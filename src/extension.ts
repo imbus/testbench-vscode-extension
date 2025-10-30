@@ -44,7 +44,6 @@ import {
     client,
     handleLanguageServerRestartOnSessionChange,
     prepareLanguageServerForTreeItemOperation,
-    setIsHandlingLogout,
     configureLanguageServerIntegration
 } from "./languageServer/server";
 import {
@@ -72,6 +71,7 @@ import { UserSessionManager } from "./userSessionManager";
 import { SharedSessionManager } from "./sharedSessionManager";
 import { v4 as uuidv4 } from "uuid";
 import { activeConfigService } from "./languageServer/activeConfigService";
+import { checkWorkspaceAndNotifyUser } from "./utils";
 
 /* =============================================================================
    Constants, Global Variables & Exports
@@ -228,7 +228,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             return;
         }
 
-        setIsHandlingLogout(true);
         isHandlingSessionChange = true;
         try {
             const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
@@ -242,7 +241,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await handleNoSession();
         } finally {
             isHandlingSessionChange = false;
-            setIsHandlingLogout(false);
         }
     };
 
@@ -1299,6 +1297,8 @@ async function createNewConnection(
     setConnection(newConnection);
     await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
     getLoginWebViewProvider()?.updateWebviewHTMLContent();
+    await checkWorkspaceAndNotifyUser();
+
     return newConnection;
 }
 
@@ -1369,7 +1369,6 @@ async function handleTestBenchSessionChange(
         logger.trace("[extension] Cleared logout signal due to new session.");
 
         getLoginWebViewProvider()?.resetEditMode();
-        setIsHandlingLogout(false);
         const previousUserId = userSessionManager.getCurrentUserId();
         const newUserId = sessionToProcess.account.id;
         const wasNewSessionStarted = previousUserId !== newUserId;
@@ -1428,9 +1427,7 @@ async function handleTestBenchSessionChange(
             await treeViews.reloadAllTreeViewsStateFromPersistence();
         }
     } else {
-        setIsHandlingLogout(true);
         await handleNoSession();
-        setIsHandlingLogout(false);
     }
 }
 

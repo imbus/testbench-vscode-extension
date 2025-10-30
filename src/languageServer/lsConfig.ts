@@ -5,7 +5,6 @@ import * as vscode from "vscode";
 import { LS_CONFIG_FILE_NAME, folderNameOfInternalTestbenchFolder } from "../constants";
 import { logger, getConnection } from "../extension";
 import { validateAndReturnWorkspaceLocation } from "../utils";
-import { isHandlingLogout } from "./server";
 
 export interface LanguageServerConfig {
     projectName: string;
@@ -117,19 +116,15 @@ export async function validateAndFixLsConfigInteractively(
     currentCfg?: LanguageServerConfig
 ): Promise<LanguageServerConfig | null> {
     try {
-        if (isHandlingLogout) {
-            logger.trace("[lsConfig] Skipping LS config validation during logout.");
-            return currentCfg || (await readLsConfig());
-        }
-
         const connection = getConnection();
         if (!connection) {
             logger.warn("[lsConfig] No active connection while validating LS config.");
             return currentCfg || (await readLsConfig());
         }
+        const initialSessionToken = connection.getSessionToken();
 
-        const cfg = currentCfg ? { ...currentCfg } : await readLsConfig();
-        if (!cfg) {
+        const config = currentCfg ? { ...currentCfg } : await readLsConfig();
+        if (!config) {
             return null;
         }
 
@@ -138,12 +133,17 @@ export async function validateAndFixLsConfigInteractively(
         const projects = await connection.getProjectsList();
         if (!projects || !Array.isArray(projects) || projects.length === 0) {
             vscode.window.showWarningMessage("No projects available on server. Cannot validate LS config.");
-            return cfg;
+            return config;
         }
 
         // Validate project name
-        let selectedProject = projects.find((p: any) => p.name === cfg.projectName);
+        let selectedProject = projects.find((p: any) => p.name === config.projectName);
         if (!selectedProject) {
+            if (!getConnection() || getConnection()!.getSessionToken() !== initialSessionToken) {
+                logger.trace("[lsConfig] Connection changed before project selection. Aborting prompts.");
+                return config;
+            }
+
             configChanged = true;
             const picked = await vscode.window.showQuickPick(
                 projects.map((p: any) => p.name),
@@ -155,37 +155,53 @@ export async function validateAndFixLsConfigInteractively(
             if (!picked) {
                 return null;
             }
-            cfg.projectName = picked;
+            config.projectName = picked;
             selectedProject = projects.find((p: any) => p.name === picked);
         }
 
         // Validate TOV name
         const projectKey = selectedProject!.key;
-        const projectTree = await connection.getProjectTreeOfProject(projectKey);
+        const currentConn = getConnection();
+        if (!currentConn || currentConn.getSessionToken() !== initialSessionToken) {
+            logger.trace("[lsConfig] Connection changed before fetching TOVs. Skipping prompts.");
+            return config;
+        }
+
+        const projectTree = await currentConn.getProjectTreeOfProject(projectKey);
         const versions = (projectTree?.children || []).filter((n: any) => n.nodeType === "Version");
         const tovNames = versions.map((v: any) => v.name || v.label).filter(Boolean);
 
-        if (!cfg.tovName || !tovNames.includes(cfg.tovName)) {
+        if (!tovNames || tovNames.length === 0) {
+            logger.warn("[lsConfig] No TOVs available or failed to fetch versions. Skipping interactive TOV prompt.");
+            return config;
+        }
+
+        if (!config.tovName || !tovNames.includes(config.tovName)) {
+            if (!getConnection() || getConnection()!.getSessionToken() !== initialSessionToken) {
+                logger.trace("[lsConfig] Connection changed before TOV selection. Aborting prompts.");
+                return config;
+            }
+
             configChanged = true;
             if (tovNames.length === 1) {
-                cfg.tovName = tovNames[0];
+                config.tovName = tovNames[0];
             } else {
                 const pickedTov = await vscode.window.showQuickPick(tovNames, {
-                    title: `Select Test Object Version for project "${cfg.projectName}"`,
+                    title: `Select Test Object Version for project "${config.projectName}"`,
                     placeHolder: "Choose a TOV for LS configuration"
                 });
                 if (!pickedTov) {
                     return null;
                 }
-                cfg.tovName = pickedTov;
+                config.tovName = pickedTov;
             }
         }
 
         if (configChanged) {
-            await writeLsConfig(cfg);
+            await writeLsConfig(config);
         }
-        logger.info(`[lsConfig] Validated and saved LS config: ${cfg.projectName} / ${cfg.tovName}`);
-        return cfg;
+        logger.info(`[lsConfig] Validated and saved LS config: ${config.projectName} / ${config.tovName}`);
+        return config;
     } catch (error) {
         logger.error("[lsConfig] Error validating LS config:", error);
         return null;

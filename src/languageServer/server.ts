@@ -57,11 +57,6 @@ let isStoppingInProgress: boolean = false;
 let lastAppliedProjectName: string | undefined;
 let lastAppliedTovName: string | undefined;
 
-export let isHandlingLogout: boolean = false;
-export function setIsHandlingLogout(value: boolean): void {
-    isHandlingLogout = value;
-}
-
 // Configuration constants
 const RESTART_DEBOUNCE_MS = 300;
 const CLIENT_START_TIMEOUT_MS = 30000;
@@ -305,7 +300,6 @@ function buildClientOptions(): LanguageClientOptions {
         },
         outputChannelName: "TestBench LS",
         errorHandler: {
-             
             error: (_error: Error, _message: Message | undefined, _count: number | undefined): ErrorHandlerResult => {
                 // Keep running and suppress user popups
                 return { action: ErrorAction.Continue };
@@ -1104,10 +1098,11 @@ export async function restartLanguageClient(projectName: string, tovName: string
  * Tries to fix any config issues interactively before restarting.
  */
 export async function restartLanguageClientFromConfig(): Promise<void> {
-    if (isHandlingLogout) {
-        logger.trace("[server] Skipping restartLanguageClientFromConfig during logout.");
+    if (!getConnection()) {
+        logger.trace("[server] No connection, skipping restartLanguageClientFromConfig.");
         return;
     }
+
     const exists = await hasLsConfig();
     if (!exists) {
         logger.warn("[server] LS config not found. Cannot restart language server.");
@@ -1125,6 +1120,11 @@ export async function restartLanguageClientFromConfig(): Promise<void> {
         return;
     }
 
+    // Connection before scheduling a restart to avoid race with logout
+    if (!getConnection()) {
+        logger.trace("[server] Connection lost after validation. Skipping LS restart.");
+        return;
+    }
     await restartLanguageClient(cfg.projectName, cfg.tovName);
 }
 
@@ -1137,10 +1137,22 @@ export function configureLanguageServerIntegration(context: vscode.ExtensionCont
         if (e.provider.id !== "testbench-auth") {
             return;
         }
-        if (isHandlingLogout) {
-            logger.trace("[server] Authentication change detected during logout. Skipping LS restart.");
+
+        let activeSession: vscode.AuthenticationSession | undefined;
+        try {
+            activeSession = await vscode.authentication.getSession("testbench-auth", ["api_access"], {
+                createIfNone: false,
+                silent: true
+            });
+        } catch {
+            logger.trace("[server] getSession failed during auth change. Skipping LS restart.");
             return;
         }
+        if (!activeSession) {
+            logger.trace("[server] No active session after authentication change. Skipping LS restart.");
+            return;
+        }
+
         if (!getConnection()) {
             return;
         }
@@ -1158,10 +1170,6 @@ export function configureLanguageServerIntegration(context: vscode.ExtensionCont
  * @param tovName the name of the TOV to update or restart the language server for.
  */
 export async function updateOrRestartLS(): Promise<boolean> {
-    if (isHandlingLogout) {
-        logger.trace("[server] updateOrRestartLS called during logout. Skipping.");
-        return false;
-    }
     if (!getConnection()) {
         logger.warn("[server] updateOrRestartLS called without active connection. Cannot update language server.");
         vscode.window.showWarningMessage("No active connection available. Please log in first.");
