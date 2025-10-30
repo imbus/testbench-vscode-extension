@@ -36,6 +36,9 @@ export class TestBenchLogger {
     private cachedLogLevel: string;
     private configChangeListener: vscode.Disposable | null = null;
     private currentLogSize: number = 0;
+    private fileLoggingAvailable: boolean = false;
+    private activeEditorChangeListener: vscode.Disposable | null = null;
+    private workspaceFoldersChangeListener: vscode.Disposable | null = null;
 
     /**
      * Log levels are 0 to 5, with 1 being the most verbose (trace) and 5 being the least verbose (error).
@@ -102,8 +105,6 @@ export class TestBenchLogger {
         this.logFilePath = path.join(this.logFolderPath, fileNameOfActiveLogFile);
         this.outputLogToTerminal = outputToTerminal === true;
         this.cachedLogLevel = getExtensionConfiguration().get(ConfigKeys.LOGGER_LEVEL, "No logging");
-
-        // Set up configuration change listener
         this.setupConfigurationListener();
 
         // Begin asynchronous initialization
@@ -135,32 +136,8 @@ export class TestBenchLogger {
      */
     private async initialize(): Promise<void> {
         try {
-            const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation(false);
-            if (workspaceLocation) {
-                // Example logFolderPath: workspaceFolder/.testbench/logs/testBenchExtension.log
-                this.logFolderPath = path.join(
-                    workspaceLocation,
-                    folderNameOfInternalTestbenchFolder,
-                    folderNameOfLogs
-                );
-                this.logFilePath = path.join(this.logFolderPath, fileNameOfActiveLogFile);
-            } else {
-                console.log(
-                    "[testBenchLogger] Workspace location is not set in the extension settings. Using default log folder."
-                );
-            }
-            await fsp.mkdir(this.logFolderPath, { recursive: true });
-
-            try {
-                const stats = await fsp.stat(this.logFilePath);
-                this.currentLogSize = stats.size;
-            } catch (error: any) {
-                if (error.code === "ENOENT") {
-                    this.currentLogSize = 0;
-                } else {
-                    throw error;
-                }
-            }
+            await this.updateLogTargetForCurrentWorkspace(true);
+            this.setupWorkspaceListeners();
         } catch (error: any) {
             if (error.code === "EPERM" || error.code === "EACCES") {
                 console.error(
@@ -170,6 +147,85 @@ export class TestBenchLogger {
             } else {
                 console.error(`[testBenchLogger] Error during logger initialization:`, error);
             }
+        }
+    }
+
+    /**
+     * Watches for workspace changes and updates the logger's target folder accordingly.
+     */
+    private setupWorkspaceListeners(): void {
+        try {
+            this.activeEditorChangeListener = vscode.window.onDidChangeActiveTextEditor(() => {
+                this.updateLogTargetForCurrentWorkspace().catch((err) =>
+                    console.error("[testBenchLogger] Error updating log target on editor change:", err)
+                );
+            });
+            this.workspaceFoldersChangeListener = vscode.workspace.onDidChangeWorkspaceFolders(() => {
+                this.updateLogTargetForCurrentWorkspace().catch((err) =>
+                    console.error("[testBenchLogger] Error updating log target on workspace change:", err)
+                );
+            });
+        } catch (error) {
+            console.error("[testBenchLogger] Failed to set up workspace listeners:", error);
+        }
+    }
+
+    /**
+     * Updates internal log paths based on the current VS Code workspace.
+     * When a workspace is available, enables file logging under `.testbench/logs` in that workspace.
+     * When no workspace is available, disables file logging (console-only remains available).
+     */
+    private async updateLogTargetForCurrentWorkspace(initializing: boolean = false): Promise<void> {
+        const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation(false);
+        if (workspaceLocation) {
+            const desiredLogFolder = path.join(
+                workspaceLocation,
+                folderNameOfInternalTestbenchFolder,
+                folderNameOfLogs
+            );
+            const desiredLogFile = path.join(desiredLogFolder, fileNameOfActiveLogFile);
+
+            const logFolderChanged = desiredLogFolder !== this.logFolderPath || desiredLogFile !== this.logFilePath;
+            if (logFolderChanged || !this.fileLoggingAvailable) {
+                this.logFolderPath = desiredLogFolder;
+                this.logFilePath = desiredLogFile;
+                try {
+                    await fsp.mkdir(this.logFolderPath, { recursive: true });
+                    try {
+                        const stats = await fsp.stat(this.logFilePath);
+                        this.currentLogSize = stats.size;
+                    } catch (statError: any) {
+                        if (statError.code === "ENOENT") {
+                            this.currentLogSize = 0;
+                        } else {
+                            throw statError;
+                        }
+                    }
+                    this.fileLoggingAvailable = true;
+                    if (!initializing) {
+                        console.log(`[testBenchLogger] File logging is now enabled at: ${this.logFilePath}`);
+                    }
+                } catch (mkdirError: any) {
+                    this.fileLoggingAvailable = false;
+                    if (mkdirError.code === "EPERM" || mkdirError.code === "EACCES") {
+                        console.error(
+                            `[testBenchLogger] Permission denied creating log directory at '${this.logFolderPath}'. File logging disabled.`
+                        );
+                    } else {
+                        console.error(
+                            `[testBenchLogger] Error preparing log directory '${this.logFolderPath}'. File logging disabled:`,
+                            mkdirError
+                        );
+                    }
+                }
+            }
+        } else {
+            if (this.fileLoggingAvailable) {
+                console.log(
+                    "[testBenchLogger] No workspace is open. Disabling file logging until a workspace is available."
+                );
+            }
+            this.fileLoggingAvailable = false;
         }
     }
 
@@ -199,6 +255,14 @@ export class TestBenchLogger {
         if (this.configChangeListener) {
             this.configChangeListener.dispose();
             this.configChangeListener = null;
+        }
+        if (this.activeEditorChangeListener) {
+            this.activeEditorChangeListener.dispose();
+            this.activeEditorChangeListener = null;
+        }
+        if (this.workspaceFoldersChangeListener) {
+            this.workspaceFoldersChangeListener.dispose();
+            this.workspaceFoldersChangeListener = null;
         }
     }
 
@@ -387,6 +451,10 @@ export class TestBenchLogger {
             } else {
                 console.log(baseLogMessage);
             }
+        }
+
+        if (!this.fileLoggingAvailable) {
+            return;
         }
 
         // Perform file writing exclusively to prevent race conditions with rotation.

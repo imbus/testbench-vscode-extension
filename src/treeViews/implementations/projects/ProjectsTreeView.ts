@@ -12,12 +12,15 @@ import { ProjectsDataProvider } from "./ProjectsDataProvider";
 import { projectsConfig } from "./ProjectsConfig";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { allExtensionCommands, ConfigKeys, ContextKeys, TreeViewTiming } from "../../../constants";
+import { promptCreateLsConfigIfMissing } from "../../../languageServer/lsConfig";
 import { displayTestThemeTreeView } from "../testThemes/TestThemesTreeView";
 import { displayTestElementsTreeView } from "../testElements/TestElementsTreeView";
 import { getExtensionConfiguration } from "../../../configuration";
 import * as reportHandler from "../../../reportHandler";
 import { treeViews } from "../../../extension";
 import { ClickHandler } from "../../core/ClickHandler";
+import { ActiveItemMarkerModule } from "../../features/ActiveItemMarkerModule";
+import { activeConfigService } from "../../../languageServer/activeConfigService";
 
 export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
     private dataProvider: ProjectsDataProvider;
@@ -38,6 +41,18 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         this.registerCommands();
         this.registerEventHandlers();
         this.setupCycleClickHandlers();
+    }
+
+    /**
+     * Clears the data provider's cache.
+     */
+    public clearCache(): void {
+        this.dataProvider.clearCache();
+    }
+
+    protected async initializeModules(): Promise<void> {
+        await super.initializeModules();
+        await this.addModule(new ActiveItemMarkerModule());
     }
 
     /**
@@ -113,6 +128,11 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         this.eventBus.on("tree:itemExpanded", async (event) => {
             const item = event.data.item;
             if (item instanceof ProjectsTreeItem && item.data.type === "version") {
+                const projectName = item.parent?.label?.toString();
+                const tovName = item.label?.toString();
+                if (projectName && tovName) {
+                    await promptCreateLsConfigIfMissing(projectName, tovName);
+                }
                 await vscode.commands.executeCommand(allExtensionCommands.handleTOVClick, item);
             }
         });
@@ -120,6 +140,11 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         this.eventBus.on("tree:itemCollapsed", async (event) => {
             const item = event.data.item;
             if (item instanceof ProjectsTreeItem && item.data.type === "version") {
+                const projectName = item.parent?.label?.toString();
+                const tovName = item.label?.toString();
+                if (projectName && tovName) {
+                    await promptCreateLsConfigIfMissing(projectName, tovName);
+                }
                 await vscode.commands.executeCommand(allExtensionCommands.handleTOVClick, item);
             }
         });
@@ -162,6 +187,8 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
                 metadata: project.metadata
             })
         );
+
+        this.sortProjectTreeItems(createdProjectTreeItems);
 
         // If filtering is active, we must load the entire hierarchy upfront
         // so that the filter logic can inspect children of non-matching parents.
@@ -314,36 +341,18 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
      * @param item The cycle tree item that was single clicked
      */
     private async handleCycleSingleClick(item: ProjectsTreeItem): Promise<void> {
-        if (item.originalContextValue !== "cycle") {
+        if (item.data.type !== "cycle") {
             return;
         }
 
-        const cycleKey = item.getCycleKey();
-        const projectKey = item.getProjectKey();
-        const versionKey = item.getVersionKey();
         const projectName = item.parent?.parent?.label?.toString();
         const tovName = item.parent?.label?.toString();
 
-        if (projectKey && cycleKey && versionKey && projectName && tovName) {
+        if (projectName && tovName) {
             this.logger.trace(`[ProjectsTreeView] Cycle item single clicked: ${item.label}`);
 
-            await vscode.commands.executeCommand(allExtensionCommands.updateOrRestartLS, projectName, tovName);
-
-            if (treeViews?.testThemesTree) {
-                await treeViews.testThemesTree.loadCycle(
-                    projectKey,
-                    cycleKey,
-                    versionKey,
-                    projectName,
-                    tovName,
-                    item.label?.toString()
-                );
-            }
-            if (treeViews?.testElementsTree) {
-                await treeViews.testElementsTree.loadTov(versionKey, tovName, projectName, tovName);
-            }
-        } else {
-            throw new Error("Invalid cycle item: missing project, cycle, or version key");
+            // Prompt to create LS config if missing when single-clicking a cycle
+            await promptCreateLsConfigIfMissing(projectName, tovName);
         }
     }
 
@@ -352,7 +361,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
      * @param item The cycle tree item that was double clicked
      */
     private async handleCycleDoubleClick(item: ProjectsTreeItem): Promise<void> {
-        if (item.originalContextValue !== "cycle") {
+        if (item.data.type !== "cycle") {
             return;
         }
 
@@ -362,20 +371,23 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         const projectName = item.parent?.parent?.label?.toString();
         const tovName = item.parent?.label?.toString();
 
-        if (!cycleKey || !projectKey) {
-            this.logger.warn(
-                "[ProjectsTreeView] Missing cycle and project keys for cycle selection when handling cycle double click"
-            );
+        if (!cycleKey || !projectKey || !versionKey || !projectName || !tovName) {
+            this.logger.warn("[ProjectsTreeView] Missing keys for cycle selection when handling cycle double click");
             return;
         }
 
-        if (!projectName || !tovName) {
-            const missingProjectAndTovNameErrorMessage = `[ProjectsTreeView] Cannot update language server: Missing project / TOV name. Project: ${projectName}, TOV: ${tovName}`;
-            const missingProjectAndTovNameErrorMessageForUser = `Cannot update language server: Missing project / TOV name.`;
-            this.logger.error(missingProjectAndTovNameErrorMessage);
-            vscode.window.showErrorMessage(missingProjectAndTovNameErrorMessageForUser);
-        } else {
-            await vscode.commands.executeCommand(allExtensionCommands.updateOrRestartLS, projectName, tovName);
+        if (treeViews?.testThemesTree) {
+            await treeViews.testThemesTree.loadCycle(
+                projectKey,
+                cycleKey,
+                versionKey,
+                projectName,
+                tovName,
+                item.label?.toString()
+            );
+        }
+        if (treeViews?.testElementsTree) {
+            await treeViews.testElementsTree.loadTov(versionKey, tovName, projectName, tovName);
         }
 
         await displayTestThemeTreeView();
@@ -404,6 +416,39 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         if (item.id) {
             await this.cycleClickHandler.handleClick(item, item.id, this.logger);
         }
+    }
+
+    /**
+     * Sorts project tree items to display the active configured project first, followed by the rest alphabetically.
+     * The active project is determined by the `projectName` in `ls.config.json`.
+     * @param projectItems The array of `ProjectsTreeItem` to sort in place.
+     */
+    private sortProjectTreeItems(projectItems: ProjectsTreeItem[]): void {
+        const activeConfig = activeConfigService.getActiveConfig();
+        const activeProjectName = activeConfig?.projectName?.trim();
+
+        projectItems.sort((projectA, projectB) => {
+            const nameA = projectA.data.name.trim();
+            const nameB = projectB.data.name.trim();
+
+            // Determine if each project is the one marked as active in the configuration.
+            const isProjectAActive = activeProjectName ? nameA === activeProjectName : false;
+            const isProjectBActive = activeProjectName ? nameB === activeProjectName : false;
+
+            // If project A is active and B is not, A comes first.
+            if (isProjectAActive && !isProjectBActive) {
+                return -1;
+            }
+
+            // If project B is active and A is not, B comes first.
+            if (!isProjectAActive && isProjectBActive) {
+                return 1;
+            }
+
+            // If both are active or both not active,
+            // sort them alphabetically by name.
+            return nameA.localeCompare(nameB);
+        });
     }
 
     /**
@@ -518,6 +563,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         const treeItem = new ProjectsTreeItem(data, this.extensionContext, parent);
         treeItem.updateId();
         this.applyModulesToProjectsItem(treeItem);
+        (this.getModule("activeItemMarker") as ActiveItemMarkerModule)?.decorateItem(treeItem);
         return treeItem;
     }
 

@@ -17,8 +17,10 @@ import { ClickHandler } from "../../core/ClickHandler";
 import {
     findInteractionPositionInResourceFile,
     isLanguageServerRunning,
-    waitForLanguageServerReady
-} from "../../../server";
+    waitForLanguageServerReady,
+    updateOrRestartLS
+} from "../../../languageServer/server";
+import { hasLsConfig } from "../../../languageServer/lsConfig";
 import { getExtensionSetting } from "../../../configuration";
 import { ConfigKeys } from "../../../constants";
 
@@ -51,6 +53,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private resourceFiles: Map<string, string[]> = new Map();
     private resourceFileService: ResourceFileService;
     private interactionClickHandler: ClickHandler<TestElementsTreeItem>;
+    private resourceFilesWatcher: vscode.FileSystemWatcher | undefined;
+    private resourceAvailabilityRefreshDebounceHandle: NodeJS.Timeout | undefined;
 
     constructor(
         extensionContext: vscode.ExtensionContext,
@@ -66,6 +70,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
         this.registerEventHandlers();
         this.setupInteractionClickHandlers();
+        this.setupResourceFilesWatcher();
     }
 
     /**
@@ -148,6 +153,61 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
+     * Sets up a workspace watcher for .resource files and schedules a debounced
+     * refresh to update tree item availability and icons.
+     */
+    private setupResourceFilesWatcher(): void {
+        try {
+            // Watch all .resource files in the workspace
+            this.resourceFilesWatcher = vscode.workspace.createFileSystemWatcher("**/*.resource");
+
+            const schedule = () => this.scheduleResourceAvailabilityRefresh();
+            this.disposables.push(
+                this.resourceFilesWatcher.onDidCreate(schedule),
+                this.resourceFilesWatcher.onDidChange(schedule),
+                this.resourceFilesWatcher.onDidDelete(schedule),
+                this.resourceFilesWatcher
+            );
+        } catch (error) {
+            this.logger.error("[TestElementsTreeView] Error setting up .resource files watcher:", error);
+        }
+    }
+
+    /**
+     * Debounces and schedules a refresh of resource availability state across the tree.
+     */
+    private scheduleResourceAvailabilityRefresh(): void {
+        if (this.resourceAvailabilityRefreshDebounceHandle) {
+            clearTimeout(this.resourceAvailabilityRefreshDebounceHandle);
+        }
+        this.resourceAvailabilityRefreshDebounceHandle = setTimeout(async () => {
+            try {
+                await this.refreshResourceAvailabilityFromWorkspace();
+            } catch (error) {
+                this.logger.error(
+                    "[TestElementsTreeView] Error during debounced resource availability refresh:",
+                    error
+                );
+            }
+        }, 500);
+    }
+
+    /**
+     * Recomputes resource availability for subdivision items and updates icons and interactions.
+     */
+    private async refreshResourceAvailabilityFromWorkspace(): Promise<void> {
+        try {
+            if (!this.rootItems || this.rootItems.length === 0) {
+                return;
+            }
+            await this.updateSubdivisionIcons(this.rootItems);
+            this._onDidChangeTreeData.fire(undefined);
+        } catch (error) {
+            this.logger.error("[TestElementsTreeView] Error refreshing resource availability from workspace:", error);
+        }
+    }
+
+    /**
      * Refreshes a specific tree item and all of its parent items.
      * @param item The item to start the refresh from.
      */
@@ -170,6 +230,16 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         // Resource operations use language server commands, ensure it's running
         try {
             if (!isLanguageServerRunning()) {
+                const cfgExists = await hasLsConfig();
+                if (!cfgExists) {
+                    vscode.window.showWarningMessage(
+                        "Language server is not available because no project configuration was found (.testbench/ls.config.json). Create it first."
+                    );
+                    return;
+                }
+
+                // Attempt to initialize LS from current config, then wait for readiness
+                await updateOrRestartLS();
                 await vscode.window.withProgress(
                     {
                         location: vscode.ProgressLocation.Notification,
@@ -515,18 +585,16 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         // The python regex processing is done in language server via testbench_ls.get_resource_directory_subdivision_index command.
         // Language server initialization should be awaited here to prevent error logs caused by this command call.
         if (!isLanguageServerRunning()) {
-            try {
-                this.logger.debug(
-                    "[TestElementsTreeView] Language server not running, waiting before updating subdivision icons."
-                );
-                await waitForLanguageServerReady();
-                this.logger.debug("[TestElementsTreeView] Language server is ready, proceeding with icon updates.");
-            } catch (error) {
-                this.logger.error(
-                    "[TestElementsTreeView] Error waiting for language server before icon update:",
-                    error
-                );
-                return;
+            const cfgExists = await hasLsConfig();
+            if (cfgExists) {
+                try {
+                    await updateOrRestartLS();
+                    await waitForLanguageServerReady(5000, 100);
+                } catch {
+                    this.logger.trace("[TestElementsTreeView] LS not ready, proceeding with icon updates.");
+                }
+            } else {
+                this.logger.trace("[TestElementsTreeView] No LS config present; proceeding with icon updates.");
             }
         }
 

@@ -26,7 +26,7 @@ import { LoginWebViewProvider } from "../../loginWebView";
 import * as configuration from "../../configuration";
 import * as testBenchLogger from "../../testBenchLogger";
 import * as testBenchConnection from "../../testBenchConnection";
-import * as server from "../../server";
+import * as server from "../../languageServer/server";
 
 suite("Extension Test Suite", function () {
     let testEnv: TestEnvironment;

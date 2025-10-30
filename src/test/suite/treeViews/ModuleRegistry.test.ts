@@ -19,7 +19,7 @@ class MockModule implements TreeViewModule {
         this.id = id;
     }
 
-    public async initialize(context: TreeViewContext): Promise<void> {
+    public async initialize(_context: TreeViewContext): Promise<void> {
         this._initialized = true;
     }
 

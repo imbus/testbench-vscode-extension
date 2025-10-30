@@ -22,16 +22,22 @@ export class TestThemesDataProvider {
     ) {}
 
     /**
-     * Fetch the cycle structure containing test themes
-     * @param projectKey - The project key
-     * @param cycleKey - The cycle key
-     * @returns Promise resolving to TestStructure or null
+     * Fetches the test structure for a given cycle from the server or cache
+     * @param projectKey The project key
+     * @param cycleKey The cycle key
+     * @param suppressFilteredData Flag to suppress filtered data on the server
+     * @return Promise resolving to the test structure or null if not found
      */
-    public async fetchCycleStructure(projectKey: string, cycleKey: string): Promise<TestStructure | null> {
-        const cacheKey = `${projectKey}:${cycleKey}`;
-        const cached = this.cache.get(cacheKey);
-        if (cached) {
-            return cached;
+    public async fetchCycleStructure(
+        projectKey: string,
+        cycleKey: string,
+        suppressFilteredData: boolean = true
+    ): Promise<TestStructure | null> {
+        const cacheKey = `${this.getCacheKey(projectKey, cycleKey)}.${suppressFilteredData}`;
+        const cachedData = this.cache.get(cacheKey);
+
+        if (cachedData) {
+            return cachedData;
         }
 
         const connection = this.getConnection();
@@ -41,7 +47,11 @@ export class TestThemesDataProvider {
         }
 
         try {
-            const testStructure = await connection.fetchTestStructureOfCycleFromServer(projectKey, cycleKey);
+            const testStructure = await connection.fetchTestStructureOfCycleFromServer(
+                projectKey,
+                cycleKey,
+                suppressFilteredData
+            );
             if (!testStructure) {
                 return null;
             }
@@ -68,16 +78,22 @@ export class TestThemesDataProvider {
     }
 
     /**
-     * Fetch the TOV structure containing test themes
-     * @param projectKey - The project key
-     * @param tovKey - The TOV key
-     * @returns Promise resolving to TestStructure or null
+     * Fetches the test structure for a given TOV from the server or cache
+     * @param projectKey The project key
+     * @param tovKey The TOV key
+     * @param suppressFilteredData Flag to suppress filtered data on the server
+     * @return Promise resolving to the test structure or null if not found
      */
-    public async fetchTovStructure(projectKey: string, tovKey: string): Promise<TestStructure | null> {
-        const cacheKey = `${projectKey}:tov:${tovKey}`;
-        const cached = this.cache.get(cacheKey);
-        if (cached) {
-            return cached;
+    public async fetchTovStructure(
+        projectKey: string,
+        tovKey: string,
+        suppressFilteredData: boolean = true
+    ): Promise<TestStructure | null> {
+        const cacheKey = `${this.getCacheKey(projectKey, tovKey, true)}.${suppressFilteredData}`;
+        const cachedData = this.cache.get(cacheKey);
+
+        if (cachedData) {
+            return cachedData;
         }
 
         const connection = this.getConnection();
@@ -87,7 +103,11 @@ export class TestThemesDataProvider {
         }
 
         try {
-            const testStructure = await connection.fetchTestStructureOfTOVFromServer(projectKey, tovKey);
+            const testStructure = await connection.fetchTestStructureOfTOVFromServer(
+                projectKey,
+                tovKey,
+                suppressFilteredData
+            );
 
             if (!testStructure) {
                 return null;
@@ -315,5 +335,16 @@ export class TestThemesDataProvider {
             return "TestCaseNode";
         }
         return "TestThemeNode";
+    }
+
+    /**
+     * Generates a cache key for a given project key and key.
+     * @param projectKey The project key.
+     * @param key The cycle or TOV key.
+     * @param isTov Whether the key is for a TOV.
+     * @returns The generated cache key.
+     */
+    private getCacheKey(projectKey: string, key: string, isTov: boolean = false): string {
+        return `${projectKey}:${key}:${isTov ? "tov" : "cycle"}`;
     }
 }

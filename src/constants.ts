@@ -80,6 +80,7 @@ export const ContextKeys = {
     PROJECT_TREE_HAS_CUSTOM_ROOT: "testbenchExtension.projectTreeHasCustomRoot",
     THEME_TREE_HAS_CUSTOM_ROOT: "testbenchExtension.themeTreeHasCustomRoot",
     IS_TT_OPENED_FROM_CYCLE: "testbenchExtension.isTestThemeOpenedFromCycle",
+    WORKSPACE_AVAILABLE: "testbenchExtension.workspaceAvailable",
     SHOW_PROJECTS_TREE: "testbenchExtension.showProjectsTree",
     SHOW_TEST_THEMES_TREE: "testbenchExtension.showTestThemesTree",
     SHOW_TEST_ELEMENTS_TREE: "testbenchExtension.showTestElementsTree",
@@ -91,7 +92,11 @@ export const ContextKeys = {
     // Test theme tree item context for opening a robot file
     HAS_GENERATED_ROBOT_FILE: "testbenchExtension.hasGeneratedRobotFile",
     // Test theme tree filters context
-    TEST_THEME_TREE_HAS_FILTERS: "testbenchExtension.testThemeTreeHasFilters"
+    TEST_THEME_TREE_HAS_FILTERS: "testbenchExtension.testThemeTreeHasFilters",
+    // Search filter context keys
+    PROJECTS_TREE_HAS_SEARCH_FILTER: "testbenchExtension.projectsTreeHasSearchFilter",
+    TEST_THEMES_TREE_HAS_SEARCH_FILTER: "testbenchExtension.testThemesTreeHasSearchFilter",
+    TEST_ELEMENTS_TREE_HAS_SEARCH_FILTER: "testbenchExtension.testElementsTreeHasSearchFilter"
 } as const;
 
 // --- Storage Keys ---
@@ -159,12 +164,14 @@ export const JobTypes = {
 
 // Internal folder name used to store and process files internally.
 export const folderNameOfInternalTestbenchFolder: string = ".testbench";
+export const LS_CONFIG_FILE_NAME: string = "ls.config.json";
+// Subfolder inside the internal TestBench folder to store downloaded report ZIPs
+export const INTERNAL_REPORTS_SUBFOLDER_NAME: string = "reports";
 
 // --- Tree View Timing Constants ---
 export const TreeViewTiming = {
     // Data freshness and caching
-    DATA_FRESHNESS_THRESHOLD_MS: 5000,
-    DATA_STALE_THRESHOLD_MS: 5000,
+    TREE_DATA_FRESHNESS_THRESHOLD_MS: 5000,
 
     // UI refresh and debouncing
     UI_REFRESH_DEBOUNCE_MS: 500,
@@ -208,8 +215,9 @@ export const allExtensionCommands = {
     refreshProjectTreeView: `${baseKeyOfExtension}.refreshProjectTreeView`,
     refreshTestThemeTreeView: `${baseKeyOfExtension}.refreshTestThemeTreeView`,
     refreshTestElementsTree: `${baseKeyOfExtension}.refreshTestElementsTree`,
-    displayFiltersForTestThemeTreeON: `${baseKeyOfExtension}.displayFiltersForTestThemeTreeON`,
-    displayFiltersForTestThemeTreeOFF: `${baseKeyOfExtension}.displayFiltersForTestThemeTreeOFF`,
+    displayFiltersForTestThemeTree: `${baseKeyOfExtension}.displayFiltersForTestThemeTree`,
+    displayFiltersForTestThemeTreeEnabled: `${baseKeyOfExtension}.displayFiltersForTestThemeTreeEnabled`,
+    displayFiltersForTestThemeTreeDisabled: `${baseKeyOfExtension}.displayFiltersForTestThemeTreeDisabled`,
     clearInternalTestbenchFolder: `${baseKeyOfExtension}.clearInternalTestbenchFolder`,
     openTOVFromProjectsView: `${baseKeyOfExtension}.openTOVFromProjectsView`,
     openCycleFromProjectsView: `${baseKeyOfExtension}.openCycleFromProjectsView`,
@@ -237,5 +245,17 @@ export const allExtensionCommands = {
     openInteractionInTestElementsView: `${baseKeyOfExtension}.openInteractionInTestElementsView`,
     createMissingParentResourceForInteraction: `${baseKeyOfExtension}.createMissingParentResourceForInteraction`,
     handleInteractionClick: `${baseKeyOfExtension}.handleInteractionClick`,
-    findInteractionPosition: `${baseKeyOfExtension}.findInteractionPosition`
+    findInteractionPosition: `${baseKeyOfExtension}.findInteractionPosition`,
+    enableFilterDiffMode: `${baseKeyOfExtension}.enableFilterDiffMode`,
+    disableFilterDiffMode: `${baseKeyOfExtension}.disableFilterDiffMode`,
+    searchInProjectsTreeOn: `${baseKeyOfExtension}.searchInProjectsTreeOn`,
+    searchInProjectsTreeOff: `${baseKeyOfExtension}.searchInProjectsTreeOff`,
+    searchInTestThemesTreeOn: `${baseKeyOfExtension}.searchInTestThemesTreeOn`,
+    searchInTestThemesTreeOff: `${baseKeyOfExtension}.searchInTestThemesTreeOff`,
+    searchInTestElementsTreeOn: `${baseKeyOfExtension}.searchInTestElementsTreeOn`,
+    searchInTestElementsTreeOff: `${baseKeyOfExtension}.searchInTestElementsTreeOff`,
+    restartLanguageServerFromConfig: `${baseKeyOfExtension}.restartLanguageServerFromConfig`,
+    setActiveProject: `${baseKeyOfExtension}.setActiveProject`,
+    setActiveTOV: `${baseKeyOfExtension}.setActiveTOV`,
+    validateAndFixLsConfig: `${baseKeyOfExtension}.validateAndFixLsConfig`
 };

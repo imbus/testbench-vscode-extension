@@ -87,9 +87,13 @@ export interface FilterState {
     textFilter?: {
         searchText: string;
         caseSensitive: boolean;
-        searchInLabel: boolean;
-        searchInUniqueId: boolean;
+        searchInName: boolean;
+        searchInId: boolean;
         searchInDescription: boolean;
+        searchInTooltip: boolean;
+        searchInType: boolean;
+        showParentsOfMatches: boolean;
+        showChildrenOfMatches: boolean;
     } | null;
     filterDiffState?: {
         enabled: boolean;
@@ -208,9 +212,13 @@ export interface SerializedFilterState {
     textFilter?: {
         searchText: string;
         caseSensitive: boolean;
-        searchInLabel: boolean;
-        searchInUniqueId: boolean;
+        searchInName: boolean;
+        searchInId: boolean;
         searchInDescription: boolean;
+        searchInTooltip: boolean;
+        searchInType: boolean;
+        showParentsOfMatches: boolean;
+        showChildrenOfMatches: boolean;
     } | null;
     filterDiffState?: {
         enabled: boolean;

@@ -12,6 +12,7 @@ import { getExtensionSetting } from "../../../configuration";
 import { ConfigKeys } from "../../../constants";
 import { TestThemesTreeItem } from "./TestThemesTreeItem";
 import { treeViews } from "../../../extension";
+import { MarkingModule } from "../../features/MarkingModule";
 
 export interface RobotFileInfo {
     exists: boolean;
@@ -187,6 +188,13 @@ export class RobotFileService {
                     item.updateContextValue();
                     if (treeViews && treeViews.testThemesTree) {
                         treeViews.testThemesTree.refresh(item);
+                        // If file is gone, unmark the item to keep icon/marking in sync
+                        const markingModule = treeViews.testThemesTree.getModule("marking") as
+                            | MarkingModule
+                            | undefined;
+                        if (markingModule && item.id) {
+                            markingModule.unmarkItemByID(item.id);
+                        }
                     }
                 }
                 vscode.window.showErrorMessage(`Failed to open robot file. File not found: ${path.basename(filePath)}`);

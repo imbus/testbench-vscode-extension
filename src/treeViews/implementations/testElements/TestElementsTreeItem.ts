@@ -52,7 +52,13 @@ export class TestElementsTreeItem extends TreeItemBase {
         data: TestElementItemData,
         extensionContext: vscode.ExtensionContext,
         parent?: TestElementsTreeItem,
-        eventBus?: EventBus
+        eventBus?: EventBus,
+        /**
+         * If false, prevents this item from being added to its parent's children.
+         * Used by the `clone` method to avoid modifying the original tree, which
+         * caused an infinite loop during filtering.
+         */
+        addToParent: boolean = true
     ) {
         const label = TestElementsTreeItem.extractLabel(data.hierarchicalName || data.displayName);
         const description = TestElementsTreeItem.buildDescription(data);
@@ -67,7 +73,7 @@ export class TestElementsTreeItem extends TreeItemBase {
         this.tooltip = this.generateTooltip();
         this.registerEventHandlers();
 
-        if (parent) {
+        if (parent && addToParent) {
             parent.addChild(this);
         }
 
@@ -443,7 +449,10 @@ export class TestElementsTreeItem extends TreeItemBase {
                 children: [...(this.data.children || [])]
             },
             this.extensionContext,
-            this.parent as TestElementsTreeItem
+            this.parent as TestElementsTreeItem,
+            this.eventBus,
+            // Pass false to prevent the cloned item from being added to the original parent's children.
+            false
         );
 
         // Copy metadata
@@ -529,7 +538,8 @@ export class TestElementsTreeItem extends TreeItemBase {
     ): (data: any) => TestElementsTreeItem {
         return (data: any) => {
             const ctx = extensionContext || (parent?.extensionContext as vscode.ExtensionContext);
-            return new TestElementsTreeItem(data.data || data, ctx, parent);
+            // When deserializing, we want to reconstruct the original tree, so we add items to their parents.
+            return new TestElementsTreeItem(data.data || data, ctx, parent, undefined, true);
         };
     }
 

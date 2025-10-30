@@ -21,7 +21,6 @@ import {
     setExtensionContext,
     userSessionManager
 } from "../extension";
-import { updateOrRestartLS } from "../server";
 import {
     displayProjectManagementTreeView,
     hideProjectManagementTreeView
@@ -42,7 +41,7 @@ export interface TreeViews {
     clear: () => void;
     saveCurrentState: () => Promise<void>;
     resetForNewUser: () => Promise<void>;
-    reloadAllTreeViewsStateFromPersistence: () => Promise<void>;
+    reloadAllTreeViewsStateFromPersistence: (options?: { refresh?: boolean }) => Promise<void>;
     // View state management methods
     saveUIContext: (viewId: "projects" | "testThemes" | "testElements", contextData?: any) => Promise<void>;
     clearViewState: () => Promise<void>;
@@ -131,8 +130,13 @@ export class TreeViewFactory {
             resetForNewUser: async () => {
                 await this.resetTreeViewsForNewUser(projectsTree, testThemesTree, testElementsTree);
             },
-            reloadAllTreeViewsStateFromPersistence: async () => {
-                await this.reloadAllTreeViewStateFromPersistence(projectsTree, testThemesTree, testElementsTree);
+            reloadAllTreeViewsStateFromPersistence: async (options?: { refresh?: boolean }) => {
+                await this.reloadAllTreeViewStateFromPersistence(
+                    projectsTree,
+                    testThemesTree,
+                    testElementsTree,
+                    options
+                );
             },
             // View state management methods
             saveUIContext: async (viewId: "projects" | "testThemes" | "testElements", contextData?: any) => {
@@ -533,17 +537,19 @@ export class TreeViewFactory {
      * @param projectsTree The projects tree view
      * @param testThemesTree The test themes tree view
      * @param testElementsTree The test elements tree view
+     * @param options The options for the reload operation to determine if the tree view should be refreshed immediately
      */
     private async reloadAllTreeViewStateFromPersistence(
         projectsTree: ProjectsTreeView,
         testThemesTree: TestThemesTreeView,
-        testElementsTree: TestElementsTreeView
+        testElementsTree: TestElementsTreeView,
+        options?: { refresh?: boolean }
     ): Promise<void> {
         try {
             await Promise.all([
-                projectsTree.reloadStateFromPersistence(),
-                testThemesTree.reloadStateFromPersistence(),
-                testElementsTree.reloadStateFromPersistence()
+                projectsTree.reloadStateFromPersistence(options),
+                testThemesTree.reloadStateFromPersistence(options),
+                testElementsTree.reloadStateFromPersistence(options)
             ]);
             this.logger.debug(`[TreeViewFactory] Successfully reloaded tree view state.`);
         } catch (error) {
@@ -772,10 +778,6 @@ export class TreeViewFactory {
                         );
                     }
                 }
-            }
-
-            if (savedContext && this.isValidSavedContext(savedContext)) {
-                await updateOrRestartLS(savedContext.projectName, savedContext.tovName);
             }
 
             if (savedViewId && savedViewId !== "projects" && savedContext) {

@@ -20,6 +20,9 @@ import { TreeViewTiming } from "../../constants";
 import { IconModule } from "../features/IconModule";
 import { userSessionManager } from "../../extension";
 import { PersistenceModule } from "../features/PersistenceModule";
+import { CacheManager } from "../../core/cacheManager";
+
+const ROOT_ITEMS_CACHE_KEY = "root_items";
 
 export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.TreeDataProvider<T> {
     protected readonly _onDidChangeTreeData = new vscode.EventEmitter<T | undefined | null | void>();
@@ -32,11 +35,11 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     public readonly eventBus: EventBus;
     protected vscTreeView: vscode.TreeView<T> | undefined;
 
+    protected rootItemsCache: CacheManager<string, T[]>;
     protected rootItems: T[] = [];
     private _disposed = false;
     private _initialized = false;
     private _isLoading = false;
-    private _lastDataFetch = 0;
     private _dataFetchDebounceTimeout: NodeJS.Timeout | undefined;
     private _intentionallyCleared = false;
 
@@ -64,6 +67,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             this.logger,
             this
         );
+        this.rootItemsCache = new CacheManager<string, T[]>(TreeViewTiming.TREE_DATA_FRESHNESS_THRESHOLD_MS);
 
         this.eventBus.on("connection:changed", async (event) => {
             const { connected } = event.data;
@@ -193,7 +197,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
      * If a module fails to initialize, it will continue with the other modules.
      * @returns Promise that resolves when all modules are initialized
      */
-    private async initializeModules(): Promise<void> {
+    protected async initializeModules(): Promise<void> {
         const enabledModules = ModuleRegistry.createEnabledModules(this.config.features);
         const modulePromises: Promise<void>[] = [];
 
@@ -237,6 +241,19 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
      */
     public getModule<M extends TreeViewModule>(moduleId: string): M | undefined {
         return this.modules.get(moduleId) as M;
+    }
+
+    public async addModule(module: TreeViewModule): Promise<void> {
+        if (this.modules.has(module.id)) {
+            this.logger.warn(`[TreeViewBase] Module with ID '${module.id}' already exists.`);
+            return;
+        }
+        this.registerModule(module);
+        try {
+            await module.initialize(this.context);
+        } catch (error) {
+            this.logger.error(this.buildLogPrefix(`Failed to initialize module ${module.id}:`), error);
+        }
     }
 
     /**
@@ -315,21 +332,28 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             }
 
             let children: T[];
+
             if (!element) {
-                children = await this.getRootItems();
+                children = await this.expandAll(await this.getRootItems());
             } else {
-                children = await this.getChildrenForItem(element);
+                const preFilteredChildren = element.getMetadata("_filteredChildren");
+                if (preFilteredChildren && Array.isArray(preFilteredChildren)) {
+                    // Use pre-filtered children to preserve item functionality during search
+                    children = preFilteredChildren as T[];
+                } else {
+                    children = await this.getChildrenForItem(element);
+                }
             }
 
+            // Apply filtering if active
             const filterModule = this.getModule("filtering");
             if (filterModule && filterModule.isActive()) {
-                // If this is the root level and parent/child inclusion is enabled,
-                // tree structure should be loaded fully for filtering
-                if (!element && this.shouldExpandForFiltering(filterModule)) {
-                    children = await this.expandTreeForFiltering(children);
+                if (!element) {
+                    children = await this.expandAll(children);
+                    children = filterModule.filterTreeItems(children);
+                } else if (!element.getMetadata("_filteredChildren")) {
+                    children = filterModule.filterTreeItems(children);
                 }
-
-                children = filterModule.filterTreeItems(children);
             }
 
             const expansionModule = this.getModule("expansion");
@@ -394,29 +418,19 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     }
 
     /**
-     * Determines if tree expansion is needed for filtering
-     * @param filterModule The filtering module instance
-     * @return True if expansion is required, false otherwise
+     * Recursively expands all items in a given list of tree items.
+     * @param items The list of items to expand.
+     * @returns The list of items with all descendants loaded.
      */
-    private shouldExpandForFiltering(filterModule: any): boolean {
-        const textFilter = filterModule.getTextFilter();
-        return textFilter && (textFilter.showParentsOfMatches || textFilter.showChildrenOfMatches);
-    }
-
-    /**
-     * Expands tree structure to load all children for filtering
-     * @param items Array of tree items to expand
-     * @return Promise resolving to expanded items with loaded children
-     */
-    private async expandTreeForFiltering(items: T[]): Promise<T[]> {
-        const expandedItems: T[] = [];
+    private async expandAll(items: T[]): Promise<T[]> {
         for (const item of items) {
-            const children = await this.getChildrenForItem(item);
-            item.children = children;
-            expandedItems.push(item);
+            if (item.collapsibleState !== vscode.TreeItemCollapsibleState.None && item.children.length === 0) {
+                const children = await this.getChildrenForItem(item);
+                item.children = children;
+                await this.expandAll(children);
+            }
         }
-
-        return expandedItems;
+        return items;
     }
 
     /**
@@ -424,24 +438,19 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
      * @return Promise resolving to array of root tree items
      */
     protected async getRootItems(): Promise<T[]> {
-        const hasItems = this.rootItems.length > 0;
-        const dataIsFresh = Date.now() - this._lastDataFetch < TreeViewTiming.DATA_FRESHNESS_THRESHOLD_MS;
-        if (hasItems && dataIsFresh) {
+        const cachedItems = this.rootItemsCache.getEntryFromCache(ROOT_ITEMS_CACHE_KEY);
+        if (cachedItems) {
             this.logger.trace(this.buildLogPrefix("Using cached root items"));
-            return this.rootItems;
+            this.rootItems = cachedItems;
+            return cachedItems;
         }
 
         if (this._isLoading) {
             return this.rootItems;
         }
 
-        // Check if we have a recent fetch (even if empty) to prevent infinite loading
-        if (this._lastDataFetch > 0 && Date.now() - this._lastDataFetch < TreeViewTiming.DATA_FRESHNESS_THRESHOLD_MS) {
-            return this.rootItems;
-        }
-
         if (this._intentionallyCleared && this.rootItems.length === 0) {
-            return this.rootItems;
+            return [];
         }
 
         await this.loadData();
@@ -539,8 +548,8 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     public clearTree(): void {
         this.logger.trace(this.buildLogPrefix("Clearing tree view"));
         this.rootItems = [];
+        this.rootItemsCache.clearCache();
         this.stateManager.clear();
-        this._lastDataFetch = 0;
         this._intentionallyCleared = true;
         this._onDidChangeTreeData.fire(undefined);
         this.updateTreeViewMessage();
@@ -553,7 +562,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     public clearTreeDataOnly(): void {
         this.logger.trace(this.buildLogPrefix("Clearing tree data only, preserving UI state"));
         this.rootItems = [];
-        this._lastDataFetch = 0;
+        this.rootItemsCache.clearCache();
         this._intentionallyCleared = true;
         this._onDidChangeTreeData.fire(undefined);
         this.updateTreeViewMessage();
@@ -615,7 +624,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
         }
 
         this.rootItems = [];
-        this._lastDataFetch = 0;
+        this.rootItemsCache.clearCache();
         this._intentionallyCleared = true;
         this.resetTitle();
         this._onDidChangeTreeData.fire(undefined);
@@ -627,7 +636,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
      * This is intended to be used after a user logs in.
      * Expansion state is applied directly during tree rendering.
      */
-    public async reloadStateFromPersistence(): Promise<void> {
+    public async reloadStateFromPersistence(options?: { refresh?: boolean }): Promise<void> {
         const persistenceModule = this.getModule("persistence") as PersistenceModule | undefined;
         if (!persistenceModule) {
             this.logger.warn(this.buildLogPrefix(`No persistence module available for ${this.config.id}`));
@@ -654,7 +663,9 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             }
 
             // Apply the loaded state
-            this.refresh(undefined, { immediate: true });
+            if (options?.refresh ?? true) {
+                this.refresh(undefined, { immediate: true });
+            }
         } else {
             this.logger.debug(this.buildLogPrefix(`No persistent state found for ${this.config.id}`));
         }
@@ -719,6 +730,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
         this.eventBus.dispose();
         this.stateManager.dispose();
         this.rootItems = [];
+        this.rootItemsCache.clearCache();
         this.modules.clear();
     }
 
@@ -773,13 +785,37 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
 
             if (state.error) {
                 this.vscTreeView.message = this.config.ui.errorMessage;
-            } else if (state.loading) {
-                this.vscTreeView.message = this.config.ui.loadingMessage;
-            } else if (this.rootItems.length === 0 && !this._intentionallyCleared) {
-                this.vscTreeView.message = this.config.ui.emptyMessage;
-            } else {
-                this.vscTreeView.message = undefined;
+                return;
             }
+
+            if (state.loading) {
+                this.vscTreeView.message = this.config.ui.loadingMessage;
+                return;
+            }
+
+            const filteringModule = this.getModule("filtering") as FilteringModule | undefined;
+            if (filteringModule && filteringModule.isActive() && this.getCurrentRootItems().length > 0) {
+                const filteredRootItems = filteringModule.filterTreeItems(this.getCurrentRootItems());
+                const textFilter = filteringModule.getTextFilter();
+                if (filteredRootItems.length === 0) {
+                    if (textFilter?.searchText) {
+                        this.vscTreeView.message = `No items found for "${textFilter.searchText}"`;
+                    } else {
+                        this.vscTreeView.message = "All items have been filtered.";
+                    }
+                    return;
+                } else if (textFilter?.searchText) {
+                    this.vscTreeView.message = `Search results for: "${textFilter.searchText}"`;
+                    return;
+                }
+            }
+
+            if (this.getCurrentRootItems().length === 0 && !this._intentionallyCleared) {
+                this.vscTreeView.message = this.config.ui.emptyMessage;
+                return;
+            }
+
+            this.vscTreeView.message = undefined;
         } catch (error) {
             if (this.vscTreeView) {
                 this.vscTreeView.message = undefined;
@@ -802,16 +838,11 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             this.stateManager.setLoading(true);
             this.updateTreeViewMessage();
 
-            const hasNoData = this.rootItems.length === 0;
-            const isDataStale = Date.now() - this._lastDataFetch >= TreeViewTiming.DATA_STALE_THRESHOLD_MS;
-            const shouldFetch = hasNoData || isDataStale;
-
-            if (shouldFetch) {
-                const timeoutMs = this.config.behavior.loadingTimeout;
-                this.rootItems = await this.withOptionalTimeout(() => this.fetchRootItems(), "Data loading", timeoutMs);
-                this._lastDataFetch = Date.now();
-                this._intentionallyCleared = false;
-            }
+            const timeoutMs = this.config.behavior.loadingTimeout;
+            const newRootItems = await this.withOptionalTimeout(() => this.fetchRootItems(), "Data loading", timeoutMs);
+            this.rootItems = newRootItems;
+            this.rootItemsCache.setEntryInCache(ROOT_ITEMS_CACHE_KEY, newRootItems);
+            this._intentionallyCleared = false;
 
             this.stateManager.setLoading(false);
             this.updateTreeViewMessage();
@@ -863,7 +894,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             }
         };
 
-        collectCurrentItems(this.rootItems as TreeItemBase[]);
+        collectCurrentItems(this.getCurrentRootItems() as TreeItemBase[]);
 
         // For each expanded item ID, ensure its children are loaded, but only
         // if the item's ancestor chain is effectively expanded
@@ -940,7 +971,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             }
         };
 
-        collectItems(this.rootItems);
+        collectItems(this.getCurrentRootItems());
 
         const expandedItems = state.expansion.expandedItems;
         const collapsedItems = state.expansion.collapsedItems;

@@ -336,18 +336,6 @@
                 }
             },
             {
-                "command": "testbenchExtension.makeRoot",
-                "title": "Make root"
-            },
-            {
-                "command": "testbenchExtension.resetProjectTreeViewRoot",
-                "title": "Reset Projects View Root"
-            },
-            {
-                "command": "testbenchExtension.resetTestThemeTreeViewRoot",
-                "title": "Reset Test Themes View Root"
-            },
-            {
                 "command": "testbenchExtension.fetchTovStructure",
                 "title": "TestBench: Get TOV Structure"
             },
@@ -379,21 +367,37 @@
                 }
             },
             {
-                "command": "testbenchExtension.displayFiltersForTestThemeTreeON",
+                "command": "testbenchExtension.displayFiltersForTestThemeTreeDisabled",
                 "title": "Display Test Theme Filters",
                 "when": "view == testbench.testThemes && !testbenchExtension.testThemeTreeHasFilters",
                 "icon": {
-                    "light": "resources/icons/filter-light.svg",
-                    "dark": "resources/icons/filter-dark.svg"
+                    "light": "resources/icons/filter-off-light.svg",
+                    "dark": "resources/icons/filter-off-dark.svg"
                 }
             },
             {
-                "command": "testbenchExtension.displayFiltersForTestThemeTreeOFF",
+                "command": "testbenchExtension.displayFiltersForTestThemeTreeEnabled",
                 "title": "Display Test Theme Filters",
                 "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters",
                 "icon": {
-                    "light": "resources/icons/filter-off-light.svg",
-                    "dark": "resources/icons/filter-off-dark.svg"
+                    "light": "resources/icons/filter-on-light.svg",
+                    "dark": "resources/icons/filter-on-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.enableFilterDiffMode",
+                "title": "Filter Diff Disabled",
+                "icon": {
+                    "light": "resources/icons/diff-off-light.svg",
+                    "dark": "resources/icons/diff-off-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.disableFilterDiffMode",
+                "title": "Filter Diff Enabled",
+                "icon": {
+                    "light": "resources/icons/diff-on-light.svg",
+                    "dark": "resources/icons/diff-on-dark.svg"
                 }
             },
             {
@@ -480,6 +484,66 @@
             {
                 "command": "testbenchExtension.clearAllExtensionData",
                 "title": "TestBench: Clear All Extension Data"
+            },
+            {
+                "command": "testbenchExtension.searchInProjectsTreeOff",
+                "title": "Search",
+                "icon": {
+                    "light": "resources/icons/search-off-light.svg",
+                    "dark": "resources/icons/search-off-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.searchInProjectsTreeOn",
+                "title": "Search",
+                "icon": {
+                    "light": "resources/icons/search-on-light.svg",
+                    "dark": "resources/icons/search-on-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.searchInTestThemesTreeOff",
+                "title": "Search",
+                "icon": {
+                    "light": "resources/icons/search-off-light.svg",
+                    "dark": "resources/icons/search-off-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.searchInTestThemesTreeOn",
+                "title": "Search",
+                "icon": {
+                    "light": "resources/icons/search-on-light.svg",
+                    "dark": "resources/icons/search-on-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.searchInTestElementsTreeOff",
+                "title": "Search",
+                "icon": {
+                    "light": "resources/icons/search-off-light.svg",
+                    "dark": "resources/icons/search-off-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.searchInTestElementsTreeOn",
+                "title": "Search",
+                "icon": {
+                    "light": "resources/icons/search-on-light.svg",
+                    "dark": "resources/icons/search-on-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.setActiveProject",
+                "title": "Set as Active Project"
+            },
+            {
+                "command": "testbenchExtension.setActiveTOV",
+                "title": "Set as Active TOV"
+            },
+            {
+                "command": "testbenchExtension.validateAndFixLsConfig",
+                "title": "TestBench: Validate and Fix Project Configuration"
             }
         ],
         "viewsContainers": {
@@ -522,18 +586,6 @@
         },
         "menus": {
             "commandPalette": [
-                {
-                    "command": "testbenchExtension.makeRoot",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.resetProjectTreeViewRoot",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.resetTestThemeTreeViewRoot",
-                    "when": "false"
-                },
                 {
                     "command": "testbenchExtension.fetchTovStructure",
                     "when": "false"
@@ -589,6 +641,10 @@
                 {
                     "command": "testbenchExtension.checkForCycleDoubleClick",
                     "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.validateAndFixLsConfig",
+                    "when": "false"
                 }
             ],
             "view/title": [
@@ -622,6 +678,24 @@
                     }
                 },
                 {
+                    "command": "testbenchExtension.searchInProjectsTreeOff",
+                    "when": "view == testbench.projects && !testbenchExtension.projectsTreeHasSearchFilter",
+                    "group": "navigation@4",
+                    "icon": {
+                        "light": "resources/icons/search-off-light.svg",
+                        "dark": "resources/icons/search-off-dark.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.searchInProjectsTreeOn",
+                    "when": "view == testbench.projects && testbenchExtension.projectsTreeHasSearchFilter",
+                    "group": "navigation@4",
+                    "icon": {
+                        "light": "resources/icons/search-on-light.svg",
+                        "dark": "resources/icons/search-on-dark.svg"
+                    }
+                },
+                {
                     "command": "testbenchExtension.displayAllProjects",
                     "group": "navigation@2",
                     "when": "view == testbench.testThemes",
@@ -649,7 +723,7 @@
                     }
                 },
                 {
-                    "command": "testbenchExtension.displayFiltersForTestThemeTreeOFF",
+                    "command": "testbenchExtension.displayFiltersForTestThemeTreeDisabled",
                     "when": "view == testbench.testThemes && !testbenchExtension.testThemeTreeHasFilters && false",
                     "group": "navigation@3",
                     "icon": {
@@ -658,17 +732,53 @@
                     }
                 },
                 {
-                    "command": "testbenchExtension.displayFiltersForTestThemeTreeON",
+                    "command": "testbenchExtension.displayFiltersForTestThemeTreeEnabled",
                     "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && false",
                     "group": "navigation@3",
                     "icon": {
-                        "light": "resources/icons/filter-light.svg",
-                        "dark": "resources/icons/filter-dark.svg"
+                        "light": "resources/icons/filter-on-light.svg",
+                        "dark": "resources/icons/filter-on-dark.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.enableFilterDiffMode",
+                    "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && !testbenchExtension.filterDiffModeEnabledTestThemes && false",
+                    "group": "navigation@4",
+                    "icon": {
+                        "light": "resources/icons/diff-off-light.svg",
+                        "dark": "resources/icons/diff-off-dark.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.disableFilterDiffMode",
+                    "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && testbenchExtension.filterDiffModeEnabledTestThemes && false",
+                    "group": "navigation@4",
+                    "icon": {
+                        "light": "resources/icons/diff-on-light.svg",
+                        "dark": "resources/icons/diff-on-dark.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.searchInTestThemesTreeOff",
+                    "when": "view == testbench.testThemes && !testbenchExtension.testThemesTreeHasSearchFilter",
+                    "group": "navigation@5",
+                    "icon": {
+                        "light": "resources/icons/search-off-light.svg",
+                        "dark": "resources/icons/search-off-dark.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.searchInTestThemesTreeOn",
+                    "when": "view == testbench.testThemes && testbenchExtension.testThemesTreeHasSearchFilter",
+                    "group": "navigation@5",
+                    "icon": {
+                        "light": "resources/icons/search-on-light.svg",
+                        "dark": "resources/icons/search-on-dark.svg"
                     }
                 },
                 {
                     "command": "testbenchExtension.showExtensionSettings",
-                    "group": "navigation@8",
+                    "group": "navigation@9",
                     "when": "view == testbench.projects || view == testbenchExtension.webView"
                 },
                 {
@@ -680,12 +790,30 @@
                         "light": "resources/icons/refresh-light.svg",
                         "dark": "resources/icons/refresh-dark.svg"
                     }
+                },
+                {
+                    "command": "testbenchExtension.searchInTestElementsTreeOff",
+                    "when": "view == testbench.testElements && !testbenchExtension.testElementsTreeHasSearchFilter",
+                    "group": "navigation@3",
+                    "icon": {
+                        "light": "resources/icons/search-off-light.svg",
+                        "dark": "resources/icons/search-off-dark.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.searchInTestElementsTreeOn",
+                    "when": "view == testbench.testElements && testbenchExtension.testElementsTreeHasSearchFilter",
+                    "group": "navigation@3",
+                    "icon": {
+                        "light": "resources/icons/search-on-light.svg",
+                        "dark": "resources/icons/search-on-dark.svg"
+                    }
                 }
             ],
             "view/item/context": [
                 {
                     "command": "testbenchExtension.generateTestCasesForCycle",
-                    "when": "view == testbench.projects && viewItem == Cycle",
+                    "when": "view == testbench.projects && viewItem == Cycle && testbenchExtension.workspaceAvailable",
                     "group": "inline@1"
                 },
                 {
@@ -695,7 +823,7 @@
                 },
                 {
                     "command": "testbenchExtension.generateTestCasesForTOV",
-                    "when": "view == testbench.projects && (viewItem == Version || viewItem == customRoot.Version)",
+                    "when": "view == testbench.projects && (viewItem == Version || viewItem == customRoot.Version) && testbenchExtension.workspaceAvailable",
                     "group": "inline@1"
                 },
                 {
@@ -705,22 +833,22 @@
                 },
                 {
                     "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
-                    "when": "view == 'testbench.testThemes' && testbenchExtension.isTestThemeOpenedFromCycle && viewItem =~ /(TestThemeNode|TestCaseSetNode)(\\.hasRobotFile)?$/",
+                    "when": "view == 'testbench.testThemes' && testbenchExtension.isTestThemeOpenedFromCycle && testbenchExtension.workspaceAvailable && viewItem =~ /(TestThemeNode|TestCaseSetNode)(\\.hasRobotFile)?$/",
                     "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.generateTestsForTestThemeTreeItemFromTOV",
-                    "when": "view == 'testbench.testThemes' && !testbenchExtension.isTestThemeOpenedFromCycle && viewItem =~ /(TestThemeNode|TestCaseSetNode)(\\.hasRobotFile)?$/",
+                    "when": "view == 'testbench.testThemes' && !testbenchExtension.isTestThemeOpenedFromCycle && testbenchExtension.workspaceAvailable && viewItem =~ /(TestThemeNode|TestCaseSetNode)(\\.hasRobotFile)?$/",
                     "group": "inline@2"
                 },
                 {
                     "command": "testbenchExtension.openAndRevealGeneratedRobotFile",
-                    "when": "view == 'testbench.testThemes' && viewItem =~ /\\.hasRobotFile$/",
+                    "when": "view == 'testbench.testThemes' && testbenchExtension.workspaceAvailable && viewItem =~ /\\.hasRobotFile$/",
                     "group": "inline@3"
                 },
                 {
                     "command": "testbenchExtension.readAndImportTestResultsToTestbench",
-                    "when": "view == 'testbench.testThemes' && viewItem =~ /MarkedForImport/",
+                    "when": "view == 'testbench.testThemes' && testbenchExtension.workspaceAvailable && viewItem =~ /MarkedForImport/",
                     "group": "inline@2",
                     "icon": {
                         "light": "resources/icons/upload-light.svg",
@@ -728,46 +856,39 @@
                     }
                 },
                 {
-                    "command": "testbenchExtension.makeRoot",
-                    "when": "(view == testbench.projects && viewItem == Project) || (view == testbench.testThemes && (viewItem == TestThemeNode || viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForGeneration.TestThemeNode' || viewItem == 'openedFromCycle.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForGeneration.TestThemeNode'))",
-                    "group": "navigation"
-                },
-                {
-                    "command": "testbenchExtension.resetProjectTreeViewRoot",
-                    "when": "view == testbench.projects && viewItem =~ /customRoot/",
-                    "group": "navigation@1",
-                    "title": "Reset Custom Root"
-                },
-                {
-                    "command": "testbenchExtension.resetTestThemeTreeViewRoot",
-                    "when": "view == 'testbench.testThemes' && viewItem =~ /customRoot/",
-                    "group": "navigation@1",
-                    "title": "Reset Custom Root"
-                },
-                {
                     "command": "testbenchExtension.openAvailableSubdivisionInTestElementsView",
-                    "when": "view == testbench.testElements && viewItem == 'testElement.subdivision.resource.available'",
+                    "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable && viewItem == 'testElement.subdivision.resource.available'",
                     "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.openMissingSubdivisionInTestElementsView",
-                    "when": "view == testbench.testElements && viewItem == 'testElement.subdivision.resource.missing'",
+                    "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable && viewItem == 'testElement.subdivision.resource.missing'",
                     "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.openSubdivisionFolderInExplorer",
-                    "when": "view == testbench.testElements && viewItem == 'testElement.subdivision.folder'",
+                    "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable && viewItem == 'testElement.subdivision.folder'",
                     "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.openInteractionInTestElementsView",
-                    "when": "view == testbench.testElements && viewItem == 'testElement.interaction.resource.available'",
+                    "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable && viewItem == 'testElement.interaction.resource.available'",
                     "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.createMissingParentResourceForInteraction",
-                    "when": "view == testbench.testElements && viewItem == 'testElement.interaction.resource.missing'",
+                    "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable && viewItem == 'testElement.interaction.resource.missing'",
                     "group": "inline@1"
+                },
+                {
+                    "command": "testbenchExtension.setActiveProject",
+                    "when": "view == testbench.projects && viewItem == Project && testbenchExtension.workspaceAvailable",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "testbenchExtension.setActiveTOV",
+                    "when": "view == testbench.projects && viewItem == Version && testbenchExtension.workspaceAvailable",
+                    "group": "navigation@2"
                 }
             ]
         }
@@ -794,8 +915,8 @@
         "release:manual": "node scripts/manual-release.js"
     },
     "devDependencies": {
-        "@commitlint/cli": "^19.8.1",
-        "@commitlint/config-conventional": "^19.8.1",
+        "@commitlint/cli": "^20.1.0",
+        "@commitlint/config-conventional": "^20.0.0",
         "@eslint/js": "^9.20.0",
         "@semantic-release/changelog": "^6.0.3",
         "@semantic-release/exec": "^7.1.0",
@@ -805,36 +926,36 @@
         "@types/base-64": "^1.0.2",
         "@types/glob": "^8.1.0",
         "@types/mocha": "^10.0.10",
-        "@types/node": "^22.15.32",
+        "@types/node": "^22.18.12",
         "@types/sinon": "^17.0.4",
         "@types/uuid": "^10.0.0",
         "@types/vscode": "^1.101.0",
         "@typescript-eslint/eslint-plugin": "^8.9.0",
         "@typescript-eslint/parser": "^8.9.0",
-        "@vscode/test-cli": "^0.0.10",
+        "@vscode/test-cli": "^0.0.12",
         "@vscode/test-electron": "^2.5.2",
         "@vscode/vsce": "^3.6.2",
-        "conventional-changelog-conventionalcommits": "^8.0.0",
+        "conventional-changelog-conventionalcommits": "^9.1.0",
         "copy-webpack-plugin": "^13.0.1",
         "eslint": "^9.29.0",
         "fast-deep-equal": "^3.1.3",
-        "globals": "^15.15.0",
+        "globals": "^16.4.0",
         "husky": "^9.1.7",
-        "mocha": "^10.8.2",
+        "mocha": "^11.7.4",
         "mocha-junit-reporter": "^2.2.1",
         "nyc": "^17.1.0",
         "prettier": "^3.5.3",
         "proxyquire": "^2.1.3",
         "semantic-release": "^24.2.5",
-        "sinon": "^19.0.5",
+        "sinon": "^21.0.0",
         "ts-loader": "^9.5.2",
         "typescript": "^5.8.3",
         "typescript-eslint": "^8.34.1",
         "webpack": "^5.99.9",
-        "webpack-cli": "^5.1.4"
+        "webpack-cli": "^6.0.1"
     },
     "dependencies": {
-        "@vscode-elements/elements": "^1.16.1",
+        "@vscode-elements/elements": "^2.3.1",
         "@vscode/python-extension": "^1.0.5",
         "axios": "^1.10.0",
         "base-64": "^1.0.0",
@@ -842,7 +963,7 @@
         "https-proxy-agent": "^7.0.6",
         "jszip": "^3.10.1",
         "regex-translator": "^0.2.8",
-        "uuid": "^11.1.0",
+        "uuid": "^9.0.1",
         "vscode-languageclient": "^9.0.1"
     },
     "extensionDependencies": [

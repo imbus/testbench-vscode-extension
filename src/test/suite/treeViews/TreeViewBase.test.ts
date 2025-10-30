@@ -69,7 +69,7 @@ class TestTreeView extends TreeViewBase<TestTreeItem> {
         return this.mockRootItems;
     }
 
-    protected async getChildrenForItem(item: TestTreeItem): Promise<TestTreeItem[]> {
+    protected async getChildrenForItem(_item: TestTreeItem): Promise<TestTreeItem[]> {
         this.getChildrenForItemCalled = true;
         return this.mockChildren;
     }
@@ -500,11 +500,11 @@ suite("TreeViewBase", function () {
             await treeView.testGetRootItems();
             assert.strictEqual(treeView.fetchRootItemsCalled, true);
 
-            // Reset flag and set old timestamp
+            // Reset flag and clear cache to simulate expired cache
             treeView.fetchRootItemsCalled = false;
-            treeView.setLastDataFetch(Date.now() - 10000); // 10 seconds ago
+            (treeView as any).rootItemsCache.clearCache();
 
-            // Second request should fetch again due to old timestamp
+            // Second request should fetch again due to cleared cache
             await treeView.testGetRootItems();
             assert.strictEqual(treeView.fetchRootItemsCalled, true);
         });

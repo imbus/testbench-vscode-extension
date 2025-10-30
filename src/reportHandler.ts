@@ -12,7 +12,7 @@ import * as os from "os";
 import * as testBenchTypes from "./testBenchTypes";
 import * as utils from "./utils";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
-import axios, { AxiosResponse } from "axios";
+import { AxiosResponse, AxiosInstance } from "axios";
 import { connection, logger, userSessionManager } from "./extension";
 import {
     ConfigKeys,
@@ -20,7 +20,8 @@ import {
     JobTypes,
     folderNameOfInternalTestbenchFolder,
     ProjectItemTypes,
-    TestThemeItemTypes
+    TestThemeItemTypes,
+    INTERNAL_REPORTS_SUBFOLDER_NAME
 } from "./constants";
 import { extractDataFromReport, PlayServerConnection, withRetry, RetryPredicateFactory } from "./testBenchConnection";
 import { ExecutionMode } from "./testBenchTypes";
@@ -263,7 +264,7 @@ export async function getJobIdOfCycleReport(
     const getJobIDUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
     logger.trace(`[reportHandler] Fetching job ID of cycle report from URL: ${getJobIDUrl}`);
     try {
-        const apiClient: axios.AxiosInstance = connection.getApiClient();
+        const apiClient: AxiosInstance = connection.getApiClient();
         const jobIdResponse: AxiosResponse<testBenchTypes.JobIdResponse> = await withRetry(
             () =>
                 apiClient.post<testBenchTypes.JobIdResponse>(getJobIDUrl, requestParams, {
@@ -315,7 +316,7 @@ export async function getJobStatus(
     const getJobStatusUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/${jobType}/job/${jobId}/v1`;
     logger.trace(`[reportHandler] Fetching job status at: ${getJobStatusUrl}`);
 
-    const apiClient: axios.AxiosInstance = connection.getApiClient();
+    const apiClient: AxiosInstance = connection.getApiClient();
     const jobStatusResponse: AxiosResponse<testBenchTypes.JobStatusResponse> = await withRetry(
         () =>
             apiClient.get(getJobStatusUrl, {
@@ -369,7 +370,7 @@ export async function downloadReport(
         const downloadReportUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/report/${fileNameToDownload}/v1`;
         logger.debug(`[reportHandler] Downloading report "${fileNameToDownload}" from URL: ${downloadReportUrl}`);
 
-        const apiClient: axios.AxiosInstance = connection.getApiClient();
+        const apiClient: AxiosInstance = connection.getApiClient();
         const downloadZipResponse: AxiosResponse<any> = await withRetry(
             () =>
                 apiClient.get(downloadReportUrl, {
@@ -411,7 +412,7 @@ export async function downloadReport(
 }
 
 /**
- * Saves the downloaded report file locally.
+ * Saves the downloaded report file locally inside the internal .testbench folder's reports subfolder.
  *
  * @param {string} workspaceLocation The workspace location.
  * @param {string} folderNameOfReport The folder name for saving the report.
@@ -427,6 +428,8 @@ async function storeReportFileLocally(
 ): Promise<string | null> {
     try {
         const filePath: string = path.join(workspaceLocation, folderNameOfReport, fileNameOfReport);
+        const dirPath: string = path.dirname(filePath);
+        await vscode.workspace.fs.createDirectory(vscode.Uri.file(dirPath));
         const uri: vscode.Uri = vscode.Uri.file(filePath);
         await vscode.workspace.fs.writeFile(uri, new Uint8Array(downloadResponse.data));
         logger.debug(`[reportHandler] Report file saved to '${uri.fsPath}'.`);
@@ -732,7 +735,7 @@ async function runRobotFrameworkTestGenerationProcess(
     const downloadedReportZipPath: string | null = await fetchReportZipOfCycleFromServer(
         projectKey,
         cycleKey,
-        folderNameOfInternalTestbenchFolder,
+        path.join(folderNameOfInternalTestbenchFolder, INTERNAL_REPORTS_SUBFOLDER_NAME),
         cycleStructureOptionsRequestParams,
         progress,
         cancellationToken
@@ -857,9 +860,7 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
         return selectedXMLFileUri[0].fsPath;
     }
 
-    const xmlFileNotSelectedError: string = "No output.xml file selected.";
-    logger.warn(`[reportHandler] ${xmlFileNotSelectedError}`);
-    vscode.window.showWarningMessage(xmlFileNotSelectedError);
+    logger.warn("[reportHandler] No output.xml file selected.");
     return null;
 }
 
@@ -919,8 +920,18 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             }
             const testbenchWorkingDirectoryPathInsideWorkspace: string = path.join(
                 workspaceLocation,
-                folderNameOfInternalTestbenchFolder
+                folderNameOfInternalTestbenchFolder,
+                INTERNAL_REPORTS_SUBFOLDER_NAME
             );
+            try {
+                await vscode.workspace.fs.createDirectory(
+                    vscode.Uri.file(testbenchWorkingDirectoryPathInsideWorkspace)
+                );
+            } catch (e) {
+                logger.warn(
+                    `[reportHandler] Failed to ensure reports directory exists at ${testbenchWorkingDirectoryPathInsideWorkspace}: ${e}`
+                );
+            }
 
             const outputXMLPath: string | null = await chooseRobotOutputXMLFileIfNotSet(workspaceLocation);
             if (!outputXMLPath) {
@@ -967,7 +978,7 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             const downloadedReportWithoutResultsZip: string | null = await fetchReportZipOfCycleFromServer(
                 projectKey,
                 cycleKey,
-                folderNameOfInternalTestbenchFolder,
+                path.join(folderNameOfInternalTestbenchFolder, INTERNAL_REPORTS_SUBFOLDER_NAME),
                 cycleStructureOptionsRequestParams,
                 progress,
                 cancellationToken
@@ -1404,7 +1415,7 @@ export async function startTestGenerationUsingTOV(
                 const downloadedTovReportPath: string | null = await downloadReport(
                     projectKey,
                     downloadedTovReportName,
-                    folderNameOfInternalTestbenchFolder
+                    path.join(folderNameOfInternalTestbenchFolder, INTERNAL_REPORTS_SUBFOLDER_NAME)
                 );
 
                 if (!downloadedTovReportPath) {

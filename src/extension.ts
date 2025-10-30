@@ -35,14 +35,25 @@ import { ProjectsTreeItem } from "./treeViews/implementations/projects/ProjectsT
 import * as reportHandler from "./reportHandler";
 import * as utils from "./utils";
 import path from "path";
+import { TreeViewBase } from "./treeViews/core/TreeViewBase";
+import { TreeItemBase } from "./treeViews/core/TreeItemBase";
+import { TextFilterOptions } from "./treeViews/features/FilteringModule";
 import {
     updateOrRestartLS,
     stopLanguageClient,
     client,
     handleLanguageServerRestartOnSessionChange,
     prepareLanguageServerForTreeItemOperation,
-    setIsHandlingLogout
-} from "./server";
+    configureLanguageServerIntegration
+} from "./languageServer/server";
+import {
+    hasLsConfig,
+    writeLsConfig,
+    readLsConfig,
+    validateAndFixLsConfigInteractively,
+    LanguageServerConfig,
+    promptCreateLsConfigIfMissing
+} from "./languageServer/lsConfig";
 import {
     hideProjectManagementTreeView,
     displayProjectManagementTreeView
@@ -59,6 +70,8 @@ import { initializeTreeViews } from "./treeViews/TreeViewFactory";
 import { UserSessionManager } from "./userSessionManager";
 import { SharedSessionManager } from "./sharedSessionManager";
 import { v4 as uuidv4 } from "uuid";
+import { activeConfigService } from "./languageServer/activeConfigService";
+import { checkWorkspaceAndNotifyUser } from "./utils";
 
 /* =============================================================================
    Constants, Global Variables & Exports
@@ -101,6 +114,9 @@ export function setExtensionContext(context: vscode.ExtensionContext): void {
 
 // Global variable to store the authentication provider instance
 let authProviderInstance: TestBenchAuthenticationProvider | null = null;
+export function getAuthProvider(): TestBenchAuthenticationProvider | null {
+    return authProviderInstance;
+}
 
 // Prevent multiple session change handling simultaneously
 let isHandlingSessionChange: boolean = false;
@@ -281,13 +297,15 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         const projectName = versionItem.parent?.label?.toString();
         const tovName = versionItem.label?.toString();
 
-        if (projectKey && tovKey && projectName && tovName) {
-            await updateOrRestartLS(projectName, tovName);
-        } else {
+        if (!(projectKey && tovKey && projectName && tovName)) {
             const errorMessage = `Cannot update language server: Invalid project or TOV values. Project name: ${projectName}, TOV name: ${tovName}`;
             vscode.window.showErrorMessage(errorMessage);
             logger.error(`[extension] ${errorMessage}`);
+            return;
         }
+
+        // Prompt to create LS config if missing on TOV click
+        await promptCreateLsConfigIfMissing(projectName, tovName);
     };
 
     const handleOpenTOV = async (tovItem: ProjectsTreeItem) => {
@@ -311,7 +329,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await displayTestThemeTreeView();
             await displayTestElementsTreeView();
             await hideProjectManagementTreeView();
-            await updateOrRestartLS(projectName, tovName);
+
+            await promptCreateLsConfigIfMissing(projectName, tovName);
+            const cfg = await readLsConfig();
+            if (!cfg || !cfg.projectName || cfg.projectName.trim() === "" || cfg.tovName === undefined) {
+                await validateAndFixLsConfigInteractively(cfg || undefined);
+            }
             await treeViews.testThemesTree.loadTov(projectKey, tovKey, projectName, tovName);
             if (treeViews.testElementsTree) {
                 await treeViews.testElementsTree.loadTov(tovKey, tovItem.label?.toString(), projectName, tovName);
@@ -352,7 +375,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await displayTestThemeTreeView();
             await displayTestElementsTreeView();
             await hideProjectManagementTreeView();
-            await updateOrRestartLS(projectName, tovName);
+
+            await promptCreateLsConfigIfMissing(projectName, tovName);
+            const cfg = await readLsConfig();
+            if (!cfg || !cfg.projectName || cfg.projectName.trim() === "" || cfg.tovName === undefined) {
+                await validateAndFixLsConfigInteractively(cfg || undefined);
+            }
             await treeViews.testThemesTree.loadCycle(
                 projectKey,
                 cycleKey,
@@ -408,7 +436,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 }
             }
 
-            await prepareLanguageServerForTreeItemOperation(tovItem, "generate test cases for TOV");
+            await prepareLanguageServerForTreeItemOperation("generate test cases for TOV");
             await treeViews.projectsTree.generateTestCasesForTOV(tovItem);
         } catch (error) {
             if (error instanceof TestBenchConnectionError) {
@@ -450,7 +478,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 }
             }
 
-            await prepareLanguageServerForTreeItemOperation(cycleItem, "generate test cases for cycle");
+            await prepareLanguageServerForTreeItemOperation("generate test cases for cycle");
             await reportHandler.startTestGenerationForCycle(context, cycleItem);
         } catch (error) {
             if (error instanceof TestBenchConnectionError) {
@@ -487,10 +515,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
-            await prepareLanguageServerForTreeItemOperation(
-                testThemeTreeItem,
-                "generate test cases for test theme or test case set"
-            );
+            await prepareLanguageServerForTreeItemOperation("generate test cases for test theme or test case set");
             await treeViews.testThemesTree.generateTestCases(testThemeTreeItem);
         } catch (error) {
             if (error instanceof TestBenchConnectionError) {
@@ -529,10 +554,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
-            await prepareLanguageServerForTreeItemOperation(
-                testThemeTreeItem,
-                "generate test cases for test theme tree item"
-            );
+            await prepareLanguageServerForTreeItemOperation("generate test cases for test theme tree item");
             await treeViews.testThemesTree.generateTestCases(testThemeTreeItem);
         } catch (error) {
             if (error instanceof TestBenchConnectionError) {
@@ -571,7 +593,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
-            await prepareLanguageServerForTreeItemOperation(testThemeTreeItem, "import test results");
+            await prepareLanguageServerForTreeItemOperation("import test results");
             await treeViews.testThemesTree.importTestResultsForTestThemeTreeItem(testThemeTreeItem);
         } catch (error) {
             if (error instanceof TestBenchConnectionError) {
@@ -635,8 +657,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         treeViews?.testElementsTree.createMissingParentResourceForInteraction(item);
     };
 
-    const handleUpdateOrRestartLS = (projectName: string | undefined, tovName: string | undefined) => {
-        updateOrRestartLS(projectName, tovName);
+    const handleUpdateOrRestartLS = () => {
+        updateOrRestartLS();
     };
 
     const handleShowExtensionSettings = () => {
@@ -656,141 +678,117 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     };
 
     const handleDisplayFiltersForTestThemeTree = async () => {
-        logger.debug(`[extension] Command called: testbenchExtension.displayFiltersForTestThemeTree ON or OFF`);
-
         if (!treeViews?.testThemesTree) {
-            logger.warn(
-                `[extension] testbenchExtension.displayFiltersForTestThemeTree ON or OFF called before test themes tree is initialized`
-            );
+            logger.warn("[extension] Test themes tree not available to display filters.");
             return;
         }
 
+        const connection = getConnection();
         if (!connection) {
-            logger.warn(
-                `[extension] testbenchExtension.displayFiltersForTestThemeTree ON or OFF called without active connection.`
-            );
-            vscode.window.showWarningMessage("No active connection available. Please log in first.");
+            vscode.window.showErrorMessage("No connection available to fetch filters.");
             return;
         }
 
         try {
-            const filters = await connection.getFiltersFromOldPlayServer();
-            if (!filters) {
+            const serverFilters = await connection.getFiltersFromOldPlayServer();
+            if (!serverFilters || !Array.isArray(serverFilters)) {
+                vscode.window.showWarningMessage("Could not fetch filters from the server.");
                 return;
             }
 
-            const quickPickItems: vscode.QuickPickItem[] = filters.map((filter: any) => {
-                let iconPath: { light: vscode.Uri; dark: vscode.Uri } | undefined;
-
-                switch (filter.type) {
-                    case "TestTheme":
-                        iconPath = {
-                            light: vscode.Uri.file(
-                                path.join(extensionContext.extensionPath, "resources/icons/TestThemeOriginal-light.svg")
-                            ),
-                            dark: vscode.Uri.file(
-                                path.join(extensionContext.extensionPath, "resources/icons/TestThemeOriginal-dark.svg")
-                            )
-                        };
-                        break;
-
-                    case "TestCaseSet":
-                        iconPath = {
-                            light: vscode.Uri.file(
-                                path.join(
-                                    extensionContext.extensionPath,
-                                    "resources/icons/TestCaseSetOriginal-light.svg"
-                                )
-                            ),
-
-                            dark: vscode.Uri.file(
-                                path.join(
-                                    extensionContext.extensionPath,
-                                    "resources/icons/TestCaseSetOriginal-dark.svg"
-                                )
-                            )
-                        };
-                        break;
-
-                    case "TestCase":
-                        iconPath = {
-                            light: vscode.Uri.file(
-                                path.join(extensionContext.extensionPath, "resources/icons/testCase-light.svg")
-                            ),
-                            dark: vscode.Uri.file(
-                                path.join(extensionContext.extensionPath, "resources/icons/testCase-dark.svg")
-                            )
-                        };
-                        break;
-
-                    default:
-                        iconPath = undefined;
-                        break;
-                }
-
-                return {
-                    label: filter.name,
-                    description: `Type: ${filter.type}`,
-                    picked: false,
-                    iconPath: iconPath,
-                    filterData: filter
-                } as vscode.QuickPickItem & { filterData: any };
-            });
-
-            const savedFilters = treeViews?.testThemesTree?.getSavedFilters() || [];
-            const savedFilterIds = new Set(savedFilters.map((f: any) => f.key?.serial || f.name));
-            // Mark currently applied filters as picked
-            quickPickItems.forEach((item: any) => {
-                const filterId = item.filterData.key?.serial || item.filterData.name;
-
-                item.picked = savedFilterIds.has(filterId);
-            });
-
             const quickPick = vscode.window.createQuickPick();
-            quickPick.title = "Select Filters for Test Theme Tree";
-            quickPick.placeholder =
-                savedFilters.length > 0
-                    ? `${savedFilters.length} filter(s) currently applied. Choose filters to apply`
-                    : "Choose one or more filters to apply";
-            quickPick.items = quickPickItems;
             quickPick.canSelectMany = true;
-            quickPick.matchOnDescription = true;
-            quickPick.matchOnDetail = true;
-            quickPick.selectedItems = quickPickItems.filter((item: any) => item.picked);
+            quickPick.title = "Select filters to apply to the Test Themes tree";
 
-            quickPick.onDidAccept(() => {
-                const selectedFilters = quickPick.selectedItems.map((item: any) => item.filterData);
-                logger.trace(
-                    `[extension] Selected ${selectedFilters.length} filters:`,
+            type FilterQuickPickItem = vscode.QuickPickItem & { filterObject?: any; picked?: boolean };
 
-                    selectedFilters.map((f: any) => f.name)
-                );
+            const quickPickItems: FilterQuickPickItem[] = serverFilters.map((filter: any) => ({
+                label: filter.name,
+                description: `Type: ${filter.type}`,
+                picked: treeViews?.testThemesTree
+                    .getSavedFilters()
+                    .some((savedFilter) => savedFilter.key?.serial === filter.key?.serial),
+                filterObject: filter
+            }));
 
-                if (selectedFilters.length > 0) {
-                    vscode.window.showInformationMessage(
-                        `Selected ${selectedFilters.length} filter(s): ${selectedFilters.map((f: any) => f.name).join(", ")}`
-                    );
-                    treeViews?.testThemesTree?.applyFiltersAndRefresh(selectedFilters).catch((error) => {
-                        logger.error(`[extension] Error applying test theme filters:`, error);
+            if (treeViews.testThemesTree.getSavedFilters().length > 0) {
+                quickPickItems.push({
+                    label: "Actions",
+                    kind: vscode.QuickPickItemKind.Separator
+                });
+                quickPickItems.push({
+                    label: "$(clear-all) Clear filters",
+                    description: "Clear all active filters",
+                    filterObject: "clear-filters-action",
+                    picked: false
+                });
+            }
 
-                        vscode.window.showErrorMessage(`Failed to apply filters: ${error.message}`);
-                    });
-                } else {
-                    treeViews?.testThemesTree?.clearFiltersAndRefresh().catch((error) => {
-                        logger.error(`[extension] Error clearing test theme filters:`, error);
-                    });
-                }
+            quickPick.items = quickPickItems;
+            quickPick.selectedItems = quickPickItems.filter((item) => item.picked);
 
-                quickPick.dispose();
-            });
-            quickPick.onDidHide(() => {
-                quickPick.dispose();
-            });
+            const disposables: vscode.Disposable[] = [];
+
+            disposables.push(
+                quickPick.onDidChangeSelection(async (selection) => {
+                    if (
+                        selection.some((item) => (item as FilterQuickPickItem).filterObject === "clear-filters-action")
+                    ) {
+                        if (treeViews?.testThemesTree) {
+                            await treeViews.testThemesTree.clearFiltersAndRefresh();
+                        }
+                        quickPick.hide();
+                    }
+                })
+            );
+
+            disposables.push(
+                quickPick.onDidAccept(async () => {
+                    const selectedItems = quickPick.selectedItems;
+
+                    if (!treeViews?.testThemesTree) {
+                        logger.warn("[extension] Test themes tree became unavailable during filter selection.");
+                        quickPick.hide();
+                        return;
+                    }
+
+                    const selectedFilters = selectedItems
+                        .filter((item) => (item as FilterQuickPickItem).filterObject !== "clear-filters-action")
+                        .map((item) => (item as FilterQuickPickItem).filterObject);
+
+                    await treeViews.testThemesTree.applyFiltersAndRefresh(selectedFilters);
+                    quickPick.hide();
+                })
+            );
+
+            disposables.push(
+                quickPick.onDidHide(() => {
+                    disposables.forEach((d) => d.dispose());
+                    quickPick.dispose();
+                })
+            );
+
             quickPick.show();
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "Unknown error";
-            logger.error(`[extension] Error when displaying filters: ${errorMessage}`, error);
-            vscode.window.showErrorMessage(`Failed to display filters: ${errorMessage}`);
+            const errorMessage = `Error displaying filters: ${error instanceof Error ? error.message : "Unknown error"}`;
+            logger.error(`[extension] ${errorMessage}`);
+            vscode.window.showErrorMessage(errorMessage);
+        }
+    };
+
+    const handleEnableFilterDiffMode = async () => {
+        if (treeViews?.testThemesTree) {
+            await treeViews.testThemesTree.enableFilterDiffMode();
+        } else {
+            logger.warn("[extension] Test themes tree not available to enable filter diff mode.");
+        }
+    };
+
+    const handleDisableFilterDiffMode = async () => {
+        if (treeViews?.testThemesTree) {
+            await treeViews.testThemesTree.disableFilterDiffMode();
+        } else {
+            logger.warn("[extension] Test themes tree not available to disable filter diff mode.");
         }
     };
 
@@ -841,6 +839,300 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     };
 
+    /**
+     * Handles the search functionality for a given tree view.
+     * Provides a live search within an input box,
+     * and a button to configure search options.
+     * @param treeView The tree view instance to perform the search on.
+     */
+    const handleSearchInTreeView = async (treeView: TreeViewBase<TreeItemBase>): Promise<void> => {
+        logger.trace(`[extension] Initiating search for tree view: ${treeView.config.id}`);
+        const filteringModule = treeView.getModule("filtering");
+        if (!filteringModule) {
+            logger.warn(`[extension] Search cancelled: FilteringModule not found for tree view ${treeView.config.id}.`);
+            vscode.window.showWarningMessage("Search functionality is not available for this view.");
+            return;
+        }
+
+        const currentFilter = filteringModule.getTextFilter();
+        logger.trace(`[extension] Current text filter: ${JSON.stringify(currentFilter)}`);
+        const treeViewId = treeView.config.id;
+        const isProjectsTree = treeViewId === "testbench.projects";
+
+        // Use existing filter options or defaults.
+        let searchOptionsToUse = {
+            searchInName: currentFilter?.searchInName ?? true,
+            searchInDescription: currentFilter?.searchInDescription ?? !isProjectsTree,
+            searchInTooltip: currentFilter?.searchInTooltip ?? true,
+            caseSensitive: currentFilter?.caseSensitive ?? false,
+            exactMatch: currentFilter?.exactMatch ?? false,
+            showChildrenOfMatches: currentFilter?.showChildrenOfMatches ?? true
+        };
+
+        const inputBox = vscode.window.createInputBox();
+        inputBox.title = `Search in ${treeView.config.title}`;
+        inputBox.value = currentFilter?.searchText || "";
+        // Note: VS Code adds this extra text after our prompt text by default:
+        // (Press 'Enter' to confirm or 'Escape' to cancel)
+        inputBox.prompt = "Enter search text. Clear input field to remove filter.";
+
+        // Button to configure search options on top right of the input box.
+        const configureButton: vscode.QuickInputButton = {
+            iconPath: new vscode.ThemeIcon("settings-gear"),
+            tooltip: "Configure Search Options"
+        };
+        inputBox.buttons = [configureButton];
+
+        const disposables: vscode.Disposable[] = [];
+
+        /**
+         * Applies the text filter to the tree view based on the current search text and options.
+         * @param searchText The text to search for.
+         */
+        const performSearch = (searchText: string) => {
+            if (!searchText.trim()) {
+                if (filteringModule.getTextFilter() !== null) {
+                    logger.trace("[extension] Search text is empty, clearing filter.");
+                    filteringModule.setTextFilter(null);
+                }
+                return;
+            }
+
+            const newFilterOptions: TextFilterOptions = {
+                searchText: searchText,
+                ...searchOptionsToUse,
+                searchInId: false,
+                searchInType: false,
+                showParentsOfMatches: true
+            };
+
+            logger.trace(`[extension] Applying text filter: ${JSON.stringify(newFilterOptions)}`);
+            filteringModule.setTextFilter(newFilterOptions);
+        };
+
+        const showOptionsQuickPick = async (): Promise<void> => {
+            inputBox.hide();
+
+            const searchCriteria: (vscode.QuickPickItem & { id: string; picked?: boolean })[] = [
+                {
+                    id: "Name",
+                    label: "Name",
+                    description: "Search in item's name",
+                    picked: searchOptionsToUse.searchInName
+                }
+            ];
+
+            if (!isProjectsTree) {
+                searchCriteria.push({
+                    id: "Description",
+                    label: "UID",
+                    description: "Search in item's unique ID",
+                    picked: searchOptionsToUse.searchInDescription
+                });
+            }
+
+            searchCriteria.push({
+                id: "Tooltip",
+                label: "Tooltip",
+                description: "Search in all available item fields",
+                picked: searchOptionsToUse.searchInTooltip
+            });
+
+            // Define search option items for the quick pick.
+            const quickPickSearchOptions: (vscode.QuickPickItem & { id: string; picked?: boolean })[] = [
+                {
+                    id: "CaseSensitive",
+                    label: "Case Sensitive",
+                    description: "Perform a case-sensitive search",
+                    picked: searchOptionsToUse.caseSensitive
+                },
+                {
+                    id: "ExactMatch",
+                    label: "Exact Match",
+                    description: "Perform an exact match search",
+                    picked: searchOptionsToUse.exactMatch
+                },
+                {
+                    id: "ShowChildren",
+                    label: "Show Children of Matches",
+                    description: "Show all children of matching items",
+                    picked: searchOptionsToUse.showChildrenOfMatches
+                }
+            ];
+
+            const quickPick = vscode.window.createQuickPick<vscode.QuickPickItem & { id: string }>();
+            quickPick.canSelectMany = true;
+            quickPick.placeholder = "Select search criteria and options";
+            quickPick.title = `Search Options for ${treeView.config.title}`;
+
+            const quickPickItems: (vscode.QuickPickItem & { id: string })[] = [
+                { id: "separator-criteria", label: "Search Criteria", kind: vscode.QuickPickItemKind.Separator },
+                ...searchCriteria,
+                { id: "separator-options", label: "Options", kind: vscode.QuickPickItemKind.Separator },
+                ...quickPickSearchOptions
+            ];
+
+            quickPick.items = quickPickItems;
+            quickPick.selectedItems = quickPickItems.filter((item) => (item as any).picked);
+
+            const quickPickDisposables: vscode.Disposable[] = [];
+
+            // Update search options when selection confirmed
+            quickPickDisposables.push(
+                quickPick.onDidAccept(() => {
+                    const selectedItems = quickPick.selectedItems;
+                    searchOptionsToUse = {
+                        searchInName: selectedItems.some((i) => i.id === "Name"),
+                        searchInDescription: selectedItems.some((i) => i.id === "Description"),
+                        searchInTooltip: selectedItems.some((i) => i.id === "Tooltip"),
+                        caseSensitive: selectedItems.some((i) => i.id === "CaseSensitive"),
+                        exactMatch: selectedItems.some((i) => i.id === "ExactMatch"),
+                        showChildrenOfMatches: selectedItems.some((i) => i.id === "ShowChildren")
+                    };
+                    quickPick.hide();
+                })
+            );
+
+            quickPickDisposables.push(
+                quickPick.onDidHide(() => {
+                    quickPickDisposables.forEach((d) => d.dispose());
+                    quickPick.dispose();
+                    inputBox.show();
+                    performSearch(inputBox.value);
+                })
+            );
+
+            quickPick.show();
+        };
+
+        // Perform live search when input box value changes.
+        disposables.push(
+            inputBox.onDidChangeValue((searchText) => {
+                performSearch(searchText);
+            })
+        );
+
+        // Show search options when configure button is clicked.
+        disposables.push(
+            inputBox.onDidTriggerButton(async (button) => {
+                if (button === configureButton) {
+                    await showOptionsQuickPick();
+                }
+            })
+        );
+
+        // Hide the input box when the user presses Enter.
+        disposables.push(
+            inputBox.onDidAccept(async () => {
+                inputBox.hide();
+            })
+        );
+
+        disposables.push(
+            inputBox.onDidHide(() => {
+                disposables.forEach((d) => d.dispose());
+                inputBox.dispose();
+            })
+        );
+
+        inputBox.show();
+        // Perform initial search if there is text in the input box (from a previous search).
+        if (inputBox.value) {
+            performSearch(inputBox.value);
+        }
+    };
+
+    const handleSearchInProjectsTree = async () => {
+        if (treeViews?.projectsTree) {
+            await handleSearchInTreeView(treeViews.projectsTree);
+        }
+    };
+
+    const handleSearchInTestThemesTree = async () => {
+        if (treeViews?.testThemesTree) {
+            await handleSearchInTreeView(treeViews.testThemesTree);
+        }
+    };
+
+    const handleSearchInTestElementsTree = async () => {
+        if (treeViews?.testElementsTree) {
+            await handleSearchInTreeView(treeViews.testElementsTree);
+        }
+    };
+
+    const handleSetActiveProject = async (item: ProjectsTreeItem) => {
+        logger.trace(`[extension] Command called: ${allExtensionCommands.setActiveProject}`);
+        if (!item) {
+            logger.warn("[extension] 'Set as Active Project' called without an item.");
+            return;
+        }
+
+        const languageServerParams = item.getLanguageServerParameters();
+        if (!languageServerParams) {
+            vscode.window.showErrorMessage("Could not determine configuration from the selected item.");
+            return;
+        }
+
+        const { projectName } = languageServerParams;
+
+        const choice = await vscode.window.showInformationMessage(
+            `Set '${projectName}' as the active project? The currently active TOV will be kept if it belongs to this project.`,
+            { modal: true },
+            "Set Active Project"
+        );
+        if (choice !== "Set Active Project") {
+            return;
+        }
+
+        const currentConfig = await readLsConfig();
+        const newConfig: LanguageServerConfig = {
+            projectName: projectName,
+            tovName: currentConfig?.tovName || ""
+        };
+
+        await writeLsConfig(newConfig);
+        vscode.window.showInformationMessage(`Active project set to: ${newConfig.projectName}`);
+    };
+
+    const handleSetActiveTOV = async (item: ProjectsTreeItem) => {
+        logger.trace(`[extension] Command called: ${allExtensionCommands.setActiveTOV}`);
+        if (!item) {
+            logger.warn("[extension] 'Set as Active TOV' called without an item.");
+            return;
+        }
+
+        const languageServerParams = item.getLanguageServerParameters();
+        if (!languageServerParams) {
+            vscode.window.showErrorMessage("Could not determine configuration from the selected item.");
+            return;
+        }
+
+        const { projectName, tovName } = languageServerParams;
+        if (!tovName) {
+            vscode.window.showErrorMessage("Could not determine TOV from the selected item.");
+            return;
+        }
+
+        const newConfig: LanguageServerConfig = {
+            projectName: projectName,
+            tovName: tovName
+        };
+
+        await writeLsConfig(newConfig);
+        vscode.window.showInformationMessage(
+            `Active configuration set to: ${newConfig.projectName} / ${newConfig.tovName}`
+        );
+    };
+
+    const handleValidateAndFixLsConfig = async () => {
+        logger.trace(`[extension] Command called: ${allExtensionCommands.validateAndFixLsConfig}`);
+        if (!(await hasLsConfig())) {
+            vscode.window.showInformationMessage("No TestBench project configuration file found to validate.");
+            return;
+        }
+        await validateAndFixLsConfigInteractively(undefined);
+    };
+
     // --- Command Registry ---
     const commandRegistry = [
         // Authentication and Session
@@ -885,8 +1177,17 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         { id: allExtensionCommands.refreshProjectTreeView, handler: handleRefreshProjectTreeView },
         { id: allExtensionCommands.refreshTestThemeTreeView, handler: handleRefreshTestThemeTreeView },
         { id: allExtensionCommands.refreshTestElementsTree, handler: handleRefreshTestElementsTree },
-        { id: allExtensionCommands.displayFiltersForTestThemeTreeON, handler: handleDisplayFiltersForTestThemeTree },
-        { id: allExtensionCommands.displayFiltersForTestThemeTreeOFF, handler: handleDisplayFiltersForTestThemeTree },
+        { id: allExtensionCommands.displayFiltersForTestThemeTree, handler: handleDisplayFiltersForTestThemeTree },
+        {
+            id: allExtensionCommands.displayFiltersForTestThemeTreeEnabled,
+            handler: handleDisplayFiltersForTestThemeTree
+        },
+        {
+            id: allExtensionCommands.displayFiltersForTestThemeTreeDisabled,
+            handler: handleDisplayFiltersForTestThemeTree
+        },
+        { id: allExtensionCommands.enableFilterDiffMode, handler: handleEnableFilterDiffMode },
+        { id: allExtensionCommands.disableFilterDiffMode, handler: handleDisableFilterDiffMode },
         {
             id: allExtensionCommands.makeRoot,
             handler: handleMakeRoot
@@ -943,7 +1244,16 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         {
             id: allExtensionCommands.openIssueReporter,
             handler: handleOpenIssueReporter
-        }
+        },
+        { id: allExtensionCommands.searchInProjectsTreeOn, handler: handleSearchInProjectsTree },
+        { id: allExtensionCommands.searchInProjectsTreeOff, handler: handleSearchInProjectsTree },
+        { id: allExtensionCommands.searchInTestThemesTreeOn, handler: handleSearchInTestThemesTree },
+        { id: allExtensionCommands.searchInTestThemesTreeOff, handler: handleSearchInTestThemesTree },
+        { id: allExtensionCommands.searchInTestElementsTreeOn, handler: handleSearchInTestElementsTree },
+        { id: allExtensionCommands.searchInTestElementsTreeOff, handler: handleSearchInTestElementsTree },
+        { id: allExtensionCommands.setActiveProject, handler: handleSetActiveProject },
+        { id: allExtensionCommands.setActiveTOV, handler: handleSetActiveTOV },
+        { id: allExtensionCommands.validateAndFixLsConfig, handler: handleValidateAndFixLsConfig }
     ];
 
     // Registration Loop
@@ -974,7 +1284,7 @@ async function createNewConnection(
         logger.warn(
             "[extension] A different connection was active. Logging out from previous server session before establishing new one."
         );
-        await currentConnection.logoutUserOnServer();
+        await currentConnection.teardownAfterLogout();
     }
 
     const newConnection = new PlayServerConnection(
@@ -989,6 +1299,8 @@ async function createNewConnection(
     setConnection(newConnection);
     await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
     getLoginWebViewProvider()?.updateWebviewHTMLContent();
+    await checkWorkspaceAndNotifyUser();
+
     return newConnection;
 }
 
@@ -997,11 +1309,12 @@ async function createNewConnection(
  */
 async function handleNoActiveConnection(): Promise<void> {
     if (connection) {
-        await connection.logoutUserOnServer();
+        await connection.teardownAfterLogout();
     }
 
     if (treeViews) {
         treeViews.clear();
+        treeViews.projectsTree.clearCache();
         await treeViews.loadDefaultViewsUI();
     }
 }
@@ -1011,7 +1324,7 @@ async function handleNoActiveConnection(): Promise<void> {
  */
 async function handleNoSession(): Promise<void> {
     if (connection) {
-        await connection.logoutUserOnServer();
+        await connection.teardownAfterLogout();
     }
     setConnection(null);
     await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
@@ -1026,6 +1339,7 @@ async function handleNoSession(): Promise<void> {
     // Clear tree data but preserve persistent state (expansion, marking, etc.)
     if (treeViews) {
         treeViews.projectsTree.clearTree();
+        treeViews.projectsTree.clearCache();
         treeViews.testThemesTree.clearTree();
         treeViews.testElementsTree.clearTree();
         await treeViews.loadDefaultViewsUI();
@@ -1057,7 +1371,6 @@ async function handleTestBenchSessionChange(
         logger.trace("[extension] Cleared logout signal due to new session.");
 
         getLoginWebViewProvider()?.resetEditMode();
-        setIsHandlingLogout(false);
         const previousUserId = userSessionManager.getCurrentUserId();
         const newUserId = sessionToProcess.account.id;
         const wasNewSessionStarted = previousUserId !== newUserId;
@@ -1081,11 +1394,6 @@ async function handleTestBenchSessionChange(
             login: sessionToProcess.account.label
         });
 
-        if (treeViews) {
-            const reason = wasNewSessionStarted ? "New user session" : "Session restored/relogged";
-            logger.trace(`[extension] ${reason} for ${sessionToProcess.account.label}. Reloading persistent UI state.`);
-            await treeViews.reloadAllTreeViewsStateFromPersistence();
-        }
         const activeConnection = await connectionManager.getActiveConnection(context);
 
         if (!activeConnection) {
@@ -1113,52 +1421,28 @@ async function handleTestBenchSessionChange(
             !!(connection && connection.getSessionToken() !== newConnection.getSessionToken());
 
         if (isNewConnection && treeViews) {
-            logger.trace("[extension] New connection established.");
+            logger.trace("[extension] New connection established, restoring tree view state.");
+            await treeViews.reloadAllTreeViewsStateFromPersistence({ refresh: false });
             await treeViews.restoreViewsState();
+        } else if (treeViews) {
+            logger.trace("[extension] Session refreshed, reloading persistent UI state.");
+            await treeViews.reloadAllTreeViewsStateFromPersistence();
         }
     } else {
-        setIsHandlingLogout(true);
         await handleNoSession();
     }
 }
 
-/* =============================================================================
-   Extension Activation & Deactivation
-   ============================================================================= */
-
-/**
- * Called when the extension is activated.
- *
- * @param {vscode.ExtensionContext} context The extension context.
+/** Sets up and registers the authentication provider and its listeners.
+ * @param context The extension context.
+ * @param instanceId A unique identifier for this extension instance.
+ * @returns The initialized TestBenchAuthenticationProvider instance.
  */
-export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    const instanceId = uuidv4();
-    logger = new testBenchLogger.TestBenchLogger();
-    logger.info(`[extension] Activating extension instance ${instanceId}.`);
-    initializeConfigurationWatcher();
-
-    const handleAutomaticLogin = async () => {
-        logger.trace(`[extension] Performing automatic login on activation.`);
-        const config = getExtensionConfiguration();
-        if (config.get(ConfigKeys.AUTO_LOGIN)) {
-            try {
-                authProviderInstance?.prepareForSilentAutoLogin();
-                const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
-                    createIfNone: true
-                });
-
-                if (session) {
-                    await handleTestBenchSessionChange(context, session);
-                }
-            } catch (error) {
-                // Errors are expected if auto-login fails silently
-                logger.trace("[extension] Automatic login failed:", error);
-            }
-        }
-    };
-
-    // Register AuthenticationProvider
-    authProviderInstance = new TestBenchAuthenticationProvider(context, instanceId);
+function initializeAuthentication(
+    context: vscode.ExtensionContext,
+    instanceId: string
+): TestBenchAuthenticationProvider {
+    const authProviderInstance = new TestBenchAuthenticationProvider(context, instanceId);
     context.subscriptions.push(
         vscode.authentication.registerAuthenticationProvider(
             TESTBENCH_AUTH_PROVIDER_ID,
@@ -1167,94 +1451,185 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             { supportsMultipleAccounts: false }
         )
     );
-    logger.trace("[extension] TestBenchAuthenticationProvider registered.");
 
-    // Session Change Listener
     context.subscriptions.push(
         vscode.authentication.onDidChangeSessions(async (e) => {
-            if (e.provider.id === TESTBENCH_AUTH_PROVIDER_ID) {
-                if (isHandlingSessionChange) {
-                    return;
-                }
-                isHandlingSessionChange = true;
-                logger.trace("[extension] TestBench authentication sessions changed.");
-                try {
-                    const currentSession = await vscode.authentication.getSession(
-                        TESTBENCH_AUTH_PROVIDER_ID,
-                        ["api_access"],
-                        { createIfNone: false, silent: true }
-                    );
-                    await handleTestBenchSessionChange(context, currentSession);
-                } catch (error) {
-                    logger.error("[extension] Error getting session in onDidChangeSessions listener:", error);
-                    await handleTestBenchSessionChange(context, undefined);
-                } finally {
-                    isHandlingSessionChange = false;
-                }
+            if (e.provider.id !== TESTBENCH_AUTH_PROVIDER_ID || isHandlingSessionChange) {
+                return;
+            }
+
+            isHandlingSessionChange = true;
+            logger.trace("[extension] TestBench authentication sessions changed.");
+            try {
+                const currentSession = await vscode.authentication.getSession(
+                    TESTBENCH_AUTH_PROVIDER_ID,
+                    ["api_access"],
+                    { createIfNone: false, silent: true }
+                );
+                await handleTestBenchSessionChange(context, currentSession);
+            } catch (error) {
+                logger.error("[extension] Error getting session in onDidChangeSessions listener:", error);
+                await handleTestBenchSessionChange(context, undefined);
+            } finally {
+                isHandlingSessionChange = false;
             }
         })
     );
 
-    userSessionManager = new UserSessionManager(context);
+    logger.trace("[extension] TestBenchAuthenticationProvider registered.");
+    return authProviderInstance;
+}
 
-    // Initialize tree views
-    await initializeTreeViews(context);
+/** Initializes context keys. */
+async function initializeContextValues(context: vscode.ExtensionContext): Promise<void> {
+    // Set initial context states
+    const initialContexts = [
+        { key: ContextKeys.CONNECTION_ACTIVE, value: false },
+        { key: ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, value: false },
+        { key: ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, value: false },
+        { key: ContextKeys.FILTER_DIFF_MODE_ENABLED, value: false },
+        { key: ContextKeys.FILTER_DIFF_MODE_ENABLED_PROJECTS, value: false },
+        { key: ContextKeys.FILTER_DIFF_MODE_ENABLED_TEST_THEMES, value: false },
+        { key: ContextKeys.FILTER_DIFF_MODE_ENABLED_TEST_ELEMENTS, value: false },
+        { key: ContextKeys.TEST_THEME_TREE_HAS_FILTERS, value: false }
+    ];
 
-    // Set the initial connection context state
-    await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, connection !== null);
-
-    await vscode.commands.executeCommand("setContext", ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, false);
-    await vscode.commands.executeCommand("setContext", ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, false);
-
-    // Initialize filter diff mode context keys
-    await vscode.commands.executeCommand("setContext", ContextKeys.FILTER_DIFF_MODE_ENABLED, false);
-    await vscode.commands.executeCommand("setContext", ContextKeys.FILTER_DIFF_MODE_ENABLED_PROJECTS, false);
-    await vscode.commands.executeCommand("setContext", ContextKeys.FILTER_DIFF_MODE_ENABLED_TEST_THEMES, false);
-    await vscode.commands.executeCommand("setContext", ContextKeys.FILTER_DIFF_MODE_ENABLED_TEST_ELEMENTS, false);
+    for (const ctx of initialContexts) {
+        await vscode.commands.executeCommand("setContext", ctx.key, ctx.value);
+    }
 
     const isTTOpenedFromCycle = context.globalState.get<string | undefined>(
         StorageKeys.IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY
     );
     await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, isTTOpenedFromCycle);
 
-    // Initialize login webview first
-    loginWebViewProvider = new loginWebView.LoginWebViewProvider(context);
+    // Initialize workspace availability context and listener
+    const updateWorkspaceAvailabilityContext = async () => {
+        const hasWorkspace = (vscode.workspace.workspaceFolders?.length || 0) > 0;
+        await vscode.commands.executeCommand("setContext", ContextKeys.WORKSPACE_AVAILABLE, hasWorkspace);
+    };
+    await updateWorkspaceAvailabilityContext();
     context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(loginWebView.LoginWebViewProvider.viewId, loginWebViewProvider, {
-            webviewOptions: { retainContextWhenHidden: true }
+        vscode.workspace.onDidChangeWorkspaceFolders(() => {
+            updateWorkspaceAvailabilityContext().catch((err) =>
+                logger?.error("[extension] Error updating workspace availability context:", err)
+            );
         })
     );
+}
 
-    // Register all commands
-    await registerExtensionCommands(context);
+/**
+ * Validates a stored session by attempting to use it to fetch a simple endpoint.
+ * This prevents creating connections and opening tree views with expired tokens.
+ * @param context The extension context
+ * @param session The session to validate
+ * @returns True if the session is valid, false otherwise
+ */
+async function validateStoredSession(
+    context: vscode.ExtensionContext,
+    session: vscode.AuthenticationSession
+): Promise<boolean> {
+    logger.trace("[extension] Validating stored session before restoration...");
 
-    // Attempt to restore session on activation
-    logger.trace("[extension] Checking if previous TestBench session should be restored...");
+    try {
+        const sharedSessionManager = SharedSessionManager.getInstance(context);
+        const sharedSession = await sharedSessionManager.getSharedSession();
+
+        if (!sharedSession || sharedSession.sessionToken !== session.accessToken) {
+            logger.debug("[extension] No matching shared session data found for validation.");
+            return false;
+        }
+
+        const tempConnection = new PlayServerConnection(
+            sharedSession.serverName,
+            sharedSession.portNumber,
+            sharedSession.username,
+            sharedSession.sessionToken,
+            context,
+            sharedSession.isInsecure
+        );
+
+        await tempConnection.initialize();
+        const isValid = await sharedSessionManager.validateSession(tempConnection);
+        await tempConnection.teardownAfterLogout();
+
+        if (!isValid) {
+            logger.debug("[extension] Stored session validation failed, session is expired or invalid.");
+            await sharedSessionManager.clearSharedSession();
+        }
+
+        return isValid;
+    } catch (error: any) {
+        logger.warn("[extension] Session validation failed:", error.message || error);
+        const sharedSessionManager = SharedSessionManager.getInstance(context);
+        await sharedSessionManager.clearSharedSession();
+        return false;
+    }
+}
+
+/** Attempts to restore a previous session or perform an automatic login. */
+async function handleInitialSession(context: vscode.ExtensionContext): Promise<void> {
+    logger.trace("[extension] Checking for existing TestBench session to restore...");
     try {
         const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
             createIfNone: false,
             silent: true
         });
+
         if (session) {
-            await handleTestBenchSessionChange(context, session);
-            logger.debug("[extension] Successfully restored previous TestBench session.");
-        } else {
-            logger.debug("[extension] No previous TestBench session found for restoration.");
-            if (!getExtensionConfiguration().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
-                await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
+            // Validate the session before using it
+            const isSessionValid = await validateStoredSession(context, session);
+
+            if (isSessionValid) {
+                await handleTestBenchSessionChange(context, session);
+                logger.debug("[extension] Successfully restored previous TestBench session.");
+                return; // Session restored, no need for auto-login
+            } else {
+                logger.debug("[extension] Stored session is no longer valid. Clearing session and showing login.");
+                // Remove the invalid session
+                if (authProviderInstance) {
+                    await authProviderInstance.removeSession(session.id);
+                }
                 getLoginWebViewProvider()?.updateWebviewHTMLContent();
+                return;
             }
+        }
+
+        logger.debug("[extension] No previous session found. Checking for auto-login config.");
+        if (getExtensionConfiguration().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
+            logger.debug("[extension] Auto-login is enabled. Attempting silent login.");
+            performAutomaticLogin(context);
+        } else {
+            getLoginWebViewProvider()?.updateWebviewHTMLContent();
         }
     } catch (error) {
         logger.warn("[extension] Error trying to get initial TestBench session silently:", error);
-        await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
+        getLoginWebViewProvider()?.updateWebviewHTMLContent();
     }
+}
 
-    if (getExtensionConfiguration().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
-        logger.debug("[extension] Auto-login is enabled. Scheduling automatic login.");
-        handleAutomaticLogin();
+/** Performs a silent, automatic login if configured. */
+async function performAutomaticLogin(context: vscode.ExtensionContext): Promise<void> {
+    logger.trace(`[extension] Performing automatic login on activation.`);
+    try {
+        authProviderInstance?.markNextLoginAsSilent();
+        const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
+            createIfNone: true
+        });
+
+        if (session) {
+            await handleTestBenchSessionChange(context, session);
+        }
+    } catch (error) {
+        logger.trace("[extension] Automatic login failed silently:", error);
     }
+}
 
+/** Sets up the polling mechanism to sync logout across multiple windows.
+ * @param context The extension context.
+ * @param instanceId A unique identifier for this extension instance. *
+ */
+function initializeCrossWindowStateSync(context: vscode.ExtensionContext, instanceId: string): void {
     let lastProcessedLogoutTimestamp = 0;
     const logoutPollInterval = setInterval(async () => {
         const signal = context.globalState.get<{ initiatorId: string; timestamp: number }>(
@@ -1262,8 +1637,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         );
 
         if (signal && signal.initiatorId !== instanceId && signal.timestamp > lastProcessedLogoutTimestamp) {
-            logger.info(
-                `[extension] Detected logout signal from another instance (${signal.initiatorId}). Logging out this instance (${instanceId}).`
+            logger.trace(
+                `[extension] Detected logout signal from instance (${signal.initiatorId}). Logging out this instance (${instanceId}).`
             );
             lastProcessedLogoutTimestamp = signal.timestamp;
 
@@ -1276,8 +1651,51 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push({
         dispose: () => clearInterval(logoutPollInterval)
     });
+}
 
-    logger.info("[extension] Extension activated successfully.");
+/**
+ * Called when the extension is activated.
+ * @param {vscode.ExtensionContext} context The extension context.
+ */
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
+    try {
+        const instanceId = uuidv4();
+        logger = new testBenchLogger.TestBenchLogger();
+        logger.info(`[extension] Activating extension instance ${instanceId}.`);
+        initializeConfigurationWatcher();
+
+        // Initialize login webview
+        loginWebViewProvider = new loginWebView.LoginWebViewProvider(context);
+        context.subscriptions.push(
+            vscode.window.registerWebviewViewProvider(loginWebView.LoginWebViewProvider.viewId, loginWebViewProvider, {
+                webviewOptions: { retainContextWhenHidden: true }
+            })
+        );
+
+        // Authentication and session management
+        authProviderInstance = initializeAuthentication(context, instanceId);
+        userSessionManager = new UserSessionManager(context);
+
+        await initializeTreeViews(context);
+        await initializeContextValues(context);
+        await registerExtensionCommands(context);
+        configureLanguageServerIntegration(context);
+        await activeConfigService.initialize(context);
+
+        // Handle session restoration and automatic login after everything is set up
+        await handleInitialSession(context);
+
+        // Start background tasks
+        initializeCrossWindowStateSync(context, instanceId);
+
+        logger.info(`[extension] Extension instance ${instanceId} activated successfully.`);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+        // Ensure logger is initialized, or fall back to console
+        const log = logger ? logger.error : console.error;
+        log(`[extension] Failed to activate extension. ${errorMessage}`, error);
+        vscode.window.showErrorMessage(`TestBench Extension failed to activate: ${errorMessage}`);
+    }
 }
 
 export async function clearAllExtensionData(
@@ -1306,7 +1724,7 @@ export async function clearAllExtensionData(
 
         if (connection) {
             try {
-                await connection.logoutUserOnServer();
+                await connection.teardownAfterLogout();
             } catch (error) {
                 logger.error("[extension] Error logging out from server while clearing all extension data:", error);
             }
@@ -1512,6 +1930,7 @@ export async function deactivate(): Promise<void> {
             await treeViews.testElementsTree.dispose();
             treeViews = null;
         }
+        activeConfigService.dispose();
         logger.info("[extension] Extension deactivated");
         if (logger) {
             logger.dispose();

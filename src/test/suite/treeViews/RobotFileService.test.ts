@@ -130,8 +130,11 @@ suite("RobotFileService", function () {
 
             for (const testCase of testCases) {
                 const mockItem = createMockTestThemesTreeItem(testCase.name, testCase.numbering);
-                const result = await robotFileService.checkRobotFileExists(mockItem);
-                assert.strictEqual(result.fileName, testCase.expected);
+                const result = robotFileService["generateRobotFileName"](
+                    mockItem.data.base.name,
+                    mockItem.data.base.numbering
+                );
+                assert.strictEqual(result, testCase.expected);
             }
         });
 
@@ -164,8 +167,11 @@ suite("RobotFileService", function () {
 
             for (const testCase of testCases) {
                 const mockItem = createMockTestThemesTreeItem(testCase.name, testCase.numbering);
-                const result = await robotFileService.checkRobotFileExists(mockItem);
-                assert.strictEqual(result.fileName, testCase.expected);
+                const result = robotFileService["generateRobotFileName"](
+                    mockItem.data.base.name,
+                    mockItem.data.base.numbering
+                );
+                assert.strictEqual(result, testCase.expected);
             }
         });
 

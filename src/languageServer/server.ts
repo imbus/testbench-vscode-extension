@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH } from "./constants";
-import { getInterpreterPath } from "./python";
+import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH } from "../constants";
+import { getInterpreterPath } from "../python";
 import {
     LanguageClient,
     LanguageClientOptions,
@@ -12,7 +12,8 @@ import {
     ErrorHandlerResult,
     CloseHandlerResult
 } from "vscode-languageclient/node";
-import { connection, logger } from "./extension";
+import { getConnection, logger } from "../extension";
+import { readLsConfig, hasLsConfig, validateAndFixLsConfigInteractively } from "./lsConfig";
 
 interface TbConnectionDetails {
     serverName: string;
@@ -53,11 +54,8 @@ let isLanguageServerBusy: boolean = false;
 let pendingRestartParams: PendingOperation | null = null;
 let restartTimeout: NodeJS.Timeout | null = null;
 let isStoppingInProgress: boolean = false;
-
-export let isHandlingLogout: boolean = false;
-export function setIsHandlingLogout(value: boolean): void {
-    isHandlingLogout = value;
-}
+let lastAppliedProjectName: string | undefined;
+let lastAppliedTovName: string | undefined;
 
 // Configuration constants
 const RESTART_DEBOUNCE_MS = 300;
@@ -209,7 +207,7 @@ async function validateTestBenchConnection(
     projectName: string,
     tovName: string
 ): Promise<TbConnectionDetails | null> {
-    if (!connection) {
+    if (!getConnection()) {
         logger.warn(
             `[server] No active TestBench connection. LS will not be started for ${projectName}/${tovName}, Op ${operationId}`
         );
@@ -219,11 +217,12 @@ async function validateTestBenchConnection(
         return null;
     }
 
+    const currentConn = getConnection();
     const tbConnectionDetails: TbConnectionDetails = {
-        serverName: connection.getServerName(),
-        serverPort: connection.getServerPort(),
-        username: connection.getUsername(),
-        sessionToken: connection.getSessionToken()
+        serverName: currentConn!.getServerName(),
+        serverPort: currentConn!.getServerPort(),
+        username: currentConn!.getUsername(),
+        sessionToken: currentConn!.getSessionToken()
     };
 
     return tbConnectionDetails;
@@ -301,15 +300,13 @@ function buildClientOptions(): LanguageClientOptions {
         },
         outputChannelName: "TestBench LS",
         errorHandler: {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             error: (_error: Error, _message: Message | undefined, _count: number | undefined): ErrorHandlerResult => {
+                // Keep running and suppress user popups
                 return { action: ErrorAction.Continue };
             },
             closed: (): CloseHandlerResult => {
-                if (isHandlingLogout) {
-                    return { action: CloseAction.DoNotRestart };
-                }
-                return { action: CloseAction.Restart };
+                // Avoid auto-restart loops
+                return { action: CloseAction.DoNotRestart };
             }
         }
     };
@@ -662,6 +659,28 @@ function setupClientNotifications(
             });
     });
 
+    client.onNotification("testbench-language-server/attempt-create-keyword", (params) => {
+        const path = params.path;
+        const keywordName = params.keyword_name;
+        vscode.window
+            .showWarningMessage(
+                "Are you sure you want to create a new TestBench keyword?",
+                {
+                    modal: true,
+                    detail: "The keyword will be created in the subdivision corresponding to the current resource file."
+                },
+                "Create Keyword"
+            )
+            .then(async (selection) => {
+                if (selection === "Create Keyword") {
+                    vscode.commands.executeCommand("testbench_ls.createKeyword", {
+                        document_uri: path,
+                        keyword_name: keywordName
+                    });
+                }
+            });
+    });
+
     vscode.workspace.registerTextDocumentContentProvider(virtualDocumentScheme, virtualDocumentProvider);
     client.onNotification("testbench-language-server/display-diff", (params) => {
         const realPath = params.path;
@@ -798,6 +817,9 @@ async function startAndMonitorClient(
         const currentGlobalClient = getLanguageClientInstance();
         if (currentGlobalClient === newClient) {
             setupClientNotifications(newClient, projectName, tovName, operationId);
+            // Remember the context applied to the running LS
+            lastAppliedProjectName = projectName;
+            lastAppliedTovName = tovName;
         } else {
             logger.warn(
                 `[server] LS for ${projectName}/${tovName} started, but global client instance changed (current is for op ${getCurrentLsOperationId()}) before notification setup. This instance may be orphaned or soon replaced (Op ID ${operationId})`
@@ -899,7 +921,7 @@ export async function initializeLanguageServer(project: string, tov: string, ope
             `Project: ${project}, TOV: ${tov}. Current global OpId: ${getCurrentLsOperationId()}, Received Op ID ${operationId}`
     );
 
-    if (!connection) {
+    if (!getConnection()) {
         logger.trace(`[server] No connection, skipping initialization for ${project}/${tov}`);
         return;
     }
@@ -997,7 +1019,7 @@ function scheduleDebouncedRestart(projectName: string, tovName: string): void {
  *          regardless of whether it was skipped, successful, or encountered an error.
  */
 async function executeRestart(projectName: string, tovName: string): Promise<void> {
-    if (!connection) {
+    if (!getConnection()) {
         logger.trace(`[server] No connection, skipping restart for ${projectName}/${tovName}`);
         return;
     }
@@ -1072,38 +1094,157 @@ export async function restartLanguageClient(projectName: string, tovName: string
 }
 
 /**
- * Updates or restarts the language server based on the current state.
+ * Restarts the language server using configuration from .testbench/ls.config.json.
+ * Tries to fix any config issues interactively before restarting.
+ */
+export async function restartLanguageClientFromConfig(): Promise<void> {
+    if (!getConnection()) {
+        logger.trace("[server] No connection, skipping restartLanguageClientFromConfig.");
+        return;
+    }
+
+    const exists = await hasLsConfig();
+    if (!exists) {
+        logger.warn("[server] LS config not found. Cannot restart language server.");
+        vscode.window.showWarningMessage(
+            "No TestBench project configuration found (.testbench/ls.config.json). Create it first."
+        );
+        return;
+    }
+
+    // Validate config and attempt interactive fix before starting LS
+    let cfg = await readLsConfig();
+    cfg = await validateAndFixLsConfigInteractively(cfg || undefined);
+    if (!cfg) {
+        logger.warn("[server] LS config validation failed or was cancelled. Aborting restart.");
+        return;
+    }
+
+    // Connection before scheduling a restart to avoid race with logout
+    if (!getConnection()) {
+        logger.trace("[server] Connection lost after validation. Skipping LS restart.");
+        return;
+    }
+    await restartLanguageClient(cfg.projectName, cfg.tovName);
+}
+
+/**
+ * Registers LS-related VS Code command and event handler for authentication state changes.
+ * Call this from extension activation to avoid top-level side effects.
+ */
+export function configureLanguageServerIntegration(context: vscode.ExtensionContext): void {
+    const authListener = vscode.authentication.onDidChangeSessions(async (e) => {
+        if (e.provider.id !== "testbench-auth") {
+            return;
+        }
+
+        let activeSession: vscode.AuthenticationSession | undefined;
+        try {
+            activeSession = await vscode.authentication.getSession("testbench-auth", ["api_access"], {
+                createIfNone: false,
+                silent: true
+            });
+        } catch {
+            logger.trace("[server] getSession failed during auth change. Skipping LS restart.");
+            return;
+        }
+        if (!activeSession) {
+            logger.trace("[server] No active session after authentication change. Skipping LS restart.");
+            return;
+        }
+
+        if (!getConnection()) {
+            return;
+        }
+        const exists = await hasLsConfig();
+        if (exists) {
+            await restartLanguageClientFromConfig();
+        }
+    });
+    context.subscriptions.push(authListener);
+}
+
+/**
+ * Updates or restarts the language server based on testbench/ls.config.json file
  * @param projectName the name of the project to update or restart the language server for.
  * @param tovName the name of the TOV to update or restart the language server for.
  */
-export async function updateOrRestartLS(projectName: string | undefined, tovName: string | undefined): Promise<void> {
-    if (!projectName || !tovName) {
-        logger.error("[server] updateOrRestartLS called with invalid project or TOV name.");
-        vscode.window.showErrorMessage("Invalid project or TOV name provided for language server call.");
-        return;
-    }
-
-    if (!connection) {
+export async function updateOrRestartLS(): Promise<boolean> {
+    if (!getConnection()) {
         logger.warn("[server] updateOrRestartLS called without active connection. Cannot update language server.");
         vscode.window.showWarningMessage("No active connection available. Please log in first.");
-        return;
+        return false;
+    }
+
+    const exists = await hasLsConfig();
+    if (!exists) {
+        logger.debug("[server] No LS config found; skipping language server start/update.");
+        return false;
+    }
+
+    let cfg = await readLsConfig();
+    if (!cfg) {
+        logger.warn("[server] Invalid LS config; skipping language server start/update.");
+        return false;
+    }
+
+    // Run interactive fixer automatically when config is incomplete
+    if (!cfg || !cfg.projectName || cfg.projectName.trim() === "" || cfg.tovName === undefined) {
+        const fixed = await validateAndFixLsConfigInteractively(cfg);
+        if (!fixed || !fixed.projectName || fixed.projectName.trim() === "" || fixed.tovName === undefined) {
+            logger.trace("[server] LS config incomplete and interactive validation cancelled/failed.");
+            return false;
+        }
+        cfg = fixed;
+    }
+
+    // Validate project and TOV against server to prevent LS crash on bad config
+    try {
+        const conn = getConnection();
+        const projects = await conn!.getProjectsList();
+        let project = projects?.find((p: any) => p.name === cfg!.projectName);
+        if (!project) {
+            logger.warn(`[server] Config project not found on server: ${cfg.projectName}`);
+            const fixed = await validateAndFixLsConfigInteractively(cfg);
+            if (!fixed) {
+                return false;
+            }
+            cfg = fixed;
+            project = projects?.find((p: any) => p.name === cfg!.projectName);
+            if (!project) {
+                return false;
+            }
+        }
+        const projectTree = await conn!.getProjectTreeOfProject(project.key);
+        const tovNames = (projectTree?.children || [])
+            .filter((n: any) => n.nodeType === "Version")
+            .map((v: any) => v.name || v.label)
+            .filter(Boolean);
+        if (!tovNames.includes(cfg!.tovName)) {
+            logger.warn(`[server] Config TOV not found for project ${cfg!.projectName}: ${cfg!.tovName}`);
+            const fixed = await validateAndFixLsConfigInteractively(cfg);
+            if (!fixed) {
+                return false;
+            }
+            cfg = fixed;
+        }
+    } catch (e) {
+        logger.warn("[server] Failed to validate LS config against server:", e);
+        return false;
     }
 
     const existingClient = getLanguageClientInstance();
-    if (!existingClient || existingClient.state === State.Stopped || existingClient.state === State.Starting) {
-        await restartLanguageClient(projectName, tovName);
-    } else {
-        try {
-            await vscode.commands.executeCommand("testbench_ls.updateProject", projectName);
-            await vscode.commands.executeCommand("testbench_ls.updateTov", tovName);
-            logger.debug(
-                `[server] TestBench language server context has been updated with '${projectName}/${tovName}'.`
-            );
-        } catch (error) {
-            logger.warn(`[server] Failed to update language client, restarting server as fallback: ${error}`);
-            await restartLanguageClient(projectName, tovName);
-        }
+    const isSameContext =
+        lastAppliedProjectName === cfg.projectName && (lastAppliedTovName || "") === (cfg.tovName || "");
+
+    if (existingClient && existingClient.state === State.Running && isSameContext) {
+        // Already running with same context; no-op
+        logger.trace("[server] LS already running with configured context; no update/restart needed.");
+        return false;
     }
+
+    await restartLanguageClient(cfg.projectName, cfg.tovName);
+    return true;
 }
 
 /**
@@ -1170,28 +1311,24 @@ export async function waitForLanguageServerReady(
  * Extracts project and TOV names from different tree item types (projects or test theme tree items),
  * retrieves language server parameters and initializes or updates the language server.
  *
- * @param item The tree item that extends TreeItemBase and implements LanguageServerParameterProvider
  * @param operationName Human readable name of the operation for error messages
  * @returns Promise that resolves to the extracted project and TOV names, or throws an error
  */
 export async function prepareLanguageServerForTreeItemOperation(
-    item: any, // Using any to avoid circular imports - the item should have getLanguageServerParameters method
     operationName: string
 ): Promise<{ projectName: string; tovName: string }> {
     const timeOutMs = 30000;
     const checkIntervallMs = 100;
-    const languageServerParams = item.getLanguageServerParameters?.();
 
-    if (!languageServerParams) {
-        const errorMessage = `Cannot ${operationName}: invalid tree item. Missing project or TOV information.`;
-        logger.error(`[server] ${errorMessage}`);
-        vscode.window.showErrorMessage(errorMessage);
+    const config = await validateAndFixLsConfigInteractively();
+
+    if (!config) {
+        const errorMessage = `Cannot ${operationName}: TestBench project configuration is not set. Operation cancelled.`;
+        logger.warn(`[server] ${errorMessage}`);
         throw new Error(errorMessage);
     }
 
-    const { projectName: projectNameOfTreeItem, tovName: tovNameOfTreeItem } = languageServerParams;
-    await updateOrRestartLS(projectNameOfTreeItem, tovNameOfTreeItem);
-
+    await updateOrRestartLS();
     await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
@@ -1204,7 +1341,7 @@ export async function prepareLanguageServerForTreeItemOperation(
         }
     );
 
-    return { projectName: projectNameOfTreeItem, tovName: tovNameOfTreeItem };
+    return { projectName: config.projectName, tovName: config.tovName };
 }
 
 /**

@@ -354,6 +354,7 @@ export class TestElementsDataProvider {
          * @param node The current tree node to process.
          * @returns An array of all descendant TestElementData items that are resource files.
          */
+        let lsCommandUnavailable = false;
         const findResourcesAndMarkVirtuals = async (node: TestElementData): Promise<TestElementData[]> => {
             const resourcesInChildrenArrays = await Promise.all(
                 node.children?.map((child) => findResourcesAndMarkVirtuals(child)) || []
@@ -369,15 +370,29 @@ export class TestElementsDataProvider {
 
                     for (const descendantResource of resourcesInChildren) {
                         const descendantResourcePathParts = descendantResource.hierarchicalName.split("/");
-                        const markerPositionInPath: number = await vscode.commands.executeCommand(
-                            "testbench_ls.get_resource_directory_subdivision_index",
-                            {
-                                resource_directory_regex: resourceDirectoryMarker,
-                                subdivision_parts: descendantResourcePathParts
-                            }
-                        );
+                        let markerPositionInPath: number | undefined;
+                        if (lsCommandUnavailable) {
+                            // Skip virtual detection if LS command is unavailable
+                            continue;
+                        }
+                        try {
+                            markerPositionInPath = await vscode.commands.executeCommand(
+                                "testbench_ls.get_resource_directory_subdivision_index",
+                                {
+                                    resource_directory_regex: resourceDirectoryMarker,
+                                    subdivision_parts: descendantResourcePathParts
+                                }
+                            );
+                        } catch {
+                            lsCommandUnavailable = true;
+                            this.logger.warn(
+                                "[TestElementsDataProvider] LS command 'testbench_ls.get_resource_directory_subdivision_index' unavailable. Skipping virtual folder detection."
+                            );
+                            // Stop further attempts and avoid marking as virtual by default
+                            break;
+                        }
 
-                        if (markerPositionInPath !== -1) {
+                        if (markerPositionInPath !== undefined && markerPositionInPath !== -1) {
                             // Marker found, folder is virtual if it's at or before the marker in the path.
                             const currentSubdivisionPathParts = node.hierarchicalName.split("/");
                             if (currentSubdivisionPathParts.length <= markerPositionInPath + 1) {
@@ -390,8 +405,8 @@ export class TestElementsDataProvider {
                                     break;
                                 }
                             }
-                        } else {
-                            // No marker, entire hierarchy is stripped
+                        } else if (markerPositionInPath === -1) {
+                            // No marker found by LS; consider entire hierarchy stripped
                             isVirtualFolder = true;
                             break;
                         }

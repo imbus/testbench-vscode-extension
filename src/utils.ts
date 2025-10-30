@@ -10,7 +10,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as os from "os";
 import JSZip from "jszip";
-import { folderNameOfInternalTestbenchFolder } from "./constants";
+import { folderNameOfInternalTestbenchFolder, LS_CONFIG_FILE_NAME } from "./constants";
 
 // Module-level variable to cache the workspace location selection.
 let cachedWorkspaceLocation: string | undefined;
@@ -89,7 +89,8 @@ export async function constructAbsolutePathFromRelativePath(
  */
 export async function deleteDirectoryRecursively(
     directoryPathToDelete: string,
-    excludedFoldersFromDeletion: string[]
+    excludedFoldersFromDeletion: string[],
+    excludedFilesFromDeletion: string[] = [LS_CONFIG_FILE_NAME]
 ): Promise<void | null> {
     logger.debug(
         `[utils] Deleting directory recursively: "${directoryPathToDelete}", excluded folders from recursive deletion: ${excludedFoldersFromDeletion}`
@@ -107,8 +108,12 @@ export async function deleteDirectoryRecursively(
 
             const fileStats: fs.Stats = await fsPromises.stat(currentPath);
             if (fileStats.isDirectory()) {
-                await deleteDirectoryRecursively(currentPath, excludedFoldersFromDeletion);
+                await deleteDirectoryRecursively(currentPath, excludedFoldersFromDeletion, excludedFilesFromDeletion);
             } else {
+                if (excludedFilesFromDeletion.includes(file)) {
+                    logger.trace(`[utils] Skipping excluded file: "${currentPath}"`);
+                    continue;
+                }
                 logger.debug(`[utils] Deleting file: "${currentPath}"`);
                 await fsPromises.unlink(currentPath);
             }
@@ -137,7 +142,8 @@ export async function deleteDirectoryRecursively(
 export async function clearInternalTestbenchFolder(
     workspaceLocationToClear: string,
     excludedFoldersFromDeletion: string[] = [],
-    promptForConfirmation: boolean = true
+    promptForConfirmation: boolean = true,
+    excludedFilesFromDeletion: string[] = [LS_CONFIG_FILE_NAME]
 ): Promise<void | null> {
     try {
         try {
@@ -188,8 +194,12 @@ export async function clearInternalTestbenchFolder(
 
                 const fileStats: fs.Stats = await fsPromises.stat(filePath);
                 if (fileStats.isDirectory()) {
-                    await deleteDirectoryRecursively(filePath, excludedFoldersFromDeletion);
+                    await deleteDirectoryRecursively(filePath, excludedFoldersFromDeletion, excludedFilesFromDeletion);
                 } else {
+                    if (excludedFilesFromDeletion.includes(file)) {
+                        logger.trace(`[utils] Skipping excluded file: "${filePath}"`);
+                        continue;
+                    }
                     await fsPromises.unlink(filePath);
                 }
             }
@@ -226,15 +236,13 @@ export async function clearInternalTestbenchFolder(
  * 1. The workspace folder containing the currently active text editor.
  * 2. A previously cached workspace location, if it still exists.
  * 3. The first workspace folder if multiple are open and no active editor or cache is available.
- * 4. The user's home directory as a last resort.
  *
  * If a workspace location is found, it is cached for subsequent calls.
- * If no workspace or home directory can be determined, an error is logged and displayed,
- * and the function returns `undefined`.
+ * If no workspace can be determined, the function returns `undefined` (no fallback to user's home directory).
  *
- * The user can set workspace manually using the 'Set Workspace' command.
+ * The user can set or open a workspace via VS Code (e.g., "Open Folder" or a dedicated command in the extension).
  *
- * @param enableLogging - Optional. If `true` (default), logs trace, warning, and error messages during execution.
+ * @param enableLogging - Optional. If `true`, logs trace/warn/error messages and shows a user-facing error on failure.
  * @returns A promise that resolves to the file system path of the determined workspace location,
  * or `undefined` if no suitable location can be found.
  */
@@ -289,19 +297,27 @@ export async function validateAndReturnWorkspaceLocation(enableLogging: boolean 
         }
     }
 
-    const homeDirectory: string = os.homedir();
     if (logger && enableLogging) {
-        logger.trace(`[utils] No workspace available; falling back to user's home directory: "${homeDirectory}"`);
+        logger.error("[utils] No workspace is open. Please open a folder or workspace in VS Code.");
+        vscode.window.showErrorMessage(
+            "No workspace folder is open. Please open a folder or workspace in VS Code to continue."
+        );
     }
+    return undefined;
+}
 
-    if (!homeDirectory) {
-        const workspaceLocationMissingError: string = "Unable to determine workspace location or home directory.";
-        logger.error(`[utils] ${workspaceLocationMissingError}`);
-        vscode.window.showErrorMessage(workspaceLocationMissingError);
-        return undefined;
+/**
+ * Checks if workspace is available and shows info message if not.
+ * Called after successful login to inform users about read-only mode.
+ */
+export async function checkWorkspaceAndNotifyUser(): Promise<void> {
+    const hasWorkspace = (vscode.workspace.workspaceFolders?.length || 0) > 0;
+    if (!hasWorkspace) {
+        vscode.window.showInformationMessage(
+            "You don't have an active workspace. Read-only mode is active. Some features requiring a workspace are disabled."
+        );
+        logger.info("[extension] User logged in without an active workspace. Read-only mode active.");
     }
-
-    return homeDirectory;
 }
 
 /**
