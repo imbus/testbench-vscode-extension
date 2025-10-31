@@ -1,0 +1,28 @@
+name: Remove Old Artifacts
+
+on:
+    # Run weekly on Wednesdays at 2 AM UTC
+    schedule:
+        - cron: "0 2 * * 3"
+    # Allow manual trigger
+    workflow_dispatch:
+
+jobs:
+    cleanup:
+        name: Cleanup Old Artifacts
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        permissions:
+            actions: write # Required to delete artifacts for private repos
+
+        steps:
+            - name: Remove Old Artifacts
+              uses: c-hive/gha-remove-artifacts@v1
+              with:
+                  # Delete artifacts older than 1 month (matches retention-days: 30)
+                  age: "1 month"
+                  # Skip artifacts from the last 3 successful workflow runs
+                  skip-recent: 3
+                  # Skip these specific artifacts (uncomment to preserve release artifacts)
+                  # skip-tags: |
+                  #    testbench-extension-release
