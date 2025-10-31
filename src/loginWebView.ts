@@ -619,71 +619,97 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         return iconUri;
     }
 
-    private getConnectionManagementHtmlPage(webview: vscode.Webview): string {
-        const nonce = getNonce();
+    /**
+     * Reads a webview file (HTML, CSS, JS) from the dist/webview directory.
+     * @param {string} fileName The name of the file to read.
+     * @returns {string} The file content.
+     */
+    private readWebviewFile(fileName: string): string {
+        const filePath = path.join(this.extensionContext.extensionPath, "dist", "webview", fileName);
+        return fs.readFileSync(filePath, "utf8");
+    }
 
-        const scriptUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(
-                this.extensionContext.extensionUri,
-                "dist",
-                "webview",
-                WebviewFiles.CONNECTION_MANAGEMENT.JS
-            )
+    /**
+     * Creates a webview script URI for a JavaScript file.
+     * @param {vscode.Webview} webview The webview instance.
+     * @param {string} jsFileName The JavaScript file name.
+     * @returns {vscode.Uri} The webview URI for the script.
+     */
+    private createScriptUri(webview: vscode.Webview, jsFileName: string): vscode.Uri {
+        return webview.asWebviewUri(
+            vscode.Uri.joinPath(this.extensionContext.extensionUri, "dist", "webview", jsFileName)
         );
-        const stylesPath = path.join(
-            this.extensionContext.extensionPath,
-            "dist",
-            "webview",
-            WebviewFiles.CONNECTION_MANAGEMENT.CSS
-        );
-        const stylesContent = fs.readFileSync(stylesPath, "utf8");
+    }
 
-        const connectionsHeaderIconDarkUri = this.createIconUri(webview, "connections-dark.svg");
-        const connectionsHeaderIconLightUri = this.createIconUri(webview, "connections-light.svg");
-        const addConnectionHeaderIconDarkUri = this.createIconUri(webview, "add-dark.svg");
-        const addConnectionHeaderIconLightUri = this.createIconUri(webview, "add-light.svg");
-        const editConnectionHeaderIconDarkUri = this.createIconUri(webview, "edit-connection-dark.svg");
-        const editConnectionHeaderIconLightUri = this.createIconUri(webview, "edit-connection-light.svg");
-        const saveConnectionButtonIconDarkUri = this.createIconUri(webview, "save-dark.svg");
-        const saveConnectionButtonIconLightUri = this.createIconUri(webview, "save-light.svg");
-        const loginIconLightUri = this.createIconUri(webview, "login-webview-light.svg");
-        const loginIconDarkUri = this.createIconUri(webview, "login-webview-dark.svg");
-        const editIconLightUri = this.createIconUri(webview, "edit-connection-light.svg");
-        const editIconDarkUri = this.createIconUri(webview, "edit-connection-dark.svg");
-        const deleteIconLightUri = this.createIconUri(webview, "remove-connection-light.svg");
-        const deleteIconDarkUri = this.createIconUri(webview, "remove-connection-dark.svg");
+    /**
+     * Generates CSS styles for theme-aware icons used in the connection management page.
+     * @param {vscode.Webview} webview The webview instance.
+     * @returns {string} The CSS string with icon URL variables.
+     */
+    private generateConnectionManagementIconStyles(webview: vscode.Webview): string {
+        const icons = {
+            connectionsHeader: {
+                dark: this.createIconUri(webview, "connections-dark.svg"),
+                light: this.createIconUri(webview, "connections-light.svg")
+            },
+            addConnectionHeader: {
+                dark: this.createIconUri(webview, "add-dark.svg"),
+                light: this.createIconUri(webview, "add-light.svg")
+            },
+            editConnectionHeader: {
+                dark: this.createIconUri(webview, "edit-connection-dark.svg"),
+                light: this.createIconUri(webview, "edit-connection-light.svg")
+            },
+            save: {
+                dark: this.createIconUri(webview, "save-dark.svg"),
+                light: this.createIconUri(webview, "save-light.svg")
+            },
+            login: {
+                dark: this.createIconUri(webview, "login-webview-dark.svg"),
+                light: this.createIconUri(webview, "login-webview-light.svg")
+            },
+            edit: {
+                dark: this.createIconUri(webview, "edit-connection-dark.svg"),
+                light: this.createIconUri(webview, "edit-connection-light.svg")
+            },
+            delete: {
+                dark: this.createIconUri(webview, "remove-connection-dark.svg"),
+                light: this.createIconUri(webview, "remove-connection-light.svg")
+            }
+        };
 
-        const iconStyles = `
+        return `
             [data-vscode-theme-kind="vscode-light"],
             :root {
-                --icon-connections-header: url(${connectionsHeaderIconLightUri});
-                --icon-add-connection-header: url(${addConnectionHeaderIconLightUri});
-                --icon-edit-connection-header: url(${editConnectionHeaderIconLightUri});
-                --icon-save: url(${saveConnectionButtonIconLightUri});
-                --icon-login: url(${loginIconLightUri});
-                --icon-edit: url(${editIconLightUri});
-                --icon-delete: url(${deleteIconLightUri});
+                --icon-connections-header: url(${icons.connectionsHeader.light});
+                --icon-add-connection-header: url(${icons.addConnectionHeader.light});
+                --icon-edit-connection-header: url(${icons.editConnectionHeader.light});
+                --icon-save: url(${icons.save.light});
+                --icon-login: url(${icons.login.light});
+                --icon-edit: url(${icons.edit.light});
+                --icon-delete: url(${icons.delete.light});
             }
     
             [data-vscode-theme-kind="vscode-dark"],
             [data-vscode-theme-kind="vscode-high-contrast"] {
-                --icon-connections-header: url(${connectionsHeaderIconDarkUri});
-                --icon-add-connection-header: url(${addConnectionHeaderIconDarkUri});
-                --icon-edit-connection-header: url(${editConnectionHeaderIconDarkUri});
-                --icon-save: url(${saveConnectionButtonIconDarkUri});
-                --icon-login: url(${loginIconDarkUri});
-                --icon-edit: url(${editIconDarkUri});
-                --icon-delete: url(${deleteIconDarkUri});
+                --icon-connections-header: url(${icons.connectionsHeader.dark});
+                --icon-add-connection-header: url(${icons.addConnectionHeader.dark});
+                --icon-edit-connection-header: url(${icons.editConnectionHeader.dark});
+                --icon-save: url(${icons.save.dark});
+                --icon-login: url(${icons.login.dark});
+                --icon-edit: url(${icons.edit.dark});
+                --icon-delete: url(${icons.delete.dark});
             }
         `;
+    }
 
-        const htmlTemplatePath = path.join(
-            this.extensionContext.extensionPath,
-            "dist",
-            "webview",
-            WebviewFiles.CONNECTION_MANAGEMENT.HTML
-        );
-        let html = fs.readFileSync(htmlTemplatePath, "utf8");
+    private getConnectionManagementHtmlPage(webview: vscode.Webview): string {
+        const nonce = getNonce();
+        const scriptUri = this.createScriptUri(webview, WebviewFiles.CONNECTION_MANAGEMENT.JS);
+        const stylesContent = this.readWebviewFile(WebviewFiles.CONNECTION_MANAGEMENT.CSS);
+        const iconStyles = this.generateConnectionManagementIconStyles(webview);
+
+        let html = this.readWebviewFile(WebviewFiles.CONNECTION_MANAGEMENT.HTML);
 
         html = html.replace(/{{nonce}}/g, nonce);
         html = html.replace(/{{cspSource}}/g, webview.cspSource);
@@ -696,17 +722,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
     private getAlreadyLoggedInHtmlPage(webview: vscode.Webview): string {
         const nonce: string = getNonce();
-
-        const scriptUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionContext.extensionUri, "dist", "webview", WebviewFiles.LOGGED_IN.JS)
-        );
-        const stylesPath = path.join(
-            this.extensionContext.extensionPath,
-            "dist",
-            "webview",
-            WebviewFiles.LOGGED_IN.CSS
-        );
-        const stylesContent = fs.readFileSync(stylesPath, "utf8");
+        const scriptUri = this.createScriptUri(webview, WebviewFiles.LOGGED_IN.JS);
+        const stylesContent = this.readWebviewFile(WebviewFiles.LOGGED_IN.CSS);
         const logoUri: vscode.Uri | null = this.createIconUri(webview, "testbench-logo.svg");
 
         const currentConnection: PlayServerConnection | null = connection;
@@ -715,13 +732,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             connectedAsInfo = `Connected as <strong>${currentConnection.getUsername()}</strong> on <strong>${currentConnection.getServerName()}:${currentConnection.getServerPort()}</strong>.`;
         }
 
-        const htmlTemplatePath = path.join(
-            this.extensionContext.extensionPath,
-            "dist",
-            "webview",
-            WebviewFiles.LOGGED_IN.HTML
-        );
-        let html = fs.readFileSync(htmlTemplatePath, "utf8");
+        let html = this.readWebviewFile(WebviewFiles.LOGGED_IN.HTML);
 
         html = html.replace(/{{nonce}}/g, nonce);
         html = html.replace(/{{cspSource}}/g, webview.cspSource);
