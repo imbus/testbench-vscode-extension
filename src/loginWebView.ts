@@ -348,7 +348,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             if (existingConnection) {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                     type: "warning",
-                    text: `A connection with the same server, port, and username already exists: "${existingConnection.label}". Not saving duplicate.`
+                    text: `A connection with the same server, port, and username already exists: "${existingConnection.label}".`
                 });
                 logger.warn(
                     `[loginWebView] Attempt to save duplicate connection (server/user match) prevented for: ${existingConnection.label}`
@@ -505,7 +505,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             if (existingConnection && existingConnection.id !== payload.id) {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                     type: "warning",
-                    text: `Another connection with the same server, port, and username already exists: "${existingConnection.label}". Cannot save duplicate.`
+                    text: `Another connection with the same server, port, and username already exists: "${existingConnection.label}".`
                 });
                 logger.warn(
                     `[loginWebView] Attempt to update to duplicate connection credentials prevented. Existing connection: ${existingConnection.label}`
