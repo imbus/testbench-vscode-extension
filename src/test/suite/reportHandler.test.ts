@@ -36,14 +36,14 @@ suite("ReportHandler Test Suite", function () {
     suite("Testing View Configuration Behavior", () => {
         test("should use correct configuration key", () => {
             const configGetStub = mockConfig.get as sinon.SinonStub;
-            configGetStub.withArgs(ConfigKeys.OPEN_TESTING_VIEW_AFTER_GENERATION, false).returns(true);
+            configGetStub.withArgs(ConfigKeys.OPEN_TESTING_VIEW_AFTER_TEST_GENERATION, false).returns(true);
 
             const result = configuration
                 .getExtensionConfiguration()
-                .get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_GENERATION, false);
+                .get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_TEST_GENERATION, false);
 
             assert.ok(
-                configGetStub.calledWith(ConfigKeys.OPEN_TESTING_VIEW_AFTER_GENERATION, false),
+                configGetStub.calledWith(ConfigKeys.OPEN_TESTING_VIEW_AFTER_TEST_GENERATION, false),
                 "Should use the correct configuration key"
             );
             assert.strictEqual(result, true, "Should return the configured value");
@@ -54,10 +54,10 @@ suite("ReportHandler Test Suite", function () {
 
             const result = configuration
                 .getExtensionConfiguration()
-                .get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_GENERATION, false);
+                .get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_TEST_GENERATION, false);
 
             assert.ok(
-                configGetStub.calledWith(ConfigKeys.OPEN_TESTING_VIEW_AFTER_GENERATION, false),
+                configGetStub.calledWith(ConfigKeys.OPEN_TESTING_VIEW_AFTER_TEST_GENERATION, false),
                 "Should call configuration with default value"
             );
             assert.strictEqual(result, false, "Should return default value when not configured");
@@ -65,34 +65,34 @@ suite("ReportHandler Test Suite", function () {
 
         test("should handle enabled configuration correctly", () => {
             const configGetStub = mockConfig.get as sinon.SinonStub;
-            configGetStub.withArgs(ConfigKeys.OPEN_TESTING_VIEW_AFTER_GENERATION, false).returns(true);
+            configGetStub.withArgs(ConfigKeys.OPEN_TESTING_VIEW_AFTER_TEST_GENERATION, false).returns(true);
 
             const result = configuration
                 .getExtensionConfiguration()
-                .get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_GENERATION, false);
+                .get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_TEST_GENERATION, false);
 
             assert.strictEqual(result, true, "Should return true when setting is enabled");
         });
 
         test("should handle disabled configuration correctly", () => {
             const configGetStub = mockConfig.get as sinon.SinonStub;
-            configGetStub.withArgs(ConfigKeys.OPEN_TESTING_VIEW_AFTER_GENERATION, false).returns(false);
+            configGetStub.withArgs(ConfigKeys.OPEN_TESTING_VIEW_AFTER_TEST_GENERATION, false).returns(false);
 
             const result = configuration
                 .getExtensionConfiguration()
-                .get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_GENERATION, false);
+                .get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_TEST_GENERATION, false);
 
             assert.strictEqual(result, false, "Should return false when setting is disabled");
         });
 
         test("should open testing view when setting is enabled", async () => {
             const configGetStub = mockConfig.get as sinon.SinonStub;
-            configGetStub.withArgs(ConfigKeys.OPEN_TESTING_VIEW_AFTER_GENERATION, false).returns(true);
+            configGetStub.withArgs(ConfigKeys.OPEN_TESTING_VIEW_AFTER_TEST_GENERATION, false).returns(true);
 
             if (
                 configuration
                     .getExtensionConfiguration()
-                    .get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_GENERATION, false)
+                    .get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_TEST_GENERATION, false)
             ) {
                 await vscode.commands.executeCommand("workbench.view.extension.test");
             }
@@ -105,12 +105,12 @@ suite("ReportHandler Test Suite", function () {
 
         test("should not open testing view when setting is disabled", async () => {
             const configGetStub = mockConfig.get as sinon.SinonStub;
-            configGetStub.withArgs(ConfigKeys.OPEN_TESTING_VIEW_AFTER_GENERATION, false).returns(false);
+            configGetStub.withArgs(ConfigKeys.OPEN_TESTING_VIEW_AFTER_TEST_GENERATION, false).returns(false);
 
             if (
                 configuration
                     .getExtensionConfiguration()
-                    .get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_GENERATION, false)
+                    .get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_TEST_GENERATION, false)
             ) {
                 await vscode.commands.executeCommand("workbench.view.extension.test");
             }

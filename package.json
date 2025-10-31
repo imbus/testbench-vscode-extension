@@ -237,7 +237,7 @@
                         "order": 1,
                         "scope": "resource"
                     },
-                    "testbenchExtension.openTestingViewAfterGeneration": {
+                    "testbenchExtension.openTestingViewAfterTestGeneration": {
                         "type": "boolean",
                         "description": "If enabled, the testing view will be opened automatically after test generation is completed.",
                         "default": false,
