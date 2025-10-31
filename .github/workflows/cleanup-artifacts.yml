@@ -1,9 +1,6 @@
 name: Remove Old Artifacts
 
 on:
-    # Run weekly on Wednesdays at 2 AM UTC
-    schedule:
-        - cron: "0 2 * * 3"
     # Allow manual trigger
     workflow_dispatch:
 
