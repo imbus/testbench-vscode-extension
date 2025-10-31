@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { logger, connection } from "./extension";
-import { WebviewMessageCommands, allExtensionCommands } from "./constants";
+import { WebviewMessageCommands, allExtensionCommands, WebviewFiles } from "./constants";
 import * as connectionManager from "./connectionManager";
 import { TestBenchConnection } from "./testBenchTypes";
 import { TESTBENCH_AUTH_PROVIDER_ID } from "./testBenchAuthenticationProvider";
@@ -438,7 +438,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             );
             this.editingConnectionId = connectionId;
 
-            this.postMessageToWebview("enterEditMode", {
+            this.postMessageToWebview(WebviewMessageCommands.ENTER_EDIT_MODE, {
                 connection: connectionToEdit,
                 hasStoredPassword: !!storedPassword
             });
@@ -545,7 +545,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 text: `Connection "${payload.label}" updated successfully.`
             });
 
-            this.postMessageToWebview("exitEditMode", {});
+            this.postMessageToWebview(WebviewMessageCommands.EXIT_EDIT_MODE, {});
             await this.sendConnectionToWebview();
         } catch (error: any) {
             logger.error("[loginWebView] Error updating connection:", error);
@@ -565,7 +565,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         logger.trace(`[loginWebView] Cancelling edit mode for connection ID: ${this.editingConnectionId}`);
         this.editingConnectionId = null;
 
-        this.postMessageToWebview("exitEditMode", {});
+        this.postMessageToWebview(WebviewMessageCommands.EXIT_EDIT_MODE, {});
         this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
             type: "info",
             text: "Edit cancelled."
@@ -623,9 +623,19 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         const nonce = getNonce();
 
         const scriptUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionContext.extensionUri, "dist", "webview", "main.js")
+            vscode.Uri.joinPath(
+                this.extensionContext.extensionUri,
+                "dist",
+                "webview",
+                WebviewFiles.CONNECTION_MANAGEMENT.JS
+            )
         );
-        const stylesPath = path.join(this.extensionContext.extensionPath, "dist", "webview", "styles.css");
+        const stylesPath = path.join(
+            this.extensionContext.extensionPath,
+            "dist",
+            "webview",
+            WebviewFiles.CONNECTION_MANAGEMENT.CSS
+        );
         const stylesContent = fs.readFileSync(stylesPath, "utf8");
 
         const connectionsHeaderIconDarkUri = this.createIconUri(webview, "connections-dark.svg");
@@ -671,7 +681,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             this.extensionContext.extensionPath,
             "dist",
             "webview",
-            "connectionManagement.html"
+            WebviewFiles.CONNECTION_MANAGEMENT.HTML
         );
         let html = fs.readFileSync(htmlTemplatePath, "utf8");
 
@@ -688,9 +698,14 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         const nonce: string = getNonce();
 
         const scriptUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionContext.extensionUri, "dist", "webview", "loggedIn.js")
+            vscode.Uri.joinPath(this.extensionContext.extensionUri, "dist", "webview", WebviewFiles.LOGGED_IN.JS)
         );
-        const stylesPath = path.join(this.extensionContext.extensionPath, "dist", "webview", "loggedIn.css");
+        const stylesPath = path.join(
+            this.extensionContext.extensionPath,
+            "dist",
+            "webview",
+            WebviewFiles.LOGGED_IN.CSS
+        );
         const stylesContent = fs.readFileSync(stylesPath, "utf8");
         const logoUri: vscode.Uri | null = this.createIconUri(webview, "testbench-logo.svg");
 
@@ -700,7 +715,12 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             connectedAsInfo = `Connected as <strong>${currentConnection.getUsername()}</strong> on <strong>${currentConnection.getServerName()}:${currentConnection.getServerPort()}</strong>.`;
         }
 
-        const htmlTemplatePath = path.join(this.extensionContext.extensionPath, "dist", "webview", "loggedIn.html");
+        const htmlTemplatePath = path.join(
+            this.extensionContext.extensionPath,
+            "dist",
+            "webview",
+            WebviewFiles.LOGGED_IN.HTML
+        );
         let html = fs.readFileSync(htmlTemplatePath, "utf8");
 
         html = html.replace(/{{nonce}}/g, nonce);
