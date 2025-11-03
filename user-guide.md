@@ -110,17 +110,129 @@ Settings are grouped in VS Code under these sections
 
 ### Settings Overview
 
-- _Output Directory_ controls where generated `.robot` files are created
-- _Output Xml File Path_ points to the Robot Framework results file (`output.xml`) for importing results
-- _Open Testing View After Test Generation_ opens the Testing view after generating tests
-- _Resource Marker_ marks subdivisions that should be treated as Robot Framework resources
-- _Log level_ controls the verbosity of logs
+#### Login Settings
+
+- **Automatic Login After Extension Activation**
+    - **Type:** Boolean
+    - **Default:** `false`
+    - **Description:** When enabled, the extension automatically attempts to log in to the TestBench server using the last used connection after the extension is activated.
+
+#### Logger Settings
+
+- **TestBench Log Level**
+    - **Type:** String (Enum)
+    - **Default:** `Info`
+    - **Options:** `No logging`, `Trace`, `Debug`, `Info`, `Warn`, `Error`
+    - **Description:** Sets the minimum log level for the extension. Logs are saved in the log folder inside the `.testbench` directory within the workspace. Choose `Trace` or `Debug` for detailed troubleshooting, `Info` for general operation monitoring, `Warn` for warnings only, or `Error` to log only errors. Select `No logging` to disable logging entirely. Log rotation automatically manages log files (up to 3 files, max 10 MB each).
+
+#### TestBench2RobotFramework Settings
+
+These settings control how the extension generates Robot Framework test suites from TestBench data.
+
+- **Use Configuration File**
+    - **Type:** Boolean
+    - **Default:** `false`
+    - **Description:** When enabled, `testbench2robotframework` prioritizes settings specified in the `pyproject.toml` file over the extension settings defined in VS Code.
+
+- **Clean Files Before Test Generation**
+    - **Type:** Boolean
+    - **Default:** `true`
+    - **Description:** When enabled, deletes all files present in the output directory before new test suites are created.
+
+- **Fully Qualified Keywords**
+    - **Default:** `false`
+    - **Description:** When enabled, Robot Framework keywords are called by their fully qualified name (e.g., `LibraryName.Keyword Name`) in the generated test suites.
+
+- **Output Directory**
+    - **Type:** String
+    - **Default:** `tests`
+    - **Description:** Specifies the directory where the generated Robot Framework test suites (`.robot` files) will be created. The path is relative to the workspace root. For example, if set to `tests`, files will be created in `<workspace>/tests/`.
+
+- **Compound Interaction Logging**
+    - **Type:** String (Enum)
+    - **Default:** `GROUP`
+    - **Options:** `GROUP`, `COMMENT`, `NONE`
+    - **Description:** Controls how compound TestBench interactions (interactions that contain other interactions) are logged in the generated test suites:
+        - `GROUP`: Compound interactions are wrapped in a collapsible group
+        - `COMMENT`: Compound interactions are marked with comments
+        - `NONE`: No special logging for compound interactions
+
+- **Log Suite Numbering**
+    - **Type:** Boolean
+    - **Default:** `false`
+    - **Description:** When enabled, test suite numbering is logged in the generated Robot Framework files. This can help with traceability and organization when dealing with large numbers of test suites.
+
+- **Library Marker**
+    - **Type:** Array of Strings
+    - **Default:** `["[Robot-Library]"]`
+    - **Description:** Marker(s) used to identify TestBench Subdivisions that correspond to Robot Framework libraries. Subdivisions whose names end with any of these markers will be treated as Robot Framework libraries during test generation. For example, a subdivision named `MySubdivision [Robot-Library]` would be recognized as a library.
+
+- **Library Root**
+    - **Type:** Array of Strings
+    - **Default:** `["RF", "RF-Library"]`
+    - **Description:** Identifies TestBench root subdivision(s) whose direct children correspond to Robot Framework libraries.
+
+- **Resource Root Regex**
+    - **Type:** String
+    - **Default:** `resources`
+    - **Description:** Regular expression that identifies where the resource directory begins in TestBench's subdivision hierarchy. Acts as a cut point, where everything before this marker is ignored, and everything after it is preserved in the local file structure under the Resource Directory Path. For example: with regex `resources` and TestBench path `Project/resources/Login/Keywords`, the local file becomes `<Resource Directory Path>/Login/Keywords.resource` (ignoring `Project/resources`).
+
+- **Resource Directory Path**
+    - **Type:** String
+    - **Default:** `""` (empty)
+    - **Description:** Specifies the local directory where Robot Framework resource files (`.resource` files) will be stored. The path is relative to the workspace root. This setting works with Resource Root Regex to map TestBench's subdivision hierarchy to your local file system. For example: if Resource Root Regex is `resources` and this is set to `robot_resources`, a TestBench path like `Project/resources/Utils/Keywords` becomes `robot_resources/Utils/Keywords.resource` locally.
+
+- **Resource Marker**
+    - **Type:** Array of Strings
+    - **Default:** `["[Robot-Resource]"]`
+    - **Description:** Marker(s) used to identify TestBench Subdivisions that correspond to Robot Framework resources. Subdivisions whose names end with any of these markers are treated as Robot Framework resources. In the Test Elements view, subdivisions with this marker are displayed and have special actions to create or open the corresponding `.resource` file.
+
+- **Resource Root**
+    - **Type:** Array of Strings
+    - **Default:** `["RF-Resource"]`
+    - **Description:** Identifies TestBench root subdivision(s) whose direct children correspond to Robot Framework resources.
+
+- **Library Mapping**
+    - **Type:** Array of Strings
+    - **Default:** `[]` (empty)
+    - **Description:** Optional custom mapping of TestBench Subdivisions to Robot Framework library imports. Each entry must be in the format: `<TestBench Subdivision Name>:<Robot Framework Library import>`.
+
+- **Resource Mapping**
+    - **Type:** Array of Strings
+    - **Default:** `[]` (empty)
+    - **Description:** Optional custom mapping of TestBench Subdivisions to Robot Framework resource imports. Each entry must be in the format: `<TestBench Subdivision Name>:<Robot Framework Resource import>`.
+
+- **Output Xml File Path**
+    - **Type:** String
+    - **Default:** `results/output.xml`
+    - **Description:** The relative file path where the Robot Framework output XML file (test execution results) is stored. This file is generated by Robot Framework after test execution and is used by the extension to import test results back to the TestBench server. The path is relative to the workspace root. If not set, the extension will prompt you to select an `output.xml` file location when importing results.
+
+#### Test Generation Settings
+
+- **Clear Internal TestBench Directory Before Test Generation**
+    - **Type:** Boolean
+    - **Default:** `false`
+    - **Description:** When enabled, deletes all files (excluding log files and project config file) from the internal `.testbench` directory before generating tests.
+
+- **Open Testing View After Generation**
+    - **Type:** Boolean
+    - **Default:** `false`
+    - **Description:** When enabled, the VS Code Testing view is automatically opened after test generation completes, where you can run the newly generated tests.
+
+#### Connection Settings
+
+- **Certificate Path**
+    - **Type:** String
+    - **Default:** `""` (empty)
+    - **Description:** Optional path to the public TestBench server certificate file (`.pem` format) relative to the workspace root. This is only required when connecting to TestBench servers that use self-signed certificates or custom certificate authorities (e.g., development/test environments or unofficial server versions). In production environments with official TestBench servers using standard certificates, this setting can be left empty. If not specified, the extension uses the system's default certificate store.
 
 ### Note
 
-- All path strings in the extension settings are relative to your current VS Code workspace root.
-  Example:
-  If your VS Code workspace is located at `C:\\MyWorkspace` and you want to set the 'Output Directory' to `C:\\MyWorkspace\\tests`, set the setting to `tests`.
+- **All path strings in the extension settings are relative to your current VS Code workspace root.**
+
+    Example: If your VS Code workspace is located at `C:\MyWorkspace` and you want to set the 'Output Directory' to `C:\MyWorkspace\tests`, set the setting to `tests`.
+
+- **Most settings apply at the workspace level**, meaning they are specific to the current workspace. Some settings like login and logging apply at the resource level, which allows different configurations for different workspace folders in a multi-root workspace.
 
 ## Logging
 

@@ -233,7 +233,7 @@
                     "testbenchExtension.clearInternalTestbenchDirectoryBeforeTestGeneration": {
                         "type": "boolean",
                         "default": false,
-                        "description": "Deletes all files, excluding log files, from the internal `.testbench` directory before generating tests.",
+                        "description": "Deletes all files, excluding log files and project config file, from the internal `.testbench` directory before generating tests.",
                         "order": 1,
                         "scope": "resource"
                     },
