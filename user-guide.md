@@ -228,13 +228,11 @@ These settings control how the extension generates Robot Framework test suites f
 - **Certificate Path**
     - **Type:** String
     - **Default:** `""` (empty)
-    - **Description:** Optional path to the public TestBench server certificate file (`.pem` format) relative to the workspace root. This is only required when connecting to TestBench servers that use self-signed certificates or custom certificate authorities (e.g., development/test environments or unofficial server versions). In production environments with official TestBench servers using standard certificates, this setting can be left empty. If not specified, the extension uses the system's default certificate store.
+    - **Description:** Optional path to the public TestBench server certificate file (`.pem` format). This can be either an absolute path or a path relative to the workspace root. This is only required when connecting to TestBench servers that use self-signed certificates or custom certificate authorities (e.g., development/test environments or unofficial TestBench server versions). In production environments with official TestBench servers using standard certificates, this setting can be left empty. If not specified, the extension uses the system's default certificate store.
 
 ### Note
 
-- **All path strings in the extension settings are relative to your current VS Code workspace root.**
-
-    Example: If your VS Code workspace is located at `C:\MyWorkspace` and you want to set the 'Output Directory' to `C:\MyWorkspace\tests`, set the setting to `tests`.
+- **All path strings in the extension settings are relative to your current VS Code workspace root, except Certificate Path which accepts both absolute and relative paths.** For example, if your workspace is `C:\MyWorkspace` and you want to set 'Output Directory' to `C:\MyWorkspace\tests`, use `tests`. For Certificate Path, you can use either `C:\certs\server.pem` (absolute) or `certs\server.pem` (relative).
 
 - **Most settings apply at the workspace level**, meaning they are specific to the current workspace. Some settings like login and logging apply at the resource level, which allows different configurations for different workspace folders in a multi-root workspace.
 
