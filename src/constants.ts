@@ -42,10 +42,27 @@ export const WebviewMessageCommands = {
     EDIT_CONNECTION: "editConnection",
     UPDATE_CONNECTION: "updateConnection",
     CANCEL_EDIT_CONNECTION: "cancelEditConnection",
+    ENTER_EDIT_MODE: "enterEditMode",
+    EXIT_EDIT_MODE: "exitEditMode",
 
     // Host to Webview communication
     DISPLAY_CONNECTIONS_IN_WEBVIEW: "displayConnectionsInWebview",
     SHOW_WEBVIEW_MESSAGE: "showWebviewMessage"
+} as const;
+
+// --- Webview File Paths ---
+export const WebviewFiles = {
+    CONNECTION_MANAGEMENT: {
+        HTML: "connectionManagement.html",
+        CSS: "connectionManagement.css",
+        JS: "connectionManagement.js"
+    },
+    LOGGED_IN: {
+        HTML: "loggedIn.html",
+        CSS: "loggedIn.css",
+        JS: "loggedIn.js"
+    },
+    DIST_WEBVIEW_DIR: "dist/webview"
 } as const;
 
 // --- Extension Configuration Setting Keys ---
