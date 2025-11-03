@@ -183,7 +183,7 @@ async function createHttpsAgent(insecure: boolean = false): Promise<HttpsProxyAg
     } else {
         const defaultCAs = tls.rootCertificates.map((cert) => Buffer.from(cert));
         const certificatePathSetting = getExtensionSetting<string>(ConfigKeys.CERTIFICATE_PATH);
-        let absoluteCertPath: string | Buffer | null = null;
+        let absoluteCertPath: string | null = null;
         if (certificatePathSetting) {
             absoluteCertPath = await utils.constructAbsolutePathFromRelativePath(certificatePathSetting, true);
         } else {
@@ -191,7 +191,7 @@ async function createHttpsAgent(insecure: boolean = false): Promise<HttpsProxyAg
             if (!certPath) {
                 logger.debug("[testBenchConnection] Environment variable 'NODE_EXTRA_CA_CERTS' is not set.");
             } else {
-                absoluteCertPath = fs.readFileSync(certPath);
+                absoluteCertPath = certPath;
             }
         }
         if (!absoluteCertPath) {
