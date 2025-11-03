@@ -3,8 +3,12 @@ This guide explains how to use the TestBench VS Code Extension to navigate insid
 ## Requirements
 
 - Python 3.10 or newer installed on your system
-- Required VS Code extension for robotframework test execution: RobotCode (d-biehl.robotcode)
 - An open VS Code workspace. Without a workspace, the extension runs in read-only mode and features like test generation and importing results are disabled
+
+**Note:** The following VS Code extensions are required dependencies and will be automatically installed (if not already present) when you install the TestBench extension:
+
+- Python extension (`ms-python.python`)
+- RobotCode extension (`d-biehl.robotcode`) - for Robot Framework test execution
 
 ## Quick Start
 
