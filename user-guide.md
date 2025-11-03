@@ -243,10 +243,6 @@ These settings control how the extension generates Robot Framework test suites f
         - **Windows:** Set a system or user environment variable `NODE_EXTRA_CA_CERTS=C:\path\to\certificate.pem`, then restart VS Code
         - **Linux/macOS:** Add `export NODE_EXTRA_CA_CERTS=/path/to/certificate.pem` to your shell profile (e.g., `~/.bashrc`, `~/.zshrc`), then restart your terminal and VS Code
 
-        **Insecure connection option:** If certificate validation fails during login (e.g., due to self-signed certificates), the extension will show a warning dialog with details about the certificate error and offer a "Proceed Anyway" option. If you choose to proceed:
-        - The extension will establish an insecure connection that bypasses certificate validation. This connection is not secure and should only be used in trusted development/test environments
-        - The insecure mode remains active for the duration of your session and is reset when you log out. All subsequent API requests during that session will use the insecure connection
-
 ### Note
 
 - **All path strings in the extension settings are relative to your current VS Code workspace root, except Certificate Path which accepts both absolute and relative paths.** For example, if your workspace is `C:\MyWorkspace` and you want to set 'Output Directory' to `C:\MyWorkspace\tests`, use `tests`. For Certificate Path, you can use either `C:\certs\server.pem` (absolute) or `certs\server.pem` (relative).
