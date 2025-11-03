@@ -251,7 +251,7 @@
                 "properties": {
                     "testbenchExtension.certificatePath": {
                         "type": "string",
-                        "description": "Path to the public TestBench certificate .pem file relative to the workspace location.",
+                        "description": "Path to the public TestBench certificate .pem file. Can be either an absolute path or a path relative to the workspace location.",
                         "order": 1,
                         "scope": "resource"
                     }
