@@ -691,7 +691,7 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
     }
 
     if (testGenerationSuccessful) {
-        if (getExtensionConfiguration().get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_GENERATION, false)) {
+        if (getExtensionConfiguration().get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_TEST_GENERATION, false)) {
             await vscode.commands.executeCommand("workbench.view.extension.test");
         }
 
@@ -1440,7 +1440,9 @@ export async function startTestGenerationUsingTOV(
                     : `Successfully generated Robot Framework test suites from Test Object Version '${treeItem.label}'.`;
                 vscode.window.showInformationMessage(tovTestGenerationSuccessMessage);
 
-                if (getExtensionConfiguration().get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_GENERATION, false)) {
+                if (
+                    getExtensionConfiguration().get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_TEST_GENERATION, false)
+                ) {
                     await vscode.commands.executeCommand("workbench.view.extension.test");
                 }
 

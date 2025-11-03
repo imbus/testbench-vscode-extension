@@ -44,12 +44,12 @@
                 </h3>
                 <form id="addConnectionForm">
                     <div class="form-group">
-                        <label for="connectionLabel">Connection Label (e.g., "My TestBench Connection")</label>
+                        <label for="connectionLabel">Connection Label (Optional)</label>
                         <input
                             type="text"
                             id="connectionLabel"
                             name="connectionLabel"
-                            placeholder="Optional, e.g., Main TestBench"
+                            placeholder="My connection label"
                         />
                     </div>
                     <div class="form-group">
@@ -59,7 +59,7 @@
                             id="serverName"
                             name="serverName"
                             required
-                            placeholder="e.g., testbench.example.com"
+                            placeholder="testbench.example.com"
                         />
                     </div>
                     <div class="form-group">
@@ -70,33 +70,18 @@
                             name="portNumber"
                             value="9445"
                             required
-                            placeholder="e.g., 9445"
+                            placeholder="9445"
                         />
                     </div>
                     <div class="form-group">
                         <label for="username">Username</label>
-                        <input
-                            type="text"
-                            id="username"
-                            name="username"
-                            required
-                            placeholder="Your TestBench username"
-                        />
+                        <input type="text" id="username" name="username" required placeholder="example-tester" />
                     </div>
                     <div class="form-group">
                         <label for="password">Password</label>
                         <div class="password-wrapper">
-                            <input type="password" id="password" name="password" placeholder="Enter password" />
+                            <input type="password" id="password" name="password" placeholder="Enter your password" />
                         </div>
-                        <small
-                            style="
-                                color: var(--vscode-descriptionForeground);
-                                font-size: 0.85em;
-                                margin-top: 4px;
-                                display: block;
-                            "
-                            >Only non-empty passwords will be stored.</small
-                        >
                     </div>
                     <div class="form-group checkbox-group">
                         <input type="checkbox" id="storePasswordCheckbox" name="storePassword" checked />

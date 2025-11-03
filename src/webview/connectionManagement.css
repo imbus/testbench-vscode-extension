@@ -455,24 +455,32 @@ button .icon {
     background-color: var(--vscode-inputValidation-infoBackground);
     color: var(--vscode-inputValidation-infoForeground);
     border: 1px solid var(--vscode-inputValidation-infoBorder);
+    text-shadow: 0 0 1px rgba(0, 0, 0, 0.3);
+    font-weight: 500;
 }
 
 .message-success {
-    background-color: var(--vscode-editorGutter-addedBackground);
+    background-color: rgba(115, 201, 144, 0.18);
     color: var(--vscode-notification-infoForeground);
-    border: 1px solid var(--vscode-gitDecoration-addedResourceForeground);
+    border: 1px solid rgba(115, 201, 144, 0.4);
+    text-shadow: 0 0 1px rgba(0, 0, 0, 0.3);
+    font-weight: 500;
 }
 
 .message-error {
     background-color: var(--vscode-inputValidation-errorBackground);
     color: var(--vscode-inputValidation-errorForeground);
     border: 1px solid var(--vscode-inputValidation-errorBorder);
+    text-shadow: 0 0 1px rgba(0, 0, 0, 0.3);
+    font-weight: 500;
 }
 
 .message-warning {
     background-color: var(--vscode-inputValidation-warningBackground, #warning_color_background_fallback);
     color: var(--vscode-inputValidation-warningForeground, var(--vscode-foreground));
     border: 1px solid var(--vscode-inputValidation-warningBorder, #warning_color_border_fallback);
+    text-shadow: 0 0 1px rgba(0, 0, 0, 0.3);
+    font-weight: 500;
 }
 
 #noConnectionsMessage {
@@ -488,20 +496,6 @@ button .icon {
     margin: var(--spacing-lg) 0;
     word-wrap: break-word;
     hyphens: auto;
-}
-
-/* Responsive design*/
-/* Mobile-first approach with consolidated breakpoints */
-@media (max-width: 320px) {
-    body {
-        padding: var(--spacing-lg);
-        gap: var(--spacing-2xl);
-    }
-
-    .connection-section,
-    .add-connection-section {
-        padding: var(--spacing-xl);
-    }
 }
 
 @media (max-width: 300px) {

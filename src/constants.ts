@@ -42,10 +42,27 @@ export const WebviewMessageCommands = {
     EDIT_CONNECTION: "editConnection",
     UPDATE_CONNECTION: "updateConnection",
     CANCEL_EDIT_CONNECTION: "cancelEditConnection",
+    ENTER_EDIT_MODE: "enterEditMode",
+    EXIT_EDIT_MODE: "exitEditMode",
 
     // Host to Webview communication
     DISPLAY_CONNECTIONS_IN_WEBVIEW: "displayConnectionsInWebview",
     SHOW_WEBVIEW_MESSAGE: "showWebviewMessage"
+} as const;
+
+// --- Webview File Paths ---
+export const WebviewFiles = {
+    CONNECTION_MANAGEMENT: {
+        HTML: "connectionManagement.html",
+        CSS: "connectionManagement.css",
+        JS: "connectionManagement.js"
+    },
+    LOGGED_IN: {
+        HTML: "loggedIn.html",
+        CSS: "loggedIn.css",
+        JS: "loggedIn.js"
+    },
+    DIST_WEBVIEW_DIR: "dist/webview"
 } as const;
 
 // --- Extension Configuration Setting Keys ---
@@ -57,7 +74,7 @@ export const ConfigKeys = {
     TB2ROBOT_CLEAN: "cleanFilesBeforeTestGeneration",
     TB2ROBOT_FULLY_QUALIFIED: "fullyQualifiedKeywords",
     TB2ROBOT_OUTPUT_DIR: "outputDirectory",
-    TB2ROBOT_COMPOUND_LOGGING: "compoundInteractionLogging",
+    TB2ROBOT_COMPOUND_LOGGING: "compoundKeywordLogging",
     TB2ROBOT_LOG_SUITE_NUMBERING: "logSuiteNumbering",
     TB2ROBOT_RESOURCE_DIR: "resourceDirectoryPath",
     TB2ROBOT_RESOURCE_DIRECTORY_MARKER: "resourceRootRegex",
@@ -68,7 +85,7 @@ export const ConfigKeys = {
     TB2ROBOT_LIBRARY_MAPPING: "libraryMapping",
     TB2ROBOT_RESOURCE_MAPPING: "resourceMapping",
     TB2ROBOT_OUTPUT_XML_PATH: "outputXmlFilePath",
-    OPEN_TESTING_VIEW_AFTER_GENERATION: "openTestingViewAfterGeneration",
+    OPEN_TESTING_VIEW_AFTER_TEST_GENERATION: "openTestingViewAfterTestGeneration",
     CERTIFICATE_PATH: "certificatePath",
     PROXY_URL: "proxy"
     // PROXY_STRICT_SSL: "proxyStrictSSL",
