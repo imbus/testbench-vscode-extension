@@ -165,9 +165,9 @@
         passwordInput.value = ""; // Don't pre-fill password for security
 
         if (hasStoredPassword) {
-            passwordInput.placeholder = "Password is stored. Leave empty to keep it.";
+            passwordInput.placeholder = "Leave empty to keep stored password";
         } else {
-            passwordInput.placeholder = "Enter password to store it.";
+            passwordInput.placeholder = "Enter your password";
         }
 
         // Update checkbox state
@@ -198,7 +198,7 @@
 
         // Clear and reset form
         addConnectionForm.reset();
-        passwordInput.placeholder = "Enter password";
+        passwordInput.placeholder = "Enter your password";
         portNumberInput.value = "9445"; // Reset default port
         storePasswordCheckbox.checked = true; // Reset default
     }
