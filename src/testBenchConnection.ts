@@ -185,7 +185,17 @@ async function createHttpsAgent(insecure: boolean = false): Promise<HttpsProxyAg
         const certificatePathSetting = getExtensionSetting<string>(ConfigKeys.CERTIFICATE_PATH);
         let absoluteCertPath: string | null = null;
         if (certificatePathSetting) {
-            absoluteCertPath = await utils.constructAbsolutePathFromRelativePath(certificatePathSetting, true);
+            if (path.isAbsolute(certificatePathSetting)) {
+                if (await utils.isAbsolutePath(certificatePathSetting, true)) {
+                    absoluteCertPath = certificatePathSetting;
+                } else {
+                    logger.warn(
+                        `[testBenchConnection] Absolute certificate path "${certificatePathSetting}" does not exist or is not accessible.`
+                    );
+                }
+            } else {
+                absoluteCertPath = await utils.constructAbsolutePathFromRelativePath(certificatePathSetting, true);
+            }
         } else {
             const certPath = process.env.NODE_EXTRA_CA_CERTS;
             if (!certPath) {
