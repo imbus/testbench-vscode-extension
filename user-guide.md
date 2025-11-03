@@ -3,8 +3,8 @@ This guide explains how to use the TestBench VS Code Extension to navigate insid
 ## Requirements
 
 - Python 3.10 or newer installed on your system
+- Required VS Code extension for robotframework test execution: RobotCode (d-biehl.robotcode)
 - An open VS Code workspace. Without a workspace, the extension runs in read-only mode and features like test generation and importing results are disabled
-- Recommended VS Code extension for robotframework test execution: RobotCode (d-biehl.robotcode)
 
 ## Quick Start
 
@@ -65,14 +65,6 @@ Example `ls.config.json`
 - Toolbar of test themes view contains following buttons: Refresh Test Themes, Open Projects View, Search (TODO: Filter and Filter diff)
 - The view displays only tree items with an execution status other than NotPlanned and not locked by the system
 
-## Filters in Test Themes
-
-- Click 'Display Test Theme Filters' to list filters available to the current user that can be applied to test themes view, where you can select multiple filters
-- Active filters are stored per user in VS Code and persist across logins as long as the filter remains available
-- When a filter is active, the filter button changes color and an action button 'Clear Filters' appears at the bottom of the filter list to remove all active filters
-- When a filter is active, the 'Filter Diff' button becomes visible. Filter Diff button toggles a mode that shows all items, visually marking which items would be filtered out by the active filter.
-- When filter diff mode is enabled, the filter diff icon will be colored to indicate that it is active. Clicking it again will disable the filter diff mode.
-
 ## Generating Robot Framework Tests
 
 - You can generate Robot Framework tests for a single tree item or for entire subtrees by clicking the robotframework icon next to the tree item.
@@ -116,7 +108,7 @@ Settings are grouped in VS Code under these sections
 - Test Generation
 - Connection
 
-### Important Settings
+### Settings Overview
 
 - _Output Directory_ controls where generated `.robot` files are created
 - _Output Xml File Path_ points to the Robot Framework results file (`output.xml`) for importing results
