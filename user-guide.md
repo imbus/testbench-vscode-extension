@@ -228,7 +228,24 @@ These settings control how the extension generates Robot Framework test suites f
 - **Certificate Path**
     - **Type:** String
     - **Default:** `""` (empty)
-    - **Description:** Optional path to the public TestBench server certificate file (`.pem` format). This can be either an absolute path or a path relative to the workspace root. This is only required when connecting to TestBench servers that use self-signed certificates or custom certificate authorities (e.g., development/test environments or unofficial TestBench server versions). In production environments with official TestBench servers using standard certificates, this setting can be left empty. If not specified, the extension uses the system's default certificate store.
+    - **Description:** Optional path to the public TestBench server certificate file (`.pem` format). This can be either an absolute path or a path relative to the workspace root.
+
+        **When to use:** A certificate is only required when connecting to TestBench servers that use self-signed certificates or custom certificate authorities (e.g., development/test environments or unofficial server versions). In production environments with official TestBench servers using standard certificates, this setting can be left empty.
+
+        **How certificate validation works:**
+        1. If Certificate Path is set, the extension uses both your custom certificate AND the system's default certificate store for validation
+        2. If Certificate Path is empty, the extension checks the `NODE_EXTRA_CA_CERTS` environment variable (see below)
+        3. If neither is set, only the system's default certificate store is used
+
+        **Using NODE_EXTRA_CA_CERTS environment variable:** Instead of configuring Certificate Path in the extension settings, you can set the `NODE_EXTRA_CA_CERTS` environment variable to point to your certificate file.
+
+        To set `NODE_EXTRA_CA_CERTS`:
+        - **Windows:** Set a system or user environment variable `NODE_EXTRA_CA_CERTS=C:\path\to\certificate.pem`, then restart VS Code
+        - **Linux/macOS:** Add `export NODE_EXTRA_CA_CERTS=/path/to/certificate.pem` to your shell profile (e.g., `~/.bashrc`, `~/.zshrc`), then restart your terminal and VS Code
+
+        **Insecure connection option:** If certificate validation fails during login (e.g., due to self-signed certificates), the extension will show a warning dialog with details about the certificate error and offer a "Proceed Anyway" option. If you choose to proceed:
+        - The extension will establish an insecure connection that bypasses certificate validation. This connection is not secure and should only be used in trusted development/test environments
+        - The insecure mode remains active for the duration of your session and is reset when you log out. All subsequent API requests during that session will use the insecure connection
 
 ### Note
 
