@@ -15,7 +15,7 @@ import { ContextKeys, TestElementItemTypes } from "../../../constants";
 import { treeViews } from "../../../extension";
 import { ClickHandler } from "../../core/ClickHandler";
 import {
-    findInteractionPositionInResourceFile,
+    findKeywordPositionInResourceFile,
     isLanguageServerRunning,
     waitForLanguageServerReady,
     updateOrRestartLS
@@ -32,7 +32,7 @@ interface ResourceOperationConfig {
     createMissing: boolean;
     revealInExplorer: boolean;
     targetItem: TestElementsTreeItem;
-    interactionItem?: TestElementsTreeItem;
+    keywordItem?: TestElementsTreeItem;
     errorMessages: {
         noHierarchicalName: string;
         noPath: string;
@@ -52,7 +52,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private currentTovName: string | null = null;
     private resourceFiles: Map<string, string[]> = new Map();
     private resourceFileService: ResourceFileService;
-    private interactionClickHandler: ClickHandler<TestElementsTreeItem>;
+    private keywordClickHandler: ClickHandler<TestElementsTreeItem>;
     private resourceFilesWatcher: vscode.FileSystemWatcher | undefined;
     private resourceAvailabilityRefreshDebounceHandle: NodeJS.Timeout | undefined;
 
@@ -66,26 +66,26 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
         this.dataProvider = new TestElementsDataProvider(this.logger, getConnection, this.eventBus);
         this.resourceFileService = new ResourceFileService(this.logger);
-        this.interactionClickHandler = new ClickHandler<TestElementsTreeItem>();
+        this.keywordClickHandler = new ClickHandler<TestElementsTreeItem>();
 
         this.registerEventHandlers();
-        this.setupInteractionClickHandlers();
+        this.setupKeywordClickHandlers();
         this.setupResourceFilesWatcher();
     }
 
     /**
-     * Sets up click handlers for interaction items using the generalized click handler
+     * Sets up click handlers for keyword items using the generalized click handler
      */
-    private setupInteractionClickHandlers(): void {
-        this.interactionClickHandler.updateHandlers({
+    private setupKeywordClickHandlers(): void {
+        this.keywordClickHandler.updateHandlers({
             onSingleClick: async (item: TestElementsTreeItem) => {
-                if (item.data.testElementType === TestElementType.Interaction) {
-                    await this.handleInteractionSingleClick(item);
+                if (item.data.testElementType === TestElementType.Keyword) {
+                    await this.handleKeywordSingleClick(item);
                 }
             },
             onDoubleClick: async (item: TestElementsTreeItem) => {
-                if (item.data.testElementType === TestElementType.Interaction) {
-                    await this.handleInteractionDoubleClick(item);
+                if (item.data.testElementType === TestElementType.Keyword) {
+                    await this.handleKeywordDoubleClick(item);
                 }
             }
         });
@@ -225,7 +225,14 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param config The configuration object defining the operation to perform.
      */
     private async _handleResourceOperation(config: ResourceOperationConfig): Promise<void> {
-        const { operationType, createMissing, revealInExplorer, targetItem, interactionItem, errorMessages } = config;
+        const {
+            operationType,
+            createMissing,
+            revealInExplorer,
+            targetItem,
+            keywordItem: keywordItem,
+            errorMessages
+        } = config;
 
         // Resource operations use language server commands, ensure it's running
         try {
@@ -310,11 +317,11 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 this.refreshItemWithParents(targetItem);
             }
 
-            if (operationType === "interaction" && interactionItem) {
-                await this.openFileAndJumpToInteraction(
+            if (operationType === "interaction" && keywordItem) {
+                await this.openFileAndJumpToKeyword(
                     finalPath,
-                    interactionItem.data.originalName,
-                    interactionItem.data.uniqueID
+                    keywordItem.data.originalName,
+                    keywordItem.data.uniqueID
                 );
             } else if (operationType !== "folder") {
                 await this.openFileInVSCodeEditor(finalPath);
@@ -725,7 +732,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         };
 
         // Check if parent resource is locally available for interactions
-        if (testElementType === TestElementType.Interaction && parent) {
+        if (testElementType === TestElementType.Keyword && parent) {
             itemData.isLocallyAvailable = parent.data.isLocallyAvailable || false;
         }
 
@@ -745,8 +752,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         switch (type) {
             case TestElementItemTypes.SUBDIVISION:
                 return TestElementType.Subdivision;
-            case TestElementItemTypes.INTERACTION:
-                return TestElementType.Interaction;
+            case TestElementItemTypes.KEYWORD:
+                return TestElementType.Keyword;
             case TestElementItemTypes.DATA_TYPE:
                 return TestElementType.DataType;
             case TestElementItemTypes.CONDITION:
@@ -858,16 +865,12 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Opens a resource file in VS Code editor and positions cursor at a specific interaction.
+     * Opens a resource file in VS Code editor and positions cursor at a specific keyword.
      * @param resourcePath The path of the resource file
-     * @param interactionName The name of the interaction to find and position cursor at
+     * @param keywordName The name of the keyword to find and position cursor at
      * @param uid The unique identifier of the tree item
      */
-    private async openFileAndJumpToInteraction(
-        resourcePath: string,
-        interactionName: string,
-        uid: string
-    ): Promise<void> {
+    private async openFileAndJumpToKeyword(resourcePath: string, keywordName: string, uid: string): Promise<void> {
         let textDocument: vscode.TextDocument;
         let textEditor: vscode.TextEditor;
 
@@ -884,20 +887,16 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             return;
         }
         try {
-            const interactionLineNumber = await findInteractionPositionInResourceFile(
-                textDocument.uri,
-                interactionName,
-                uid
-            );
-            if (interactionLineNumber !== undefined) {
-                const position = new vscode.Position(interactionLineNumber, 0);
+            const keywordLineNumber = await findKeywordPositionInResourceFile(textDocument.uri, keywordName, uid);
+            if (keywordLineNumber !== undefined) {
+                const position = new vscode.Position(keywordLineNumber, 0);
                 textEditor.selection = new vscode.Selection(position, position);
                 textEditor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
             }
         } catch (positioningError) {
             const errorMessage = positioningError instanceof Error ? positioningError.message : "Unknown error";
             this.logger.warn(
-                `[TestElementsTreeView] Failed to position cursor for keyword '${interactionName}' in resource file at path ${resourcePath}: ${errorMessage}`,
+                `[TestElementsTreeView] Failed to position cursor for keyword '${keywordName}' in resource file at path ${resourcePath}: ${errorMessage}`,
                 positioningError
             );
         }
@@ -969,12 +968,12 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Finds and opens the robot resource of an interaction and reveals the opened file in the VS Code explorer view.
-     * Also jumps to the interaction position in the file.
+     * Finds and opens the robot resource of an keyword and reveals the opened file in the VS Code explorer view.
+     * Also jumps to the keyword position in the file.
      * If the parent resource file doesn't exist, it will create the file first.
-     * @param item The tree item representing an interaction.
+     * @param item The tree item representing an keyword.
      */
-    public async goToInteractionResource(item: TestElementsTreeItem): Promise<void> {
+    public async goToKeywordResource(item: TestElementsTreeItem): Promise<void> {
         const parentResource = item.parent as TestElementsTreeItem;
         if (!parentResource) {
             vscode.window.showErrorMessage(`Could not find the parent resource for keyword ${item.label}`);
@@ -986,7 +985,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             createMissing: true,
             revealInExplorer: true,
             targetItem: parentResource,
-            interactionItem: item,
+            keywordItem: item,
             errorMessages: {
                 noHierarchicalName: "Cannot determine resource path: parent has no hierarchical name.",
                 noPath: "Cannot construct resource path: workspace location not found.",
@@ -999,11 +998,11 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Creates a missing parent resource for an interaction, opens it and
+     * Creates a missing parent resource for an keyword, opens it and
      * reveals the opened file in the VS Code explorer view.
-     * @param item The interaction tree item
+     * @param item The keyword tree item
      */
-    public async createMissingParentResourceForInteraction(item: TestElementsTreeItem): Promise<void> {
+    public async createMissingParentResourceForKeyword(item: TestElementsTreeItem): Promise<void> {
         const parentResource = item.parent as TestElementsTreeItem;
         if (!parentResource) {
             vscode.window.showErrorMessage(`Could not find the parent resource for keyword ${item.label}`);
@@ -1015,7 +1014,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             createMissing: true,
             revealInExplorer: true,
             targetItem: parentResource,
-            interactionItem: item,
+            keywordItem: item,
             errorMessages: {
                 noHierarchicalName: "Cannot determine resource path: parent has no hierarchical name.",
                 noPath: "Cannot construct resource path: workspace location not found.",
@@ -1028,11 +1027,11 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Handles interaction single click events.
-     * Opens the .resource file in the editor and jumps to the interaction only if it exists.
-     * @param item The interaction tree item that was single clicked
+     * Handles keyword single click events.
+     * Opens the .resource file in the editor and jumps to the keyword only if it exists.
+     * @param item The keyword tree item that was single clicked
      */
-    private async handleInteractionSingleClick(item: TestElementsTreeItem): Promise<void> {
+    private async handleKeywordSingleClick(item: TestElementsTreeItem): Promise<void> {
         const parentResource = item.parent as TestElementsTreeItem;
         if (!parentResource) {
             vscode.window.showErrorMessage(`Could not find the parent resource for keyword ${item.label}`);
@@ -1044,7 +1043,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             createMissing: false,
             revealInExplorer: false,
             targetItem: parentResource,
-            interactionItem: item,
+            keywordItem: item,
             errorMessages: {
                 noHierarchicalName: "Cannot determine resource path: parent has no hierarchical name.",
                 noPath: "Cannot construct resource path: workspace location not found.",
@@ -1058,25 +1057,25 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Handles interaction double click events.
-     * Creates/opens the resource file, jumps to the interaction position, and reveals the file in explorer.
-     * @param item The interaction tree item that was double clicked
+     * Handles keyword double click events.
+     * Creates/opens the resource file, jumps to the keyword position, and reveals the file in explorer.
+     * @param item The keyword tree item that was double clicked
      */
-    private async handleInteractionDoubleClick(item: TestElementsTreeItem): Promise<void> {
+    private async handleKeywordDoubleClick(item: TestElementsTreeItem): Promise<void> {
         this.logger.debug(`[TestElementsTreeView] Keyword tree item double clicked: ${item.label}`);
-        await this.goToInteractionResource(item);
+        await this.goToKeywordResource(item);
     }
 
     /**
-     * Handles interaction clicks from external commands
-     * @param item The interaction item that was clicked
+     * Handles keyword clicks from external commands
+     * @param item The keyword item that was clicked
      */
-    public async handleInteractionClick(item: TestElementsTreeItem): Promise<void> {
+    public async handleKeywordClick(item: TestElementsTreeItem): Promise<void> {
         if (!item.id) {
             return;
         }
 
-        await this.interactionClickHandler.handleClick(item, item.id, this.logger);
+        await this.keywordClickHandler.handleClick(item, item.id, this.logger);
     }
 
     /**

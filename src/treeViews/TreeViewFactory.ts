@@ -366,7 +366,7 @@ export class TreeViewFactory {
             /*
             if (item.data?.testElementType === "Interaction") {
                 treeView.eventBus.emit({
-                    type: "interaction:selected",
+                    type: "keyword:selected",
                     source: treeView.config.id,
                     data: { item },
                     timestamp: Date.now()

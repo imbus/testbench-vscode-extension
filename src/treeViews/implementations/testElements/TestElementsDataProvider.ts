@@ -276,7 +276,7 @@ export class TestElementsDataProvider {
      * - Include Subdivision if:
      *       Subdivision name matches resource marker defined in extension settings
      *       OR a child subdivision tree item has a resource marker match.
-     * - Include Interaction if:
+     * - Include Keyword if:
      *       The direct parent subdivision has a resource directory match.
      * @param rootsToFilter The root elements of the unfiltered test elements tree to filter.
      * @returns A new array of filtered root elements.
@@ -469,7 +469,7 @@ export class TestElementsDataProvider {
             return TestElementType.Subdivision;
         }
         if (item.Interaction_key?.serial) {
-            return TestElementType.Interaction;
+            return TestElementType.Keyword;
         }
         if (item.Condition_key?.serial) {
             return TestElementType.Condition;
@@ -489,7 +489,7 @@ export class TestElementsDataProvider {
         const elementType = this._getTestElementType(raw);
         switch (elementType) {
             case TestElementType.Subdivision:
-            case TestElementType.Interaction:
+            case TestElementType.Keyword:
             case TestElementType.Condition:
             case TestElementType.DataType: {
                 const specificKey = raw[`${elementType}_key`];

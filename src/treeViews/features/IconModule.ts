@@ -274,7 +274,7 @@ export class IconModule implements TreeViewModule {
                         dark: vscode.Uri.joinPath(extensionUri, "resources", "icons", `${baseIconName}-dark.svg`)
                     };
                 }
-                case TestElementType.Interaction:
+                case TestElementType.Keyword:
                     return {
                         light: vscode.Uri.joinPath(extensionUri, "resources", "icons", "testStep-light.svg"),
                         dark: vscode.Uri.joinPath(extensionUri, "resources", "icons", "testStep-dark.svg")

@@ -459,7 +459,7 @@
                 }
             },
             {
-                "command": "testbenchExtension.openInteractionInTestElementsView",
+                "command": "testbenchExtension.openKeywordInTestElementsView",
                 "title": "Open Resource",
                 "when": "view == testbench.testElements && viewItem == 'testElement.interaction.resource.available'",
                 "icon": {
@@ -468,7 +468,7 @@
                 }
             },
             {
-                "command": "testbenchExtension.createMissingParentResourceForInteraction",
+                "command": "testbenchExtension.createMissingParentResourceForKeyword",
                 "title": "Create Resource",
                 "when": "view == testbench.testElements && viewItem == 'testElement.interaction.resource.missing'",
                 "icon": "$(new-file)"
@@ -631,11 +631,11 @@
                     "when": "false"
                 },
                 {
-                    "command": "testbenchExtension.openInteractionInTestElementsView",
+                    "command": "testbenchExtension.openKeywordInTestElementsView",
                     "when": "false"
                 },
                 {
-                    "command": "testbenchExtension.createMissingParentResourceForInteraction",
+                    "command": "testbenchExtension.createMissingParentResourceForKeyword",
                     "when": "false"
                 },
                 {
@@ -871,12 +871,12 @@
                     "group": "inline@1"
                 },
                 {
-                    "command": "testbenchExtension.openInteractionInTestElementsView",
+                    "command": "testbenchExtension.openKeywordInTestElementsView",
                     "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable && viewItem == 'testElement.interaction.resource.available'",
                     "group": "inline@1"
                 },
                 {
-                    "command": "testbenchExtension.createMissingParentResourceForInteraction",
+                    "command": "testbenchExtension.createMissingParentResourceForKeyword",
                     "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable && viewItem == 'testElement.interaction.resource.missing'",
                     "group": "inline@1"
                 },

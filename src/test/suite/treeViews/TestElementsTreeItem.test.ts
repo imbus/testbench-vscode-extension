@@ -62,7 +62,7 @@ suite("TestElementsTreeItem", function () {
 
             const childData = createMockTestElementData({
                 displayName: "ChildItem",
-                testElementType: TestElementType.Interaction
+                testElementType: TestElementType.Keyword
             });
             const child = new TestElementsTreeItem(childData, testEnv.mockContext, parent, mockEventBus);
 
@@ -104,7 +104,7 @@ suite("TestElementsTreeItem", function () {
             assert.strictEqual(item.contextValue, "testElement.subdivision.folder");
         });
 
-        test("should set correct context value for interaction with available parent", function () {
+        test("should set correct context value for keyword with available parent", function () {
             const parentData = createMockTestElementData({
                 displayName: "ParentResource [Robot-Resource]",
                 testElementType: TestElementType.Subdivision,
@@ -112,17 +112,17 @@ suite("TestElementsTreeItem", function () {
             });
             const parent = new TestElementsTreeItem(parentData, testEnv.mockContext, undefined, mockEventBus);
 
-            const interactionData = createMockTestElementData({
-                displayName: "TestInteraction",
-                testElementType: TestElementType.Interaction,
+            const keywordData = createMockTestElementData({
+                displayName: "TestKeyword",
+                testElementType: TestElementType.Keyword,
                 isLocallyAvailable: true
             });
-            const interaction = new TestElementsTreeItem(interactionData, testEnv.mockContext, parent, mockEventBus);
+            const keyword = new TestElementsTreeItem(keywordData, testEnv.mockContext, parent, mockEventBus);
 
-            assert.strictEqual(interaction.contextValue, "testElement.interaction.resource.available");
+            assert.strictEqual(keyword.contextValue, "testElement.interaction.resource.available");
         });
 
-        test("should set correct context value for interaction with missing parent", function () {
+        test("should set correct context value for keyword with missing parent", function () {
             const parentData = createMockTestElementData({
                 displayName: "ParentResource [Robot-Resource]",
                 testElementType: TestElementType.Subdivision,
@@ -130,19 +130,19 @@ suite("TestElementsTreeItem", function () {
             });
             const parent = new TestElementsTreeItem(parentData, testEnv.mockContext, undefined, mockEventBus);
 
-            const interactionData = createMockTestElementData({
-                displayName: "TestInteraction",
-                testElementType: TestElementType.Interaction,
+            const keywordData = createMockTestElementData({
+                displayName: "TestKeyword",
+                testElementType: TestElementType.Keyword,
                 isLocallyAvailable: false
             });
-            const interaction = new TestElementsTreeItem(interactionData, testEnv.mockContext, parent, mockEventBus);
+            const keyword = new TestElementsTreeItem(keywordData, testEnv.mockContext, parent, mockEventBus);
 
-            assert.strictEqual(interaction.contextValue, "testElement.interaction.resource.missing");
+            assert.strictEqual(keyword.contextValue, "testElement.interaction.resource.missing");
         });
     });
 
-    suite("Interaction Context Value Updates", function () {
-        test("should update interaction context value when parent resource becomes available", function () {
+    suite("Keyword Context Value Updates", function () {
+        test("should update keyword context value when parent resource becomes available", function () {
             const parentResource = createMockTestElementItem(
                 createMockTestElementData({
                     displayName: "ParentResource [Robot-Resource]",
@@ -152,22 +152,22 @@ suite("TestElementsTreeItem", function () {
                 })
             );
 
-            const interaction = createMockTestElementItem(
+            const keyword = createMockTestElementItem(
                 createMockTestElementData({
-                    displayName: "TestInteraction",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
-                    testElementType: TestElementType.Interaction,
+                    displayName: "TestKeyword",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestKeyword",
+                    testElementType: TestElementType.Keyword,
                     isLocallyAvailable: false
                 }),
                 parentResource
             );
-            assert.strictEqual(interaction.contextValue, "testElement.interaction.resource.missing");
+            assert.strictEqual(keyword.contextValue, "testElement.interaction.resource.missing");
 
             parentResource.updateLocalAvailability(true, "/test/path/ParentResource.resource");
-            assert.strictEqual(interaction.contextValue, "testElement.interaction.resource.available");
+            assert.strictEqual(keyword.contextValue, "testElement.interaction.resource.available");
         });
 
-        test("should update interaction context value when parent resource becomes unavailable", function () {
+        test("should update keyword context value when parent resource becomes unavailable", function () {
             const parentResource = createMockTestElementItem(
                 createMockTestElementData({
                     displayName: "ParentResource [Robot-Resource]",
@@ -177,20 +177,20 @@ suite("TestElementsTreeItem", function () {
                 })
             );
 
-            const interaction = createMockTestElementItem(
+            const keyword = createMockTestElementItem(
                 createMockTestElementData({
-                    displayName: "TestInteraction",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
-                    testElementType: TestElementType.Interaction,
+                    displayName: "TestKeyword",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestKeyword",
+                    testElementType: TestElementType.Keyword,
                     isLocallyAvailable: true
                 }),
                 parentResource
             );
 
-            assert.strictEqual(interaction.contextValue, "testElement.interaction.resource.available");
+            assert.strictEqual(keyword.contextValue, "testElement.interaction.resource.available");
 
             parentResource.updateLocalAvailability(false);
-            assert.strictEqual(interaction.contextValue, "testElement.interaction.resource.missing");
+            assert.strictEqual(keyword.contextValue, "testElement.interaction.resource.missing");
         });
     });
 
@@ -204,8 +204,8 @@ suite("TestElementsTreeItem", function () {
             const parent = new TestElementsTreeItem(parentData, testEnv.mockContext, undefined, mockEventBus);
 
             const childData = createMockTestElementData({
-                displayName: "TestInteraction",
-                testElementType: TestElementType.Interaction,
+                displayName: "TestKeyword",
+                testElementType: TestElementType.Keyword,
                 isLocallyAvailable: false
             });
             const child = new TestElementsTreeItem(childData, testEnv.mockContext, parent, mockEventBus);
