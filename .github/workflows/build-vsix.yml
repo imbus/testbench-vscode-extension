@@ -86,6 +86,8 @@ jobs:
                       .vscode-test/logs/
                       *.log
                   if-no-files-found: ignore
+                  retention-days: 7 # Logs only kept for 7 days
+                  compression-level: 9 # Max compression for logs
 
     build:
         name: Build VSIX
@@ -210,6 +212,8 @@ jobs:
                   path: ${{ steps.verify_vsix.outputs.VSIX_PATH }}
                   if-no-files-found: error
                   overwrite: true
+                  retention-days: 30 # Should be aligned with cleanup workflow (cleanup-artifacts.yml)
+                  compression-level: 6 # (0-9, default is 6, 9 is max compression)
 
             # Upload VSIX for release workflow (if on main branch)
             - name: Upload VSIX for Release
@@ -220,3 +224,4 @@ jobs:
                   path: ${{ steps.verify_vsix.outputs.VSIX_PATH }}
                   if-no-files-found: error
                   overwrite: true
+                  retention-days: 90
