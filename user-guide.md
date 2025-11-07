@@ -152,14 +152,14 @@ These settings control how the extension generates Robot Framework test suites f
     - **Default:** `tests`
     - **Description:** Specifies the directory where the generated Robot Framework test suites (`.robot` files) will be created. The path is relative to the workspace root. For example, if set to `tests`, files will be created in `<workspace>/tests/`.
 
-- **Compound Interaction Logging**
+- **Compound Keyword Logging**
     - **Type:** String (Enum)
     - **Default:** `GROUP`
     - **Options:** `GROUP`, `COMMENT`, `NONE`
-    - **Description:** Controls how compound TestBench interactions (interactions that contain other interactions) are logged in the generated test suites:
-        - `GROUP`: Compound interactions are wrapped in a collapsible group
-        - `COMMENT`: Compound interactions are marked with comments
-        - `NONE`: No special logging for compound interactions
+    - **Description:** Controls how compound TestBench keywords (keywords that contain other keywords) are logged in the generated test suites:
+        - `GROUP`: Compound keywords are wrapped in a collapsible group
+        - `COMMENT`: Compound keywords are marked with comments
+        - `NONE`: No special logging for compound keywords
 
 - **Log Suite Numbering**
     - **Type:** Boolean
