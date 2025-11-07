@@ -92,7 +92,7 @@ export class IconModule implements TreeViewModule {
 
                 // Test elements tree
                 ["Subdivision", new vscode.ThemeIcon("symbol-namespace")],
-                ["Interaction", new vscode.ThemeIcon("symbol-event")],
+                ["Keyword", new vscode.ThemeIcon("symbol-event")],
                 ["DataType", new vscode.ThemeIcon("symbol-variable")],
                 ["Condition", new vscode.ThemeIcon("symbol-boolean")],
                 ["Other", new vscode.ThemeIcon("symbol-misc")]
@@ -119,7 +119,7 @@ export class IconModule implements TreeViewModule {
                 ["TestCaseSetNode", new vscode.ThemeIcon("file-submodule")],
                 ["TestCaseNode", new vscode.ThemeIcon("file")],
                 ["Subdivision", new vscode.ThemeIcon("folder")],
-                ["Interaction", new vscode.ThemeIcon("play")],
+                ["Keyword", new vscode.ThemeIcon("play")],
                 ["DataType", new vscode.ThemeIcon("symbol-key")],
                 ["Condition", new vscode.ThemeIcon("question")],
                 ["Other", new vscode.ThemeIcon("file")]
@@ -146,7 +146,7 @@ export class IconModule implements TreeViewModule {
                 ["TestCaseSetNode", new vscode.ThemeIcon("symbol-namespace", new vscode.ThemeColor("charts.yellow"))],
                 ["TestCaseNode", new vscode.ThemeIcon("circle-outline", new vscode.ThemeColor("charts.red"))],
                 ["Subdivision", new vscode.ThemeIcon("symbol-namespace", new vscode.ThemeColor("charts.blue"))],
-                ["Interaction", new vscode.ThemeIcon("symbol-event", new vscode.ThemeColor("charts.green"))],
+                ["Keyword", new vscode.ThemeIcon("symbol-event", new vscode.ThemeColor("charts.green"))],
                 ["DataType", new vscode.ThemeIcon("symbol-variable", new vscode.ThemeColor("charts.orange"))],
                 ["Condition", new vscode.ThemeIcon("symbol-boolean", new vscode.ThemeColor("charts.purple"))],
                 ["Other", new vscode.ThemeIcon("symbol-misc", new vscode.ThemeColor("charts.yellow"))]

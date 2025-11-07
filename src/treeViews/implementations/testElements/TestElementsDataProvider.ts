@@ -492,7 +492,14 @@ export class TestElementsDataProvider {
             case TestElementType.Keyword:
             case TestElementType.Condition:
             case TestElementType.DataType: {
-                const specificKey = raw[`${elementType}_key`];
+                const keyFieldMap: Record<string, string> = {
+                    [TestElementType.Subdivision]: "Subdivision_key",
+                    [TestElementType.Keyword]: "Interaction_key", // Interaction is renamed to Keyword in GUI
+                    [TestElementType.Condition]: "Condition_key",
+                    [TestElementType.DataType]: "DataType_key"
+                };
+                const keyField = keyFieldMap[elementType];
+                const specificKey = raw[keyField as keyof RawTestElement] as { serial: string } | undefined;
                 if (specificKey?.serial && raw.uniqueID) {
                     return `${specificKey.serial}_${raw.uniqueID}`;
                 }

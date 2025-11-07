@@ -12,7 +12,7 @@ import { ResourceFileService } from "./ResourceFileService";
 
 export enum TestElementType {
     Subdivision = "Subdivision",
-    Keyword = "Interaction",
+    Keyword = "Keyword",
     DataType = "DataType",
     Condition = "Condition",
     Other = "Other"
@@ -117,9 +117,7 @@ export class TestElementsTreeItem extends TreeItemBase {
 
         if (elementType === TestElementType.Keyword) {
             const parentResource = this.getParentResourceAvailability(data);
-            return parentResource
-                ? "testElement.interaction.resource.available"
-                : "testElement.interaction.resource.missing";
+            return parentResource ? "testElement.keyword.resource.available" : "testElement.keyword.resource.missing";
         }
 
         return `testElement.${elementType.toLowerCase()}`;
@@ -346,8 +344,8 @@ export class TestElementsTreeItem extends TreeItemBase {
             const parent = this.parent as TestElementsTreeItem | null;
             const parentAvailable = parent?.data.isLocallyAvailable || false;
             this.contextValue = parentAvailable
-                ? "testElement.interaction.resource.available"
-                : "testElement.interaction.resource.missing";
+                ? "testElement.keyword.resource.available"
+                : "testElement.keyword.resource.missing";
         } else {
             this.contextValue = TestElementsTreeItem.getInitialContextValue(this.data);
         }

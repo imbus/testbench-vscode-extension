@@ -167,7 +167,7 @@ export const TestThemeItemTypes = {
 
 export const TestElementItemTypes = {
     SUBDIVISION: "Subdivision",
-    KEYWORD: "Interaction",
+    KEYWORD: "Keyword",
     DATA_TYPE: "DataType",
     CONDITION: "Condition",
     OTHER: "Other"

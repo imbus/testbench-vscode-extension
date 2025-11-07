@@ -119,7 +119,7 @@ suite("TestElementsTreeItem", function () {
             });
             const keyword = new TestElementsTreeItem(keywordData, testEnv.mockContext, parent, mockEventBus);
 
-            assert.strictEqual(keyword.contextValue, "testElement.interaction.resource.available");
+            assert.strictEqual(keyword.contextValue, "testElement.keyword.resource.available");
         });
 
         test("should set correct context value for keyword with missing parent", function () {
@@ -137,7 +137,7 @@ suite("TestElementsTreeItem", function () {
             });
             const keyword = new TestElementsTreeItem(keywordData, testEnv.mockContext, parent, mockEventBus);
 
-            assert.strictEqual(keyword.contextValue, "testElement.interaction.resource.missing");
+            assert.strictEqual(keyword.contextValue, "testElement.keyword.resource.missing");
         });
     });
 
@@ -161,10 +161,10 @@ suite("TestElementsTreeItem", function () {
                 }),
                 parentResource
             );
-            assert.strictEqual(keyword.contextValue, "testElement.interaction.resource.missing");
+            assert.strictEqual(keyword.contextValue, "testElement.keyword.resource.missing");
 
             parentResource.updateLocalAvailability(true, "/test/path/ParentResource.resource");
-            assert.strictEqual(keyword.contextValue, "testElement.interaction.resource.available");
+            assert.strictEqual(keyword.contextValue, "testElement.keyword.resource.available");
         });
 
         test("should update keyword context value when parent resource becomes unavailable", function () {
@@ -187,10 +187,10 @@ suite("TestElementsTreeItem", function () {
                 parentResource
             );
 
-            assert.strictEqual(keyword.contextValue, "testElement.interaction.resource.available");
+            assert.strictEqual(keyword.contextValue, "testElement.keyword.resource.available");
 
             parentResource.updateLocalAvailability(false);
-            assert.strictEqual(keyword.contextValue, "testElement.interaction.resource.missing");
+            assert.strictEqual(keyword.contextValue, "testElement.keyword.resource.missing");
         });
     });
 
@@ -212,13 +212,13 @@ suite("TestElementsTreeItem", function () {
 
             assert.strictEqual(parent.data.isLocallyAvailable, false);
             assert.strictEqual(child.data.isLocallyAvailable, false);
-            assert.strictEqual(child.contextValue, "testElement.interaction.resource.missing");
+            assert.strictEqual(child.contextValue, "testElement.keyword.resource.missing");
 
             parent.updateLocalAvailability(true, "/test/path/ParentResource.resource");
 
             assert.strictEqual(parent.data.isLocallyAvailable, true);
             assert.strictEqual(child.data.isLocallyAvailable, true);
-            assert.strictEqual(child.contextValue, "testElement.interaction.resource.available");
+            assert.strictEqual(child.contextValue, "testElement.keyword.resource.available");
         });
     });
 

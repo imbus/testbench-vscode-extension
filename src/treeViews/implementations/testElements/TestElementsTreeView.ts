@@ -28,7 +28,7 @@ import { ConfigKeys } from "../../../constants";
  * Local interface for configuring the generic resource handler.
  */
 interface ResourceOperationConfig {
-    operationType: "open" | "create" | "folder" | "interaction";
+    operationType: "open" | "create" | "folder" | "keyword";
     createMissing: boolean;
     revealInExplorer: boolean;
     targetItem: TestElementsTreeItem;
@@ -193,7 +193,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Recomputes resource availability for subdivision items and updates icons and interactions.
+     * Recomputes resource availability for subdivision items and updates icons and keywords.
      */
     private async refreshResourceAvailabilityFromWorkspace(): Promise<void> {
         try {
@@ -317,7 +317,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 this.refreshItemWithParents(targetItem);
             }
 
-            if (operationType === "interaction" && keywordItem) {
+            if (operationType === "keyword" && keywordItem) {
                 await this.openFileAndJumpToKeyword(
                     finalPath,
                     keywordItem.data.originalName,
@@ -731,7 +731,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             localPath: undefined
         };
 
-        // Check if parent resource is locally available for interactions
+        // Check if parent resource is locally available for keywords
         if (testElementType === TestElementType.Keyword && parent) {
             itemData.isLocallyAvailable = parent.data.isLocallyAvailable || false;
         }
@@ -981,7 +981,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         }
 
         await this._handleResourceOperation({
-            operationType: "interaction",
+            operationType: "keyword",
             createMissing: true,
             revealInExplorer: true,
             targetItem: parentResource,
@@ -1039,7 +1039,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         }
 
         await this._handleResourceOperation({
-            operationType: "interaction",
+            operationType: "keyword",
             createMissing: false,
             revealInExplorer: false,
             targetItem: parentResource,
