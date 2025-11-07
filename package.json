@@ -459,18 +459,18 @@
                 }
             },
             {
-                "command": "testbenchExtension.openInteractionInTestElementsView",
+                "command": "testbenchExtension.openKeywordInTestElementsView",
                 "title": "Open Resource",
-                "when": "view == testbench.testElements && viewItem == 'testElement.interaction.resource.available'",
+                "when": "view == testbench.testElements && viewItem == 'testElement.keyword.resource.available'",
                 "icon": {
                     "light": "resources/icons/open-light.svg",
                     "dark": "resources/icons/open-dark.svg"
                 }
             },
             {
-                "command": "testbenchExtension.createMissingParentResourceForInteraction",
+                "command": "testbenchExtension.createMissingParentResourceForKeyword",
                 "title": "Create Resource",
-                "when": "view == testbench.testElements && viewItem == 'testElement.interaction.resource.missing'",
+                "when": "view == testbench.testElements && viewItem == 'testElement.keyword.resource.missing'",
                 "icon": "$(new-file)"
             },
             {
@@ -631,11 +631,11 @@
                     "when": "false"
                 },
                 {
-                    "command": "testbenchExtension.openInteractionInTestElementsView",
+                    "command": "testbenchExtension.openKeywordInTestElementsView",
                     "when": "false"
                 },
                 {
-                    "command": "testbenchExtension.createMissingParentResourceForInteraction",
+                    "command": "testbenchExtension.createMissingParentResourceForKeyword",
                     "when": "false"
                 },
                 {
@@ -871,13 +871,13 @@
                     "group": "inline@1"
                 },
                 {
-                    "command": "testbenchExtension.openInteractionInTestElementsView",
-                    "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable && viewItem == 'testElement.interaction.resource.available'",
+                    "command": "testbenchExtension.openKeywordInTestElementsView",
+                    "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable && viewItem == 'testElement.keyword.resource.available'",
                     "group": "inline@1"
                 },
                 {
-                    "command": "testbenchExtension.createMissingParentResourceForInteraction",
-                    "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable && viewItem == 'testElement.interaction.resource.missing'",
+                    "command": "testbenchExtension.createMissingParentResourceForKeyword",
+                    "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable && viewItem == 'testElement.keyword.resource.missing'",
                     "group": "inline@1"
                 },
                 {
