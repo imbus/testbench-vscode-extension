@@ -1348,14 +1348,14 @@ export async function prepareLanguageServerForTreeItemOperation(
  * Finds the position of a Keyword in a resource file using the language server.
  *
  * @param uri The URI of the resource file to search in
- * @param interactionName The name of the interaction to find
- * @param interactionUid The unique ID of the tree item
+ * @param keywordName The name of the keyword to find
+ * @param keywordUid The unique ID of the tree item
  * @returns Promise that resolves to the line number where the keyword was found, or undefined if not found
  */
-export async function findInteractionPositionInResourceFile(
+export async function findKeywordPositionInResourceFile(
     uri: vscode.Uri,
-    interactionName: string,
-    interactionUid: string
+    keywordName: string,
+    keywordUid: string
 ): Promise<number | undefined> {
     if (!isLanguageServerRunning()) {
         logger.error("[server] Language server is not running, cannot find keyword position");
@@ -1366,16 +1366,16 @@ export async function findInteractionPositionInResourceFile(
         const lineNumber = await vscode.commands.executeCommand(
             "testbench_ls.getInteractionPosition",
             uri.toString(),
-            interactionName,
-            interactionUid
+            keywordName,
+            keywordUid
         );
         if (typeof lineNumber === "number") {
             return lineNumber;
         }
         return undefined;
     } catch (error) {
-        const findInteractionPositionErrorMessage = error instanceof Error ? error.message : "Unknown error";
-        logger.error(`[server] Error finding keyword position: ${findInteractionPositionErrorMessage}`, error);
+        const findKeywordPositionErrorMessage = error instanceof Error ? error.message : "Unknown error";
+        logger.error(`[server] Error finding keyword position: ${findKeywordPositionErrorMessage}`, error);
         return undefined;
     }
 }

@@ -16,7 +16,7 @@ import { TestElementsTreeItem } from "./TestElementsTreeItem";
  * Configuration for resource operations
  */
 export interface ResourceOperationConfig {
-    operationType: "open" | "create" | "folder" | "interaction";
+    operationType: "open" | "create" | "folder" | "keyword";
     createMissing: boolean;
     targetItem: TestElementsTreeItem;
     parentItem?: TestElementsTreeItem;

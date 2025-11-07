@@ -167,7 +167,7 @@ export const TestThemeItemTypes = {
 
 export const TestElementItemTypes = {
     SUBDIVISION: "Subdivision",
-    INTERACTION: "Interaction",
+    KEYWORD: "Keyword",
     DATA_TYPE: "DataType",
     CONDITION: "Condition",
     OTHER: "Other"
@@ -259,10 +259,10 @@ export const allExtensionCommands = {
     openAvailableSubdivisionInTestElementsView: `${baseKeyOfExtension}.openAvailableSubdivisionInTestElementsView`,
     openMissingSubdivisionInTestElementsView: `${baseKeyOfExtension}.openMissingSubdivisionInTestElementsView`,
     openSubdivisionFolderInExplorer: `${baseKeyOfExtension}.openSubdivisionFolderInExplorer`,
-    openInteractionInTestElementsView: `${baseKeyOfExtension}.openInteractionInTestElementsView`,
-    createMissingParentResourceForInteraction: `${baseKeyOfExtension}.createMissingParentResourceForInteraction`,
-    handleInteractionClick: `${baseKeyOfExtension}.handleInteractionClick`,
-    findInteractionPosition: `${baseKeyOfExtension}.findInteractionPosition`,
+    openKeywordInTestElementsView: `${baseKeyOfExtension}.openKeywordInTestElementsView`,
+    createMissingParentResourceForKeyword: `${baseKeyOfExtension}.createMissingParentResourceForKeyword`,
+    handleKeywordClick: `${baseKeyOfExtension}.handleKeywordClick`,
+    findKeywordPosition: `${baseKeyOfExtension}.findKeywordPosition`,
     enableFilterDiffMode: `${baseKeyOfExtension}.enableFilterDiffMode`,
     disableFilterDiffMode: `${baseKeyOfExtension}.disableFilterDiffMode`,
     searchInProjectsTreeOn: `${baseKeyOfExtension}.searchInProjectsTreeOn`,
