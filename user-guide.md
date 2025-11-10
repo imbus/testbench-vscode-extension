@@ -38,7 +38,7 @@ If no workspace is open, the extension informs you that it’s running in read-o
 
 The extension tracks the active Project and TOV via a config file at `.testbench/ls.config.json` in your workspace root.
 
-- Open a TOV or a Cycle by clicking its button (double-clicking a Cycle name also opens it)
+- Open a TOV or Cycle by clicking the open button next to it. Alternatively, double-click a Cycle's name to open it directly
 - If `.testbench/ls.config.json` doesn’t exist, the extension offers to create it and fills `projectName` and `tovName` when you open a TOV or Cycle
 - You can also right-click a Project or TOV and choose Set as Active Project / Set as Active TOV. A pin icon marks the active items in projects tree view
 - The extension listens for `ls.config.json` changes and updates pin icons automatically in the Projects view
