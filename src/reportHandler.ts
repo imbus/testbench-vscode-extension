@@ -892,13 +892,16 @@ async function chooseReportWithoutResultsZipFile(workingDirectoryPath: string): 
  *
  * @param {vscode.ExtensionContext} context The extension context.
  * @param {vscode.Progress} currentProgress Optional progress reporter.
+ * @param {vscode.CancellationToken} cancellationToken Optional cancellation token.
+ * @param {string} reportRootUID Optional report root UID to use instead of the stored UID from last generation.
  * @returns {Promise<{createdReportPath: string; outputXmlPathUsed: string; baseReportPathUsed: string} | undefined>}
  * An object with paths, or undefined on error.
  */
 export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
     context: vscode.ExtensionContext,
     currentProgress?: vscode.Progress<{ message?: string; increment?: number }>,
-    cancellationToken?: vscode.CancellationToken
+    cancellationToken?: vscode.CancellationToken,
+    reportRootUID?: string
 ): Promise<{ createdReportPath: string; outputXmlPathUsed: string; baseReportPathUsed: string } | undefined> {
     try {
         logger.trace("[reportHandler] Fetching test results and creating report with results.");
@@ -968,10 +971,17 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 return undefined;
             }
 
+            // Use the provided reportRootUID if available (for specific tree item imports),
+            // otherwise use the UID from last generation (for full cycle imports)
+            const effectiveUID = reportRootUID !== undefined ? reportRootUID : UID;
+            logger.debug(
+                `[reportHandler] Using treeRootUID for import: ${effectiveUID} (provided: ${reportRootUID !== undefined}, stored: ${UID})`
+            );
+
             const currentFiltersForImport = await TestThemesTreeView.getValidatedFiltersForApiRequest();
             const cycleStructureOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
                 basedOnExecution: executionBased === testBenchTypes.ExecutionMode.Execute,
-                treeRootUID: UID,
+                treeRootUID: effectiveUID,
                 filters: currentFiltersForImport
             };
 
@@ -1211,7 +1221,8 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 const reportCreationDetails = await fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                     context,
                     progress,
-                    cancellationToken
+                    cancellationToken,
+                    resolvedReportRootUID
                 );
                 if (cancellationToken.isCancellationRequested || !reportCreationDetails?.createdReportPath) {
                     logger.error("[reportHandler] Failed to create report with results, or process was cancelled.");

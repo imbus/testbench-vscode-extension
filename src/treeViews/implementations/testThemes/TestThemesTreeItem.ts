@@ -69,6 +69,8 @@ export class TestThemesTreeItem extends TreeItemBase {
     private robotFileService: RobotFileService;
     private robotFileExists: boolean = false;
     private robotFilePath?: string;
+    private folderExists: boolean = false;
+    private folderPath?: string;
     public isFilteredOutInDiffMode = false;
 
     constructor(data: TestThemeData, extensionContext: vscode.ExtensionContext, parent?: TestThemesTreeItem) {
@@ -281,6 +283,46 @@ export class TestThemesTreeItem extends TreeItemBase {
     }
 
     /**
+     * Checks if a folder exists locally for this test theme tree item.
+     * @returns Promise that resolves to true if the folder exists
+     */
+    public async checkFolderExists(): Promise<boolean> {
+        if (this.data.elementType !== TestThemeItemTypes.TEST_THEME) {
+            return false;
+        }
+
+        try {
+            const folderInfo = await this.robotFileService.checkFolderExists(this);
+            this.folderExists = folderInfo.exists;
+            this.folderPath = folderInfo.folderPath;
+
+            return folderInfo.exists;
+        } catch (error) {
+            this.logger.error(
+                `[TestThemesTreeItem] Error checking folder existence for ${this.data.base.name}:`,
+                error
+            );
+            return false;
+        }
+    }
+
+    /**
+     * Gets the folder path if it exists
+     * @returns The folder path or undefined if it doesn't exist
+     */
+    public getFolderPath(): string | undefined {
+        return this.folderPath;
+    }
+
+    /**
+     * Checks if this item has a generated folder
+     * @returns True if the folder exists locally
+     */
+    public hasGeneratedFolder(): boolean {
+        return this.folderExists;
+    }
+
+    /**
      * Opens the generated robot file in VS Code editor
      * @returns Promise that resolves when the file is opened
      */
@@ -356,6 +398,32 @@ export class TestThemesTreeItem extends TreeItemBase {
      */
     public canHaveRobotFile(): boolean {
         return this.data.elementType === TestThemeItemTypes.TEST_CASE_SET;
+    }
+
+    /**
+     * Checks if the item can be marked based on file/folder existence.
+     * Test case sets are marked if their robot file exists.
+     * Test themes are marked if their folder exists.
+     * @return True if the item type can be marked
+     */
+    public canBeMarked(): boolean {
+        return (
+            this.data.elementType === TestThemeItemTypes.TEST_CASE_SET ||
+            this.data.elementType === TestThemeItemTypes.TEST_THEME
+        );
+    }
+
+    /**
+     * Checks if this item has generated content (robot file for test case sets, folder for test themes).
+     * @returns True if the item has generated content locally
+     */
+    public hasGeneratedContent(): boolean {
+        if (this.data.elementType === TestThemeItemTypes.TEST_CASE_SET) {
+            return this.robotFileExists;
+        } else if (this.data.elementType === TestThemeItemTypes.TEST_THEME) {
+            return this.folderExists;
+        }
+        return false;
     }
 
     /**

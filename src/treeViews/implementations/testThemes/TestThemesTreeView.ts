@@ -12,7 +12,7 @@ import { testThemesConfig } from "./TestThemesConfig";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { allExtensionCommands, ConfigKeys, ContextKeys, StorageKeys, TestThemeItemTypes } from "../../../constants";
 import { TestStructure, TestStructureNode } from "../../../testBenchTypes";
-import { getExtensionConfiguration } from "../../../configuration";
+import { getExtensionConfiguration, getExtensionSetting } from "../../../configuration";
 import {
     ALLOW_PERSISTENT_IMPORT_BUTTON,
     ENABLE_ICON_MARKING_ON_TEST_GENERATION,
@@ -1314,6 +1314,12 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * Disposes of the tree view and all its resources
      */
     public async dispose(): Promise<void> {
+        // Clear any pending debounced refresh
+        if (this.markingRefreshDebounceHandle) {
+            clearTimeout(this.markingRefreshDebounceHandle);
+            this.markingRefreshDebounceHandle = undefined;
+        }
+
         for (const disposable of this.disposables) {
             disposable.dispose();
         }
@@ -1360,7 +1366,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Updates robot file availability for all tree items that can generate tests
+     * Updates robot file and folder availability for all tree items that can generate tests
      * and updates the context to show/hide the "Open Generated Robot File" button
      */
     private async updateRobotFileAvailabilityForAllTreeItems(): Promise<void> {
@@ -1368,28 +1374,37 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             const allTestThemeTreeItems = this.getAllTestThemeTreeItems();
             let hasAnyRobotFile = false;
 
-            const robotFileChecks = allTestThemeTreeItems
+            const availabilityChecks = allTestThemeTreeItems
                 .filter((item) => item.canGenerateTests())
                 .map(async (item) => {
                     try {
-                        const hasRobotFile = await item.checkRobotFileExists();
-                        if (hasRobotFile) {
-                            hasAnyRobotFile = true;
+                        let hasContent = false;
+
+                        // Check robot file for test case sets
+                        if (item.canHaveRobotFile()) {
+                            hasContent = await item.checkRobotFileExists();
+                            if (hasContent) {
+                                hasAnyRobotFile = true;
+                            }
+                        }
+                        // Check folder for test themes
+                        else if (item.data.elementType === TestThemeItemTypes.TEST_THEME) {
+                            hasContent = await item.checkFolderExists();
                         }
 
                         item.updateContextValue();
                     } catch (error) {
                         this.logger.error(
-                            `[TestThemesTreeView] Error checking robot file availability for ${item.data.base.name}:`,
+                            `[TestThemesTreeView] Error checking content availability for ${item.data.base.name}:`,
                             error
                         );
                     }
                 });
 
-            await Promise.all(robotFileChecks);
+            await Promise.all(availabilityChecks);
             await vscode.commands.executeCommand("setContext", ContextKeys.HAS_GENERATED_ROBOT_FILE, hasAnyRobotFile);
         } catch (error) {
-            this.logger.error("[TestThemesTreeView] Error updating robot file availability for all tree items:", error);
+            this.logger.error("[TestThemesTreeView] Error updating content availability for all tree items:", error);
             throw error;
         }
     }
@@ -1436,24 +1451,67 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Sets up a workspace file system watcher for Robot Framework files to keep
-     * item markings in sync with actual file availability.
+     * Sets up workspace file system watchers for Robot Framework files and test theme folders
+     * to keep item markings in sync with actual file and folder availability.
      */
     private setupRobotFilesWatcher(): void {
         try {
+            const schedule = () => this.scheduleMarkingRefresh();
+
             // Watch all .robot files in the workspace
             this.robotFilesWatcher = vscode.workspace.createFileSystemWatcher("**/*.robot");
-
-            const schedule = () => this.scheduleMarkingRefresh();
             this.disposables.push(
                 this.robotFilesWatcher.onDidCreate(schedule),
                 this.robotFilesWatcher.onDidChange(schedule),
                 this.robotFilesWatcher.onDidDelete(schedule),
                 this.robotFilesWatcher
             );
+
+            // Watch for workspace file system changes to detect folder operations
+            // This is more reliable than FileSystemWatcher for directory changes
+            this.disposables.push(
+                vscode.workspace.onDidCreateFiles((event) => {
+                    if (this.isRelevantWorkspaceChange(event.files)) {
+                        this.logger.trace(`[TestThemesTreeView] Detected file/folder creation in workspace`);
+                        schedule();
+                    }
+                }),
+                vscode.workspace.onDidDeleteFiles((event) => {
+                    if (this.isRelevantWorkspaceChange(event.files)) {
+                        this.logger.trace(`[TestThemesTreeView] Detected file/folder deletion in workspace`);
+                        schedule();
+                    }
+                }),
+                vscode.workspace.onDidRenameFiles((event) => {
+                    const relevantFiles = event.files.map((f) => f.oldUri).concat(event.files.map((f) => f.newUri));
+                    if (this.isRelevantWorkspaceChange(relevantFiles)) {
+                        this.logger.trace(`[TestThemesTreeView] Detected file/folder rename in workspace`);
+                        schedule();
+                    }
+                })
+            );
         } catch (error) {
-            this.logger.error("[TestThemesTreeView] Error setting up robot files watcher:", error);
+            this.logger.error("[TestThemesTreeView] Error setting up file and folder watchers:", error);
         }
+    }
+
+    /**
+     * Checks if a workspace file change is relevant to test theme marking
+     * (i.e., if it's within the output directory)
+     * @param files Array of URIs that were changed
+     * @returns True if the change is relevant to test theme folders
+     */
+    private isRelevantWorkspaceChange(files: readonly vscode.Uri[]): boolean {
+        const outputDirectory = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
+        if (!outputDirectory || files.length === 0) {
+            return false;
+        }
+
+        // Check if any of the changed files are within the output directory
+        return files.some((uri) => {
+            const relativePath = vscode.workspace.asRelativePath(uri, false);
+            return relativePath.startsWith(outputDirectory);
+        });
     }
 
     /**
@@ -1482,8 +1540,9 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
     /**
      * Synchronizes the marking state of tree items with the availability of
-     * their corresponding .robot files. If a file exists, the item is marked
-     * with type "generation", if the file is missing, any existing mark is removed.
+     * their corresponding .robot files or folders. If content exists (file for test case sets,
+     * folder for test themes), the item is marked with type "generation". If content is missing,
+     * any existing mark is removed.
      */
     public async syncMarkingsWithRobotFileAvailability(): Promise<void> {
         try {
@@ -1492,18 +1551,18 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 return;
             }
 
-            const treeItemCandidates = this.getAllTestThemeTreeItems().filter((treeItem) =>
-                treeItem.canHaveRobotFile()
-            );
+            // Process all items that can be marked (both test case sets and test themes)
+            const treeItemCandidates = this.getAllTestThemeTreeItems().filter((treeItem) => treeItem.canBeMarked());
             const desiredMarkType = this.getDesiredMarkType();
             const { projectKey, contextKey } = this.getCurrentContextKeys();
 
             const tasks = treeItemCandidates.map(async (treeItem) => {
                 try {
-                    const robotFileExistsForTreeItem = treeItem.hasGeneratedRobotFile();
+                    // Check if content exists (robot file for test case sets, folder for test themes)
+                    const contentExistsForTreeItem = treeItem.hasGeneratedContent();
                     await this.bindMarkForItemToItsExistence(
                         treeItem,
-                        robotFileExistsForTreeItem,
+                        contentExistsForTreeItem,
                         markingModule,
                         desiredMarkType,
                         projectKey,
@@ -1516,7 +1575,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
             await Promise.all(tasks);
         } catch (error) {
-            this.logger.error("[TestThemesTreeView] Error syncing markings with robot file availability:", error);
+            this.logger.error("[TestThemesTreeView] Error syncing markings with content availability:", error);
         }
     }
 
@@ -1578,15 +1637,15 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Connects the marking state of a single item with its file existence.
-     * - If a file exists, ensure the item is marked with the desired type.
+     * Connects the marking state of a single item with its content existence.
+     * - If content exists (file for test case sets, folder for test themes), ensure the item is marked with the desired type.
      * - If marked with a different type, upgrade when appropriate and never
      *   downgrade from 'import' to 'generation'.
-     * - If no file exists, unmark the item.
+     * - If no content exists, unmark the item.
      */
     private async bindMarkForItemToItsExistence(
         treeItem: TestThemesTreeItem,
-        robotFileExistsForTreeItem: boolean,
+        contentExistsForTreeItem: boolean,
         markingModule: MarkingModule,
         desiredType: "import" | "generation",
         projectKey?: string,
@@ -1600,7 +1659,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         const isMarked = markingModule.isMarked(itemId);
         const currentMark = markingModule.getMarkingInfo(itemId);
 
-        if (robotFileExistsForTreeItem) {
+        if (contentExistsForTreeItem) {
             if (!isMarked) {
                 this.applyMarkForItem(treeItem, desiredType, projectKey, contextKey, markingModule);
                 return;
@@ -1614,7 +1673,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 this.applyMarkForItem(treeItem, desiredType, projectKey, contextKey, markingModule);
             }
         } else if (isMarked) {
-            // Remove any marking for items without a file
+            // Remove any marking for items without content
             markingModule.unmarkItemByID(itemId);
         }
     }
