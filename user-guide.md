@@ -74,9 +74,9 @@ Example `ls.config.json`
 - You can generate Robot Framework tests for a single tree item or for entire subtrees by clicking the robotframework icon next to the tree item.
 - Test generation process uses the bundled `testbench2robotframework` library internally
 - Output location of generated tests is configured via the Output Directory setting (relative to the workspace)
-- After test generation, generated tree items in the tree are marked visually
+- After test generation, generated tree items in the tree are marked visually. The extension watches generated files and folders for changes, and tree item markings are updated live if files are removed, moved, or added.
 - Single-click a generated Test Case Set to open the generated `.robot` file, double-click also reveals the file location in VS Code Explorer
-- In Extension settings you can enable 'Open Testing View After Test Generation' to automatically open VS Code’s Testing view after generating tests
+- In Extension settings you can enable 'Open Testing View After Test Generation' to automatically open VS Code's Testing view after generating tests
 
 ## Execute and Import Results
 
