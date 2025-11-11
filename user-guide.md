@@ -16,9 +16,13 @@ This guide explains how to use the TestBench VS Code Extension to navigate insid
 2. Create/select a TestBench connection and log in
 3. After the first login, the Projects view opens automatically
 
-If no workspace is open, the extension informs you that it’s running in read-only mode.
+![Read-Only Mode Notification](userGuideImages/ReadOnlyMode.png)
+
+If no workspace is open, the extension informs you that it's running in read-only mode.
 
 ## Login and Connections
+
+![Extension Login Page](userGuideImages/ExtensionLoginPage.png)
 
 - **Managing connections:** Create, edit, or remove connections with these details: label, server URL, port, username, and password
 - **Secure storage:** Password storage is optional. Connection details are stored securely in VS Code Secret Storage
@@ -27,11 +31,16 @@ If no workspace is open, the extension informs you that it’s running in read-o
 
 ## Projects View
 
+![Projects View](userGuideImages/ProjectsView.png)
+
 - Displays all available projects for the logged-in user. A project contains Test Object Versions (TOVs), and a TOV contains Test Cycles
 - **Toolbar buttons:** Logout, Refresh Projects, Search, Open Extension Settings
 - **Action buttons:** Test Object Versions and Test Cycles have buttons to open them in the Test Themes view and to generate tests
 - **Read-only mode:** In read-only mode, TOVs and Cycles do not have test generation buttons
 - **Opening a TOV or Cycle:** Click the open button next to a TOV or Cycle to open it. Alternatively, you can double-click directly on a Cycle's name as a shortcut to open it
+
+<!-- TODO: Add a GIF showing the opening of a TOV or Cycle -->
+
 - **View switching:** Opening a TOV or Cycle in Projects view switches to a new view where the Test Themes view and Test Elements view are displayed together for that context
 - **State persistence:** The extension remembers visible tree views and expansion/collapse states of tree items, restoring them when you log in again
 
@@ -40,8 +49,14 @@ If no workspace is open, the extension informs you that it’s running in read-o
 The extension tracks the active Project and TOV via a config file at `.testbench/ls.config.json` in your workspace root.
 
 - If `.testbench/ls.config.json` doesn't exist, the extension offers to create it and automatically fills in the `projectName` and `tovName` when you open a TOV or Cycle
+
+![Config Creation Prompt](userGuideImages/ConfigCreationPrompt.png)
+
 - **Manual activation:** Right-click a Project or TOV and select 'Set as Active Project' or 'Set as Active TOV'. A pin icon marks the active items in the Projects tree view
 - **Live updates:** The extension monitors `ls.config.json` for changes and automatically updates pin icons in the Projects view
+
+<!-- TODO: Add a GIF showing right-click context menu on Project/TOV with "Set as Active" option and the resulting pin icon -->
+
 - **Configuration validation:** If `ls.config.json` is missing or invalid, the extension offers a guided fix to set a valid configuration based on your visible projects and TOVs
 
 Example `ls.config.json`
@@ -58,6 +73,9 @@ Example `ls.config.json`
 - **Activating search:** Click the Search button in any tree view to start filtering tree items
 - **Live filtering:** Tree items are filtered in real-time as you type in the search box
 - **Search indicator:** The search icon changes color when a search is active. Clearing the search text disables the search and restores all tree items
+
+<!-- TODO: Add a GIF showing clicking the search button, typing to filter items, and the search icon color change -->
+
 - **Search options:** Click the gear icon on top-right of the search UI to configure search behavior:
     - **Search criteria:** Choose to search by Name, Tooltip, or UIDs (note: Projects view items do not have UIDs)
     - **Match options:**
@@ -65,7 +83,11 @@ Example `ls.config.json`
         - Exact Match: Require complete word/phrase match
         - Show Children of Matches: Also display all children of matching items
 
+![Search Options Dialog](userGuideImages/SearchOptionsForTestThemes.png)
+
 ## Test Themes View
+
+![Test Themes View](userGuideImages/TestThemesView.png)
 
 - The Test Themes view is opened by opening a TOV or Cycle in the Projects view
 - It displays test themes and test case sets for the opened TOV or Cycle
@@ -79,11 +101,21 @@ Example `ls.config.json`
 ## Generating Robot Framework Tests
 
 - **Generating tests:** Click the Robot Framework icon next to any tree item in Test Themes view to generate tests for that item or its entire subtree. Test generation process uses the bundled `testbench2robotframework` library internally
+
+![Generate Tests Button](userGuideImages/TestThemesGenerateTestsButton.png)
+
 - **Output location:** Configure the output directory via the 'Output Directory' setting (path is relative to the workspace root)
+
 - **Visual marking:** After test generation, generated tree items are marked visually in the tree. The extension watches generated files and folders for changes, automatically updating tree item markings when files are removed, moved, or added
+
+![Generated Tree Items with Visual Marking](userGuideImages/TestThemesMarkedTreeItems.png)
+
 - **Opening generated tests:**
     - **Single-click** a Test Case Set: Opens the generated `.robot` file in the editor
     - **Double-click** a Test Case Set: Opens the `.robot` file and reveals its location in VS Code Explorer
+
+<!-- TODO: Add a GIF showing single-click to open .robot file / double-click to open and reveal in Explorer -->
+
 - **Auto-open Testing view:** Enable 'Open Testing View After Test Generation' in Extension settings to automatically open VS Code's Testing view after generating tests to be able to run them immediately
 
 ## Execute and Import Results
@@ -98,21 +130,38 @@ Example `ls.config.json`
     - Execution status of imported items is set to `Performed`
     - The verdict field shows the execution outcome
 
+<!-- TODO: Add a GIF showing Import button appearing after test generation, clicking it and import progress -->
+
 ## Test Elements View
+
+![Test Elements View](userGuideImages/TestElementsView.png)
 
 - The Test Elements view displays subdivisions and their keywords for the current TOV context
 - The view title includes the Project and TOV name to show the current context
 - The 'Resource Marker' setting identifies subdivisions that correspond to Robot Framework resources. Subdivisions whose names end with this marker are treated as `.resource` files
+
 - **Creating resources:** Use the 'Create Resource' button on a subdivision to create a local `.resource` file. After creation, the file is revealed in the VS Code Explorer and opened in the editor
+
 - **Visual indicators:** Subdivision tree items that are locally available as resource files show differently colored icons to indicate their availability. The 'Create Resource' button changes to 'Open Resource' for existing resource files
+
+<!-- TODO: Add a GIF clicking 'Create Resource' button, file creation, tree item color change, reveal in Explorer, and opening in editor -->
+
 - **Keyword navigation:**
     - **Single-click:** Opens the corresponding resource file in the editor and jumps directly to the keyword definition
     - **Double-click:** Opens the resource file, jumps to the keyword definition, and reveals the file location in VS Code Explorer
 
+![Keyword Navigation Example](<userGuideImages/TestElementsKeywordOfResourceFile(CHECK).png>)
+
 ### Language Server Features for Resource Files
 
 - **Metadata:** The first two lines of a generated resource file contain metadata: the subdivision UID and its context
+
+![Generated Resource File with Metadata](userGuideImages/GeneratedResourceFile.png)
+
 - **Validation:** If context metadata is missing or invalid, a quick fix is available to set the correct context
+
+![Quick Fix for Wrong Context](userGuideImages/ResourceFileWrongContextQuickFixPrompt.png)
+
 - **Synchronization:** CodeLens actions displayed above metadata and keywords allow you to pull changes from and push changes to the TestBench server to keep local files synchronized with the TestBench server
 
 ## Extension Settings
@@ -292,3 +341,5 @@ These settings control how the extension generates Robot Framework test suites f
 
 - Use the 'Reload Window' command (Ctrl+R / Cmd+R) to resolve transient extension issues
 - If problems persist, use the command 'TestBench: Clear All Extension Data' to reset all persistent extension data (including stored connections) in the current workspace. **Warning:** This action cannot be undone
+
+![Clear All Extension Data Command](userGuideImages/ClearAllExtensionDataCommand.png)
