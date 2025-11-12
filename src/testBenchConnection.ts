@@ -33,6 +33,46 @@ import { SharedSessionManager } from "./sharedSessionManager";
 import { handleLanguageServerRestartOnSessionChange } from "./languageServer/server";
 import { CacheManager } from "./core/cacheManager";
 
+interface CachedCertificateData {
+    path: string;
+    mtimeMs: number;
+    data: Buffer;
+}
+
+let cachedCertificate: CachedCertificateData | null = null;
+
+/**
+ * Loads and caches certificate data from disk to avoid redundant reads.
+ * @param absolutePath The absolute path to the certificate file
+ * @returns The certificate data as a Buffer, or null if loading fails
+ */
+async function getCachedCertificateData(absolutePath: string): Promise<Buffer | null> {
+    try {
+        const stats = await fs.promises.stat(absolutePath);
+        if (
+            cachedCertificate &&
+            cachedCertificate.path === absolutePath &&
+            cachedCertificate.mtimeMs === stats.mtimeMs
+        ) {
+            logger.trace("[testBenchConnection] Reusing cached certificate data.");
+            return cachedCertificate.data;
+        }
+
+        const certificateBuffer = await fs.promises.readFile(absolutePath);
+        cachedCertificate = {
+            path: absolutePath,
+            mtimeMs: stats.mtimeMs,
+            data: certificateBuffer
+        };
+        logger.trace("[testBenchConnection] Loaded certificate data into cache.");
+        return certificateBuffer;
+    } catch (error) {
+        logger.warn("[testBenchConnection] Failed to load certificate data from disk:", error);
+        cachedCertificate = null;
+        return null;
+    }
+}
+
 /**
  * Manages TLS security state globally for the extension.
  * Provides a centralized way to handle secure vs insecure connections
@@ -209,11 +249,17 @@ async function createHttpsAgent(insecure: boolean = false): Promise<HttpsProxyAg
             agentOptions.ca = defaultCAs;
             logger.debug("[testBenchConnection] Using only default system CAs.");
         } else {
-            const customCA = fs.readFileSync(absoluteCertPath);
-            const combinedCAs = [...defaultCAs, customCA];
-
-            logger.debug("[testBenchConnection] Using combined CAs (default system CAs + custom CA).");
-            agentOptions.ca = combinedCAs;
+            const customCA = await getCachedCertificateData(absoluteCertPath);
+            if (customCA) {
+                const combinedCAs = [...defaultCAs, customCA];
+                logger.debug("[testBenchConnection] Using combined CAs (default system CAs + custom CA).");
+                agentOptions.ca = combinedCAs;
+            } else {
+                logger.warn(
+                    `[testBenchConnection] Unable to load certificate at "${absoluteCertPath}". Falling back to default system CAs.`
+                );
+                agentOptions.ca = defaultCAs;
+            }
         }
     }
 
