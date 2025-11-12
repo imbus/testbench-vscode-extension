@@ -231,7 +231,7 @@ async function createHttpsAgent(insecure: boolean = false): Promise<HttpsProxyAg
 export class PlayServerConnection {
     private baseURL: string;
     private apiClient!: AxiosInstance;
-    private readonly keepAliveIntervalInSeconds: number = 30 * 1000; // 30 seconds
+    private readonly keepAliveIntervalInMs: number = 30 * 1000; // 30 seconds
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
     private testElementsCache: CacheManager<string, any>;
     private testStructureCache: CacheManager<string, testBenchTypes.TestStructure>;
@@ -1077,7 +1077,7 @@ export class PlayServerConnection {
 
     /**
      * Starts the keep-alive process that prevents the session from timing out.
-     * The keep-alive process sends a GET request to the server every 4 minutes.
+     * The keep-alive process sends a GET request to the server in regular intervals.
      * The constructor method of the PlayServerConnection class starts the keep-alive process automatically.
      * If the session token is null, the keep-alive process is not started.
      * If the keep-alive process is already running and it is triggered again, the previous one is stopped before starting a new one.
@@ -1086,7 +1086,7 @@ export class PlayServerConnection {
         this.stopKeepAlive();
         this.keepAliveIntervalId = setInterval(() => {
             this.sendKeepAliveRequest();
-        }, this.keepAliveIntervalInSeconds);
+        }, this.keepAliveIntervalInMs);
         // this.sendKeepAliveRequest();
         logger.trace("[testBenchConnection] Keep-alive started.");
     }
