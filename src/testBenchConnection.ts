@@ -10,7 +10,6 @@ import * as fs from "fs";
 
 import * as testBenchTypes from "./testBenchTypes";
 import * as reportHandler from "./reportHandler";
-import * as base64 from "base-64";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
@@ -32,6 +31,7 @@ import * as connectionManager from "./connectionManager";
 import { SharedSessionManager } from "./sharedSessionManager";
 import { handleLanguageServerRestartOnSessionChange } from "./languageServer/server";
 import { CacheManager } from "./core/cacheManager";
+import { LegacyPlayServerClient } from "./api/LegacyPlayServerClient";
 
 interface CachedCertificateData {
     path: string;
@@ -277,6 +277,7 @@ async function createHttpsAgent(insecure: boolean = false): Promise<HttpsProxyAg
 export class PlayServerConnection {
     private baseURL: string;
     private apiClient!: AxiosInstance;
+    private legacyClient!: LegacyPlayServerClient;
     private readonly keepAliveIntervalInMs: number = 30 * 1000; // 30 seconds
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
     private testElementsCache: CacheManager<string, any>;
@@ -323,6 +324,15 @@ export class PlayServerConnection {
             httpsAgent: agentToUse,
             proxy: false
         });
+
+        // Initialize legacy client for old Play Server API calls
+        this.legacyClient = new LegacyPlayServerClient(
+            this.serverName,
+            this.sessionToken,
+            this.username,
+            agentToUse,
+            this.context
+        );
 
         if (this.sessionToken) {
             // Start the keep-alive process immediately to prevent session timeout after 5 minutes
@@ -533,191 +543,25 @@ export class PlayServerConnection {
             return cachedEntry;
         }
 
-        if (!this.sessionToken) {
-            logger.error(
-                `[testBenchConnection] Session token is null. Cannot fetch test elements for TOV key: ${tovKey}`
-            );
-            return null;
-        }
-        if (!tovKey) {
-            logger.error(`[testBenchConnection] TOV key is missing. Cannot fetch test elements.`);
-            return null;
+        // Delegate to legacy client
+        const testElements = await this.legacyClient.getTestElements(tovKey);
+
+        // Cache the result if successful
+        if (testElements) {
+            this.testElementsCache.setEntryInCache(tovKey, testElements);
         }
 
-        try {
-            const oldPlayServerPortNumber: number = 9443;
-            const oldPlayServerBaseUrl: string = `https://${this.serverName}:${oldPlayServerPortNumber}/api/1`;
-            const getTestElementsURL: string = `tovs/${tovKey}/testElements`;
-
-            const userNameFromConfig: string = this.username;
-            const encoded = base64.encode(`${userNameFromConfig}:${this.sessionToken}`);
-
-            logger.debug(
-                `[testBenchConnection] Creating session for old play server with URL ${oldPlayServerBaseUrl} to fetch test elements.`
-            );
-            const oldPlayServerSession: AxiosInstance = axios.create({
-                baseURL: oldPlayServerBaseUrl,
-                // Old play server, which runs on port 9443, uses BasicAuth.
-                // Use loginName as username, and use sessionToken as the password
-                auth: {
-                    username: this.username,
-                    password: this.sessionToken
-                },
-                headers: {
-                    Authorization: `Basic ${encoded}`,
-                    "Content-Type": "application/vnd.testbench+json; charset=utf-8"
-                },
-                proxy: false,
-                httpsAgent: this.apiClient.defaults.httpsAgent
-            });
-
-            if (!oldPlayServerSession) {
-                logger.error(
-                    `[testBenchConnection] Failed to create session for old play server with URL ${oldPlayServerBaseUrl} while fetching test elements for TOV key ${tovKey}`
-                );
-                return null;
-            }
-
-            logger.trace(
-                `[testBenchConnection] Fetching test elements for TOV key ${tovKey} from ${getTestElementsURL}`
-            );
-            const testElementsResponse: AxiosResponse = await withRetry(
-                () => oldPlayServerSession.get(getTestElementsURL),
-                3, // maxRetries
-                2000, // delayMs
-                RetryPredicateFactory.createDefaultPredicate()
-            );
-
-            // Save the JSON to a file for analyzing the structure
-            /*
-            const savePath = await vscode.window.showSaveDialog({
-                saveLabel: "Save Test Elements JSON Response From Server",
-                filters: {
-                    "JSON Files": ["json"],
-                    "All Files": ["*"],
-                },
-            });
-            if (savePath) {
-                const filePath = savePath.fsPath;
-                utils.saveJsonDataToFile(filePath, testElementsResponse.data);
-                vscode.window.showInformationMessage(`Test elements response saved to ${filePath}`);
-            } else {
-                vscode.window.showErrorMessage("No file path selected.");
-            }
-            */
-
-            logger.debug(
-                `[testBenchConnection] Response status of GET test elements request for URL ${getTestElementsURL}: ${testElementsResponse.status}`
-            );
-            if (testElementsResponse.data) {
-                // Note: The output of testElementsResponse is large
-                logger.trace(
-                    `[testBenchConnection] Fetched test elements data from URL ${getTestElementsURL}:`,
-                    testElementsResponse.data
-                );
-                this.testElementsCache.setEntryInCache(tovKey, testElementsResponse.data);
-                return testElementsResponse.data;
-            } else {
-                logger.error(
-                    `[testBenchConnection] Test elements data is not available from URL ${getTestElementsURL}.`
-                );
-                return null;
-            }
-        } catch (error) {
-            logger.error(`[testBenchConnection] Error fetching test elements for TOV key ${tovKey}: ${error}`);
-            vscode.window.showErrorMessage("Error fetching test elements. Please check the logs for details.");
-            return null;
-        }
+        return testElements;
     }
 
     // TODO: If this API call is implemented in the new play server, replace this method with the new API.
     /**
      * Returns all filters that can be accessed by the connected user.
+     *
+     * @returns {Promise<any | null>} The filters data or null if an error occurs
      */
     async getFiltersFromOldPlayServer(): Promise<any | null> {
-        if (!this.sessionToken) {
-            logger.error("[testBenchConnection] Session token is null. Cannot fetch filters");
-            return null;
-        }
-
-        try {
-            const oldPlayServerPortNumber: number = 9443;
-            const oldPlayServerBaseUrl: string = `https://${this.serverName}:${oldPlayServerPortNumber}/api/1`;
-            const getFiltersURL: string = `${oldPlayServerBaseUrl}/filters`;
-
-            logger.debug(
-                `[testBenchConnection] Creating session for old play server with URL ${oldPlayServerBaseUrl} to fetch filters`
-            );
-
-            const userNameFromConfig: string = this.username;
-            const encoded = base64.encode(`${userNameFromConfig}:${this.sessionToken}`);
-            const oldPlayServerSession: AxiosInstance = axios.create({
-                baseURL: oldPlayServerBaseUrl,
-                // Old play server, which runs on port 9443, uses BasicAuth.
-                // Use loginName as username, and use sessionToken as the password
-                auth: {
-                    username: this.username,
-                    password: this.sessionToken
-                },
-                headers: {
-                    Authorization: `Basic ${encoded}`,
-                    "Content-Type": "application/vnd.testbench+json; charset=utf-8"
-                },
-                proxy: false,
-                httpsAgent: this.apiClient.defaults.httpsAgent
-            });
-
-            if (!oldPlayServerSession) {
-                logger.error(
-                    `[testBenchConnection] Failed to create session for old play server with URL ${oldPlayServerBaseUrl} while fetching filters`
-                );
-                return null;
-            }
-
-            logger.trace(`[testBenchConnection] Fetching filters from URL ${getFiltersURL}`);
-            const getFiltersResponse: AxiosResponse = await withRetry(
-                () => oldPlayServerSession.get(getFiltersURL),
-                3, // maxRetries
-                2000, // delayMs
-                RetryPredicateFactory.createDefaultPredicate()
-            );
-
-            // Save the JSON to a file for analyzing the structure
-            /*
-            const savePath = await vscode.window.showSaveDialog({
-                saveLabel: "Save Test Elements JSON Response From Server",
-                filters: {
-                    "JSON Files": ["json"],
-                    "All Files": ["*"],
-                },
-            });
-            if (savePath) {
-                const filePath = savePath.fsPath;
-                utils.saveJsonDataToFile(filePath, getFiltersResponse.data);
-                vscode.window.showInformationMessage(`Response saved to ${filePath}`);
-            } else {
-                vscode.window.showErrorMessage("No file path selected.");
-            }
-            */
-
-            logger.debug(
-                `[testBenchConnection] Response status of get filters request for URL ${getFiltersURL}: ${getFiltersResponse.status}`
-            );
-            if (getFiltersResponse.data) {
-                logger.trace(
-                    `[testBenchConnection] Fetched filters data for request ${getFiltersURL}:`,
-                    getFiltersResponse.data
-                );
-                return getFiltersResponse.data;
-            } else {
-                logger.error(`[testBenchConnection] Filters data is not available from URL ${getFiltersURL}.`);
-                return null;
-            }
-        } catch (error) {
-            logger.error(`[testBenchConnection] Error fetching filters: ${error}`);
-            vscode.window.showErrorMessage("Error fetching filters. Please check the logs for details.");
-            return null;
-        }
+        return this.legacyClient.getFilters();
     }
 
     /**
