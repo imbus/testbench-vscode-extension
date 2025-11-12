@@ -31,12 +31,12 @@ export interface TestThemeData {
     };
     spec: {
         key: string;
-        locker: string | null;
+        locker: string | { key: string; name: string } | null;
         status: string;
     };
     aut: {
         key: string;
-        locker: string | null;
+        locker: string | { key: string; name: string } | null;
         status: string;
     };
     exec?: {
@@ -44,7 +44,7 @@ export interface TestThemeData {
         execStatus?: string;
         verdict?: string;
         key?: string;
-        locker?: string | null;
+        locker?: string | { key: string; name: string } | null;
     } | null;
     filters: any[];
     elementType: string;
@@ -218,14 +218,31 @@ export class TestThemesTreeItem extends TreeItemBase {
             if (this.data.exec.verdict) {
                 tooltipContextLines.push(`Verdict: ${this.data.exec.verdict}`);
             }
+            if (this.data.exec.locker) {
+                const lockerValue =
+                    typeof this.data.exec.locker === "string" ? this.data.exec.locker : this.data.exec.locker.name;
+                tooltipContextLines.push(`Execution Locker: ${lockerValue}`);
+            }
         }
 
         if (this.data.spec.status) {
             tooltipContextLines.push(`Specification Status: ${this.data.spec.status}`);
         }
 
+        if (this.data.spec.locker) {
+            const lockerValue =
+                typeof this.data.spec.locker === "string" ? this.data.spec.locker : this.data.spec.locker.name;
+            tooltipContextLines.push(`Specification Locker: ${lockerValue}`);
+        }
+
         if (this.data.aut.status) {
             tooltipContextLines.push(`Automation Status: ${this.data.aut.status}`);
+        }
+
+        if (this.data.aut.locker) {
+            const lockerValue =
+                typeof this.data.aut.locker === "string" ? this.data.aut.locker : this.data.aut.locker.name;
+            tooltipContextLines.push(`Automation Locker: ${lockerValue}`);
         }
 
         if (this.data.base.uniqueID) {

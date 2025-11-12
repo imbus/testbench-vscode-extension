@@ -56,16 +56,16 @@ export interface TestStructureNode {
     };
     spec: {
         key: string;
-        locker: string | null;
+        locker: string | { key: string; name: string } | null;
         status: string;
     };
     aut: {
         key: string;
-        locker: string | null;
+        locker: string | { key: string; name: string } | null;
         status: string;
     };
     exec?: {
-        locker?: string;
+        locker?: string | { key: string; name: string } | null;
         status?: string;
     };
     filters: any[];

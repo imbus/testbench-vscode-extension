@@ -491,7 +491,9 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             vscode.commands.registerCommand(`${this.config.id}.resetCustomRoot`, async () => this.resetCustomRoot())
         );
 
-        this.disposables.push(vscode.commands.registerCommand(`${this.config.id}.refresh`, () => this.refresh()));
+        this.disposables.push(
+            vscode.commands.registerCommand(`${this.config.id}.refresh`, () => this.refreshWithCacheClear())
+        );
 
         this.disposables.push(
             vscode.commands.registerCommand(
@@ -694,6 +696,9 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                     }
                 }
 
+                // Clear cache before refresh to get updated lock status from server
+                // After import, items are typically locked by system and should be hidden
+                this.dataProvider.clearCache();
                 this.refresh();
             } else {
                 const importFailedMessageForUser = `Import was cancelled or did not complete successfully for ${itemLabel}`;
@@ -991,8 +996,15 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         if (nodeData.exec?.status === "NotPlanned") {
             return false;
         }
-        if (nodeData.exec?.locker === "-2") {
-            return false;
+
+        // Check if item is locked by system (-2)
+        // The locker can be either a string or an object with a key property
+        const lockerValue = nodeData.exec?.locker;
+        if (lockerValue !== null && lockerValue !== undefined) {
+            const lockerKey = typeof lockerValue === "string" ? lockerValue : lockerValue.key;
+            if (lockerKey === "-2") {
+                return false;
+            }
         }
 
         // If filter diff mode is disabled and there are filters applied,
@@ -1351,6 +1363,37 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         this._onDidChangeTreeData.fire(undefined);
         this.resetTitle();
         this.updateTestThemesFilterContextKey();
+    }
+
+    /**
+     * Refreshes the tree view by clearing the cache and reloading data from the server.
+     * This ensures that the latest data is fetched, including updated lock statuses and other server-side changes.
+     */
+    public async refreshWithCacheClear(): Promise<void> {
+        this.logger.debug("[TestThemesTreeView] Refreshing with cache clear to fetch latest data from server");
+        this.dataProvider.clearCache();
+
+        // Reload the current context (cycle or TOV) to fetch fresh data
+        if (this.currentProjectKey && this.currentCycleKey && this.isOpenedFromCycle) {
+            await this.loadCycle(
+                this.currentProjectKey,
+                this.currentCycleKey,
+                this.currentTovKey || "",
+                this.currentProjectName || "",
+                this.currentTovName || "",
+                this.currentCycleLabel || undefined
+            );
+        } else if (this.currentProjectKey && this.currentTovKey && !this.isOpenedFromCycle) {
+            await this.loadTov(
+                this.currentProjectKey,
+                this.currentTovKey,
+                this.currentProjectName || "",
+                this.currentTovName || ""
+            );
+        } else {
+            // Fallback to regular refresh if no context is available
+            this.refresh();
+        }
     }
 
     /**
