@@ -161,7 +161,7 @@ export class MarkingModule implements TreeViewModule {
                 `Marked item ${item.label} and ${validDescendants.length} descendants`
             )
         );
-        this.context.refresh({ immediate: true });
+        this.context.refresh({ immediate: true, skipDataReload: true });
     }
 
     /**
@@ -246,7 +246,7 @@ export class MarkingModule implements TreeViewModule {
     public clearAllMarkings(emitGlobalEvent: boolean = true): void {
         this.markingState = this.createEmptyState();
         this.updateState();
-        this.context.refresh();
+        this.context.refresh({ skipDataReload: true });
         this.context.logger.trace(this.context.buildLogPrefix("MarkingModule", "Cleared all markings"));
 
         if (emitGlobalEvent) {
@@ -301,7 +301,7 @@ export class MarkingModule implements TreeViewModule {
      */
     private updateState(): void {
         this.context.stateManager.setState({ marking: this.markingState });
-        this.context.refresh({ immediate: true });
+        this.context.refresh({ immediate: true, skipDataReload: true });
     }
 
     /**
