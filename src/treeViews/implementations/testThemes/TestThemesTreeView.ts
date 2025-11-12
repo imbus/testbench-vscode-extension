@@ -34,6 +34,16 @@ interface TestThemeFilterStorage {
     [contextKey: string]: any[];
 }
 
+/**
+ * Interface for test generation context
+ */
+interface GenerationContext {
+    projectKey: string;
+    cycleKey: string;
+    tovKey: string;
+    isOpenedFromCycle: boolean;
+}
+
 export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     private dataProvider: TestThemesDataProvider;
     private disposables: vscode.Disposable[] = [];
@@ -1043,102 +1053,143 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         }
 
         try {
-            if (getExtensionConfiguration().get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR)) {
-                await vscode.commands.executeCommand(allExtensionCommands.clearInternalTestbenchFolder);
-            }
+            await this.executeClearInternalDirIfNeeded();
 
-            const projectKey = this.currentProjectKey;
-            const cycleKey = this.currentCycleKey;
-            const tovKey = this.currentTovKey;
-
-            if (!projectKey || (!cycleKey && !tovKey)) {
-                const testGenerationContextMissingErrorMessage =
-                    "[TestThemesTreeView] Could not determine the active Project, Cycle, or TOV context for test generation.";
-                const testGenerationContextMissingErrorMessageForUser =
-                    "Could not determine the active Project, Cycle, or TOV context for test generation.";
-                vscode.window.showErrorMessage(testGenerationContextMissingErrorMessageForUser);
-                this.logger.error(testGenerationContextMissingErrorMessage);
+            const context = this.validateTestGenerationContext();
+            if (!context) {
                 return;
             }
 
-            const itemLabel = item.label?.toString() || "Unknown Item";
-            const itemUID = item.data.base.uniqueID;
-
-            let testGenerationSuccessful = false;
-            if (this.isOpenedFromCycle && cycleKey) {
-                // Generation from a cycle context
-                testGenerationSuccessful =
-                    await reportHandler.generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
-                        this.extensionContext,
-                        item,
-                        itemLabel,
-                        projectKey,
-                        cycleKey,
-                        itemUID
-                    );
-            } else if (tovKey) {
-                // Generation from a TOV context
-                testGenerationSuccessful = await reportHandler.startTestGenerationUsingTOV(
-                    this.extensionContext,
-                    item,
-                    projectKey,
-                    tovKey,
-                    true
-                );
-            }
-
-            if (testGenerationSuccessful && ENABLE_ICON_MARKING_ON_TEST_GENERATION && this.isOpenedFromCycle) {
-                const markingModule = this.getModule("marking") as MarkingModule;
-                if (markingModule && item.id) {
-                    markingModule.clearAllMarkings();
-
-                    // Mark the item and its descendants for import
-                    // The marking module handles refreshing
-                    const contextKey = cycleKey || tovKey || "";
-                    markingModule.markItemWithDescendants(item, projectKey, contextKey, "import");
-
-                    const persistenceModule = this.getModule("persistence") as PersistenceModule | undefined;
-                    if (persistenceModule) {
-                        await persistenceModule.forceSave();
-                    }
-                } else {
-                    this.logger.warn(
-                        `[TestThemesTreeView] Could not mark item ${item.label}: Marking module not available or item has no ID.`
-                    );
-                }
-            } else if (
-                testGenerationSuccessful &&
-                ENABLE_ICON_MARKING_ON_TEST_GENERATION &&
-                !this.isOpenedFromCycle &&
-                tovKey
-            ) {
-                const markingModule = this.getModule("marking") as MarkingModule;
-                if (markingModule && item.id) {
-                    markingModule.clearAllMarkings();
-                    markingModule.markItemWithDescendants(item, projectKey, tovKey, "generation");
-
-                    // Force an immediate save of the state to disk to prevent data loss on reload.
-                    const persistenceModule = this.getModule("persistence") as PersistenceModule | undefined;
-                    if (persistenceModule) {
-                        await persistenceModule.forceSave();
-                    }
-                } else {
-                    this.logger.warn(
-                        `[TestThemesTreeView] Could not mark item ${item.label}: Marking module not available or item has no ID.`
-                    );
-                }
-            }
+            const testGenerationSuccessful = await this.performTestGeneration(item, context);
 
             if (testGenerationSuccessful) {
-                await this.updateRobotFileAvailabilityForAllTreeItems();
-                this._onDidChangeTreeData.fire(undefined);
+                await this.handleSuccessfulGeneration(item, context);
             }
         } catch (error) {
-            this.logger.error("[TestThemesTreeView] Error generating test cases:", error);
-            vscode.window.showErrorMessage(
-                `Error generating test cases: ${error instanceof Error ? error.message : "Unknown error"}`
+            this.handleTestGenerationError(error);
+        }
+    }
+
+    /**
+     * Clears internal TestBench directory if configured to do so.
+     */
+    private async executeClearInternalDirIfNeeded(): Promise<void> {
+        if (getExtensionConfiguration().get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR)) {
+            await vscode.commands.executeCommand(allExtensionCommands.clearInternalTestbenchFolder);
+        }
+    }
+
+    /**
+     * Validates and returns the test generation context (project, cycle, TOV keys).
+     * @returns Generation context object or null if validation fails
+     */
+    private validateTestGenerationContext(): GenerationContext | null {
+        const projectKey = this.currentProjectKey;
+        const cycleKey = this.currentCycleKey;
+        const tovKey = this.currentTovKey;
+
+        if (!projectKey || (!cycleKey && !tovKey)) {
+            const errorMessage = "Could not determine the active Project, Cycle, or TOV context for test generation.";
+            this.logger.error(`[TestThemesTreeView] ${errorMessage}`);
+            vscode.window.showErrorMessage(errorMessage);
+            return null;
+        }
+
+        return {
+            projectKey,
+            cycleKey: cycleKey || "",
+            tovKey: tovKey || "",
+            isOpenedFromCycle: this.isOpenedFromCycle
+        };
+    }
+
+    /**
+     * Performs the actual test generation based on context (cycle vs TOV).
+     * @param item The test theme tree item to generate tests for
+     * @param context The validated generation context
+     * @returns True if generation was successful, false otherwise
+     */
+    private async performTestGeneration(item: TestThemesTreeItem, context: GenerationContext): Promise<boolean> {
+        const itemLabel = item.label?.toString() || "Unknown Item";
+        const itemUID = item.data.base.uniqueID;
+
+        if (context.isOpenedFromCycle && context.cycleKey) {
+            // Generation from a cycle context
+            return await reportHandler.generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
+                this.extensionContext,
+                item,
+                itemLabel,
+                context.projectKey,
+                context.cycleKey,
+                itemUID
+            );
+        } else if (context.tovKey) {
+            // Generation from a TOV context
+            return await reportHandler.startTestGenerationUsingTOV(
+                this.extensionContext,
+                item,
+                context.projectKey,
+                context.tovKey,
+                true
             );
         }
+
+        return false;
+    }
+
+    /**
+     * Handles post-generation tasks: marking items and updating UI.
+     * @param item The test theme tree item that was generated
+     * @param context The generation context
+     */
+    private async handleSuccessfulGeneration(item: TestThemesTreeItem, context: GenerationContext): Promise<void> {
+        await this.applyPostGenerationMarking(item, context);
+        await this.updateRobotFileAvailabilityForAllTreeItems();
+        this._onDidChangeTreeData.fire(undefined);
+    }
+
+    /**
+     * Applies marking to generated items based on context (import vs generation marking).
+     * @param item The test theme tree item to mark
+     * @param context The generation context determining marking type
+     */
+    private async applyPostGenerationMarking(item: TestThemesTreeItem, context: GenerationContext): Promise<void> {
+        if (!ENABLE_ICON_MARKING_ON_TEST_GENERATION) {
+            return;
+        }
+
+        const markingModule = this.getModule("marking") as MarkingModule;
+        if (!markingModule || !item.id) {
+            this.logger.warn(
+                `[TestThemesTreeView] Could not mark item ${item.label}: Marking module not available or item has no ID.`
+            );
+            return;
+        }
+
+        markingModule.clearAllMarkings();
+
+        // Determine marking type and context key based on whether opened from cycle or TOV
+        const markingType = context.isOpenedFromCycle ? "import" : "generation";
+        const contextKey = context.isOpenedFromCycle ? context.cycleKey : context.tovKey;
+
+        markingModule.markItemWithDescendants(item, context.projectKey, contextKey, markingType);
+
+        // Force an immediate save of the state to disk to prevent data loss on reload
+        const persistenceModule = this.getModule("persistence") as PersistenceModule | undefined;
+        if (persistenceModule) {
+            await persistenceModule.forceSave();
+        }
+    }
+
+    /**
+     * Handles errors during test generation.
+     * @param error The error that occurred
+     */
+    private handleTestGenerationError(error: unknown): void {
+        this.logger.error("[TestThemesTreeView] Error generating test cases:", error);
+        vscode.window.showErrorMessage(
+            `Error generating test cases: ${error instanceof Error ? error.message : "Unknown error"}`
+        );
     }
 
     /**
