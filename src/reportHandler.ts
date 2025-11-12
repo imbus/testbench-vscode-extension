@@ -13,7 +13,7 @@ import * as testBenchTypes from "./testBenchTypes";
 import * as utils from "./utils";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
 import { AxiosResponse, AxiosInstance } from "axios";
-import { connection, logger, userSessionManager } from "./extension";
+import { connection, logger, treeViews, userSessionManager } from "./extension";
 import {
     ConfigKeys,
     StorageKeys,
@@ -1313,7 +1313,7 @@ export async function startTestGenerationForCycle(
             );
         }
 
-        await generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
+        const generationSuccessful = await generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
             context,
             selectedCycleTreeItem,
             selectedCycleTreeItem.label,
@@ -1321,6 +1321,14 @@ export async function startTestGenerationForCycle(
             cycleKey,
             cycleUID
         );
+
+        if (generationSuccessful && treeViews?.testThemesTree) {
+            await treeViews.testThemesTree.markCycleGenerationFromProjectsView(selectedCycleTreeItem);
+        } else if (generationSuccessful) {
+            logger.warn(
+                "[reportHandler] Test themes tree view is not available, cannot apply import markings after cycle generation."
+            );
+        }
     } catch (error) {
         logger.error(
             `[reportHandler] Error in startTestGenerationForCycle: ${error instanceof Error ? error.message : String(error)}`

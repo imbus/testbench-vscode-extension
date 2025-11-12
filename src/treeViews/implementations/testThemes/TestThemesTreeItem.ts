@@ -51,6 +51,7 @@ export interface TestThemeData {
     hasChildren: boolean;
     projectKey?: string;
     cycleKey?: string;
+    tovKey?: string;
     isGenerated?: boolean;
     isImported?: boolean;
     level?: number;
@@ -135,12 +136,13 @@ export class TestThemesTreeItem extends TreeItemBase {
      */
     private getContextIdentifier(): string {
         const projectKey = this.data.projectKey || "unknown-project";
-        const contextKey = this.data.cycleKey || "unknown-context";
+        const tovKey = this.data.tovKey || "unknown-tov";
         const isOpenedFromCycle = this.getMetadata("openedFromCycle") === true;
+        const contextKey = isOpenedFromCycle ? this.data.cycleKey || "unknown-cycle" : tovKey;
         const contextType = isOpenedFromCycle ? "cycle" : "tov";
         const userId = userSessionManager.getCurrentUserId();
 
-        return `${userId}:${contextType}:${projectKey}:${contextKey}`;
+        return `${userId}:${contextType}:${projectKey}:${tovKey}:${contextKey}`;
     }
 
     /**
