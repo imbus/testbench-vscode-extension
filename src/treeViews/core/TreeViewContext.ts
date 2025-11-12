@@ -7,7 +7,7 @@ import * as vscode from "vscode";
 import { TreeViewConfig } from "./TreeViewConfig";
 import { StateManager } from "../state/StateManager";
 import { EventBus } from "../utils/EventBus";
-import { TreeViewBase } from "./TreeViewBase";
+import { RefreshOptions, TreeViewBase } from "./TreeViewBase";
 import { TestBenchLogger } from "../../testBenchLogger";
 
 /**
@@ -22,7 +22,7 @@ export interface TreeViewContext {
     readonly logger: TestBenchLogger;
 
     // Tree view reference
-    readonly refresh: (options?: { immediate?: boolean }) => void;
+    readonly refresh: (options?: RefreshOptions) => void;
     readonly getTreeView: () => TreeViewBase<any>;
     readonly getCurrentRootItems: () => any[];
 
@@ -43,7 +43,7 @@ export class TreeViewContextImpl implements TreeViewContext {
         public readonly treeView: TreeViewBase<any>
     ) {}
 
-    public refresh(options?: { immediate?: boolean }): void {
+    public refresh(options?: RefreshOptions): void {
         // A refresh from the context is always a full refresh of the tree.
         // Pass "undefined" for the item and forward the options.
         this.treeView.refresh(undefined, options);

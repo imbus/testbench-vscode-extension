@@ -24,6 +24,11 @@ import { CacheManager } from "../../core/cacheManager";
 
 const ROOT_ITEMS_CACHE_KEY = "root_items";
 
+export interface RefreshOptions {
+    immediate?: boolean;
+    skipDataReload?: boolean;
+}
+
 export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.TreeDataProvider<T> {
     protected readonly _onDidChangeTreeData = new vscode.EventEmitter<T | undefined | null | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -483,7 +488,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
      * @param item Optional specific item to refresh
      * @param options Optional refresh options including immediate flag
      */
-    public refresh(item?: T, options?: { immediate?: boolean }): void {
+    public refresh(item?: T, options?: RefreshOptions): void {
         this.logger.trace(
             this.buildLogPrefix(
                 `Refreshing tree view${item ? ` for item: ${item.label}` : ""}${options?.immediate ? " immediately" : ""}`
@@ -494,11 +499,26 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             this._dataFetchDebounceTimeout = undefined;
         }
 
+        const skipDataReload = options?.skipDataReload ?? false;
+
         if (!item) {
             // Full refresh
             this._intentionallyCleared = false;
-            // Reset flag for full refresh
-            this.loadData(options);
+
+            if (skipDataReload) {
+                this.logger.trace(this.buildLogPrefix("Skipping data reload per refresh options."));
+                if (options?.immediate) {
+                    this._onDidChangeTreeData.fire(undefined);
+                } else {
+                    this._dataFetchDebounceTimeout = setTimeout(() => {
+                        this._onDidChangeTreeData.fire(undefined);
+                        this._dataFetchDebounceTimeout = undefined;
+                    }, TreeViewTiming.UI_REFRESH_DEBOUNCE_MS);
+                }
+            } else {
+                // Reset flag for full refresh
+                this.loadData(options);
+            }
         } else {
             // Partial refresh
             if (options?.immediate) {
@@ -874,7 +894,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
      * Loads data for the tree view with optional immediate refresh
      * @param options Optional parameters for data loading behavior
      */
-    protected async loadData(options?: { immediate?: boolean }): Promise<void> {
+    protected async loadData(options?: RefreshOptions): Promise<void> {
         if (this._isLoading) {
             return;
         }

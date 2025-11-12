@@ -4,7 +4,7 @@
  */
 
 import * as vscode from "vscode";
-import { TreeViewBase } from "../../core/TreeViewBase";
+import { RefreshOptions, TreeViewBase } from "../../core/TreeViewBase";
 import { TestThemesTreeItem, TestThemeData, TestThemeType } from "./TestThemesTreeItem";
 import { TreeViewConfig } from "../../core/TreeViewConfig";
 import { TestThemesDataProvider } from "./TestThemesDataProvider";
@@ -1416,8 +1416,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         this.updateTestThemesFilterContextKey();
     }
 
-    public override refresh(item?: TestThemesTreeItem, options?: { immediate?: boolean }): void {
-        if (item) {
+    public override refresh(item?: TestThemesTreeItem, options?: RefreshOptions): void {
+        if (item || options?.skipDataReload) {
             super.refresh(item, options);
             return;
         }
@@ -1457,7 +1457,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         return false;
     }
 
-    public async refreshWithCacheClear(options?: { immediate?: boolean }): Promise<void> {
+    public async refreshWithCacheClear(options?: RefreshOptions): Promise<void> {
         this.logger.debug("[TestThemesTreeView] Refreshing with cache clear to fetch latest data from server");
         this.dataProvider.clearCache();
 
