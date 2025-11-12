@@ -225,117 +225,229 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param config The configuration object defining the operation to perform.
      */
     private async _handleResourceOperation(config: ResourceOperationConfig): Promise<void> {
-        const {
-            operationType,
-            createMissing,
-            revealInExplorer,
-            targetItem,
-            keywordItem: keywordItem,
-            errorMessages
-        } = config;
-
-        // Resource operations use language server commands, ensure it's running
         try {
-            if (!isLanguageServerRunning()) {
-                const cfgExists = await hasLsConfig();
-                if (!cfgExists) {
-                    vscode.window.showWarningMessage(
-                        "Language server is not available because no project configuration was found (.testbench/ls.config.json). Create it first."
-                    );
-                    return;
-                }
+            await this.ensureLanguageServerReady();
 
-                // Attempt to initialize LS from current config, then wait for readiness
-                await updateOrRestartLS();
-                await vscode.window.withProgress(
-                    {
-                        location: vscode.ProgressLocation.Notification,
-                        title: "Waiting for Language Server",
-                        cancellable: true
-                    },
-                    async (progress, cancellationToken) => {
-                        progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
-                        await waitForLanguageServerReady(30000, 100, cancellationToken);
-                    }
-                );
-            }
-
-            const hierarchicalName = targetItem.data.hierarchicalName;
-            if (!hierarchicalName) {
-                vscode.window.showErrorMessage(errorMessages.noHierarchicalName);
-                return;
-            }
-            const cleanName = this.removeResourceMarkersFromHierarchicalName(hierarchicalName).trim();
-            const absolutePath = await this.resourceFileService.constructAbsolutePath(cleanName);
-            if (!absolutePath) {
-                vscode.window.showErrorMessage(errorMessages.noPath);
+            const resourcePath = await this.resolveResourcePathForTreeItem(config.targetItem, config.errorMessages);
+            if (!resourcePath) {
                 return;
             }
 
-            const isResourceFile = ResourceFileService.hasResourceMarker(hierarchicalName);
-            const finalPath =
-                isResourceFile && !absolutePath.endsWith(".resource") ? `${absolutePath}.resource` : absolutePath;
+            const resourcePathExists = await this.resourceFileService.pathExists(resourcePath.finalPath);
 
-            const exists = await this.resourceFileService.pathExists(finalPath);
-
-            if (!exists) {
-                if (!createMissing) {
-                    vscode.window.showWarningMessage(
-                        isResourceFile ? errorMessages.fileNotFound : errorMessages.folderNotFound
-                    );
-                    return;
-                }
-
-                const uid = targetItem.data.uniqueID;
-                if (isResourceFile && !uid) {
-                    vscode.window.showErrorMessage(errorMessages.noUid.replace("{label}", targetItem.label as string));
-                    return;
-                }
-
-                if (isResourceFile) {
-                    let context = "";
-                    if (this.currentProjectName && this.currentTovName) {
-                        context = `tb:context:${this.currentProjectName}/${this.currentTovName}\n`;
-                    }
-                    const content = `tb:uid:${uid}\n${context}\n`;
-                    await this.resourceFileService.ensureFileExists(finalPath, content);
-                    const uri = vscode.Uri.file(finalPath);
-                    vscode.commands.executeCommand("testbench_ls.pullSubdivision", uri.toString(), uid, false);
-                } else {
-                    try {
-                        await this.resourceFileService.ensureFolderPathExists(finalPath);
-                    } catch (error) {
-                        vscode.window.showErrorMessage(
-                            `Failed to create folder: ${error instanceof Error ? error.message : "Unknown error"}`
-                        );
-                        return;
-                    }
-                }
-
-                targetItem.updateLocalAvailability(true, finalPath);
-                await this.updateParentIcons(targetItem);
-                this.refreshItemWithParents(targetItem);
-            }
-
-            if (operationType === "keyword" && keywordItem) {
-                await this.openFileAndJumpToKeyword(
-                    finalPath,
-                    keywordItem.data.originalName,
-                    keywordItem.data.uniqueID
+            if (!resourcePathExists) {
+                const createdResource = await this.handleMissingResource(
+                    resourcePath,
+                    config.targetItem,
+                    config.createMissing,
+                    config.errorMessages
                 );
-            } else if (operationType !== "folder") {
-                await this.openFileInVSCodeEditor(finalPath);
+                if (!createdResource) {
+                    return;
+                }
             }
 
-            if (revealInExplorer) {
-                await this.revealFileInVSCodeExplorer(finalPath);
-            }
-        } catch (error) {
-            this.logger.error(`[TestElementsTreeView] Error during resource operation '${operationType}':`, error);
-            vscode.window.showErrorMessage(
-                `Operation failed: ${error instanceof Error ? error.message : "Unknown error"}`
+            await this.executeResourceOperation(
+                config.operationType,
+                resourcePath.finalPath,
+                config.keywordItem,
+                config.revealInExplorer
             );
+        } catch (error) {
+            this.handleResourceOperationError(config.operationType, error);
         }
+    }
+
+    /**
+     * Ensures the language server is running and ready for resource operations.
+     * @throws Error if language server configuration is missing
+     */
+    private async ensureLanguageServerReady(): Promise<void> {
+        if (isLanguageServerRunning()) {
+            return;
+        }
+
+        const cfgExists = await hasLsConfig();
+        if (!cfgExists) {
+            vscode.window.showWarningMessage(
+                "Language server is not available because no project configuration was found (.testbench/ls.config.json). Create it first."
+            );
+            throw new Error("Language server configuration missing");
+        }
+
+        await updateOrRestartLS();
+        await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: "Waiting for Language Server",
+                cancellable: true
+            },
+            async (progress, cancellationToken) => {
+                progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
+                await waitForLanguageServerReady(30000, 100, cancellationToken);
+            }
+        );
+    }
+
+    /**
+     * Resolves and validates the resource path for a given tree item.
+     * @param targetItem The tree item to resolve the path for
+     * @param errorMessages Error messages to display if resolution fails
+     * @returns Resolved resource path information or null if resolution fails
+     */
+    private async resolveResourcePathForTreeItem(
+        targetItem: TestElementsTreeItem,
+        errorMessages: ResourceOperationConfig["errorMessages"]
+    ): Promise<{ finalPath: string; isResourceFile: boolean } | null> {
+        const hierarchicalName = targetItem.data.hierarchicalName;
+        if (!hierarchicalName) {
+            vscode.window.showErrorMessage(errorMessages.noHierarchicalName);
+            return null;
+        }
+
+        const cleanName = this.removeResourceMarkersFromHierarchicalName(hierarchicalName).trim();
+        const absolutePath = await this.resourceFileService.constructAbsolutePath(cleanName);
+        if (!absolutePath) {
+            vscode.window.showErrorMessage(errorMessages.noPath);
+            return null;
+        }
+
+        const isResourceFile = ResourceFileService.hasResourceMarker(hierarchicalName);
+        const finalPath =
+            isResourceFile && !absolutePath.endsWith(".resource") ? `${absolutePath}.resource` : absolutePath;
+
+        return { finalPath, isResourceFile };
+    }
+
+    /**
+     * Handles the creation of missing resources (files or folders).
+     * @param resourcePath The resolved resource path information
+     * @param targetItem The tree item representing the resource
+     * @param createMissing Whether to create the missing resource
+     * @param errorMessages Error messages to display
+     * @returns True if the resource was created or creation was not needed, false otherwise
+     */
+    private async handleMissingResource(
+        resourcePath: { finalPath: string; isResourceFile: boolean },
+        targetItem: TestElementsTreeItem,
+        createMissing: boolean,
+        errorMessages: ResourceOperationConfig["errorMessages"]
+    ): Promise<boolean> {
+        if (!createMissing) {
+            vscode.window.showWarningMessage(
+                resourcePath.isResourceFile ? errorMessages.fileNotFound : errorMessages.folderNotFound
+            );
+            return false;
+        }
+
+        if (resourcePath.isResourceFile) {
+            const created = await this.createResourceFile(resourcePath.finalPath, targetItem, errorMessages);
+            if (!created) {
+                return false;
+            }
+        } else {
+            const created = await this.createResourceFolder(resourcePath.finalPath);
+            if (!created) {
+                return false;
+            }
+        }
+
+        targetItem.updateLocalAvailability(true, resourcePath.finalPath);
+        await this.updateParentIcons(targetItem);
+        this.refreshItemWithParents(targetItem);
+
+        return true;
+    }
+
+    /**
+     * Creates a resource file with appropriate metadata.
+     * @param filePath The path where the resource file should be created
+     * @param targetItem The tree item representing the resource
+     * @param errorMessages Error messages to display if creation fails
+     * @returns True if the file was created successfully, false otherwise
+     */
+    private async createResourceFile(
+        filePath: string,
+        targetItem: TestElementsTreeItem,
+        errorMessages: ResourceOperationConfig["errorMessages"]
+    ): Promise<boolean> {
+        const uid = targetItem.data.uniqueID;
+        if (!uid) {
+            vscode.window.showErrorMessage(errorMessages.noUid.replace("{label}", targetItem.label as string));
+            return false;
+        }
+
+        const context = this.buildContextMetadata();
+        const content = `tb:uid:${uid}\n${context}\n`;
+
+        await this.resourceFileService.ensureFileExists(filePath, content);
+
+        const uri = vscode.Uri.file(filePath);
+        vscode.commands.executeCommand("testbench_ls.pullSubdivision", uri.toString(), uid, false);
+
+        return true;
+    }
+
+    /**
+     * Creates a resource folder.
+     * @param folderPath The path where the folder should be created
+     * @returns True if the folder was created successfully, false otherwise
+     */
+    private async createResourceFolder(folderPath: string): Promise<boolean> {
+        try {
+            await this.resourceFileService.ensureFolderPathExists(folderPath);
+            return true;
+        } catch (error) {
+            vscode.window.showErrorMessage(
+                `Failed to create folder: ${error instanceof Error ? error.message : "Unknown error"}`
+            );
+            return false;
+        }
+    }
+
+    /**
+     * Builds context metadata string for resource file content.
+     * @returns Context metadata string or empty string if context is not available
+     */
+    private buildContextMetadata(): string {
+        if (this.currentProjectName && this.currentTovName) {
+            return `tb:context:${this.currentProjectName}/${this.currentTovName}\n`;
+        }
+        return "";
+    }
+
+    /**
+     * Executes the requested resource operation (open file, jump to keyword, reveal in explorer).
+     * @param operationType The type of operation to perform
+     * @param resourcePath The path to the resource
+     * @param keywordItem Optional keyword item for keyword jump operations
+     * @param revealInExplorer Whether to reveal the resource in VS Code explorer
+     */
+    private async executeResourceOperation(
+        operationType: ResourceOperationConfig["operationType"],
+        resourcePath: string,
+        keywordItem?: TestElementsTreeItem,
+        revealInExplorer?: boolean
+    ): Promise<void> {
+        if (operationType === "keyword" && keywordItem) {
+            await this.openFileAndJumpToKeyword(resourcePath, keywordItem.data.originalName, keywordItem.data.uniqueID);
+        } else if (operationType !== "folder") {
+            await this.openFileInVSCodeEditor(resourcePath);
+        }
+
+        if (revealInExplorer) {
+            await this.revealFileInVSCodeExplorer(resourcePath);
+        }
+    }
+
+    /**
+     * Handles errors that occur during resource operations.
+     * @param operationType The type of operation that failed
+     * @param error The error that occurred
+     */
+    private handleResourceOperationError(operationType: string, error: unknown): void {
+        this.logger.error(`[TestElementsTreeView] Error during resource operation '${operationType}':`, error);
+        vscode.window.showErrorMessage(`Operation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
 
     /**
