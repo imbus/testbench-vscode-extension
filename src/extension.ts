@@ -669,8 +669,11 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         treeViews?.projectsTree.refresh();
     };
 
-    const handleRefreshTestThemeTreeView = () => {
-        treeViews?.testThemesTree.refresh();
+    const handleRefreshTestThemeTreeView = async () => {
+        if (!treeViews?.testThemesTree) {
+            return;
+        }
+        await treeViews.testThemesTree.refreshWithCacheClear();
     };
 
     const handleRefreshTestElementsTree = () => {

@@ -1365,15 +1365,22 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         this.updateTestThemesFilterContextKey();
     }
 
+    public override refresh(item?: TestThemesTreeItem, options?: { immediate?: boolean }): void {
+        if (item) {
+            super.refresh(item, options);
+            return;
+        }
+
+        this.refreshWithCacheClear(options).catch((error) => {
+            this.logger.error("[TestThemesTreeView] Failed to refresh test themes tree view:", error);
+        });
+    }
+
     /**
      * Refreshes the tree view by clearing the cache and reloading data from the server.
      * This ensures that the latest data is fetched, including updated lock statuses and other server-side changes.
      */
-    public async refreshWithCacheClear(): Promise<void> {
-        this.logger.debug("[TestThemesTreeView] Refreshing with cache clear to fetch latest data from server");
-        this.dataProvider.clearCache();
-
-        // Reload the current context (cycle or TOV) to fetch fresh data
+    private async reloadCurrentContext(): Promise<boolean> {
         if (this.currentProjectKey && this.currentCycleKey && this.isOpenedFromCycle) {
             await this.loadCycle(
                 this.currentProjectKey,
@@ -1383,16 +1390,30 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 this.currentTovName || "",
                 this.currentCycleLabel || undefined
             );
-        } else if (this.currentProjectKey && this.currentTovKey && !this.isOpenedFromCycle) {
+            return true;
+        }
+
+        if (this.currentProjectKey && this.currentTovKey && !this.isOpenedFromCycle) {
             await this.loadTov(
                 this.currentProjectKey,
                 this.currentTovKey,
                 this.currentProjectName || "",
                 this.currentTovName || ""
             );
-        } else {
-            // Fallback to regular refresh if no context is available
-            this.refresh();
+            return true;
+        }
+
+        return false;
+    }
+
+    public async refreshWithCacheClear(options?: { immediate?: boolean }): Promise<void> {
+        this.logger.debug("[TestThemesTreeView] Refreshing with cache clear to fetch latest data from server");
+        this.dataProvider.clearCache();
+
+        const reloaded = await this.reloadCurrentContext();
+
+        if (!reloaded) {
+            super.refresh(undefined, options);
         }
     }
 
