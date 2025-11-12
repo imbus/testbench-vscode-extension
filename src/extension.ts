@@ -649,12 +649,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         treeViews?.testElementsTree.openFolderInExplorer(item);
     };
 
-    const handleGoToInteraction = (item: TestElementsTreeItem) => {
-        treeViews?.testElementsTree.goToInteractionResource(item);
+    const handleGoToKeyword = (item: TestElementsTreeItem) => {
+        treeViews?.testElementsTree.goToKeywordResource(item);
     };
 
-    const handleCreateMissingParentResourceForInteraction = (item: TestElementsTreeItem) => {
-        treeViews?.testElementsTree.createMissingParentResourceForInteraction(item);
+    const handleCreateMissingParentResourceForKeyword = (item: TestElementsTreeItem) => {
+        treeViews?.testElementsTree.createMissingParentResourceForKeyword(item);
     };
 
     const handleUpdateOrRestartLS = () => {
@@ -803,8 +803,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         treeViews?.testThemesTree.resetCustomRoot();
     };
 
-    const handleInteractionClick = (item: TestElementsTreeItem) => {
-        treeViews?.testElementsTree.handleInteractionClick(item);
+    const handleKeywordClick = (item: TestElementsTreeItem) => {
+        treeViews?.testElementsTree.handleKeywordClick(item);
     };
 
     const handleOpenAndRevealGeneratedRobotFile = async (item: TestThemesTreeItem) => {
@@ -1225,16 +1225,16 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             handler: handleOpenFolderInExplorer
         },
         {
-            id: allExtensionCommands.openInteractionInTestElementsView,
-            handler: handleGoToInteraction
+            id: allExtensionCommands.openKeywordInTestElementsView,
+            handler: handleGoToKeyword
         },
         {
-            id: allExtensionCommands.createMissingParentResourceForInteraction,
-            handler: handleCreateMissingParentResourceForInteraction
+            id: allExtensionCommands.createMissingParentResourceForKeyword,
+            handler: handleCreateMissingParentResourceForKeyword
         },
         {
-            id: allExtensionCommands.handleInteractionClick,
-            handler: handleInteractionClick
+            id: allExtensionCommands.handleKeywordClick,
+            handler: handleKeywordClick
         },
         {
             id: allExtensionCommands.openAndRevealGeneratedRobotFile,

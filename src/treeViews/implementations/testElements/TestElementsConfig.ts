@@ -52,9 +52,9 @@ export const testElementsConfig: TreeViewConfig = {
                     enabled: false
                 },
                 {
-                    id: "interactions",
-                    name: "Interactions",
-                    predicate: (item: any) => item.data?.testElementType === "Interaction",
+                    id: "keywords",
+                    name: "Keywords",
+                    predicate: (item: any) => item.data?.testElementType === "Keyword",
                     enabled: false
                 },
                 {

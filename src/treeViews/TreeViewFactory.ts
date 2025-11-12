@@ -364,9 +364,9 @@ export class TreeViewFactory {
         } else if (treeType === "testElements") {
             // Handle test elements tree selections
             /*
-            if (item.data?.testElementType === "Interaction") {
+            if (item.data?.testElementType === "Keyword") {
                 treeView.eventBus.emit({
-                    type: "interaction:selected",
+                    type: "keyword:selected",
                     source: treeView.config.id,
                     data: { item },
                     timestamp: Date.now()

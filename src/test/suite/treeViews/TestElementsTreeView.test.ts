@@ -310,8 +310,8 @@ suite("TestElementsTreeView", function () {
             assert.ok(testEnv.vscodeMocks.showErrorMessageStub.called, "Should show error message");
         });
     });
-    suite("Interaction Resource Operations", function () {
-        test("goToInteractionResource should create parent resource when missing", async function () {
+    suite("Keyword Resource Operations", function () {
+        test("goToKeywordResource should create parent resource when missing", async function () {
             const mockParent = createMockTestElementItem(
                 createMockTestElementData({
                     name: "ParentResource [Robot-Resource]",
@@ -319,11 +319,11 @@ suite("TestElementsTreeView", function () {
                 })
             );
 
-            const mockInteraction = createMockTestElementItem(
+            const mockKeyword = createMockTestElementItem(
                 createMockTestElementData({
-                    name: "TestInteraction",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
-                    testElementType: TestElementType.Interaction
+                    name: "TestKeyword",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestKeyword",
+                    testElementType: TestElementType.Keyword
                 }),
                 mockParent
             );
@@ -339,7 +339,7 @@ suite("TestElementsTreeView", function () {
 
             const updateParentIconsStub = testEnv.sandbox.stub(treeView as any, "updateParentIcons").resolves();
 
-            await treeView.goToInteractionResource(mockInteraction);
+            await treeView.goToKeywordResource(mockKeyword);
 
             assert.strictEqual(mockParent.data.isLocallyAvailable, true);
             assert.strictEqual(mockParent.data.localPath, "/test/path/ParentResource.resource");
@@ -347,7 +347,7 @@ suite("TestElementsTreeView", function () {
             assert.ok(updateParentIconsStub.called, "Should update parent icons");
         });
 
-        test("goToInteractionResource should open existing parent resource", async function () {
+        test("goToKeywordResource should open existing parent resource", async function () {
             const mockParent = createMockTestElementItem(
                 createMockTestElementData({
                     name: "ExistingParentResource [Robot-Resource]",
@@ -357,11 +357,11 @@ suite("TestElementsTreeView", function () {
                 })
             );
 
-            const mockInteraction = createMockTestElementItem(
+            const mockKeyword = createMockTestElementItem(
                 createMockTestElementData({
-                    name: "ExistingInteraction",
-                    hierarchicalName: "TestFolder/ExistingParentResource [Robot-Resource]/ExistingInteraction",
-                    testElementType: TestElementType.Interaction
+                    name: "ExistingKeyword",
+                    hierarchicalName: "TestFolder/ExistingParentResource [Robot-Resource]/ExistingKeyword",
+                    testElementType: TestElementType.Keyword
                 }),
                 mockParent
             );
@@ -374,27 +374,27 @@ suite("TestElementsTreeView", function () {
             testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
             testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
 
-            await treeView.goToInteractionResource(mockInteraction);
+            await treeView.goToKeywordResource(mockKeyword);
 
             assert.ok(mockResourceFileService.pathExists.called, "Should check if parent resource exists");
             assert.ok(!mockResourceFileService.ensureFileExists.called, "Should not create parent resource");
         });
 
-        test("goToInteractionResource should handle missing parent", async function () {
-            const mockInteraction = createMockTestElementItem(
+        test("goToKeywordResource should handle missing parent", async function () {
+            const mockKeyword = createMockTestElementItem(
                 createMockTestElementData({
-                    name: "TestInteraction",
-                    hierarchicalName: "TestFolder/TestInteraction",
-                    testElementType: TestElementType.Interaction
+                    name: "TestKeyword",
+                    hierarchicalName: "TestFolder/TestKeyword",
+                    testElementType: TestElementType.Keyword
                 })
             );
 
-            await treeView.goToInteractionResource(mockInteraction);
+            await treeView.goToKeywordResource(mockKeyword);
 
             assert.ok(testEnv.vscodeMocks.showErrorMessageStub.called, "Should show error message for missing parent");
         });
 
-        test("goToInteractionResource should reveal file in explorer after opening", async function () {
+        test("goToKeywordResource should reveal file in explorer after opening", async function () {
             const mockParent = createMockTestElementItem(
                 createMockTestElementData({
                     name: "ParentResource [Robot-Resource]",
@@ -402,11 +402,11 @@ suite("TestElementsTreeView", function () {
                 })
             );
 
-            const mockInteraction = createMockTestElementItem(
+            const mockKeyword = createMockTestElementItem(
                 createMockTestElementData({
-                    name: "TestInteraction",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
-                    testElementType: TestElementType.Interaction
+                    name: "TestKeyword",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestKeyword",
+                    testElementType: TestElementType.Keyword
                 }),
                 mockParent
             );
@@ -419,7 +419,7 @@ suite("TestElementsTreeView", function () {
             testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
             testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
 
-            await treeView.goToInteractionResource(mockInteraction);
+            await treeView.goToKeywordResource(mockKeyword);
 
             assert.ok(
                 testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
@@ -428,44 +428,41 @@ suite("TestElementsTreeView", function () {
         });
     });
 
-    suite("Interaction Click Handlers", function () {
-        test("handleInteractionClick should handle interaction clicks via click handler", async function () {
-            const mockInteraction = createMockTestElementItem(
+    suite("Keyword Click Handlers", function () {
+        test("handleKeywordClick should handle keyword clicks via click handler", async function () {
+            const mockKeyword = createMockTestElementItem(
                 createMockTestElementData({
-                    name: "TestInteraction",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
-                    testElementType: TestElementType.Interaction
+                    name: "TestKeyword",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestKeyword",
+                    testElementType: TestElementType.Keyword
                 })
             );
 
             const handleClickStub = testEnv.sandbox
-                .stub((treeView as any).interactionClickHandler, "handleClick")
+                .stub((treeView as any).keywordClickHandler, "handleClick")
                 .resolves();
 
-            await treeView.handleInteractionClick(mockInteraction);
+            await treeView.handleKeywordClick(mockKeyword);
 
-            assert.ok(
-                handleClickStub.calledWith(mockInteraction, mockInteraction.id, mockLogger),
-                "Should call click handler"
-            );
+            assert.ok(handleClickStub.calledWith(mockKeyword, mockKeyword.id, mockLogger), "Should call click handler");
         });
 
-        test("handleInteractionSingleClick should not create file if it does not exist", async function () {
+        test("handleKeywordSingleClick should not create file if it does not exist", async function () {
             const mockParent = createMockTestElementItem(createMockTestElementData());
-            const mockInteraction = createMockTestElementItem(
-                createMockTestElementData({ testElementType: TestElementType.Interaction }),
+            const mockKeyword = createMockTestElementItem(
+                createMockTestElementData({ testElementType: TestElementType.Keyword }),
                 mockParent
             );
 
             mockResourceFileService.constructAbsolutePath.resolves("/test/path/resource.resource");
             mockResourceFileService.pathExists.resolves(false);
 
-            await (treeView as any).handleInteractionSingleClick(mockInteraction);
+            await (treeView as any).handleKeywordSingleClick(mockKeyword);
 
             assert.ok(!mockResourceFileService.ensureFileExists.called, "Should not create file on single click");
         });
 
-        test("handleInteractionDoubleClick should create file and reveal in explorer", async function () {
+        test("handleKeywordDoubleClick should create file and reveal in explorer", async function () {
             const mockParent = createMockTestElementItem(
                 createMockTestElementData({
                     name: "ParentResource [Robot-Resource]",
@@ -473,11 +470,11 @@ suite("TestElementsTreeView", function () {
                 })
             );
 
-            const mockInteraction = createMockTestElementItem(
+            const mockKeyword = createMockTestElementItem(
                 createMockTestElementData({
-                    name: "TestInteraction",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
-                    testElementType: TestElementType.Interaction
+                    name: "TestKeyword",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestKeyword",
+                    testElementType: TestElementType.Keyword
                 }),
                 mockParent
             );
@@ -491,7 +488,7 @@ suite("TestElementsTreeView", function () {
             testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
             const showTextDocumentStub = testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
 
-            await (treeView as any).handleInteractionDoubleClick(mockInteraction);
+            await (treeView as any).handleKeywordDoubleClick(mockKeyword);
 
             assert.ok(mockResourceFileService.ensureFileExists.called, "Should create file if it doesn't exist");
             assert.ok(showTextDocumentStub.called, "Should open file in editor");

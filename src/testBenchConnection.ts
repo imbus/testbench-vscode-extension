@@ -1621,7 +1621,7 @@ export async function extractDataFromReport(zipFilePath: string): Promise<{
 
 /**
  * Logs in to the TestBench server with the provided credentials and returns session details.
- * This function focuses on the API interaction and does not handle UI or global state.
+ * This function focuses on the API keyword and does not handle UI or global state.
  *
  * @param {string} serverName The server hostname or IP.
  * @param {number} portNumber The server port.

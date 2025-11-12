@@ -12,7 +12,7 @@ import { ResourceFileService } from "./ResourceFileService";
 
 export enum TestElementType {
     Subdivision = "Subdivision",
-    Interaction = "Interaction",
+    Keyword = "Keyword",
     DataType = "DataType",
     Condition = "Condition",
     Other = "Other"
@@ -77,9 +77,9 @@ export class TestElementsTreeItem extends TreeItemBase {
             parent.addChild(this);
         }
 
-        if (this.data.testElementType === TestElementType.Interaction) {
+        if (this.data.testElementType === TestElementType.Keyword) {
             this.command = {
-                command: allExtensionCommands.handleInteractionClick,
+                command: allExtensionCommands.handleKeywordClick,
                 title: "Open Resource",
                 arguments: [this]
             };
@@ -115,18 +115,16 @@ export class TestElementsTreeItem extends TreeItemBase {
             }
         }
 
-        if (elementType === TestElementType.Interaction) {
+        if (elementType === TestElementType.Keyword) {
             const parentResource = this.getParentResourceAvailability(data);
-            return parentResource
-                ? "testElement.interaction.resource.available"
-                : "testElement.interaction.resource.missing";
+            return parentResource ? "testElement.keyword.resource.available" : "testElement.keyword.resource.missing";
         }
 
         return `testElement.${elementType.toLowerCase()}`;
     }
 
     /**
-     * Determines if the parent resource for an interaction is locally available.
+     * Determines if the parent resource for an keyword is locally available.
      * @param data The test element data
      * @returns True if parent resource is locally available, false otherwise
      */
@@ -311,19 +309,19 @@ export class TestElementsTreeItem extends TreeItemBase {
             this.data.displayName &&
             ResourceFileService.hasResourceMarker(this.data.displayName)
         ) {
-            this.updateChildInteractions(isAvailable);
+            this.updateChildKeywords(isAvailable);
         }
     }
 
     /**
-     * Updates child interactions when parent resource availability changes.
+     * Updates child keywords when parent resource availability changes.
      * @param {boolean} parentAvailable - Whether the parent resource is available.
      */
-    private updateChildInteractions(parentAvailable: boolean): void {
+    private updateChildKeywords(parentAvailable: boolean): void {
         if (this.children) {
             for (const child of this.children) {
                 const childItem = child as TestElementsTreeItem;
-                if (childItem.data.testElementType === TestElementType.Interaction) {
+                if (childItem.data.testElementType === TestElementType.Keyword) {
                     childItem.data.isLocallyAvailable = parentAvailable;
                     childItem.updateContextValue();
                     childItem.tooltip = childItem.generateTooltip();
@@ -342,12 +340,12 @@ export class TestElementsTreeItem extends TreeItemBase {
      * Updates the context value when the item's state changes dynamically.
      */
     public updateContextValue(): void {
-        if (this.data.testElementType === TestElementType.Interaction) {
+        if (this.data.testElementType === TestElementType.Keyword) {
             const parent = this.parent as TestElementsTreeItem | null;
             const parentAvailable = parent?.data.isLocallyAvailable || false;
             this.contextValue = parentAvailable
-                ? "testElement.interaction.resource.available"
-                : "testElement.interaction.resource.missing";
+                ? "testElement.keyword.resource.available"
+                : "testElement.keyword.resource.missing";
         } else {
             this.contextValue = TestElementsTreeItem.getInitialContextValue(this.data);
         }
@@ -559,7 +557,7 @@ export class TestElementsTreeItem extends TreeItemBase {
             this.data.displayName &&
             ResourceFileService.hasResourceMarker(this.data.displayName)
         ) {
-            this.updateChildInteractions(isAvailable);
+            this.updateChildKeywords(isAvailable);
         }
 
         this.eventBus.emit({
