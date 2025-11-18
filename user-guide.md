@@ -16,16 +16,16 @@ This guide explains how to use the TestBench VS Code Extension to navigate insid
 2. Create/select a TestBench connection and log in
 3. After the first login, the Projects view opens automatically
 
-![Read-Only Mode Notification](userGuideImages/ReadOnlyMode.png)
-
 If no workspace is open, the extension informs you that it's running in read-only mode.
+
+![Read-Only Mode Notification](userGuideImages/ReadOnlyMode.png)
 
 ## Login and Connections
 
 ![Extension Login Page](userGuideImages/ExtensionLoginPage.png)
 
-- **Managing connections:** Create, edit, or remove connections with these details: label, server URL, port, username, and password
-- **Secure storage:** Password storage is optional. Connection details are stored securely in VS Code Secret Storage
+- **Managing connections:** You can create, edit, or delete TestBench connections. Each connection includes a **label** (optional display name), **server URL**, **port**, **username**, and **password**, so you can easily switch between different servers or user accounts.
+- **Secure storage:** The extension stores your connection details in **VS Code Secret Storage**, which is encrypted and managed by VS Code. Saving the **password** is optional. If you prefer, you can leave it unsaved and enter it manually each time you log in.
 - **Unique connections:** Each connection label must be unique. The extension prevents creating duplicate connections with the same host, port, and username combination
 - **Settings access:** Click the Extension Settings button at the top-right of the login page to open extension settings
 
