@@ -130,10 +130,11 @@ Example `ls.config.json`
 
 ## Test Elements View
 
-![Test Elements View](userGuideImages/TestElementsView.png)
-
 - The Test Elements view displays subdivisions and their keywords for the current TOV context
 - The view title includes the Project and TOV name to show the current context
+
+![Test Elements View](userGuideImages/TestElementsView.png)
+
 - The 'Resource Marker' setting identifies subdivisions that correspond to Robot Framework resources. Subdivisions whose names end with this marker are treated as `.resource` files
 
 - **Creating resources:** Use the 'Create Resource' button on a subdivision to create a local `.resource` file. After creation, the file is revealed in the VS Code Explorer and opened in the editor
