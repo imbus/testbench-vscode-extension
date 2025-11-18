@@ -41,11 +41,13 @@ export interface TestElementItemData extends TestElementData {
     resourceFiles?: string[];
     isLocallyAvailable?: boolean;
     localPath?: string;
+    hasLocalChildren?: boolean;
 }
 
 export class TestElementsTreeItem extends TreeItemBase {
     public readonly data: TestElementItemData;
     private _resourceStatus: "none" | "available" | "missing" | "partial" = "none";
+    private _hasLocalChildren: boolean = false;
     private eventBus: EventBus;
 
     constructor(
@@ -433,6 +435,27 @@ export class TestElementsTreeItem extends TreeItemBase {
      */
     public get elementType(): TestElementType {
         return this.data.testElementType;
+    }
+
+    /**
+     * Gets whether this item has any locally available child resources.
+     * @returns True if any child resources exist locally, false otherwise.
+     */
+    public get hasLocalChildren(): boolean {
+        return this._hasLocalChildren;
+    }
+
+    /**
+     * Sets whether this item has any locally available child resources.
+     * This is used for parent marking when child resources are created/deleted.
+     * @param value True if any child resources exist locally, false otherwise.
+     */
+    public set hasLocalChildren(value: boolean) {
+        if (this._hasLocalChildren !== value) {
+            this._hasLocalChildren = value;
+            this.data.hasLocalChildren = value;
+            this.updateContextValue();
+        }
     }
 
     /**

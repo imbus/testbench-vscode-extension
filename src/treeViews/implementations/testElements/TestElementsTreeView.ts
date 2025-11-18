@@ -43,6 +43,12 @@ interface ResourceOperationConfig {
     };
 }
 
+/**
+ * When enabled, parent subdivision items are visually marked when any child subdivision
+ * or keyword resource is created locally.
+ */
+const ENABLE_PARENT_MARKING = true;
+
 export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private dataProvider: TestElementsDataProvider;
     private disposables: vscode.Disposable[] = [];
@@ -183,6 +189,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         this.resourceAvailabilityRefreshDebounceHandle = setTimeout(async () => {
             try {
                 await this.refreshResourceAvailabilityFromWorkspace();
+                await this.updateAllParentMarkings();
             } catch (error) {
                 this.logger.error(
                     "[TestElementsTreeView] Error during debounced resource availability refresh:",
@@ -190,6 +197,39 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 );
             }
         }, 500);
+    }
+
+    /**
+     * Updates parent marking flags for all subdivision items in the tree.
+     * This is called after file system changes to ensure parent markings are accurate.
+     */
+    private async updateAllParentMarkings(): Promise<void> {
+        if (!ENABLE_PARENT_MARKING || !this.rootItems || this.rootItems.length === 0) {
+            return;
+        }
+
+        try {
+            const subdivisionItems: TestElementsTreeItem[] = [];
+            const collectSubdivisions = (currentItems: TestElementsTreeItem[]) => {
+                for (const item of currentItems) {
+                    if (item.data.testElementType === TestElementType.Subdivision) {
+                        subdivisionItems.push(item);
+                    }
+                    if (item.children) {
+                        collectSubdivisions(item.children as TestElementsTreeItem[]);
+                    }
+                }
+            };
+            collectSubdivisions(this.rootItems);
+
+            // Update hasLocalChildren flag for each subdivision
+            for (const item of subdivisionItems) {
+                const hasLocalChildren = await this.hasAnyLocalChildResources(item);
+                item.hasLocalChildren = hasLocalChildren;
+            }
+        } catch (error) {
+            this.logger.error("[TestElementsTreeView] Error updating all parent markings:", error);
+        }
     }
 
     /**
@@ -354,6 +394,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
         targetItem.updateLocalAvailability(true, resourcePath.finalPath);
         await this.updateParentIcons(targetItem);
+        await this.markParentSubdivisions(targetItem);
         this.refreshItemWithParents(targetItem);
 
         return true;
@@ -749,6 +790,10 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                             }
                             const exists = await this.resourceFileService.pathExists(resourcePath);
                             item.updateLocalAvailability(exists, resourcePath);
+
+                            if (exists) {
+                                await this.markParentSubdivisions(item);
+                            }
                         }
                     }
                 } catch (error) {
@@ -759,6 +804,94 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 }
             })
         );
+    }
+
+    /**
+     * Checks if a subdivision item has any locally available child resources.
+     * This recursively checks all descendants to see if any resource files exist.
+     * @param item The subdivision item to check
+     * @returns True if any child resources exist locally, false otherwise
+     */
+    private async hasAnyLocalChildResources(item: TestElementsTreeItem): Promise<boolean> {
+        if (item.data.isLocallyAvailable) {
+            return true;
+        }
+
+        if (item.children && item.children.length > 0) {
+            for (const child of item.children as TestElementsTreeItem[]) {
+                if (child.data.testElementType === TestElementType.Subdivision) {
+                    const hasLocal = await this.hasAnyLocalChildResources(child);
+                    if (hasLocal) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Marks parent subdivision items to indicate they have locally available child resources.
+     * This is called when a resource is created to visually mark the parent hierarchy.
+     * @param item The tree item whose parents should be marked
+     */
+    private async markParentSubdivisions(item: TestElementsTreeItem): Promise<void> {
+        if (!ENABLE_PARENT_MARKING) {
+            return;
+        }
+
+        try {
+            let parent = item.parent as TestElementsTreeItem | null;
+            while (parent) {
+                if (parent.data.testElementType === TestElementType.Subdivision) {
+                    parent.hasLocalChildren = true;
+                    this.logger.trace(
+                        `[TestElementsTreeView] Marked parent subdivision '${parent.label}' as having local children`
+                    );
+                }
+                parent = parent.parent as TestElementsTreeItem | null;
+            }
+        } catch (error) {
+            this.logger.error(
+                `[TestElementsTreeView] Error marking parent subdivisions for item ${item.label}:`,
+                error
+            );
+        }
+    }
+
+    /**
+     * Unmarks parent subdivision items if they no longer have any locally available child resources.
+     * This is called when a resource is deleted to update the parent hierarchy marking.
+     * @param item The tree item whose parents should be checked and potentially unmarked
+     */
+    private async unmarkParentSubdivisionsIfNeeded(item: TestElementsTreeItem): Promise<void> {
+        if (!ENABLE_PARENT_MARKING) {
+            return;
+        }
+
+        try {
+            let parent = item.parent as TestElementsTreeItem | null;
+            while (parent) {
+                if (parent.data.testElementType === TestElementType.Subdivision) {
+                    // Check if this parent still has any local child resources
+                    const hasLocalChildren = await this.hasAnyLocalChildResources(parent);
+                    parent.hasLocalChildren = hasLocalChildren;
+
+                    if (!hasLocalChildren) {
+                        this.logger.trace(
+                            `[TestElementsTreeView] Unmarked parent subdivision '${parent.label}' - no local children remaining`
+                        );
+                    }
+                }
+                parent = parent.parent as TestElementsTreeItem | null;
+            }
+        } catch (error) {
+            this.logger.error(
+                `[TestElementsTreeView] Error unmarking parent subdivisions for item ${item.label}:`,
+                error
+            );
+        }
     }
 
     /**
