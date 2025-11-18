@@ -72,7 +72,7 @@ Example `ls.config.json`
 - **Live filtering:** Tree items are filtered in real-time as you type in the search box
 - **Search indicator:** The search icon changes color when a search is active. Clearing the search text disables the search and restores all tree items
 
-<!-- TODO: Add a GIF showing clicking the search button, typing to filter items, and the search icon color change -->
+![Search Feature](userGuideImages/SearchFeature.png)
 
 - **Search options:** Click the gear icon on top-right of the search UI to configure search behavior:
     - **Search criteria:** Choose to search by Name, Tooltip, or UIDs (note: Projects view items do not have UIDs)
