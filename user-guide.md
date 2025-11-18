@@ -31,18 +31,16 @@ If no workspace is open, the extension informs you that it's running in read-onl
 
 ## Projects View
 
-![Projects View](userGuideImages/ProjectsView.png)
-
-- Displays all available projects for the logged-in user. A project contains Test Object Versions (TOVs), and a TOV contains Test Cycles
+- Projects view is opened by default when you log in to a TestBench account for the first time
+- Displays all available projects for the logged-in user. A project can contain Test Object Versions (TOVs), and TOVs can contain Test Cycles
 - **Toolbar buttons:** Logout, Refresh Projects, Search, Open Extension Settings
-- **Action buttons:** Test Object Versions and Test Cycles have buttons to open them in the Test Themes view and to generate tests
+- **Action buttons:** Each Test Object Version and Test Cycle tree item has two action buttons: one button to open it in the Test Themes view, and another button to generate Robot Framework tests for that item including its contained hierarchy.
 - **Read-only mode:** In read-only mode, TOVs and Cycles do not have test generation buttons
 - **Opening a TOV or Cycle:** Click the open button next to a TOV or Cycle to open it. Alternatively, you can double-click directly on a Cycle's name as a shortcut to open it
+- **View switching:** Opening a TOV or Cycle in Projects view switches to a new view where the Test Themes view and Test Elements view are displayed together for that selected context
+- **State persistence:** The extension remembers visible tree views and expansion/collapse states of tree items, restoring them when you log in again so that you can continue where you left off
 
-<!-- TODO: Add a GIF showing the opening of a TOV or Cycle -->
-
-- **View switching:** Opening a TOV or Cycle in Projects view switches to a new view where the Test Themes view and Test Elements view are displayed together for that context
-- **State persistence:** The extension remembers visible tree views and expansion/collapse states of tree items, restoring them when you log in again
+![Projects View](userGuideImages/ProjectsView.png)
 
 ### Context Configuration
 
