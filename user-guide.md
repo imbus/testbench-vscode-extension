@@ -85,16 +85,16 @@ Example `ls.config.json`
 
 ## Test Themes View
 
-![Test Themes View](userGuideImages/TestThemesView.png)
-
 - The Test Themes view is opened by opening a TOV or Cycle in the Projects view
 - It displays test themes and test case sets for the opened TOV or Cycle
 - The view title includes the Project, TOV, and Cycle name to show the current context
 - **Toolbar buttons:** Refresh Test Themes, Open Projects View, Search
-- **Visibility rules:** The view hides tree items that meet any of these conditions:
+- **Visibility rules:** Test Themes view hides tree items that meet any of these conditions:
     - Test Cases (individual test cases are hidden; only test case sets are shown)
     - Items with execution status `NotPlanned`
     - Items locked by the system
+
+![Test Themes View](userGuideImages/TestThemesView.png)
 
 ## Generating Robot Framework Tests
 
