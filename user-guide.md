@@ -44,7 +44,7 @@ If no workspace is open, the extension informs you that it's running in read-onl
 
 ### Context Configuration
 
-The extension tracks the active Project and TOV via a config file at `.testbench/ls.config.json` in your workspace root.
+You can mark one Project and one TOV as **active**. The active Project/TOV pair defines the context used by other views (Test Themes and Test Elements), and this context configuration is stored in a config file at `.testbench/ls.config.json` in your workspace root.
 
 - If `.testbench/ls.config.json` doesn't exist, the extension offers to create it and automatically fills in the `projectName` and `tovName` when you open a TOV or Cycle
 
@@ -53,7 +53,7 @@ The extension tracks the active Project and TOV via a config file at `.testbench
 - **Manual activation:** Right-click a Project or TOV and select 'Set as Active Project' or 'Set as Active TOV'. A pin icon marks the active items in the Projects tree view
 - **Live updates:** The extension monitors `ls.config.json` for changes and automatically updates pin icons in the Projects view
 
-<!-- TODO: Add a GIF showing right-click context menu on Project/TOV with "Set as Active" option and the resulting pin icon -->
+![Set A TOV as Active](userGuideImages/SetAsActiveTov.png)
 
 - **Configuration validation:** If `ls.config.json` is missing or invalid, the extension offers a guided fix to set a valid configuration based on your visible projects and TOVs
 
