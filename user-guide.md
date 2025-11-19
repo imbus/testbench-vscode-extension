@@ -288,7 +288,7 @@ These settings control how the extension generates Robot Framework test suites f
 - **Certificate Path**
     - **Type:** String
     - **Default:** `""` (empty)
-    - **Description:** Optional path to the public TestBench server certificate file (`.pem` format). This can be either an absolute path or a path relative to the workspace root.
+    - **Description:** Optional path to the public TestBench server certificate file. This can be either an absolute path or a path relative to the workspace root.
 
         **When to use:** A certificate is only required when connecting to TestBench servers that use self-signed certificates or custom certificate authorities (e.g., development/test environments or unofficial server versions). In production environments with official TestBench servers using standard certificates, this setting can be left empty.
 
