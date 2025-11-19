@@ -138,7 +138,7 @@ Example `ls.config.json`
 
 - The 'Resource Marker' setting identifies subdivisions that correspond to Robot Framework resources. Subdivisions whose names end with this marker are treated as `.resource` files
 
-- **Creating resources:** Use the 'Create Resource' button on a subdivision to create a local `.resource` file. After creation, the file is revealed in the VS Code Explorer and opened in the editor
+- **Creating resources:** Use the 'Create Resource' button on a subdivision to create a local `.resource` file. Created resource files will be located according to the 'Resource Directory Path' setting and the subdivision's hierarchy under the 'Resource Root Regex' cut point. After creation, the file is revealed in the VS Code Explorer and opened in the editor
 
 - **Visual indicators:** Subdivision tree items that are locally available as resource files show differently colored icons to indicate their availability. The 'Create Resource' button changes to 'Open Resource' for existing resource files
 
@@ -239,12 +239,12 @@ These settings control how the extension generates Robot Framework test suites f
 - **Resource Root Regex**
     - **Type:** String
     - **Default:** `resources`
-    - **Description:** Regular expression that identifies where the resource directory begins in TestBench's subdivision hierarchy. Acts as a cut point, where everything before this marker is ignored, and everything after it is preserved in the local file structure under the Resource Directory Path. For example: with regex `resources` and TestBench path `Project/resources/Login/Keywords`, the local file becomes `<Resource Directory Path>/Login/Keywords.resource` (ignoring `Project/resources`).
+    - **Description:** Regular expression that identifies where the resource directory begins in TestBench's subdivision hierarchy. Acts as a cut point, where everything before this marker is ignored, and everything after it is preserved in the local file structure under the Resource Directory Path. For example: with regex `resources` and a subdivision hierarchy in TestBench of `Project/resources/Login/Keywords`, the local resource file path becomes `<Resource Directory Path>/Login/Keywords.resource` (ignoring the `Project/resources` portion).
 
 - **Resource Directory Path**
     - **Type:** String
     - **Default:** `""` (empty)
-    - **Description:** Specifies the local directory where Robot Framework resource files (`.resource` files) will be stored. The path is relative to the workspace root. This setting works with Resource Root Regex to map TestBench's subdivision hierarchy to your local file system. For example: if Resource Root Regex is `resources` and this is set to `robot_resources`, a TestBench path like `Project/resources/Utils/Keywords` becomes `robot_resources/Utils/Keywords.resource` locally.
+    - **Description:** Specifies the local directory where Robot Framework resource files (`.resource` files) will be stored. The path is relative to the workspace root. This setting works with Resource Root Regex to map TestBench's subdivision hierarchy to your local file system. For example: if Resource Root Regex is `resources` and Resource Directory Path is set to `robot_resources`, a subdivision hierarchy in TestBench like `Project/resources/Utils/Keywords` becomes `robot_resources/Utils/Keywords.resource` locally.
 
 - **Resource Marker**
     - **Type:** Array of Strings
