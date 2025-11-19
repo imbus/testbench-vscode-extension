@@ -121,12 +121,13 @@ Example `ls.config.json`
 - **Import buttons:** After test generation, an Import button appears next to generated tree items, allowing you to:
     - Import results for an entire generated hierarchy from the top-most item, or
     - Import results for specific items only
-- **Result updates:** After importing results:
-    - Tree item tooltips are updated to display execution results
-    - Execution status of imported items is set to `Performed`
-    - The verdict field shows the execution outcome
 
-<!-- TODO: Add a GIF showing Import button appearing after test generation, clicking it and import progress -->
+![Upload Execution Results To Testbench](userGuideImages/UploadResultsToTestbenchButton.png)
+
+- **Result updates:** After importing results:
+    - Execution status of imported items is set to `Performed`
+    - Tree item tooltips are updated to display execution results
+    - The verdict field shows the execution outcome
 
 ## Test Elements View
 
