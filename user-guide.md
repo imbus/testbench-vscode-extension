@@ -142,8 +142,6 @@ Example `ls.config.json`
 
 - **Visual indicators:** Subdivision tree items that are locally available as resource files show differently colored icons to indicate their availability. The 'Create Resource' button changes to 'Open Resource' for existing resource files
 
-<!-- TODO: Add a GIF clicking 'Create Resource' button, file creation, tree item color change, reveal in Explorer, and opening in editor -->
-
 - **Keyword navigation:**
     - **Single-click:** Opens the corresponding resource file in the editor and jumps directly to the keyword definition
     - **Double-click:** Opens the resource file, jumps to the keyword definition, and reveals the file location in VS Code Explorer
