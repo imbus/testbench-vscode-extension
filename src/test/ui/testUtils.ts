@@ -3,7 +3,7 @@
  * @description Utility functions and constants for UI tests
  */
 
-import { WebDriver, Workbench, By, ActivityBar, SideBarView, WebElement, until } from "vscode-extension-tester";
+import { WebDriver, Workbench, By, ActivityBar, SideBarView, WebElement, until, Key } from "vscode-extension-tester";
 import { getSlowMotionDelay } from "./testConfig";
 
 /**
@@ -24,21 +24,29 @@ export const ModalButtonSelectors = {
 } as const;
 
 /**
- * Attempts to logout from TestBench if a session is active.
+ * Logs out from TestBench if a session is active.
  * Uses the command palette to execute the logout command.
- * TODO: Expose logout command to users?
+ * Waits for logout to complete and verifies the webview is available.
  *
  * @param driver - The WebDriver instance
- * @returns Promise<boolean> - True if logout was attempted, false if no active session
+ * @returns Promise<boolean> - True if logout was successful, false if no active session or logout failed
  */
 export async function attemptLogout(driver: WebDriver): Promise<boolean> {
     try {
+        // Check if already logged out (webview is available)
+        const alreadyLoggedOut = await isWebviewAvailable(driver);
+        if (alreadyLoggedOut) {
+            console.log("[Logout] Already logged out - webview is available");
+            return true;
+        }
+
+        console.log("[Logout] Attempting to logout...");
         const workbench = new Workbench();
         const commandPalette = await workbench.openCommandPrompt();
 
-        // Search for logout command
+        // Search for logout command - ">" symbol must be at the beginning
         await commandPalette.setText(">TestBench: Logout");
-        await driver.sleep(1000);
+        await driver.sleep(1500); // Wait for command palette to filter results
 
         const picks = await commandPalette.getQuickPicks();
 
@@ -46,22 +54,55 @@ export async function attemptLogout(driver: WebDriver): Promise<boolean> {
         let logoutCommandFound = false;
         for (const pick of picks) {
             const text = await pick.getText();
-            if (text.includes("Logout")) {
+            if (text.includes("Logout") || text.includes("testbenchExtension.logout")) {
                 logoutCommandFound = true;
+                console.log(`[Logout] Found logout command: ${text}`);
                 await pick.select();
-                await driver.sleep(2000); // Wait for logout to complete
-                break;
+                await driver.sleep(3000); // Wait for logout to complete
+
+                // Verify logout was successful by checking if webview is now available
+                const webviewAvailable = await isWebviewAvailable(driver);
+                if (webviewAvailable) {
+                    console.log("[Logout] Logout successful - webview is now available");
+                    return true;
+                } else {
+                    console.log("[Logout] Logout command executed but webview not yet available, waiting...");
+                    // Wait a bit more and check again
+                    await driver.sleep(2000);
+                    const webviewAvailableRetry = await isWebviewAvailable(driver);
+                    if (webviewAvailableRetry) {
+                        console.log("[Logout] Logout successful after retry");
+                        return true;
+                    } else {
+                        console.log("[Logout] Warning: Logout command executed but webview still not available");
+                        return false;
+                    }
+                }
             }
         }
 
         if (!logoutCommandFound) {
+            console.log("[Logout] Logout command not found - user may already be logged out");
             await commandPalette.cancel();
+            // Check if webview is available (might already be logged out)
+            const webviewAvailable = await isWebviewAvailable(driver);
+            return webviewAvailable;
         }
 
-        return logoutCommandFound;
+        return false;
     } catch (error) {
-        // If command palette fails or logout command not found, assume no active session
-        console.log("Logout attempt failed or no active session:", error);
+        // If command palette fails, log error but don't fail the test
+        console.log("[Logout] Error during logout attempt:", error);
+        // Check if we're already logged out
+        try {
+            const webviewAvailable = await isWebviewAvailable(driver);
+            if (webviewAvailable) {
+                console.log("[Logout] Webview is available despite error - assuming already logged out");
+                return true;
+            }
+        } catch {
+            // Ignore errors when checking webview
+        }
         return false;
     }
 }
@@ -591,14 +632,35 @@ export async function deleteAllConnections(driver: WebDriver): Promise<number> {
                     }
                 }
 
-                // Click delete button
+                // Click delete button (this will open confirmation dialog)
                 await clickDeleteConnection(driver, firstConnection);
 
-                // Handle confirmation dialog
-                await handleConfirmationDialog(driver, "Delete");
+                // Switch to default content BEFORE handling dialog (dialog blocks webview)
+                await driver.switchTo().defaultContent();
+                await driver.sleep(500); // Small wait for dialog to appear
 
-                // Switch back to webview to continue deleting
-                await findAndSwitchToWebview(driver);
+                // Handle confirmation dialog (this will switch to default content internally)
+                const dialogHandled = await handleConfirmationDialog(driver, "Delete");
+
+                if (!dialogHandled) {
+                    console.log("[Cleanup] Failed to handle confirmation dialog, skipping this connection");
+                    // Try to cancel the dialog if it's still open
+                    try {
+                        await driver.switchTo().defaultContent();
+                        const cancelButtons = await driver.findElements(
+                            By.xpath("//button[contains(text(), 'Cancel') or contains(text(), 'No')]")
+                        );
+                        if (cancelButtons.length > 0) {
+                            await cancelButtons[0].click();
+                            await driver.sleep(500);
+                        }
+                    } catch {
+                        // Ignore errors when trying to cancel
+                    }
+                    continue; // Skip this connection and try next
+                }
+
+                // Wait a bit more to ensure dialog is fully closed and webview is accessible
                 await driver.sleep(UITimeouts.SHORT);
 
                 deletedCount++;
@@ -718,6 +780,8 @@ export async function clickLoginConnection(driver: WebDriver, connectionElement:
 
 /**
  * Handles VS Code confirmation dialog by clicking the specified button text.
+ * For delete confirmation dialogs, looks for "Delete" button specifically.
+ * Waits for dialog to appear and fully close before returning.
  *
  * @param driver - The WebDriver instance
  * @param buttonText - The text of the button to click (e.g., "Delete", "Save Changes")
@@ -730,13 +794,118 @@ export async function handleConfirmationDialog(
     timeout: number = UITimeouts.MEDIUM
 ): Promise<boolean> {
     try {
+        // Ensure we're in default content (not in webview)
         await driver.switchTo().defaultContent();
         await driver.sleep(UITimeouts.SHORT);
 
-        // Try to find the confirmation button by text
+        console.log(`[Dialog] Looking for confirmation dialog with button: "${buttonText}"`);
+
+        // First, wait for the dialog modal to appear (monaco-dialog-modal-block or monaco-dialog)
+        let dialogElement: WebElement | null = null;
+        try {
+            await driver.wait(
+                until.elementLocated(By.css(".monaco-dialog-modal-block, .monaco-dialog, .monaco-dialog-box")),
+                timeout,
+                "Waiting for dialog modal to appear"
+            );
+            console.log("[Dialog] Dialog modal appeared");
+            await driver.sleep(1000); // Wait for dialog to fully render
+
+            // Try multiple selectors for the dialog element
+            const dialogSelectors = [
+                ".monaco-dialog",
+                ".monaco-dialog-box",
+                ".monaco-dialog .monaco-dialog-content",
+                "[role='dialog']",
+                ".dialog-box"
+            ];
+
+            for (const selector of dialogSelectors) {
+                try {
+                    dialogElement = await driver.findElement(By.css(selector));
+                    console.log(`[Dialog] Found dialog element with selector: ${selector}`);
+                    break;
+                } catch {
+                    // Try next selector
+                }
+            }
+
+            if (!dialogElement) {
+                console.log("[Dialog] Dialog element not found with standard selectors, searching in document");
+            }
+        } catch {
+            console.log("[Dialog] Dialog modal not found, but continuing to search for button");
+        }
+
+        // Try multiple strategies to find the button
+        // Strategy 1: Find by exact text match within dialog context
         const confirmButton = await driver.wait(
             async () => {
-                const buttons = await driver.findElements(By.xpath(`//button[contains(text(), '${buttonText}')]`));
+                let buttons: WebElement[] = [];
+
+                // If we found the dialog element, search within it
+                if (dialogElement) {
+                    try {
+                        buttons = await dialogElement.findElements(
+                            By.xpath(`.//button[normalize-space(text())='${buttonText}']`)
+                        );
+                        if (buttons.length === 0) {
+                            buttons = await dialogElement.findElements(
+                                By.xpath(`.//button[contains(normalize-space(text()), '${buttonText}')]`)
+                            );
+                        }
+                        // Also try links that look like buttons
+                        if (buttons.length === 0) {
+                            buttons = await dialogElement.findElements(
+                                By.xpath(
+                                    `.//a[contains(@class, 'monaco-button') and normalize-space(text())='${buttonText}']`
+                                )
+                            );
+                        }
+                    } catch {
+                        // If dialog element becomes stale, try document-wide search
+                    }
+                }
+
+                // If no buttons found in dialog, try document-wide search
+                if (buttons.length === 0) {
+                    // Try exact text match first (button elements)
+                    buttons = await driver.findElements(By.xpath(`//button[normalize-space(text())='${buttonText}']`));
+
+                    // Try links that look like buttons (VS Code uses <a> tags styled as buttons)
+                    if (buttons.length === 0) {
+                        buttons = await driver.findElements(
+                            By.xpath(
+                                `//a[contains(@class, 'monaco-button') and normalize-space(text())='${buttonText}']`
+                            )
+                        );
+                    }
+
+                    // If no exact match, try contains
+                    if (buttons.length === 0) {
+                        buttons = await driver.findElements(
+                            By.xpath(`//button[contains(normalize-space(text()), '${buttonText}')]`)
+                        );
+                    }
+
+                    if (buttons.length === 0) {
+                        buttons = await driver.findElements(
+                            By.xpath(
+                                `//a[contains(@class, 'monaco-button') and contains(normalize-space(text()), '${buttonText}')]`
+                            )
+                        );
+                    }
+
+                    // Also try by aria-label
+                    if (buttons.length === 0) {
+                        buttons = await driver.findElements(By.xpath(`//button[@aria-label='${buttonText}']`));
+                    }
+
+                    if (buttons.length === 0) {
+                        buttons = await driver.findElements(By.xpath(`//a[@aria-label='${buttonText}']`));
+                    }
+                }
+
                 return buttons.length > 0 ? buttons[0] : null;
             },
             timeout,
@@ -744,25 +913,221 @@ export async function handleConfirmationDialog(
         );
 
         if (confirmButton) {
-            await confirmButton.click();
-            await applySlowMotion(driver); // Visible: clicking confirmation dialog button
+            const buttonTextFound = await confirmButton.getText();
+            const tagName = await confirmButton.getTagName();
+            console.log(`[Dialog] Found ${tagName} element with text: "${buttonTextFound}", clicking...`);
+
+            // Scroll button into view if needed
+            await driver.executeScript("arguments[0].scrollIntoView({ block: 'center' });", confirmButton);
+            await driver.sleep(200);
+
+            try {
+                await confirmButton.click();
+                await applySlowMotion(driver); // Visible: clicking confirmation dialog button
+            } catch (clickError) {
+                // If click fails, try JavaScript click
+                console.log(`[Dialog] Regular click failed, trying JavaScript click: ${clickError}`);
+                await driver.executeScript("arguments[0].click();", confirmButton);
+                await applySlowMotion(driver);
+            }
+
+            // Wait for dialog to fully close (wait for modal-block to disappear)
+            try {
+                await driver.wait(
+                    async () => {
+                        const modalBlocks = await driver.findElements(By.css(".monaco-dialog-modal-block"));
+                        return modalBlocks.length === 0;
+                    },
+                    UITimeouts.MEDIUM,
+                    "Waiting for dialog to close"
+                );
+                console.log("[Dialog] Dialog closed successfully");
+            } catch {
+                console.log("[Dialog] Dialog may have closed, but modal-block still present");
+            }
+
+            await driver.sleep(UITimeouts.SHORT); // Additional wait to ensure dialog is fully gone
             return true;
         }
-        return false;
-    } catch {
-        // Dialog might have different structure, try alternative approach
+
+        // If button not found, try JavaScript-based search (buttons might be in shadow DOM)
+        console.log(`[Dialog] Button "${buttonText}" not found with XPath, trying JavaScript search...`);
         try {
-            const allButtons = await driver.findElements(By.css("button"));
-            for (const button of allButtons) {
-                const text = await button.getText();
-                if (text.includes(buttonText)) {
-                    await button.click();
-                    await applySlowMotion(driver); // Visible: clicking confirmation dialog button
+            const buttonFound = (await driver.executeScript(`
+                function findButtonInDialog(buttonText) {
+                    // Try to find dialog element
+                    const dialog = document.querySelector('.monaco-dialog') || 
+                                  document.querySelector('[role="dialog"]') ||
+                                  document.querySelector('.monaco-dialog-box');
+                    
+                    const searchArea = dialog || document;
+                    
+                    // Search for buttons and links
+                    const allElements = searchArea.querySelectorAll('button, a.monaco-button, a[class*="button"]');
+                    
+                    for (const element of allElements) {
+                        const text = element.textContent?.trim() || element.innerText?.trim() || '';
+                        const ariaLabel = element.getAttribute('aria-label') || '';
+                        
+                        if (text === buttonText || text.includes(buttonText) || ariaLabel === buttonText) {
+                            return element;
+                        }
+                    }
+                    return null;
+                }
+                const button = findButtonInDialog('${buttonText}');
+                if (button) {
+                    button.scrollIntoView({ block: 'center' });
+                    return button;
+                }
+                return null;
+            `)) as WebElement | null;
+
+            if (buttonFound) {
+                console.log(`[Dialog] Found button using JavaScript, clicking...`);
+                await driver.executeScript("arguments[0].click();", buttonFound);
+                await applySlowMotion(driver);
+                await driver.sleep(1000);
+
+                // Check if dialog closed
+                const modalBlocks = await driver.findElements(By.css(".monaco-dialog-modal-block"));
+                if (modalBlocks.length === 0) {
+                    console.log("[Dialog] Dialog closed successfully using JavaScript click");
+                    await driver.sleep(UITimeouts.SHORT);
                     return true;
                 }
             }
-        } catch {
-            // No dialog found
+        } catch (jsError) {
+            console.log(`[Dialog] JavaScript search failed: ${jsError}`);
+        }
+
+        // If button still not found, try keyboard navigation (Enter key for primary button)
+        console.log(`[Dialog] Button "${buttonText}" not found, trying keyboard navigation (Enter key)...`);
+        try {
+            // Focus the dialog first
+            const dialogModal = await driver.findElement(By.css(".monaco-dialog-modal-block"));
+            await dialogModal.click();
+            await driver.sleep(200);
+
+            // Press Enter to activate the primary button (Delete is highlighted/primary)
+            await driver.actions().sendKeys(Key.ENTER).perform();
+            await driver.sleep(1000);
+
+            // Check if dialog closed
+            const modalBlocks = await driver.findElements(By.css(".monaco-dialog-modal-block"));
+            if (modalBlocks.length === 0) {
+                console.log("[Dialog] Dialog closed using Enter key");
+                await driver.sleep(UITimeouts.SHORT);
+                return true;
+            }
+        } catch (keyboardError) {
+            console.log(`[Dialog] Keyboard navigation failed: ${keyboardError}`);
+        }
+
+        console.log(`[Dialog] Button "${buttonText}" not found with any strategy`);
+        return false;
+    } catch (error) {
+        console.log(`[Dialog] Error finding button with primary strategy: ${error}`);
+        // Dialog might have different structure, try alternative approach
+        try {
+            // Wait for dialog to appear first
+            try {
+                await driver.wait(
+                    until.elementLocated(By.css(".monaco-dialog, .monaco-dialog-modal-block")),
+                    2000,
+                    "Waiting for dialog"
+                );
+            } catch {
+                // Dialog might already be there or not appear
+            }
+
+            // Use JavaScript to find all buttons/links (can access shadow DOM and any structure)
+            console.log("[Dialog] Using JavaScript to search for buttons in fallback strategy...");
+            const buttonInfo = (await driver.executeScript(`
+                function findAllButtons() {
+                    const buttons = [];
+                    const dialog = document.querySelector('.monaco-dialog') || 
+                                  document.querySelector('[role="dialog"]') ||
+                                  document.querySelector('.monaco-dialog-box') ||
+                                  document;
+                    
+                    const elements = dialog.querySelectorAll('button, a.monaco-button, a[class*="button"], a[role="button"], .monaco-button');
+                    
+                    for (const element of elements) {
+                        const text = element.textContent?.trim() || element.innerText?.trim() || '';
+                        const ariaLabel = element.getAttribute('aria-label') || '';
+                        const tagName = element.tagName.toLowerCase();
+                        buttons.push({
+                            text: text,
+                            ariaLabel: ariaLabel,
+                            tagName: tagName,
+                            className: element.className || ''
+                        });
+                    }
+                    return buttons;
+                }
+                return findAllButtons();
+            `)) as Array<{ text: string; ariaLabel: string; tagName: string; className: string }>;
+
+            console.log(`[Dialog] JavaScript found ${buttonInfo.length} button/link element(s):`);
+            for (const btn of buttonInfo) {
+                console.log(
+                    `[Dialog]   - ${btn.tagName} (class: ${btn.className}): text="${btn.text}", aria-label="${btn.ariaLabel}"`
+                );
+            }
+
+            // Try to find and click the button using JavaScript
+            const buttonClicked = (await driver.executeScript(`
+                function findAndClickButton(buttonText) {
+                    const dialog = document.querySelector('.monaco-dialog') || 
+                                  document.querySelector('[role="dialog"]') ||
+                                  document.querySelector('.monaco-dialog-box') ||
+                                  document;
+                    
+                    const elements = dialog.querySelectorAll('button, a.monaco-button, a[class*="button"], a[role="button"], .monaco-button');
+                    
+                    for (const element of elements) {
+                        const text = element.textContent?.trim() || element.innerText?.trim() || '';
+                        const ariaLabel = element.getAttribute('aria-label') || '';
+                        
+                        if (text === buttonText || text.includes(buttonText) || ariaLabel === buttonText) {
+                            element.scrollIntoView({ block: 'center' });
+                            element.click();
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                return findAndClickButton('${buttonText}');
+            `)) as boolean;
+
+            if (buttonClicked) {
+                console.log(`[Dialog] Successfully clicked button using JavaScript in fallback`);
+                await applySlowMotion(driver);
+                await driver.sleep(1000);
+
+                // Wait for dialog to close
+                try {
+                    await driver.wait(
+                        async () => {
+                            const modalBlocks = await driver.findElements(By.css(".monaco-dialog-modal-block"));
+                            return modalBlocks.length === 0;
+                        },
+                        UITimeouts.MEDIUM,
+                        "Waiting for dialog to close"
+                    );
+                    console.log("[Dialog] Dialog closed successfully");
+                } catch {
+                    console.log("[Dialog] Dialog may have closed");
+                }
+
+                await driver.sleep(UITimeouts.SHORT);
+                return true;
+            }
+
+            console.log(`[Dialog] Could not find button "${buttonText}" using JavaScript in fallback`);
+        } catch (fallbackError) {
+            console.log(`[Dialog] Fallback strategy also failed: ${fallbackError}`);
         }
         return false;
     }

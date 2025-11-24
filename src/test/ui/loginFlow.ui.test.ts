@@ -16,6 +16,7 @@ import {
     applySlowMotion,
     resetConnectionForm,
     deleteAllConnections,
+    attemptLogout,
     ConnectionFormData,
     ConnectionFormElements
 } from "./testUtils";
@@ -35,6 +36,8 @@ describe("Login Flow E2E Tests", function () {
     });
 
     after(async function () {
+        // Logout after login tests to ensure clean state for other tests
+        await attemptLogout(driver);
         await new EditorView().closeAllEditors();
     });
 
@@ -48,6 +51,9 @@ describe("Login Flow E2E Tests", function () {
 
         // Open TestBench sidebar and wait for it to initialize
         await openTestBenchSidebar(driver);
+
+        // Attempt to logout if logged in (some tests may leave user logged in)
+        await attemptLogout(driver);
 
         // Clean up any existing connections from previous test runs
         await deleteAllConnections(driver);

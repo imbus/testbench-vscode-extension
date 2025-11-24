@@ -10,7 +10,7 @@ import {
     openTestBenchSidebar,
     findAndSwitchToWebview,
     isWebviewAvailable,
-    // attemptLogout,
+    attemptLogout,
     fillConnectionForm,
     findConnectionInList,
     getConnectionCount,
@@ -90,8 +90,9 @@ describe("Login Webview - Connection Management Tests", function () {
     beforeEach(async function () {
         // Open TestBench sidebar and wait for it to initialize
         await openTestBenchSidebar(driver);
-        // Attempt to logout if logged in to ensure clean state
-        // await attemptLogout(driver);
+
+        // Attempt to logout if logged in to ensure clean state (webview must be available for these tests)
+        await attemptLogout(driver);
 
         // Clean up any existing connections from previous test runs
         await deleteAllConnections(driver);
