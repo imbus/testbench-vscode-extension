@@ -26,7 +26,7 @@ interface RawTestElement {
     type?: string;
     regexMatch?: boolean;
     Subdivision_key?: { serial: string };
-    Interaction_key?: { serial: string };
+    Keyword_key?: { serial: string };
     Condition_key?: { serial: string };
     DataType_key?: { serial: string };
 }
@@ -245,8 +245,8 @@ export class TestElementsDataProvider {
                         let parentSerialFromDetails: string | undefined;
                         if (potentialParent.details?.Subdivision_key?.serial) {
                             parentSerialFromDetails = String(potentialParent.details.Subdivision_key.serial);
-                        } else if (potentialParent.details?.Interaction_key?.serial) {
-                            parentSerialFromDetails = String(potentialParent.details.Interaction_key.serial);
+                        } else if (potentialParent.details?.Keyword_key?.serial) {
+                            parentSerialFromDetails = String(potentialParent.details.Keyword_key.serial);
                         }
 
                         if (parentSerialFromDetails === serialToFind) {
@@ -468,7 +468,7 @@ export class TestElementsDataProvider {
         if (item.Subdivision_key?.serial) {
             return TestElementType.Subdivision;
         }
-        if (item.Interaction_key?.serial) {
+        if (item.Keyword_key?.serial) {
             return TestElementType.Keyword;
         }
         if (item.Condition_key?.serial) {
@@ -494,7 +494,7 @@ export class TestElementsDataProvider {
             case TestElementType.DataType: {
                 const keyFieldMap: Record<string, string> = {
                     [TestElementType.Subdivision]: "Subdivision_key",
-                    [TestElementType.Keyword]: "Interaction_key", // Interaction is renamed to Keyword in GUI
+                    [TestElementType.Keyword]: "Keyword_key", // Server API v2 uses Keyword_key (was Interaction_key in v1)
                     [TestElementType.Condition]: "Condition_key",
                     [TestElementType.DataType]: "DataType_key"
                 };

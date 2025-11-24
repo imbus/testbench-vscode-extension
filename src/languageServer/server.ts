@@ -1364,7 +1364,7 @@ export async function findKeywordPositionInResourceFile(
 
     try {
         const lineNumber = await vscode.commands.executeCommand(
-            "testbench_ls.getInteractionPosition",
+            "testbench_ls.getKeywordPosition",
             uri.toString(),
             keywordName,
             keywordUid
