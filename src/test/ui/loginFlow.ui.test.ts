@@ -5,8 +5,19 @@
 
 import { expect } from "chai";
 import { VSBrowser, WebDriver, SideBarView, EditorView, By, until } from "vscode-extension-tester";
-import { handleAuthenticationModals, openTestBenchSidebar, findAndSwitchToWebview } from "./testUtils";
-import { getTestCredentials } from "./testConfig";
+import {
+    handleAuthenticationModals,
+    openTestBenchSidebar,
+    findAndSwitchToWebview,
+    fillConnectionForm,
+    saveConnection,
+    clickLoginConnection,
+    findConnectionInList,
+    applySlowMotion,
+    ConnectionFormData,
+    ConnectionFormElements
+} from "./testUtils";
+import { getTestCredentials, isSlowMotionEnabled, getSlowMotionDelay } from "./testConfig";
 
 describe("Login Flow E2E Tests", function () {
     let browser: VSBrowser;
@@ -26,6 +37,13 @@ describe("Login Flow E2E Tests", function () {
     });
 
     beforeEach(async function () {
+        // Log slow motion status for debugging
+        if (isSlowMotionEnabled()) {
+            console.log(`[Slow Motion] Enabled with ${getSlowMotionDelay()}ms delay`);
+        } else {
+            console.log("[Slow Motion] Disabled");
+        }
+
         // Open TestBench sidebar and wait for it to initialize
         await openTestBenchSidebar(driver);
     });
@@ -43,15 +61,18 @@ describe("Login Flow E2E Tests", function () {
                 }
 
                 // Clear all required fields
-                const serverInput = await driver.findElement(By.id("serverName"));
+                const serverInput = await driver.findElement(By.id(ConnectionFormElements.SERVER_NAME));
                 await serverInput.clear();
+                await applySlowMotion(driver); // Visible: clearing server field
 
-                const usernameInput = await driver.findElement(By.id("username"));
+                const usernameInput = await driver.findElement(By.id(ConnectionFormElements.USERNAME));
                 await usernameInput.clear();
+                await applySlowMotion(driver); // Visible: clearing username field
 
                 // Try to save without filling required fields
-                const saveButton = await driver.findElement(By.id("saveConnectionBtn"));
+                const saveButton = await driver.findElement(By.id(ConnectionFormElements.SAVE_BUTTON));
                 await saveButton.click();
+                await applySlowMotion(driver); // Visible: clicking save button
 
                 // Wait for error message to appear
                 const messagesDiv = await driver.wait(
@@ -79,20 +100,24 @@ describe("Login Flow E2E Tests", function () {
                 }
 
                 // Fill required fields with valid data
-                const serverInput = await driver.findElement(By.id("serverName"));
+                const serverInput = await driver.findElement(By.id(ConnectionFormElements.SERVER_NAME));
                 await serverInput.sendKeys("test.server.com");
+                await applySlowMotion(driver); // Visible: typing in server field
 
-                const usernameInput = await driver.findElement(By.id("username"));
+                const usernameInput = await driver.findElement(By.id(ConnectionFormElements.USERNAME));
                 await usernameInput.sendKeys("testuser");
+                await applySlowMotion(driver); // Visible: typing in username field
 
                 // Enter non-numeric port
-                const portInput = await driver.findElement(By.id("portNumber"));
+                const portInput = await driver.findElement(By.id(ConnectionFormElements.PORT_NUMBER));
                 await portInput.clear();
                 await portInput.sendKeys("abc");
+                await applySlowMotion(driver); // Visible: typing in port field
 
                 // Try to save
-                const saveButton = await driver.findElement(By.id("saveConnectionBtn"));
+                const saveButton = await driver.findElement(By.id(ConnectionFormElements.SAVE_BUTTON));
                 await saveButton.click();
+                await applySlowMotion(driver); // Visible: clicking save button
 
                 // Wait for error message to appear
                 const messagesDiv = await driver.wait(
@@ -130,8 +155,12 @@ describe("Login Flow E2E Tests", function () {
 
                 // Reset form to ensure clean state (in case previous tests left data)
                 console.log("Resetting form to clean state...");
-                const addConnectionForm = await driver.wait(until.elementLocated(By.id("addConnectionForm")), 5000);
+                const addConnectionForm = await driver.wait(
+                    until.elementLocated(By.id(ConnectionFormElements.ADD_CONNECTION_FORM)),
+                    5000
+                );
                 await driver.executeScript("arguments[0].reset();", addConnectionForm);
+                await applySlowMotion(driver); // Visible: form reset
 
                 // Fill in connection details
                 console.log("Filling in connection details...");
@@ -139,81 +168,65 @@ describe("Login Flow E2E Tests", function () {
                 // Get credentials from environment variables or test configuration
                 const credentials = getTestCredentials();
 
-                // Wait for and fill Connection Label
-                const labelInput = await driver.wait(until.elementLocated(By.id("connectionLabel")), 5000);
-                await labelInput.clear();
-                await labelInput.sendKeys(credentials.connectionLabel);
+                // Use the helper function that includes slow motion
+                const formData: ConnectionFormData = {
+                    connectionLabel: credentials.connectionLabel,
+                    serverName: credentials.serverName,
+                    portNumber: credentials.portNumber,
+                    username: credentials.username,
+                    password: credentials.password,
+                    storePassword: true
+                };
 
-                // Wait for and fill Server Name
-                const serverInput = await driver.wait(until.elementLocated(By.id("serverName")), 5000);
-                await serverInput.clear();
-                await serverInput.sendKeys(credentials.serverName);
-
-                // Wait for and fill Port Number
-                const portInput = await driver.wait(until.elementLocated(By.id("portNumber")), 5000);
-                await portInput.clear();
-                await portInput.sendKeys(credentials.portNumber);
-
-                // Wait for and fill Username
-                const usernameInput = await driver.wait(until.elementLocated(By.id("username")), 5000);
-                await usernameInput.clear();
-                await usernameInput.sendKeys(credentials.username);
-
-                // Wait for and fill Password
-                const passwordInput = await driver.wait(until.elementLocated(By.id("password")), 5000);
-                await passwordInput.clear();
-                await passwordInput.sendKeys(credentials.password);
+                await fillConnectionForm(driver, formData);
 
                 // Verify "Store password" checkbox is checked
-                const storePasswordCheckbox = await driver.findElement(By.id("storePasswordCheckbox"));
+                const storePasswordCheckbox = await driver.findElement(
+                    By.id(ConnectionFormElements.STORE_PASSWORD_CHECKBOX)
+                );
                 const isChecked = await storePasswordCheckbox.isSelected();
                 expect(isChecked).to.be.true; // eslint-disable-line @typescript-eslint/no-unused-expressions
 
-                // Click "Save New Connection" button
+                // Click "Save New Connection" button (with slow motion)
                 console.log("Clicking Save New Connection button...");
-                const saveButton = await driver.findElement(By.id("saveConnectionBtn"));
-                await saveButton.click();
-
-                // Wait for connection to be saved - wait for connections list to update
-                await driver.wait(
-                    until.elementLocated(By.id("connectionsList")),
-                    10000,
-                    "Waiting for connections list to appear"
-                );
+                await saveConnection(driver);
 
                 // Verify connection appears in connections list
                 console.log("Verifying connection in list...");
-                const connectionsList = await driver.findElement(By.id("connectionsList"));
-                const connectionsItems = await connectionsList.findElements(By.css("li"));
+                const connectionsList = await driver.wait(
+                    until.elementLocated(By.id(ConnectionFormElements.CONNECTIONS_LIST)),
+                    10000,
+                    "Waiting for connections list to appear"
+                );
+                await applySlowMotion(driver); // Visible: connections list updated
 
+                const connectionsItems = await connectionsList.findElements(By.css("li"));
                 expect(connectionsItems.length).to.be.greaterThan(0);
 
-                // Find the created test connection
-                let testConnectionFound = false;
-                let loginButton = null;
+                // Find the created test connection using helper function
+                const expectedLabel = credentials.connectionLabel;
+                const { element: connectionElement, found: testConnectionFound } = await findConnectionInList(
+                    driver,
+                    expectedLabel
+                );
 
-                for (const item of connectionsItems) {
-                    const text = await item.getText();
-                    const expectedLabel = credentials.connectionLabel;
+                // Fallback: try finding by connection string if label not found
+                let foundConnection = connectionElement;
+                if (!testConnectionFound) {
                     const expectedConnectionString = `${credentials.username}@${credentials.serverName}`;
-                    if (text.includes(expectedLabel) || text.includes(expectedConnectionString)) {
-                        testConnectionFound = true;
-                        // Find the login button for this connection
-                        const buttons = await item.findElements(By.css("button.login-btn"));
-                        if (buttons.length > 0) {
-                            loginButton = buttons[0];
-                        }
-                        break;
-                    }
+                    const { element: connectionByString } = await findConnectionInList(
+                        driver,
+                        expectedConnectionString
+                    );
+                    foundConnection = connectionByString;
                 }
 
-                expect(testConnectionFound).to.be.true; // eslint-disable-line @typescript-eslint/no-unused-expressions
-                expect(loginButton).to.not.be.null; // eslint-disable-line @typescript-eslint/no-unused-expressions
+                expect(foundConnection).to.not.be.null; // eslint-disable-line @typescript-eslint/no-unused-expressions
 
-                //  Click "Login with this connection" button
+                // Click "Login with this connection" button (with slow motion)
                 console.log("Clicking login button...");
-                if (loginButton) {
-                    await loginButton.click();
+                if (foundConnection) {
+                    await clickLoginConnection(driver, foundConnection);
                 }
 
                 // Switch back to default content to handle modal prompt interaction

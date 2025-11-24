@@ -125,6 +125,15 @@ UI tests require test credentials to connect to a TestBench server. Set these en
 - `TESTBENCH_TEST_PORT_NUMBER` - Server port (default: "9445")
 - `TESTBENCH_TEST_CONNECTION_LABEL` - Connection label (default: "TestLabel")
 
+**UI Test Configuration:**
+
+- `UI_TEST_SLOW_MOTION` - Enable slow motion mode for visible test actions (default: disabled)
+    - Set to `"true"` to enable slow motion mode
+    - When enabled, visible UI actions are delayed to allow human observation
+- `UI_TEST_SLOW_MOTION_DELAY` - Delay in milliseconds for slow motion (default: 1000ms)
+    - Only used when `UI_TEST_SLOW_MOTION` is enabled
+    - Example: `"2000"` for 2 second delays
+
 ### Setting Environment Variables
 
 #### Windows PowerShell (Current Session)
@@ -135,6 +144,10 @@ $env:TESTBENCH_TEST_USERNAME="test-username"
 $env:TESTBENCH_TEST_PASSWORD="test-password"
 $env:TESTBENCH_TEST_PORT_NUMBER="443"
 $env:TESTBENCH_TEST_CONNECTION_LABEL="TestLabel"
+
+# Optional: Enable slow motion mode for debugging
+$env:UI_TEST_SLOW_MOTION="true"
+$env:UI_TEST_SLOW_MOTION_DELAY="2000"  # 2 second delays
 ```
 
 #### Windows PowerShell (Permanent - User Level)
@@ -155,6 +168,10 @@ set TESTBENCH_TEST_USERNAME=test-username
 set TESTBENCH_TEST_PASSWORD=test-password
 set TESTBENCH_TEST_PORT_NUMBER=443
 set TESTBENCH_TEST_CONNECTION_LABEL=TestLabel
+
+REM Optional: Enable slow motion mode for debugging
+set UI_TEST_SLOW_MOTION=true
+set UI_TEST_SLOW_MOTION_DELAY=2000
 ```
 
 #### Linux/macOS
@@ -165,6 +182,10 @@ export TESTBENCH_TEST_USERNAME="test-username"
 export TESTBENCH_TEST_PASSWORD="test-password"
 export TESTBENCH_TEST_PORT_NUMBER="443"
 export TESTBENCH_TEST_CONNECTION_LABEL="TestLabel"
+
+# Optional: Enable slow motion mode for debugging
+export UI_TEST_SLOW_MOTION="true"
+export UI_TEST_SLOW_MOTION_DELAY="2000"  # 2 second delays
 ```
 
 ### Using .env File (Recommended for Local Development)
@@ -177,6 +198,10 @@ TESTBENCH_TEST_USERNAME=test-username
 TESTBENCH_TEST_PASSWORD=test-password
 TESTBENCH_TEST_PORT_NUMBER=443
 TESTBENCH_TEST_CONNECTION_LABEL=TestLabel
+
+# Optional: Enable slow motion mode for debugging
+UI_TEST_SLOW_MOTION=true
+UI_TEST_SLOW_MOTION_DELAY=2000
 ```
 
 2. Install `dotenv` (if not already installed):
@@ -188,6 +213,58 @@ npm install --save-dev dotenv
 3. The test loader (`index.ts`) will automatically load the `.env` file if `dotenv` is available.
 
 For more detailed examples, see [USAGE_EXAMPLES.md](./USAGE_EXAMPLES.md).
+
+## Slow Motion Mode
+
+Slow motion mode allows you to observe UI test actions in real-time by adding configurable delays to visible actions. This is useful for:
+
+- Debugging test failures
+- Understanding test flow
+- Demonstrating test behavior
+- Learning how the UI automation works
+
+### Enabling Slow Motion
+
+Set the `UI_TEST_SLOW_MOTION` environment variable to `"true"`:
+
+```bash
+export UI_TEST_SLOW_MOTION="true"
+```
+
+### Configuring Delay
+
+By default, slow motion adds a 1000ms (1 second) delay. You can customize this with `UI_TEST_SLOW_MOTION_DELAY`:
+
+```bash
+export UI_TEST_SLOW_MOTION_DELAY="2000"  # 2 second delays
+```
+
+### What Gets Delayed
+
+Slow motion delays are only applied to **visible user actions**:
+
+- ✅ Typing in form fields
+- ✅ Clicking buttons (save, edit, delete, login, cancel)
+- ✅ Opening/closing sidebar
+- ✅ Switching to webview
+- ✅ Clicking confirmation dialogs
+- ✅ UI updates after actions
+
+**Not delayed:**
+
+- ❌ Internal waits and timeouts
+- ❌ Error handling
+- ❌ Background operations
+- ❌ Element location checks
+
+### Example
+
+```bash
+# Run tests with slow motion enabled (2 second delays)
+export UI_TEST_SLOW_MOTION="true"
+export UI_TEST_SLOW_MOTION_DELAY="2000"
+npm run test:ui
+```
 
 ## Test Utilities
 

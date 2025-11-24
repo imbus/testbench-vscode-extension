@@ -17,14 +17,16 @@ export interface TestCredentials {
 }
 
 /**
- * Environment variable names for test credentials.
+ * Environment variable names for test credentials and configuration.
  */
 const ENV_VARS = {
     TESTBENCH_CONNECTION_LABEL: "TESTBENCH_TEST_CONNECTION_LABEL",
     TESTBENCH_SERVER_NAME: "TESTBENCH_TEST_SERVER_NAME",
     TESTBENCH_PORT_NUMBER: "TESTBENCH_TEST_PORT_NUMBER",
     TESTBENCH_USERNAME: "TESTBENCH_TEST_USERNAME",
-    TESTBENCH_PASSWORD: "TESTBENCH_TEST_PASSWORD"
+    TESTBENCH_PASSWORD: "TESTBENCH_TEST_PASSWORD",
+    UI_TEST_SLOW_MOTION: "UI_TEST_SLOW_MOTION",
+    UI_TEST_SLOW_MOTION_DELAY: "UI_TEST_SLOW_MOTION_DELAY"
 } as const;
 
 /**
@@ -83,4 +85,39 @@ export function hasTestCredentials(): boolean {
     } catch {
         return false;
     }
+}
+
+/**
+ * Gets the slow motion delay in milliseconds for UI test actions.
+ * When slow motion is enabled, visible actions are delayed to allow human observation.
+ *
+ * @returns Delay in milliseconds (default: 0, meaning no delay)
+ */
+export function getSlowMotionDelay(): number {
+    const slowMotionEnabled = process.env[ENV_VARS.UI_TEST_SLOW_MOTION];
+    if (!slowMotionEnabled || slowMotionEnabled.toLowerCase() !== "true") {
+        return 0;
+    }
+
+    const delayMs = process.env[ENV_VARS.UI_TEST_SLOW_MOTION_DELAY];
+    if (delayMs) {
+        const parsed = parseInt(delayMs, 10);
+        if (!isNaN(parsed) && parsed > 0) {
+            console.log(`[Slow Motion] Enabled with delay: ${parsed}ms`);
+            return parsed;
+        }
+    }
+
+    // Default slow motion delay: 1000ms (1 second)
+    console.log(`[Slow Motion] Enabled with default delay: 1000ms`);
+    return 1000;
+}
+
+/**
+ * Checks if slow motion mode is enabled for UI tests.
+ *
+ * @returns True if slow motion is enabled, false otherwise
+ */
+export function isSlowMotionEnabled(): boolean {
+    return getSlowMotionDelay() > 0;
 }
