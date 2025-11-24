@@ -261,7 +261,7 @@ export async function getJobIdOfCycleReport(
         return null;
     }
 
-    const getJobIDUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
+    const getJobIDUrl: string = `${connection.getBaseURL()}/2/projects/${projectKey}/cycles/${cycleKey}/report`;
     logger.trace(`[reportHandler] Fetching job ID of cycle report from URL: ${getJobIDUrl}`);
     try {
         const apiClient: AxiosInstance = connection.getApiClient();
@@ -313,7 +313,7 @@ export async function getJobStatus(
         logger.error("[reportHandler] No connection available, cannot get job status.");
         return null;
     }
-    const getJobStatusUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/${jobType}/job/${jobId}/v1`;
+    const getJobStatusUrl: string = `${connection.getBaseURL()}/2/projects/${projectKey}/${jobType}/job/${jobId}`;
     logger.trace(`[reportHandler] Fetching job status at: ${getJobStatusUrl}`);
 
     const apiClient: AxiosInstance = connection.getApiClient();
@@ -367,7 +367,7 @@ export async function downloadReport(
             vscode.window.showErrorMessage(missingConnectionError);
             return null;
         }
-        const downloadReportUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/report/${fileNameToDownload}/v1`;
+        const downloadReportUrl: string = `${connection.getBaseURL()}/2/projects/${projectKey}/report/${fileNameToDownload}`;
         logger.debug(`[reportHandler] Downloading report "${fileNameToDownload}" from URL: ${downloadReportUrl}`);
 
         const apiClient: AxiosInstance = connection.getApiClient();

@@ -405,7 +405,7 @@ export class PlayServerConnection {
             return null;
         }
         try {
-            const projectsURL: string = `/projects/v1`;
+            const projectsURL: string = `/2/projects`;
             logger.trace(`[testBenchConnection] Fetching projects list using URL: ${projectsURL}`);
             const projectsResponse: AxiosResponse<testBenchTypes.Project[]> = await withRetry(
                 () =>
@@ -473,7 +473,7 @@ export class PlayServerConnection {
             return null;
         }
         try {
-            const projectTreeURL: string = `/projects/${projectKey}/tree/v1`;
+            const projectTreeURL: string = `/2/projects/${projectKey}/tree`;
             logger.trace(
                 `[testBenchConnection] Fetching project tree for project key ${projectKey} using URL ${projectTreeURL}`
             );
@@ -577,7 +577,7 @@ export class PlayServerConnection {
         tovKey: string,
         tovStructureOptions: testBenchTypes.TovStructureOptions
     ): Promise<string | null> {
-        const tovReportUrl: string = `/projects/${projectKey}/tovs/${tovKey}/report/v1`;
+        const tovReportUrl: string = `/2/projects/${projectKey}/tovs/${tovKey}/report`;
 
         logger.debug(
             `[testBenchConnection] Requesting TOV report job ID using URL ${tovReportUrl} and options: ${JSON.stringify(tovStructureOptions)}`
@@ -652,7 +652,7 @@ export class PlayServerConnection {
         cycleKey: string,
         suppressFilteredData: boolean = true
     ): Promise<testBenchTypes.TestStructure | null> {
-        const testStructureOfCycleUrl = `/projects/${projectKey}/cycles/${cycleKey}/structure/v1`;
+        const testStructureOfCycleUrl = `/2/projects/${projectKey}/cycles/${cycleKey}/structure`;
         const validatedFilters = await TestThemesTreeView.getValidatedFiltersForApiRequest();
         return this._fetchTestStructureWithFilterHandling(
             testStructureOfCycleUrl,
@@ -675,7 +675,7 @@ export class PlayServerConnection {
         tovKey: string,
         suppressFilteredData: boolean = true
     ): Promise<testBenchTypes.TestStructure | null> {
-        const testStructureOfTOVUrl = `/projects/${projectKey}/tovs/${tovKey}/structure/v1`;
+        const testStructureOfTOVUrl = `/2/projects/${projectKey}/tovs/${tovKey}/structure`;
         const validatedFilters = await TestThemesTreeView.getValidatedFiltersForApiRequest();
         return this._fetchTestStructureWithFilterHandling(
             testStructureOfTOVUrl,
@@ -804,7 +804,7 @@ export class PlayServerConnection {
         projectKey: number,
         zipFilePath: string
     ): Promise<string> {
-        const importResultZipURL: string = `/projects/${projectKey}/executionResults/v1`;
+        const importResultZipURL: string = `/2/projects/${projectKey}/executionResults`;
 
         try {
             const zipFileData: Buffer = fs.readFileSync(zipFilePath);
@@ -887,7 +887,7 @@ export class PlayServerConnection {
         cycleKey: number,
         importData: testBenchTypes.ImportData
     ): Promise<string> {
-        const getJobIDOfImportUrl: string = `/projects/${projectKey}/cycles/${cycleKey}/import/v1`;
+        const getJobIDOfImportUrl: string = `/2/projects/${projectKey}/cycles/${cycleKey}/import`;
 
         logger.trace(
             `[testBenchConnection] Fetching job ID of import job from URL ${getJobIDOfImportUrl} and import data request body:`,
@@ -1009,7 +1009,7 @@ export class PlayServerConnection {
         try {
             await withRetry(
                 () =>
-                    this.apiClient.get(`/login/session/v1`, {
+                    this.apiClient.get(`/2/login/session`, {
                         headers: { accept: "application/vnd.testbench+json" },
                         proxy: false
                     }),
@@ -1179,7 +1179,7 @@ export async function withRetry<T>(
         if (axios.isAxiosError(error)) {
             const status = error.response?.status;
             const isNetworkError = !error.response;
-            const isAuthEndpoint = error.config?.url?.includes("/login/session/v1");
+            const isAuthEndpoint = error.config?.url?.includes("/2/login/session");
 
             if (!isAuthEndpoint && (status === 401 || status === 403 || isNetworkError)) {
                 logger.warn(
@@ -1532,7 +1532,7 @@ export async function loginToServerAndGetSessionDetails(
     };
 
     const baseURL: string = `https://${serverName}:${portNumber}/api`;
-    const loginURL: string = `${baseURL}/login/session/v1`;
+    const loginURL: string = `${baseURL}/2/login/session`;
 
     logger.trace(`[testBenchConnection] Endpoint used for login is '${loginURL}', user ${username}.`);
 
