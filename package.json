@@ -486,6 +486,14 @@
                 "title": "TestBench: Clear All Extension Data"
             },
             {
+                "command": "testbenchExtension.logout",
+                "title": "TestBench: Logout",
+                "icon": {
+                    "light": "resources/icons/logout.svg",
+                    "dark": "resources/icons/logout.svg"
+                }
+            },
+            {
                 "command": "testbenchExtension.searchInProjectsTreeOff",
                 "title": "Search",
                 "icon": {

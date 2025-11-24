@@ -14,6 +14,8 @@ import {
     clickLoginConnection,
     findConnectionInList,
     applySlowMotion,
+    resetConnectionForm,
+    deleteAllConnections,
     ConnectionFormData,
     ConnectionFormElements
 } from "./testUtils";
@@ -46,6 +48,9 @@ describe("Login Flow E2E Tests", function () {
 
         // Open TestBench sidebar and wait for it to initialize
         await openTestBenchSidebar(driver);
+
+        // Clean up any existing connections from previous test runs
+        await deleteAllConnections(driver);
     });
 
     describe("Webview Form Validation", function () {
@@ -60,14 +65,12 @@ describe("Login Flow E2E Tests", function () {
                     return;
                 }
 
-                // Clear all required fields
+                // Clear all required fields (background operation, happens before user sees anything)
                 const serverInput = await driver.findElement(By.id(ConnectionFormElements.SERVER_NAME));
                 await serverInput.clear();
-                await applySlowMotion(driver); // Visible: clearing server field
 
                 const usernameInput = await driver.findElement(By.id(ConnectionFormElements.USERNAME));
                 await usernameInput.clear();
-                await applySlowMotion(driver); // Visible: clearing username field
 
                 // Try to save without filling required fields
                 const saveButton = await driver.findElement(By.id(ConnectionFormElements.SAVE_BUTTON));
@@ -99,17 +102,38 @@ describe("Login Flow E2E Tests", function () {
                     return;
                 }
 
-                // Fill required fields with valid data
-                const serverInput = await driver.findElement(By.id(ConnectionFormElements.SERVER_NAME));
-                await serverInput.sendKeys("test.server.com");
-                await applySlowMotion(driver); // Visible: typing in server field
+                // Reset form to ensure clean state
+                await resetConnectionForm(driver);
 
-                const usernameInput = await driver.findElement(By.id(ConnectionFormElements.USERNAME));
-                await usernameInput.sendKeys("testuser");
-                await applySlowMotion(driver); // Visible: typing in username field
+                // Get credentials from environment variables or test configuration
+                // Use credentials if available, otherwise use minimal test data
+                let serverName = "example.com";
+                let username = "testuser";
 
-                // Enter non-numeric port
+                try {
+                    const credentials = getTestCredentials();
+                    serverName = credentials.serverName;
+                    username = credentials.username;
+                } catch {
+                    // Use fallback values only if credentials are not available
+                    console.log("Using fallback values for validation test");
+                }
+
+                // Fill required fields with valid data from credentials or fallback
+                // Use fillConnectionForm helper for consistent field clearing
+                const formData: ConnectionFormData = {
+                    connectionLabel: "",
+                    serverName: serverName,
+                    portNumber: "9445", // Valid port for validation test setup
+                    username: username,
+                    password: ""
+                };
+                await fillConnectionForm(driver, formData);
+
+                // Now clear port and enter invalid value for validation test
                 const portInput = await driver.findElement(By.id(ConnectionFormElements.PORT_NUMBER));
+                // Use JavaScript to ensure default value is cleared
+                await driver.executeScript("arguments[0].value = '';", portInput);
                 await portInput.clear();
                 await portInput.sendKeys("abc");
                 await applySlowMotion(driver); // Visible: typing in port field
@@ -154,13 +178,9 @@ describe("Login Flow E2E Tests", function () {
                 }
 
                 // Reset form to ensure clean state (in case previous tests left data)
+                // This is a background operation, no slow motion needed
                 console.log("Resetting form to clean state...");
-                const addConnectionForm = await driver.wait(
-                    until.elementLocated(By.id(ConnectionFormElements.ADD_CONNECTION_FORM)),
-                    5000
-                );
-                await driver.executeScript("arguments[0].reset();", addConnectionForm);
-                await applySlowMotion(driver); // Visible: form reset
+                await resetConnectionForm(driver);
 
                 // Fill in connection details
                 console.log("Filling in connection details...");
@@ -192,13 +212,15 @@ describe("Login Flow E2E Tests", function () {
                 await saveConnection(driver);
 
                 // Verify connection appears in connections list
+                // The wait is a background operation, but the result is visible
                 console.log("Verifying connection in list...");
                 const connectionsList = await driver.wait(
                     until.elementLocated(By.id(ConnectionFormElements.CONNECTIONS_LIST)),
                     10000,
                     "Waiting for connections list to appear"
                 );
-                await applySlowMotion(driver); // Visible: connections list updated
+                // Small delay to allow UI to render the updated list (visible result)
+                await applySlowMotion(driver);
 
                 const connectionsItems = await connectionsList.findElements(By.css("li"));
                 expect(connectionsItems.length).to.be.greaterThan(0);

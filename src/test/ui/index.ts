@@ -13,42 +13,53 @@ import { glob } from "glob";
 try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const dotenv = require("dotenv");
-    // Load standard .env file first
-    const result1 = dotenv.config();
-    if (result1.error) {
-        console.log("[Env] No .env file found or error loading it");
-    } else {
-        console.log("[Env] Loaded .env file");
-    }
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require("fs");
 
-    // Try multiple possible paths for testBenchConnection.env
-    const possiblePaths = [
-        path.resolve(__dirname, "../../../testBenchConnection.env"), // Project root (from compiled out/test/ui)
-        path.resolve(process.cwd(), "testBenchConnection.env"), // Current working directory
-        path.resolve(process.cwd(), ".testbenchConnection.env"), // Alternative name
-        path.resolve(__dirname, "../../testBenchConnection.env") // Alternative relative path
-    ];
+    // Get project root (where package.json is located)
+    // __dirname will be out/test/ui when compiled, so go up 3 levels
+    const projectRoot = path.resolve(__dirname, "../../../");
 
-    let loaded = false;
-    for (const envPath of possiblePaths) {
-        const result = dotenv.config({ path: envPath });
+    // Try to load .env file from project root
+    const envPath = path.join(projectRoot, ".env");
+    if (fs.existsSync(envPath)) {
+        const result = dotenv.config({ path: envPath, override: false });
         if (!result.error) {
-            console.log(`[Env] Loaded testBenchConnection.env from: ${envPath}`);
-            loaded = true;
-            break;
+            console.log(`[Env] Loaded .env from: ${envPath}`);
         }
     }
 
-    if (!loaded) {
-        console.log("[Env] testBenchConnection.env not found in any of the expected locations");
-        console.log(`[Env] Tried paths: ${possiblePaths.join(", ")}`);
+    // Try to load testBenchConnection.env from project root
+    const testBenchEnvPath = path.join(projectRoot, "testBenchConnection.env");
+    if (fs.existsSync(testBenchEnvPath)) {
+        const result = dotenv.config({ path: testBenchEnvPath, override: false });
+        if (!result.error) {
+            console.log(`[Env] Loaded testBenchConnection.env from: ${testBenchEnvPath}`);
+        }
+    } else {
+        // Try alternative locations
+        const alternativePaths = [
+            path.resolve(process.cwd(), "testBenchConnection.env"), // Current working directory
+            path.resolve(process.cwd(), ".testbenchConnection.env") // Alternative name
+        ];
+
+        for (const altPath of alternativePaths) {
+            if (fs.existsSync(altPath)) {
+                const result = dotenv.config({ path: altPath, override: false });
+                if (!result.error) {
+                    console.log(`[Env] Loaded testBenchConnection.env from: ${altPath}`);
+                    break;
+                }
+            }
+        }
     }
 
-    // Log slow motion config for debugging
-    const slowMotion = process.env.UI_TEST_SLOW_MOTION;
-    const slowMotionDelay = process.env.UI_TEST_SLOW_MOTION_DELAY;
-    console.log(`[Env] UI_TEST_SLOW_MOTION=${slowMotion || "not set"}`);
-    console.log(`[Env] UI_TEST_SLOW_MOTION_DELAY=${slowMotionDelay || "not set"}`);
+    // Log loaded values for debugging
+    console.log(`[Env] TESTBENCH_TEST_SERVER_NAME=${process.env.TESTBENCH_TEST_SERVER_NAME || "not set"}`);
+    console.log(`[Env] TESTBENCH_TEST_USERNAME=${process.env.TESTBENCH_TEST_USERNAME || "not set"}`);
+    console.log(`[Env] TESTBENCH_TEST_PORT_NUMBER=${process.env.TESTBENCH_TEST_PORT_NUMBER || "not set"}`);
+    console.log(`[Env] UI_TEST_SLOW_MOTION=${process.env.UI_TEST_SLOW_MOTION || "not set"}`);
+    console.log(`[Env] UI_TEST_SLOW_MOTION_DELAY=${process.env.UI_TEST_SLOW_MOTION_DELAY || "not set"}`);
 } catch (error) {
     // dotenv is optional - if not installed, environment variables must be set manually
     console.log("[Env] Error loading .env files:", error);

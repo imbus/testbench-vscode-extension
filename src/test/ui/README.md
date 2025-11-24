@@ -74,14 +74,6 @@ This command will:
 3. Run all UI tests
 4. Clean up test resources
 
-### Run Specific Tests
-
-To run tests matching a specific pattern:
-
-```bash
-npm run test:ui -- --grep "Login Flow"
-```
-
 ### Setup Test Environment (One-Time)
 
 If you need to set up the test environment separately:

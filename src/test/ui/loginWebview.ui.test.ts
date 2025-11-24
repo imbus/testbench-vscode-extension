@@ -25,6 +25,7 @@ import {
     isEditMode,
     generateUniqueConnectionLabel,
     applySlowMotion,
+    deleteAllConnections,
     ConnectionFormData,
     ConnectionFormElements,
     UITimeouts
@@ -91,6 +92,10 @@ describe("Login Webview - Connection Management Tests", function () {
         await openTestBenchSidebar(driver);
         // Attempt to logout if logged in to ensure clean state
         // await attemptLogout(driver);
+
+        // Clean up any existing connections from previous test runs
+        await deleteAllConnections(driver);
+
         await driver.sleep(UITimeouts.SHORT);
     });
 
@@ -368,6 +373,7 @@ describe("Login Webview - Connection Management Tests", function () {
                         const cancelButton = await driver.findElement(By.id(ConnectionFormElements.CANCEL_EDIT_BUTTON));
                         await cancelButton.click();
                         await applySlowMotion(driver); // Visible: clicking cancel button
+                        // Small wait for UI to update (background operation, no slow motion)
                         await driver.sleep(UITimeouts.SHORT);
 
                         // Verify form is reset (section title should be back to "Add New Connection")

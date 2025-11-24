@@ -151,8 +151,7 @@ export async function openTestBenchSidebar(driver?: WebDriver): Promise<void> {
         if (title === "TestBench") {
             await control.openView();
             if (driver) {
-                await applySlowMotion(driver); // Visible: opening sidebar
-                // Wait for sidebar to initialize instead of fixed sleep
+                // Wait for sidebar to initialize (background operation, no slow motion needed)
                 await driver.wait(
                     async () => {
                         try {
@@ -168,7 +167,6 @@ export async function openTestBenchSidebar(driver?: WebDriver): Promise<void> {
                     "Waiting for TestBench sidebar to initialize",
                     500
                 );
-                await applySlowMotion(driver); // Visible: sidebar fully loaded
             }
             return;
         }
@@ -319,7 +317,7 @@ export async function findAndSwitchToWebview(
             return false;
         }
 
-        await applySlowMotion(driver); // Visible: webview fully loaded and switched to
+        // Webview loading is a background operation, no slow motion needed
         return true;
     } catch (error) {
         console.log("Error finding webview:", error);
@@ -398,7 +396,37 @@ export interface ConnectionSearchResult {
 }
 
 /**
+ * Clears an input field thoroughly, handling default values and edge cases.
+ * Uses multiple strategies to ensure the field is completely cleared.
+ * This is especially important for fields with default values (like port="9445").
+ *
+ * @param driver - The WebDriver instance
+ * @param element - The input element to clear
+ * @returns Promise<void>
+ */
+async function clearInputField(driver: WebDriver, element: WebElement): Promise<void> {
+    try {
+        // Strategy 1: Use JavaScript to directly set value to empty (most reliable)
+        // This bypasses any default values set in HTML
+        await driver.executeScript("arguments[0].value = '';", element);
+
+        // Strategy 2: Standard clear as backup
+        await element.clear();
+
+        // Strategy 3: Trigger input event to ensure UI updates
+        await driver.executeScript("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", element);
+
+        // Small delay to ensure the clear operation completes
+        await driver.sleep(50);
+    } catch (error) {
+        // If all strategies fail, log but continue
+        console.log("Warning: Could not fully clear input field:", error);
+    }
+}
+
+/**
  * Fills the connection form with the provided data.
+ * Ensures fields are properly cleared before filling, especially to handle default values.
  *
  * @param driver - The WebDriver instance
  * @param formData - The connection form data to fill
@@ -408,29 +436,29 @@ export async function fillConnectionForm(driver: WebDriver, formData: Connection
     const { connectionLabel = "", serverName, portNumber, username, password = "", storePassword = true } = formData;
 
     const labelInput = await driver.findElement(By.id(ConnectionFormElements.CONNECTION_LABEL));
-    await labelInput.clear();
+    await clearInputField(driver, labelInput);
     if (connectionLabel) {
         await labelInput.sendKeys(connectionLabel);
         await applySlowMotion(driver); // Visible: typing in label field
     }
 
     const serverInput = await driver.findElement(By.id(ConnectionFormElements.SERVER_NAME));
-    await serverInput.clear();
+    await clearInputField(driver, serverInput);
     await serverInput.sendKeys(serverName);
     await applySlowMotion(driver); // Visible: typing in server field
 
     const portInput = await driver.findElement(By.id(ConnectionFormElements.PORT_NUMBER));
-    await portInput.clear();
+    await clearInputField(driver, portInput);
     await portInput.sendKeys(portNumber);
     await applySlowMotion(driver); // Visible: typing in port field
 
     const usernameInput = await driver.findElement(By.id(ConnectionFormElements.USERNAME));
-    await usernameInput.clear();
+    await clearInputField(driver, usernameInput);
     await usernameInput.sendKeys(username);
     await applySlowMotion(driver); // Visible: typing in username field
 
     const passwordInput = await driver.findElement(By.id(ConnectionFormElements.PASSWORD));
-    await passwordInput.clear();
+    await clearInputField(driver, passwordInput);
     if (password) {
         await passwordInput.sendKeys(password);
         await applySlowMotion(driver); // Visible: typing in password field
@@ -485,6 +513,127 @@ export async function getConnectionCount(driver: WebDriver): Promise<number> {
 }
 
 /**
+ * Gets all connection list items from the connections list.
+ *
+ * @param driver - The WebDriver instance
+ * @returns Promise<WebElement[]> - Array of connection list item elements
+ */
+export async function getAllConnections(driver: WebDriver): Promise<WebElement[]> {
+    try {
+        const connectionsList = await driver.findElement(By.id(ConnectionFormElements.CONNECTIONS_LIST));
+        const connectionsItems = await connectionsList.findElements(By.css("li"));
+        return connectionsItems;
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Deletes all existing TestBench connections.
+ * This is useful for cleaning up test state before running tests.
+ * Only works when the webview is available (user is not logged in).
+ *
+ * @param driver - The WebDriver instance
+ * @returns Promise<number> - The number of connections that were deleted
+ */
+export async function deleteAllConnections(driver: WebDriver): Promise<number> {
+    try {
+        // Check if webview is available (user must not be logged in)
+        const webviewAvailable = await isWebviewAvailable(driver);
+        if (!webviewAvailable) {
+            console.log("[Cleanup] Webview not available - user is logged in. Cannot delete connections.");
+            return 0;
+        }
+
+        // Switch to webview
+        const webviewFound = await findAndSwitchToWebview(driver);
+        if (!webviewFound) {
+            console.log("[Cleanup] Webview not found. Cannot delete connections.");
+            return 0;
+        }
+
+        let deletedCount = 0;
+        const maxIterations = 50; // Safety limit to prevent infinite loops
+        let iterations = 0;
+
+        // Delete connections until none remain
+        while (iterations < maxIterations) {
+            iterations++;
+
+            // Get all connections
+            const connections = await getAllConnections(driver);
+
+            if (connections.length === 0) {
+                // No more connections to delete
+                break;
+            }
+
+            // Delete the first connection (we'll keep deleting until all are gone)
+            const firstConnection = connections[0];
+
+            try {
+                // Check if delete button is enabled (not disabled during edit mode)
+                const deleteButton = await firstConnection.findElement(By.css("button.delete-btn"));
+                const isDisabled = await deleteButton.getAttribute("disabled");
+
+                if (isDisabled !== null) {
+                    // Connection is being edited - cancel edit mode first
+                    console.log("[Cleanup] Connection is being edited. Canceling edit mode first...");
+                    try {
+                        const cancelButton = await driver.findElement(By.id(ConnectionFormElements.CANCEL_EDIT_BUTTON));
+                        await cancelButton.click();
+                        await driver.sleep(UITimeouts.SHORT);
+                        // Re-fetch connections after canceling edit
+                        continue;
+                    } catch {
+                        console.log("[Cleanup] Could not cancel edit mode. Skipping cleanup.");
+                        break;
+                    }
+                }
+
+                // Click delete button
+                await clickDeleteConnection(driver, firstConnection);
+
+                // Handle confirmation dialog
+                await handleConfirmationDialog(driver, "Delete");
+
+                // Switch back to webview to continue deleting
+                await findAndSwitchToWebview(driver);
+                await driver.sleep(UITimeouts.SHORT);
+
+                deletedCount++;
+            } catch (error) {
+                console.log(`[Cleanup] Error deleting connection: ${error}`);
+                // Try to switch back to webview and continue
+                try {
+                    await findAndSwitchToWebview(driver);
+                } catch {
+                    // If we can't switch back, break the loop
+                    break;
+                }
+            }
+        }
+
+        // Switch back to default content
+        await driver.switchTo().defaultContent();
+
+        if (deletedCount > 0) {
+            console.log(`[Cleanup] Deleted ${deletedCount} connection(s)`);
+        }
+
+        return deletedCount;
+    } catch (error) {
+        console.log(`[Cleanup] Error during connection cleanup: ${error}`);
+        try {
+            await driver.switchTo().defaultContent();
+        } catch {
+            // Ignore errors when switching back
+        }
+        return 0;
+    }
+}
+
+/**
  * Clicks the save connection button and waits for the operation to complete.
  *
  * @param driver - The WebDriver instance
@@ -502,15 +651,14 @@ export async function saveConnection(
     await applySlowMotion(driver); // Visible: clicking save button
 
     if (waitForUpdate) {
-        // Wait for connections list to be present and updated
+        // Wait for connections list to be present and updated (background operation)
         await driver.wait(
             until.elementLocated(By.id(ConnectionFormElements.CONNECTIONS_LIST)),
             timeout,
             "Waiting for connections list to update"
         );
-        // Additional small wait for UI to settle
+        // Additional small wait for UI to settle (background operation, no slow motion)
         await driver.sleep(UITimeouts.SHORT);
-        await applySlowMotion(driver); // Visible: UI update after save
     }
 }
 
@@ -538,6 +686,7 @@ export async function clickEditConnection(driver: WebDriver, connectionElement: 
     const editButton = await connectionElement.findElement(By.css("button.edit-btn"));
     await editButton.click();
     await applySlowMotion(driver); // Visible: clicking edit button
+    // Small wait for UI to update (background operation, no slow motion)
     await driver.sleep(UITimeouts.SHORT);
 }
 
