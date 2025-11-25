@@ -1,7 +1,7 @@
 {
+    "security.workspace.trust.enabled": false,
     "window.titleBarStyle": "custom",
     "workbench.colorTheme": "Default Dark+",
     "testbenchExtension.automaticLoginAfterExtensionActivation": false,
-    "testbenchExtension.testbenchLogLevel": "Trace",
-    "security.workspace.trust.enabled": false
+    "testbenchExtension.testbenchLogLevel": "Trace"
 }

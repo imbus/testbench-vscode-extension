@@ -74,13 +74,20 @@ This command will:
 3. Run all UI tests
 4. Clean up test resources
 
+### Run a Single UI Test
+
+To execute a specific test file instead of the entire suite, use the `test:ui-single` script. You must pass the filename (without the full path) after the `--` separator:
+
+````bash
+npm run test:ui-single -- loginFlow.ui.test.ts
+
 ### Setup Test Environment (One-Time)
 
 If you need to set up the test environment separately:
 
 ```bash
 npm run test:ui-setup
-```
+````
 
 Then run tests:
 

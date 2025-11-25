@@ -914,6 +914,7 @@
         "test:ui": "npm run compile-tests && extest setup-and-run out/test/ui/**/*.ui.test.js",
         "test:ui-setup": "extest setup-tests",
         "test:ui-run": "npm run compile-tests && extest run-tests out/test/ui/**/*.ui.test.js",
+        "test:ui-single": "npm run compile-tests && node out/test/ui/runUITests.js",
         "prettier-format": "prettier --config .prettierrc 'src/**/*.ts' --write",
         "lint": "eslint --config eslint.config.mjs .",
         "prepare": "husky",

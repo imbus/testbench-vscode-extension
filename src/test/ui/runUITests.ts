@@ -1,55 +1,96 @@
 /**
  * @file src/test/ui/runUITests.ts
- * @description Entry point for running UI tests with VS Code Extension Tester
+ * @description Entry point for running UI tests with VS Code Extension Tester.
  */
 
 import * as path from "path";
+import * as fs from "fs";
 import { ExTester, ReleaseQuality } from "vscode-extension-tester";
 import { loadEnv } from "./testConfig";
 
 async function main(): Promise<void> {
     try {
-        // Load environment variables FIRST, before anything else
         console.log("Loading environment variables...");
         const projectRoot = path.resolve(__dirname, "../../../");
         loadEnv(projectRoot);
 
-        console.log("Starting UI tests with VS Code Extension Tester...");
+        const testStoragePath = path.resolve(projectRoot, ".test-resources");
+        const extensionsPath = path.resolve(testStoragePath, "extensions");
 
-        // The folder containing the Extension Manifest package.json
-        const extensionDevelopmentPath = path.resolve(__dirname, "../../../");
+        console.log("Starting UI tests...");
+        console.log(`[Setup] Storage Path:    ${testStoragePath}`);
 
-        // Path to the extension test runner script
-        const extensionTestsPath = path.resolve(__dirname, "./index");
+        // Handle setup with optional cleanup
+        // Allows us to re-run setup if the first attempt fails due to corruption
+        const performSetup = async (forceClean: boolean = false): Promise<ExTester> => {
+            if (forceClean) {
+                console.log("[Setup] Cleaning test resources...");
+                if (fs.existsSync(testStoragePath)) {
+                    fs.rmSync(testStoragePath, { recursive: true, force: true });
+                }
+            }
 
-        // Download VS Code, unzip it and run the integration test
-        console.log("Extension development path:", extensionDevelopmentPath);
-        console.log("Extension tests path:", extensionTestsPath);
+            const tester = new ExTester(testStoragePath, ReleaseQuality.Stable, extensionsPath);
 
-        // Initialize ExTester
-        const exTester = new ExTester(
-            extensionDevelopmentPath,
-            ReleaseQuality.Stable,
-            path.resolve(extensionDevelopmentPath, "test-resources")
-        );
+            // Check for existing VS Code to skip download check
+            const hasExistingVSCode =
+                fs.existsSync(testStoragePath) &&
+                fs.readdirSync(testStoragePath).some((file) => file.includes("vscode"));
 
-        console.log("Setting up ExTester...");
+            if (hasExistingVSCode && !forceClean) {
+                console.log("[Setup] Detected existing VS Code. Skipping download.");
+            } else {
+                console.log("[Setup] Downloading VS Code...");
+                await tester.downloadCode();
+            }
 
-        // Download VS Code and ChromeDriver
-        await exTester.downloadCode();
-        await exTester.downloadChromeDriver();
+            await tester.downloadChromeDriver();
+            await tester.installVsix();
 
-        console.log("Installing extension dependencies...");
-        await exTester.installVsix();
+            return tester;
+        };
+
+        let exTester: ExTester;
+
+        try {
+            // Try to use existing cache
+            exTester = await performSetup(false);
+        } catch (err: any) {
+            const isCorruptionError =
+                err.message &&
+                (err.message.includes("FILE_ENDED") ||
+                    err.message.includes("end of central directory") ||
+                    err.message.includes("invalid signature"));
+
+            if (isCorruptionError) {
+                console.warn("\n[Setup] Detected corrupted VS Code archive (interrupted download).");
+                console.log("[Setup] Automatically cleaning and retrying download...\n");
+
+                exTester = await performSetup(true);
+            } else {
+                throw err;
+            }
+        }
 
         console.log("Running UI tests...");
 
-        // Run the tests
-        const testFilesPattern = path.join(__dirname, "./**/*.ui.test.js");
+        // Handle arguments
+        const specificFile = process.argv[2];
+        let testFilesPattern: string;
+
+        if (specificFile) {
+            console.log(`[Test Runner] Targeting specific file: ${specificFile}`);
+            const fileName = specificFile.replace(".ts", ".js");
+            testFilesPattern = path.join(__dirname, fileName);
+        } else {
+            console.log(`[Test Runner] No specific file provided. Running all UI tests.`);
+            testFilesPattern = path.join(__dirname, "./**/*.ui.test.js");
+        }
+
         await exTester.runTests(testFilesPattern, {
             settings: "./src/test/ui/.vscode-test.settings.json",
-            resources: [], // Workspace folders to open during tests
-            cleanup: false // Set to true to cleanup VS Code instance after tests
+            resources: [],
+            cleanup: false
         });
 
         console.log("UI tests completed successfully.");

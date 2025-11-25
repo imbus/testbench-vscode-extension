@@ -225,14 +225,15 @@ export interface WorkspaceConfig {
 /**
  * Ensures a specific workspace folder is open in VS Code.
  * Handles creation, cleaning, and window reloading logic.
- * * @param config Configuration object for the workspace
+ *
+ * @param config Configuration object for the workspace
  */
 export async function ensureWorkspaceIsOpen(config: WorkspaceConfig = {}): Promise<void> {
     const { workspaceName = "test-workspace", cleanStart = false } = config;
     const browser = VSBrowser.instance;
+    const driver = browser.driver;
 
     // Resolve path relative to project root
-    // Adjust "../../../" if testUtils.ts location changes
     const projectRoot = path.resolve(__dirname, "../../../");
     const workspacePath = path.join(projectRoot, workspaceName);
 
@@ -246,41 +247,65 @@ export async function ensureWorkspaceIsOpen(config: WorkspaceConfig = {}): Promi
         fs.mkdirSync(workspacePath, { recursive: true });
     }
 
-    // Check if the specific workspace is already open to prevent unnecessary reloads
+    // Check if the specific workspace is already open
     try {
-        const title = await browser.driver.getTitle();
-        if (title && title.includes(workspaceName)) {
-            console.log(`[Workspace] '${workspaceName}' appears to be already open (title: ${title}).`);
-            // Verify workspace is actually loaded by checking for workbench container
-            try {
-                await browser.driver.wait(
-                    until.elementLocated(By.id("workbench.main.container")),
-                    2000,
-                    "Verifying workspace is loaded"
-                );
-                console.log(`[Workspace] Verified workspace '${workspaceName}' is loaded.`);
-                return;
-            } catch {
-                // Workbench not found, continue to open workspace
-                console.log(`[Workspace] Workbench container not found, opening workspace...`);
-            }
+        const title = await driver.getTitle();
+        const folderName = path.basename(workspaceName);
+        console.log(`[Workspace] Current window title: '${title}'`);
+
+        if (title && (title.includes(folderName) || title.includes(workspaceName))) {
+            console.log(`[Workspace] '${folderName}' appears to be already open.`);
+            return;
         }
     } catch (error) {
-        // Title check failed, continue to open workspace
         console.log(`[Workspace] Could not check if workspace is open: ${error}`);
     }
 
     console.log(`[Workspace] Opening folder: ${workspacePath}`);
+
+    // OPTIMIZATION: Get current workbench element to detect staleness (reload)
+    let oldWorkbench: WebElement | undefined;
+    try {
+        oldWorkbench = await driver.findElement(By.className("monaco-workbench"));
+    } catch {
+        // Element might not exist (e.g., initial empty state), which is fine
+    }
+
     await browser.openResources(workspacePath);
 
-    // Opening a folder refreshes the window, wait for window reload
-    await browser.driver.wait(
-        until.elementLocated(By.id("workbench.main.container")),
-        30000,
+    // OPTIMIZATION: Wait for the old workbench to become stale (reload started)
+    if (oldWorkbench) {
+        try {
+            await driver.wait(until.stalenessOf(oldWorkbench), 10000, "Waiting for VS Code reload to start");
+        } catch {
+            console.log("[Workspace] Warning: Window reload detected via staleness timed out or was too fast.");
+        }
+    }
+
+    // Ensure driver context is correct
+    await driver.switchTo().defaultContent();
+
+    console.log("[Workspace] Waiting for workbench to load...");
+
+    // Wait for the workbench to fully reload.
+    // Using generic class selector which is more stable than ID
+    await driver.wait(
+        until.elementLocated(By.className("monaco-workbench")),
+        120000,
         `Timeout waiting for workspace '${workspaceName}' to load`
     );
 
-    await browser.driver.sleep(1000);
+    // OPTIMIZATION: Wait for status bar as a proxy for "UI Ready"
+    try {
+        await driver.wait(
+            until.elementLocated(By.id("workbench.parts.statusbar")),
+            15000,
+            "Waiting for status bar (UI ready)"
+        );
+    } catch {
+        console.log("[Workspace] Warning: Status bar not found, proceeding anyway.");
+    }
+
     console.log(`[Workspace] Workspace '${workspaceName}' loaded successfully.`);
 }
 
