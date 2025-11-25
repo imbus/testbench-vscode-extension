@@ -8,36 +8,81 @@ import * as path from "path";
 import * as fs from "fs";
 
 /**
- * Loads environment variables from .env files at module initialization.
- * This ensures env vars are available even if runUITests.ts wasn't used.
+ * Flag to ensure environment loading only happens once (singleton pattern).
  */
-(function loadEnvVars() {
+let envLoaded = false;
+
+/**
+ * Centralized idempotent function to load environment variables from .env files.
+ *
+ * @param projectRoot - Optional project root path. If not provided, will be calculated from __dirname.
+ * @returns True if at least one env file was loaded successfully, false otherwise
+ */
+export function loadEnv(projectRoot?: string): boolean {
+    if (envLoaded) {
+        return true;
+    }
+
     try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const dotenv = require("dotenv");
 
-        // Try multiple possible locations for the .env file
+        const root = projectRoot || path.resolve(__dirname, "../../../");
+
+        // Try multiple possible locations for the .env file in priority order
         const possiblePaths = [
-            path.resolve(process.cwd(), "testBenchConnection.env"), // Current working directory
-            path.resolve(process.cwd(), ".env"), // Standard .env file
-            path.resolve(__dirname, "../../../testBenchConnection.env"), // Project root (from compiled out/test/ui)
-            path.resolve(__dirname, "../../../.env") // Project root .env
+            path.join(root, "testBenchConnection.env"),
+            path.join(root, ".env"),
+            path.resolve(process.cwd(), "testBenchConnection.env"),
+            path.resolve(process.cwd(), ".env"),
+            path.resolve(process.cwd(), ".testbenchConnection.env")
         ];
 
+        let loadedAny = false;
         for (const envPath of possiblePaths) {
             if (fs.existsSync(envPath)) {
                 const result = dotenv.config({ path: envPath, override: false });
                 if (!result.error) {
-                    console.log(`[TestConfig] Loaded env file from: ${envPath}`);
-                    break;
+                    console.log(`[Env] Loaded env file from: ${envPath}`);
+                    loadedAny = true;
+                    // Continue to try other files (don't break) to allow multiple env files
+                } else {
+                    console.log(`[Env] Error loading env file from ${envPath}:`, result.error);
                 }
             }
         }
-    } catch {
-        // dotenv is optional - if not available, env vars must be set manually
-        // Don't log error as it's expected in some environments
+
+        if (!loadedAny) {
+            console.log(`[Env] No .env files found. Environment variables must be set manually.`);
+            console.log(`[Env] Looked in: ${possiblePaths.join(", ")}`);
+        }
+
+        console.log(`[Env] TESTBENCH_TEST_SERVER_NAME=${process.env.TESTBENCH_TEST_SERVER_NAME || "not set"}`);
+        console.log(`[Env] TESTBENCH_TEST_USERNAME=${process.env.TESTBENCH_TEST_USERNAME || "not set"}`);
+        console.log(`[Env] TESTBENCH_TEST_PORT_NUMBER=${process.env.TESTBENCH_TEST_PORT_NUMBER || "not set"}`);
+        console.log(
+            `[Env] TESTBENCH_TEST_CONNECTION_LABEL=${process.env.TESTBENCH_TEST_CONNECTION_LABEL || "not set"}`
+        );
+        console.log(`[Env] UI_TEST_SLOW_MOTION=${process.env.UI_TEST_SLOW_MOTION || "not set"}`);
+        console.log(`[Env] UI_TEST_SLOW_MOTION_DELAY=${process.env.UI_TEST_SLOW_MOTION_DELAY || "not set"}`);
+
+        envLoaded = true;
+        return loadedAny;
+    } catch (error) {
+        // dotenv is optional, if not available, env vars must be set manually
+        console.log("[Env] Error loading .env files:", error);
+        console.log("[Env] Continuing without .env file - environment variables must be set manually");
+        envLoaded = true; // Mark as loaded to prevent retry loops
+        return false;
     }
-})();
+}
+
+/**
+ * Loads environment variables from .env files at module initialization.
+ * This ensures env vars are available even if runUITests.ts wasn't used.
+ * This is called automatically when the module is imported for backward compatibility.
+ */
+loadEnv();
 
 /**
  * Test credentials interface for TestBench connection.
