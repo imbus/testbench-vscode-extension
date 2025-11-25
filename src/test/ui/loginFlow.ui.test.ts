@@ -18,7 +18,8 @@ import {
     deleteAllConnections,
     attemptLogout,
     ConnectionFormData,
-    ConnectionFormElements
+    ConnectionFormElements,
+    ensureWorkspaceIsOpen
 } from "./testUtils";
 import { getTestCredentials, isSlowMotionEnabled, getSlowMotionDelay } from "./testConfig";
 
@@ -31,6 +32,16 @@ describe("Login Flow E2E Tests", function () {
 
     before(async function () {
         browser = VSBrowser.instance;
+        await ensureWorkspaceIsOpen();
+
+        // To open a specific workspace:
+        /*
+        await ensureWorkspaceIsOpen({ 
+            workspaceName: "test-resources/robot-project", 
+            cleanStart: true 
+        });
+        */
+
         driver = browser.driver;
         await new EditorView().closeAllEditors();
     });

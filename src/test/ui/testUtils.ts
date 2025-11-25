@@ -3,8 +3,20 @@
  * @description Utility functions and constants for UI tests
  */
 
-import { WebDriver, Workbench, By, ActivityBar, SideBarView, WebElement, until, Key } from "vscode-extension-tester";
 import { getSlowMotionDelay } from "./testConfig";
+import * as path from "path";
+import * as fs from "fs";
+import {
+    VSBrowser,
+    WebDriver,
+    Workbench,
+    By,
+    ActivityBar,
+    SideBarView,
+    WebElement,
+    until,
+    Key
+} from "vscode-extension-tester";
 
 /**
  * Button text constants used in VS Code modals and dialogs.
@@ -175,6 +187,58 @@ export async function handleProceedAnywayButton(driver: WebDriver, timeout: numb
 export async function handleAuthenticationModals(driver: WebDriver): Promise<void> {
     await handleAllowButton(driver);
     await handleProceedAnywayButton(driver);
+}
+
+/**
+ * Configuration options for opening a workspace.
+ */
+export interface WorkspaceConfig {
+    /** Name of the folder to open (relative to project root). Default: 'test-workspace' */
+    workspaceName?: string;
+    /** If true, deletes the folder contents before opening. Default: false */
+    cleanStart?: boolean;
+}
+
+/**
+ * Ensures a specific workspace folder is open in VS Code.
+ * Handles creation, cleaning, and window reloading logic.
+ * * @param config Configuration object for the workspace
+ */
+export async function ensureWorkspaceIsOpen(config: WorkspaceConfig = {}): Promise<void> {
+    const { workspaceName = "test-workspace", cleanStart = false } = config;
+    const browser = VSBrowser.instance;
+
+    // Resolve path relative to project root
+    // Adjust "../../../" if testUtils.ts location changes
+    const projectRoot = path.resolve(__dirname, "../../../");
+    const workspacePath = path.join(projectRoot, workspaceName);
+
+    if (cleanStart && fs.existsSync(workspacePath)) {
+        console.log(`[Workspace] Cleaning existing workspace: ${workspacePath}`);
+        fs.rmSync(workspacePath, { recursive: true, force: true });
+    }
+
+    if (!fs.existsSync(workspacePath)) {
+        console.log(`[Workspace] Creating folder: ${workspacePath}`);
+        fs.mkdirSync(workspacePath, { recursive: true });
+    }
+
+    // Check if the specific workspace is already open to prevent unnecessary reloads
+    const title = await browser.driver.getTitle();
+    if (title.includes(workspaceName)) {
+        console.log(`[Workspace] '${workspaceName}' is already open.`);
+        return;
+    }
+
+    console.log(`[Workspace] Opening folder: ${workspacePath}`);
+    await browser.openResources(workspacePath);
+
+    // Opening a folder refreshes the window, wait for window reload
+    await browser.driver.wait(
+        until.elementLocated(By.id("workbench.main.container")),
+        15000,
+        `Timeout waiting for workspace '${workspaceName}' to load`
+    );
 }
 
 /**
