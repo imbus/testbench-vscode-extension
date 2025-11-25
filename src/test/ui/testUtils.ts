@@ -3,7 +3,7 @@
  * @description Utility functions and constants for UI tests
  */
 
-import { getSlowMotionDelay } from "./testConfig";
+import { getSlowMotionDelay, getTestCredentials, hasTestCredentials } from "./testConfig";
 import * as path from "path";
 import * as fs from "fs";
 import {
@@ -247,10 +247,27 @@ export async function ensureWorkspaceIsOpen(config: WorkspaceConfig = {}): Promi
     }
 
     // Check if the specific workspace is already open to prevent unnecessary reloads
-    const title = await browser.driver.getTitle();
-    if (title.includes(workspaceName)) {
-        console.log(`[Workspace] '${workspaceName}' is already open.`);
-        return;
+    try {
+        const title = await browser.driver.getTitle();
+        if (title && title.includes(workspaceName)) {
+            console.log(`[Workspace] '${workspaceName}' appears to be already open (title: ${title}).`);
+            // Verify workspace is actually loaded by checking for workbench container
+            try {
+                await browser.driver.wait(
+                    until.elementLocated(By.id("workbench.main.container")),
+                    2000,
+                    "Verifying workspace is loaded"
+                );
+                console.log(`[Workspace] Verified workspace '${workspaceName}' is loaded.`);
+                return;
+            } catch {
+                // Workbench not found, continue to open workspace
+                console.log(`[Workspace] Workbench container not found, opening workspace...`);
+            }
+        }
+    } catch (error) {
+        // Title check failed, continue to open workspace
+        console.log(`[Workspace] Could not check if workspace is open: ${error}`);
     }
 
     console.log(`[Workspace] Opening folder: ${workspacePath}`);
@@ -259,47 +276,118 @@ export async function ensureWorkspaceIsOpen(config: WorkspaceConfig = {}): Promi
     // Opening a folder refreshes the window, wait for window reload
     await browser.driver.wait(
         until.elementLocated(By.id("workbench.main.container")),
-        15000,
+        30000,
         `Timeout waiting for workspace '${workspaceName}' to load`
     );
+
+    await browser.driver.sleep(1000);
+    console.log(`[Workspace] Workspace '${workspaceName}' loaded successfully.`);
 }
 
 /**
  * Opens the TestBench sidebar by finding and clicking the TestBench activity bar item.
+ * Handles stale element references by retrying if needed.
  *
  * @param driver - The WebDriver instance (optional, for waiting)
  * @returns Promise<void>
  */
 export async function openTestBenchSidebar(driver?: WebDriver): Promise<void> {
-    const activityBar = new ActivityBar();
-    const controls = await activityBar.getViewControls();
+    const maxRetries = 3;
+    let lastError: Error | null = null;
 
-    for (const control of controls) {
-        const title = await control.getTitle();
-        if (title === "TestBench") {
-            await control.openView();
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+            // Check if sidebar is already open by trying to get sections
             if (driver) {
-                // Wait for sidebar to initialize (background operation, no slow motion needed)
-                await driver.wait(
-                    async () => {
-                        try {
-                            const sideBar = new SideBarView();
-                            const content = sideBar.getContent();
-                            const sections = await content.getSections();
-                            return sections.length > 0;
-                        } catch {
-                            return false;
+                try {
+                    const sideBar = new SideBarView();
+                    const content = sideBar.getContent();
+                    const sections = await content.getSections();
+                    if (sections.length > 0) {
+                        // Sidebar appears to be open, verify it's the TestBench sidebar
+                        let foundTestBench = false;
+                        for (const section of sections) {
+                            const title = await section.getTitle();
+                            if (title.includes("TestBench") || title.includes("Projects") || title.includes("Login")) {
+                                foundTestBench = true;
+                                break;
+                            }
                         }
-                    },
-                    10000,
-                    "Waiting for TestBench sidebar to initialize",
-                    500
+                        if (foundTestBench) {
+                            console.log("[Sidebar] TestBench sidebar is already open");
+                            return;
+                        }
+                    }
+                } catch {
+                    // Sidebar not open or not accessible, continue to open it
+                }
+            }
+
+            const activityBar = new ActivityBar();
+            const controls = await activityBar.getViewControls();
+
+            let testBenchControlFound = false;
+            for (const control of controls) {
+                try {
+                    const title = await control.getTitle();
+                    if (title === "TestBench") {
+                        testBenchControlFound = true;
+                        await control.openView();
+                        if (driver) {
+                            // Wait for sidebar to initialize (background operation, no slow motion needed)
+                            await driver.wait(
+                                async () => {
+                                    try {
+                                        const sideBar = new SideBarView();
+                                        const content = sideBar.getContent();
+                                        const sections = await content.getSections();
+                                        return sections.length > 0;
+                                    } catch {
+                                        return false;
+                                    }
+                                },
+                                10000,
+                                "Waiting for TestBench sidebar to initialize",
+                                500
+                            );
+                        }
+                        return; // Successfully opened sidebar
+                    }
+                } catch (error) {
+                    // Stale element reference - element was found but became stale
+                    // If this is the last attempt, throw the error
+                    if (attempt === maxRetries - 1) {
+                        throw error;
+                    }
+                    console.log(
+                        `[Sidebar] Stale element detected on control, will retry (attempt ${attempt + 1}/${maxRetries})`
+                    );
+                    lastError = error as Error;
+                    break; // Break inner loop to retry outer loop
+                }
+            }
+
+            // If we get here and didn't find TestBench control, throw error
+            if (!testBenchControlFound) {
+                throw new Error("TestBench activity bar item not found");
+            }
+        } catch (error) {
+            lastError = error as Error;
+            if (attempt < maxRetries - 1) {
+                console.log(
+                    `[Sidebar] Error opening sidebar, retrying (attempt ${attempt + 1}/${maxRetries}): ${error}`
+                );
+
+                if (driver) {
+                    await driver.sleep(1000);
+                }
+            } else {
+                throw new Error(
+                    `Failed to open TestBench sidebar after ${maxRetries} attempts: ${lastError?.message || error}`
                 );
             }
-            return;
         }
     }
-    throw new Error("TestBench activity bar item not found");
 }
 
 /**
@@ -1419,4 +1507,148 @@ export async function isEditMode(driver: WebDriver): Promise<boolean> {
 export function generateUniqueConnectionLabel(prefix: string = "Test Connection"): string {
     const timestamp = Date.now();
     return `${prefix} ${timestamp}`;
+}
+
+/**
+ * Ensures the user is logged in by performing login if necessary.
+ * If already logged in, this function does nothing.
+ * If not logged in, it creates a connection and logs in using test credentials.
+ *
+ * @param driver - The WebDriver instance
+ * @param credentials - Optional test credentials (if not provided, will use getTestCredentials())
+ * @returns Promise<boolean> - True if login was successful or user was already logged in, false otherwise
+ */
+export async function ensureLoggedIn(
+    driver: WebDriver,
+    credentials?: {
+        connectionLabel: string;
+        serverName: string;
+        portNumber: string;
+        username: string;
+        password: string;
+    }
+): Promise<boolean> {
+    try {
+        const webviewAvailable = await isWebviewAvailable(driver);
+        if (!webviewAvailable) {
+            console.log("[Login] User is already logged in");
+            return true;
+        }
+
+        console.log("[Login] User is not logged in. Performing login...");
+
+        if (!hasTestCredentials() && !credentials) {
+            console.log("[Login] Test credentials not available");
+            return false;
+        }
+
+        const creds = credentials || getTestCredentials();
+
+        await openTestBenchSidebar(driver);
+
+        const webviewFound = await findAndSwitchToWebview(driver);
+        if (!webviewFound) {
+            console.log("[Login] Webview not found");
+            return false;
+        }
+
+        // Wait for connections list to be available
+        try {
+            await driver.wait(
+                until.elementLocated(By.id(ConnectionFormElements.CONNECTIONS_LIST)),
+                UITimeouts.MEDIUM,
+                "Waiting for connections list to be available"
+            );
+        } catch {
+            // Connections list might not exist yet, continue anyway
+            console.log("[Login] Connections list not found, will create new connection");
+        }
+
+        const { element: existingConnection, found: connectionExists } = await findConnectionInList(
+            driver,
+            creds.connectionLabel
+        );
+
+        if (!connectionExists || !existingConnection) {
+            console.log("[Login] Creating new connection...");
+            await resetConnectionForm(driver);
+
+            const formData: ConnectionFormData = {
+                connectionLabel: creds.connectionLabel,
+                serverName: creds.serverName,
+                portNumber: creds.portNumber,
+                username: creds.username,
+                password: creds.password,
+                storePassword: true
+            };
+
+            await fillConnectionForm(driver, formData);
+            await saveConnection(driver);
+
+            // Switch to default content to handle "Save Changes" dialog if it appears
+            await driver.switchTo().defaultContent();
+
+            // Handle "Save Changes" confirmation dialog if it appears
+            // This dialog may appear when saving a connection
+            try {
+                await handleConfirmationDialog(driver, "Save Changes", UITimeouts.SHORT);
+                console.log("[Login] Handled 'Save Changes' dialog");
+            } catch {
+                console.log("[Login] No 'Save Changes' dialog appeared");
+            }
+
+            const webviewFoundAgain = await findAndSwitchToWebview(driver);
+            if (!webviewFoundAgain) {
+                console.log("[Login] Could not switch back to webview after handling dialog");
+                return false;
+            }
+
+            await driver.wait(
+                async () => {
+                    const { found } = await findConnectionInList(driver, creds.connectionLabel);
+                    return found;
+                },
+                UITimeouts.LONG,
+                "Waiting for connection to appear in list"
+            );
+        }
+
+        const { element: connectionElement, found } = await findConnectionInList(driver, creds.connectionLabel);
+
+        if (!found || !connectionElement) {
+            const connectionString = `${creds.username}@${creds.serverName}`;
+            const { element: connectionByString } = await findConnectionInList(driver, connectionString);
+            if (connectionByString) {
+                await clickLoginConnection(driver, connectionByString);
+            } else {
+                console.log("[Login] Connection not found in list");
+                return false;
+            }
+        } else {
+            await clickLoginConnection(driver, connectionElement);
+        }
+
+        await driver.switchTo().defaultContent();
+        await handleAuthenticationModals(driver);
+
+        // Wait for Projects view to appear (indicates successful login)
+        await driver.wait(
+            async () => {
+                return !(await isWebviewAvailable(driver));
+            },
+            UITimeouts.LONG,
+            "Waiting for login to complete (Projects view to appear)"
+        );
+
+        console.log("[Login] Login successful");
+        return true;
+    } catch (error) {
+        console.log(`[Login] Error during login: ${error}`);
+        try {
+            await driver.switchTo().defaultContent();
+        } catch {
+            // Ignore errors when switching back
+        }
+        return false;
+    }
 }
