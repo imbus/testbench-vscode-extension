@@ -15,7 +15,8 @@ import {
     SideBarView,
     WebElement,
     until,
-    Key
+    Key,
+    TreeItem
 } from "vscode-extension-tester";
 
 /**
@@ -223,6 +224,16 @@ export interface WorkspaceConfig {
 }
 
 /**
+ * Configuration options for cleaning a workspace.
+ */
+export interface WorkspaceCleanupConfig {
+    /** Array of file/folder names or paths to exclude from deletion (relative to workspace root) */
+    exclude?: string[];
+    /** Whether to exclude hidden files/folders (starting with .) by default. Default: false */
+    excludeHidden?: boolean;
+}
+
+/**
  * Ensures a specific workspace folder is open in VS Code.
  * Handles creation, cleaning, and window reloading logic.
  *
@@ -307,6 +318,151 @@ export async function ensureWorkspaceIsOpen(config: WorkspaceConfig = {}): Promi
     }
 
     console.log(`[Workspace] Workspace '${workspaceName}' loaded successfully.`);
+}
+
+/**
+ * Gets the current workspace folder path from VS Code.
+ * Uses the window title to determine the workspace path.
+ *
+ * @param driver - The WebDriver instance
+ * @returns Promise<string | null> - The workspace path or null if not found
+ */
+export async function getCurrentWorkspacePath(driver: WebDriver): Promise<string | null> {
+    try {
+        // Get the window title which typically contains the workspace folder name
+        const title = await driver.getTitle();
+        if (!title) {
+            console.log("[Workspace] Could not get window title");
+            return null;
+        }
+
+        // Try to extract workspace path from title
+        const projectRoot = path.resolve(__dirname, "../../../");
+        const possibleWorkspaceNames = ["test-workspace", "workspace", "test-resources"];
+
+        for (const workspaceName of possibleWorkspaceNames) {
+            const workspacePath = path.join(projectRoot, workspaceName);
+            if (fs.existsSync(workspacePath)) {
+                // Check if the title matches this workspace
+                const folderName = path.basename(workspaceName);
+                if (title.includes(folderName) || title.includes(workspaceName)) {
+                    return workspacePath;
+                }
+            }
+        }
+
+        // If no match found, try to get from VS Code command
+        // Fallback: check for test-workspace as default
+        const defaultWorkspace = path.join(projectRoot, "test-workspace");
+        if (fs.existsSync(defaultWorkspace)) {
+            return defaultWorkspace;
+        }
+
+        console.log("[Workspace] Could not determine workspace path from title");
+        return null;
+    } catch (error) {
+        console.log(`[Workspace] Error getting workspace path: ${error}`);
+        return null;
+    }
+}
+
+/**
+ * Cleans up the workspace by removing all files and folders,
+ * with optional exclusions for specific files/folders.
+ *
+ * @param driver - The WebDriver instance (optional, for getting workspace path)
+ * @param workspacePath - Optional explicit workspace path. If not provided, will try to detect from VS Code
+ * @param config - Configuration for cleanup, including exclusions
+ * @returns Promise<boolean> - True if cleanup was successful, false otherwise
+ */
+export async function cleanupWorkspace(
+    driver?: WebDriver,
+    workspacePath?: string,
+    config: WorkspaceCleanupConfig = {}
+): Promise<boolean> {
+    const { exclude = [], excludeHidden = false } = config;
+
+    try {
+        // Determine workspace path
+        let targetPath: string | null = workspacePath || null;
+
+        if (!targetPath && driver) {
+            targetPath = await getCurrentWorkspacePath(driver);
+        }
+
+        if (!targetPath) {
+            // Fallback to default workspace
+            const projectRoot = path.resolve(__dirname, "../../../");
+            targetPath = path.join(projectRoot, "test-workspace");
+        }
+
+        if (!fs.existsSync(targetPath)) {
+            console.log(`[Workspace Cleanup] Workspace path does not exist: ${targetPath}`);
+            return false;
+        }
+
+        console.log(`[Workspace Cleanup] Cleaning workspace: ${targetPath}`);
+        console.log(`[Workspace Cleanup] Excluding: ${exclude.length > 0 ? exclude.join(", ") : "none"}`);
+
+        // Normalize exclude paths to handle both relative and absolute paths
+        const normalizedExcludes = exclude.map((item) => {
+            if (path.isAbsolute(item)) {
+                return item;
+            }
+            return path.join(targetPath, item);
+        });
+
+        // Function to check if a path should be excluded
+        const shouldExclude = (itemPath: string, itemName: string): boolean => {
+            // Check explicit exclusions
+            for (const excludePath of normalizedExcludes) {
+                if (itemPath === excludePath || itemPath.startsWith(excludePath + path.sep)) {
+                    return true;
+                }
+            }
+
+            // Check hidden files/folders if enabled
+            if (excludeHidden && itemName.startsWith(".")) {
+                return true;
+            }
+
+            return false;
+        };
+
+        // Get all items in the workspace
+        const items = fs.readdirSync(targetPath, { withFileTypes: true });
+        let deletedCount = 0;
+        let skippedCount = 0;
+
+        for (const item of items) {
+            const itemPath = path.join(targetPath, item.name);
+
+            if (shouldExclude(itemPath, item.name)) {
+                console.log(`[Workspace Cleanup] Excluding: ${item.name}`);
+                skippedCount++;
+                continue;
+            }
+
+            try {
+                if (item.isDirectory()) {
+                    fs.rmSync(itemPath, { recursive: true, force: true });
+                    console.log(`[Workspace Cleanup] Deleted folder: ${item.name}`);
+                } else {
+                    fs.unlinkSync(itemPath);
+                    console.log(`[Workspace Cleanup] Deleted file: ${item.name}`);
+                }
+                deletedCount++;
+            } catch (error) {
+                console.log(`[Workspace Cleanup] Error deleting ${item.name}: ${error}`);
+            }
+        }
+
+        console.log(`[Workspace Cleanup] Cleanup complete. Deleted: ${deletedCount}, Excluded: ${skippedCount}`);
+        return true;
+    } catch (error) {
+        console.log(`[Workspace Cleanup] Error during cleanup: ${error}`);
+        return false;
+    }
 }
 
 /**
@@ -591,7 +747,9 @@ export const ConnectionFormElements = {
 } as const;
 
 /**
- * Timeout constants for UI operations (in milliseconds).
+ * Timeout and delay constants for UI operations (in milliseconds).
+ * Timeouts are used for waiting with conditions (driver.wait).
+ * Delays are used for fixed sleep durations (driver.sleep).
  */
 export const UITimeouts = {
     SHORT: 2000,
@@ -599,6 +757,158 @@ export const UITimeouts = {
     LONG: 10000,
     VERY_LONG: 15000
 } as const;
+
+/**
+ * Finds a tree item by its label name, searching recursively through children.
+ *
+ * @param items - Array of tree items to search
+ * @param targetLabel - The label text to find (exact or partial match)
+ * @param exactMatch - If true, requires exact match; if false, uses partial match (default: false)
+ * @returns Promise<TreeItem | null> - The found tree item or null if not found
+ */
+export async function findTreeItemByLabel(
+    items: TreeItem[],
+    targetLabel: string,
+    exactMatch: boolean = false
+): Promise<TreeItem | null> {
+    for (const item of items) {
+        try {
+            const label = await item.getLabel();
+            const matches = exactMatch ? label === targetLabel : label === targetLabel || label.includes(targetLabel);
+
+            if (matches) {
+                return item;
+            }
+
+            // If item has children, search recursively
+            if (await item.hasChildren()) {
+                const children = await item.getChildren();
+                if (children && children.length > 0) {
+                    const found = await findTreeItemByLabel(children, targetLabel, exactMatch);
+                    if (found) {
+                        return found;
+                    }
+                }
+            }
+        } catch (error) {
+            // Log error but continue searching
+            console.log(`[TreeItem] Error checking tree item: ${error}`);
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Waits for tree item children to be loaded after expansion.
+ * Checks that the item is expanded and children are available.
+ *
+ * @param item - The tree item to wait for
+ * @param driver - The WebDriver instance
+ * @param timeout - Maximum time to wait (default: UITimeouts.MEDIUM)
+ * @returns Promise<boolean> - True if children are loaded, false if timeout
+ */
+export async function waitForTreeItemChildren(
+    item: TreeItem,
+    driver: WebDriver,
+    timeout: number = UITimeouts.MEDIUM
+): Promise<boolean> {
+    try {
+        await driver.wait(
+            async () => {
+                try {
+                    // Check that item is expanded
+                    const isExpanded = await item.isExpanded();
+                    if (!isExpanded) {
+                        return false;
+                    }
+
+                    // Check that children are available
+                    const children = await item.getChildren();
+                    return children !== null && children.length >= 0; // Allow empty children array (item might have no children)
+                } catch {
+                    return false;
+                }
+            },
+            timeout,
+            "Waiting for tree item children to load"
+        );
+        return true;
+    } catch (error) {
+        console.log(`[TreeItem] Timeout waiting for children to load: ${error}`);
+        return false;
+    }
+}
+
+/**
+ * Safely expands a tree item if it has children and is not already expanded.
+ * Waits for children to load after expansion using smart wait.
+ *
+ * @param item - The tree item to expand
+ * @param driver - The WebDriver instance for slow motion
+ * @returns Promise<boolean> - True if item was expanded or already expanded, false otherwise
+ */
+export async function expandTreeItemIfNeeded(item: TreeItem, driver: WebDriver): Promise<boolean> {
+    try {
+        const hasChildren = await item.hasChildren();
+        if (!hasChildren) {
+            return false;
+        }
+
+        const isExpanded = await item.isExpanded();
+        if (isExpanded) {
+            return true; // Already expanded
+        }
+
+        await item.expand();
+        await applySlowMotion(driver);
+
+        // Wait for children to actually load (smart wait instead of fixed delay)
+        const childrenLoaded = await waitForTreeItemChildren(item, driver);
+        if (!childrenLoaded) {
+            console.log(`[TreeItem] Warning: Children may not have loaded for tree item`);
+        }
+
+        // Verify it's expanded
+        const expanded = await item.isExpanded();
+        return expanded;
+    } catch (error) {
+        console.log(`[TreeItem] Error expanding tree item: ${error}`);
+        return false;
+    }
+}
+
+/**
+ * Waits for tree items to load in a tree section.
+ *
+ * @param section - The tree section to wait for
+ * @param driver - The WebDriver instance
+ * @param timeout - Maximum time to wait (default: UITimeouts.LONG)
+ * @returns Promise<boolean> - True if items loaded, false if timeout
+ */
+export async function waitForTreeItems(
+    section: any,
+    driver: WebDriver,
+    timeout: number = UITimeouts.LONG
+): Promise<boolean> {
+    try {
+        await driver.wait(
+            async () => {
+                try {
+                    const items = await section.getVisibleItems();
+                    return items.length > 0;
+                } catch {
+                    return false;
+                }
+            },
+            timeout,
+            "Waiting for tree items to load"
+        );
+        return true;
+    } catch {
+        return false;
+    }
+}
 
 /**
  * Applies slow motion delay if enabled in configuration.
@@ -1532,6 +1842,141 @@ export async function isEditMode(driver: WebDriver): Promise<boolean> {
 export function generateUniqueConnectionLabel(prefix: string = "Test Connection"): string {
     const timestamp = Date.now();
     return `${prefix} ${timestamp}`;
+}
+
+/**
+ * Finds a notification button by searching for notification containers and button text.
+ * Handles both dialog-style and toast-style notifications.
+ *
+ * @param driver - The WebDriver instance
+ * @param buttonText - The text of the button to find (e.g., "Create", "Cancel")
+ * @param notificationText - Optional text that should be present in the notification
+ * @param timeout - Maximum time to wait for notification (default: 10000ms)
+ * @returns Promise<WebElement | null> - The found button element or null if not found
+ */
+export async function findNotificationButton(
+    driver: WebDriver,
+    buttonText: string,
+    notificationText?: string,
+    timeout: number = UITimeouts.LONG
+): Promise<WebElement | null> {
+    try {
+        await driver.switchTo().defaultContent();
+
+        const button = await driver.wait(
+            async () => {
+                try {
+                    // VS Code notifications can appear as dialogs or toast notifications
+                    // First, try finding notification/dialog containers
+                    const notificationContainers = await driver.findElements(
+                        By.css(
+                            ".monaco-dialog, .monaco-dialog-box, .monaco-list-row, .notification-toast, .notifications-toasts, [role='dialog']"
+                        )
+                    );
+
+                    // Check if any container contains the expected notification text
+                    if (notificationText) {
+                        for (const container of notificationContainers) {
+                            try {
+                                const text = await container.getText();
+                                if (text.includes(notificationText)) {
+                                    // Find button within this container
+                                    try {
+                                        const btn = await container.findElement(
+                                            By.xpath(
+                                                `.//button[normalize-space(text())='${buttonText}'] | .//a[contains(@class, 'monaco-button') and normalize-space(text())='${buttonText}']`
+                                            )
+                                        );
+                                        if (btn) {
+                                            return btn;
+                                        }
+                                    } catch {
+                                        // Continue searching
+                                    }
+                                }
+                            } catch {
+                                // Continue searching
+                            }
+                        }
+                    }
+
+                    // Also try finding buttons directly (might be in a dialog)
+                    const buttons = await driver.findElements(
+                        By.xpath(
+                            `//button[normalize-space(text())='${buttonText}'] | //a[contains(@class, 'monaco-button') and normalize-space(text())='${buttonText}']`
+                        )
+                    );
+
+                    // Return the first visible button
+                    for (const btn of buttons) {
+                        try {
+                            const isDisplayed = await btn.isDisplayed();
+                            if (isDisplayed) {
+                                return btn;
+                            }
+                        } catch {
+                            // Continue searching
+                        }
+                    }
+
+                    return null;
+                } catch {
+                    return null;
+                }
+            },
+            timeout,
+            `Waiting for notification with button: ${buttonText}`
+        );
+
+        return button;
+    } catch (error) {
+        console.log(`[Notification] Error finding notification button: ${error}`);
+        return null;
+    }
+}
+
+/**
+ * Clicks a button in a notification and waits for the action to complete.
+ *
+ * @param driver - The WebDriver instance
+ * @param buttonText - The text of the button to click
+ * @param notificationText - Optional text that should be present in the notification
+ * @param timeout - Maximum time to wait for notification (default: 10000ms)
+ * @returns Promise<boolean> - True if button was found and clicked, false otherwise
+ */
+export async function clickNotificationButton(
+    driver: WebDriver,
+    buttonText: string,
+    notificationText?: string,
+    timeout: number = UITimeouts.LONG
+): Promise<boolean> {
+    try {
+        const button = await findNotificationButton(driver, buttonText, notificationText, timeout);
+
+        if (!button) {
+            console.log(`[Notification] Button "${buttonText}" not found in notification`);
+            return false;
+        }
+
+        console.log(`[Notification] Found notification button "${buttonText}", clicking...`);
+        await button.click();
+        await applySlowMotion(driver);
+
+        // Wait for notification to close
+        await driver.wait(
+            async () => {
+                const modalBlocks = await driver.findElements(By.css(".monaco-dialog-modal-block"));
+                return modalBlocks.length === 0;
+            },
+            UITimeouts.MEDIUM,
+            "Waiting for notification to close"
+        );
+
+        return true;
+    } catch (error) {
+        console.log(`[Notification] Error clicking notification button: ${error}`);
+        return false;
+    }
 }
 
 /**
