@@ -964,7 +964,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @returns The created tree item
      */
     protected createTreeItem(data: TestElementData, parent?: TestElementsTreeItem): TestElementsTreeItem {
-        const testElementType = this.convertToTestElementTypeEnum(data.testElementType);
+        const testElementType = data.testElementType;
 
         // Convert TestElementData to the extended TestElementItemData
         const itemData: TestElementItemData = {
@@ -1119,9 +1119,14 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         let textDocument: vscode.TextDocument;
         let textEditor: vscode.TextEditor;
 
+        this.logger.trace(
+            `[TestElementsTreeView] openFileAndJumpToKeyword called: resourcePath=${resourcePath}, keywordName=${keywordName}, uid=${uid}`
+        );
+
         try {
             textDocument = await vscode.workspace.openTextDocument(resourcePath);
             textEditor = await vscode.window.showTextDocument(textDocument);
+            this.logger.debug(`[TestElementsTreeView] Successfully opened resource file: ${resourcePath}`);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             this.logger.error(
@@ -1134,9 +1139,16 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         try {
             const keywordLineNumber = await findKeywordPositionInResourceFile(textDocument.uri, keywordName, uid);
             if (keywordLineNumber !== undefined) {
+                this.logger.trace(
+                    `[TestElementsTreeView] Found keyword at line ${keywordLineNumber}, positioning cursor`
+                );
                 const position = new vscode.Position(keywordLineNumber, 0);
                 textEditor.selection = new vscode.Selection(position, position);
                 textEditor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+            } else {
+                this.logger.warn(
+                    `[TestElementsTreeView] Keyword '${keywordName}' with UID ${uid} not found in resource file ${resourcePath}`
+                );
             }
         } catch (positioningError) {
             const errorMessage = positioningError instanceof Error ? positioningError.message : "Unknown error";
@@ -1277,12 +1289,15 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param item The keyword tree item that was single clicked
      */
     private async handleKeywordSingleClick(item: TestElementsTreeItem): Promise<void> {
+        this.logger.debug(
+            `[TestElementsTreeView] handleKeywordSingleClick called for keyword: ${item.label}, type: ${item.data.testElementType}, uid: ${item.data.uniqueID}`
+        );
         const parentResource = item.parent as TestElementsTreeItem;
         if (!parentResource) {
+            this.logger.error(`[TestElementsTreeView] Could not find parent resource for keyword ${item.label}`);
             vscode.window.showErrorMessage(`Could not find the parent resource for keyword ${item.label}`);
             return;
         }
-
         await this._handleResourceOperation({
             operationType: "keyword",
             createMissing: false,
@@ -1316,7 +1331,11 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param item The keyword item that was clicked
      */
     public async handleKeywordClick(item: TestElementsTreeItem): Promise<void> {
+        this.logger.debug(
+            `[TestElementsTreeView] handleKeywordClick called for item: ${item.label}, type: ${item.data.testElementType}, id: ${item.id}, uid: ${item.data.uniqueID}`
+        );
         if (!item.id) {
+            this.logger.warn(`[TestElementsTreeView] handleKeywordClick called for item without ID: ${item.label}`);
             return;
         }
 
