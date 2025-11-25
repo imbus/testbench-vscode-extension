@@ -235,19 +235,12 @@ export UI_TEST_SLOW_MOTION_DELAY="2000"  # 2 second delays
 
 Slow motion delays are only applied to **visible user actions**:
 
-- ✅ Typing in form fields
-- ✅ Clicking buttons (save, edit, delete, login, cancel)
-- ✅ Opening/closing sidebar
-- ✅ Switching to webview
-- ✅ Clicking confirmation dialogs
-- ✅ UI updates after actions
-
-**Not delayed:**
-
-- ❌ Internal waits and timeouts
-- ❌ Error handling
-- ❌ Background operations
-- ❌ Element location checks
+- Typing in form fields
+- Clicking buttons (save, edit, delete, login, cancel)
+- Opening/closing sidebar
+- Switching to webview
+- Clicking confirmation dialogs
+- UI updates after actions
 
 ### Example
 

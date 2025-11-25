@@ -187,7 +187,7 @@ export function getTestCredentials(): TestCredentials {
             "[TestConfig] Make sure testBenchConnection.env file exists in project root with required variables."
         );
     } else {
-        console.log("[TestConfig] ✅ All credentials loaded from environment variables");
+        console.log("[TestConfig] All credentials loaded from environment variables");
     }
 
     // Validate that we have at least the minimum required credentials
