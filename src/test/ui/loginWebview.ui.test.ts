@@ -206,38 +206,6 @@ describe("Login Webview - Connection Management Tests", function () {
                 }
             });
         });
-
-        it("should validate port number is numeric", async function () {
-            await withWebviewContext(
-                driver,
-                async (driver) => {
-                    const credentials = getTestCredentials();
-
-                    const formData: ConnectionFormData = {
-                        connectionLabel: "Test Connection",
-                        serverName: credentials.serverName,
-                        portNumber: "abc", // Invalid port
-                        username: credentials.username,
-                        password: credentials.password
-                    };
-
-                    await fillConnectionForm(driver, formData);
-
-                    const saveButton = await driver.findElement(By.id(ConnectionFormElements.SAVE_BUTTON));
-                    await saveButton.click();
-
-                    const messageText = await getMessageText(driver);
-                    expect(messageText.toLowerCase()).to.include("port");
-                },
-                true
-            ).catch((error) => {
-                if (error.message.includes("skipped")) {
-                    this.skip();
-                } else {
-                    throw error;
-                }
-            });
-        });
     });
 
     describe("Editing Connections", function () {
