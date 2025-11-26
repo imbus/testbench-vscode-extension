@@ -1,7 +1,45 @@
 {
     "security.workspace.trust.enabled": false,
+    "files.autoSave": "afterDelay",
+    "files.autoSaveDelay": 100,
     "window.titleBarStyle": "custom",
     "workbench.colorTheme": "Default Dark+",
     "testbenchExtension.automaticLoginAfterExtensionActivation": false,
-    "testbenchExtension.testbenchLogLevel": "Trace"
+    "testbenchExtension.testbenchLogLevel": "Trace",
+
+    "//_COMMENT_": "Disable updates and release notes to prevent popups",
+    "update.mode": "none",
+    "update.showReleaseNotes": false,
+    "extensions.autoUpdate": false,
+    "extensions.autoCheckUpdates": false,
+
+    "//_COMMENT_": "Disable the Welcome page and tips on startup",
+    "workbench.startupEditor": "none",
+    "workbench.tips.enabled": false,
+
+    "//_COMMENT_": "Disable Telemetry and Experiments to reduce network activity",
+    "telemetry.telemetryLevel": "off",
+    "workbench.enableExperiments": false,
+    "git.enabled": false,
+
+    "//_COMMENT_": "Clean UI: Disable Hovers, Minimap, and Animations",
+    "editor.minimap.enabled": false,
+    "editor.hover.enabled": false,
+    "editor.cursorBlinking": "solid",
+    "workbench.reduceMotion": "on",
+    "editor.renderIndentGuides": false,
+    "editor.matchBrackets": "never",
+
+    "//_COMMENT_": "Disable Text Editor 'Smart' Features that interfere with typing",
+    "editor.acceptSuggestionOnEnter": "off",
+    "editor.quickSuggestions": {
+        "other": false,
+        "comments": false,
+        "strings": false
+    },
+    "editor.parameterHints.enabled": false,
+
+    "//_COMMENT_": "Ensure clean start state",
+    "window.restoreWindows": "none",
+    "files.hotExit": "off"
 }

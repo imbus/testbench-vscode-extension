@@ -144,7 +144,7 @@ async function main(): Promise<void> {
         await exTester.runTests(testFilesPattern, {
             settings: TEST_PATHS.VSCODE_TEST_SETTINGS,
             resources: [runtimeWorkspacePath], // Opens the prepared runtime workspace
-            cleanup: false // Set to true to keep the instance open after tests for debugging
+            cleanup: true // Set to true to keep the instance open after tests for debugging
         });
 
         console.log("UI tests completed successfully.");

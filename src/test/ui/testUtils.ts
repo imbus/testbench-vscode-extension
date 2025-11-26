@@ -16,7 +16,9 @@ import {
     WebElement,
     until,
     Key,
-    TreeItem
+    TreeItem,
+    EditorView,
+    TextEditor
 } from "vscode-extension-tester";
 
 /**
@@ -758,7 +760,39 @@ export const UITimeouts = {
 } as const;
 
 /**
+ * Finds a tree item by its label name, searching only at the current level (non-recursive).
+ * This is more efficient and avoids expanding unrelated items.
+ *
+ * @param items - Array of tree items to search
+ * @param targetLabel - The label text to find (exact or partial match)
+ * @param exactMatch - If true, requires exact match; if false, uses partial match (default: false)
+ * @returns Promise<TreeItem | null> - The found tree item or null if not found
+ */
+export async function findTreeItemByLabelAtLevel(
+    items: TreeItem[],
+    targetLabel: string,
+    exactMatch: boolean = false
+): Promise<TreeItem | null> {
+    for (const item of items) {
+        try {
+            const label = await item.getLabel();
+            const matches = exactMatch ? label === targetLabel : label === targetLabel || label.includes(targetLabel);
+
+            if (matches) {
+                return item;
+            }
+        } catch (error) {
+            // Log error but continue searching
+            console.log(`[TreeItem] Error checking tree item: ${error}`);
+        }
+    }
+
+    return null;
+}
+
+/**
  * Finds a tree item by its label name, searching recursively through children.
+ * Note: This may expand items while searching. Use findTreeItemByLabelAtLevel for non-recursive search.
  *
  * @param items - Array of tree items to search
  * @param targetLabel - The label text to find (exact or partial match)
@@ -2119,6 +2153,1221 @@ export async function ensureLoggedIn(
         } catch {
             // Ignore errors when switching back
         }
+        return false;
+    }
+}
+
+/**
+ * Finds a specific section in the sidebar by title.
+ *
+ * @param content - The sidebar content
+ * @param sectionTitle - The title of the section to find (can be partial match)
+ * @returns Promise<any | null> - The section or null if not found
+ */
+export async function findSidebarSection(content: any, sectionTitle: string): Promise<any | null> {
+    try {
+        const sections = await content.getSections();
+        for (const section of sections) {
+            const title = await section.getTitle();
+            if (title.includes(sectionTitle)) {
+                return section;
+            }
+        }
+        return null;
+    } catch (error) {
+        console.log(`[Sidebar] Error finding section "${sectionTitle}": ${error}`);
+        return null;
+    }
+}
+
+/**
+ * Gets the title of a sidebar section.
+ *
+ * @param section - The sidebar section
+ * @returns Promise<string | null> - The section title or null if not found
+ */
+export async function getSectionTitle(section: any): Promise<string | null> {
+    try {
+        return await section.getTitle();
+    } catch (error) {
+        console.log(`[Sidebar] Error getting section title: ${error}`);
+        return null;
+    }
+}
+
+/**
+ * Clicks a toolbar button in a sidebar section by title.
+ *
+ * @param section - The sidebar section
+ * @param buttonTitle - The title/aria-label of the button to click
+ * @param driver - The WebDriver instance
+ * @returns Promise<boolean> - True if button was found and clicked, false otherwise
+ */
+export async function clickToolbarButton(section: any, buttonTitle: string, driver: WebDriver): Promise<boolean> {
+    try {
+        // Get the toolbar actions
+        const actions = await section.getActions();
+        for (const action of actions) {
+            const title = await action.getTitle();
+            if (title.includes(buttonTitle)) {
+                await action.click();
+                await applySlowMotion(driver);
+                return true;
+            }
+        }
+        console.log(`[Toolbar] Button "${buttonTitle}" not found in toolbar`);
+        return false;
+    } catch (error) {
+        console.log(`[Toolbar] Error clicking toolbar button "${buttonTitle}": ${error}`);
+        return false;
+    }
+}
+
+/**
+ * Double-clicks a tree item.
+ *
+ * @param item - The tree item to double-click
+ * @param driver - The WebDriver instance
+ * @returns Promise<void>
+ */
+export async function doubleClickTreeItem(item: TreeItem, driver: WebDriver): Promise<void> {
+    try {
+        // Get the element and perform double-click
+        const element = await item.findElement(By.css(".monaco-icon-name-container"));
+        await driver.actions().doubleClick(element).perform();
+        await applySlowMotion(driver);
+    } catch (error) {
+        // Fallback: try clicking twice
+        console.log(`[TreeItem] Double-click failed, trying alternative method: ${error}`);
+        try {
+            await item.click();
+            await driver.sleep(100);
+            await item.click();
+            await applySlowMotion(driver);
+        } catch (fallbackError) {
+            console.log(`[TreeItem] Alternative double-click also failed: ${fallbackError}`);
+            throw fallbackError;
+        }
+    }
+}
+
+/**
+ * Finds and clicks a CodeLens action in the editor.
+ *
+ * @param driver - The WebDriver instance
+ * @param codeLensText - The text of the CodeLens to find (e.g., "Pull changes from TestBench")
+ * @param lineNumber - The line number where the CodeLens should appear (0-based)
+ * @param timeout - Maximum time to wait for CodeLens (default: 10000ms)
+ * @returns Promise<boolean> - True if CodeLens was found and clicked, false otherwise
+ */
+export async function clickCodeLens(
+    driver: WebDriver,
+    codeLensText: string,
+    _lineNumber: number = 0, // kept for compatibility but unused in this strategy
+    timeout: number = UITimeouts.LONG
+): Promise<boolean> {
+    await driver.switchTo().defaultContent();
+    console.log(`[CodeLens] Starting exact DOM search and click for: "${codeLensText}"`);
+
+    try {
+        await driver.wait(
+            async () => {
+                try {
+                    // 1. Precise XPath based on your DevTools inspection
+                    // Look for <span> with class 'codelens-decoration' -> child <a> with specific text
+                    const xpathSelector = `//span[contains(@class, 'codelens-decoration')]//a[contains(text(), '${codeLensText}')]`;
+
+                    const links = await driver.findElements(By.xpath(xpathSelector));
+
+                    if (links.length > 0) {
+                        const link = links[0];
+
+                        // Verify visibility to ensure we aren't clicking a hidden/stale one
+                        if (await link.isDisplayed()) {
+                            console.log(`[CodeLens] Found visible link for "${codeLensText}"`);
+
+                            // 2. Scroll into view (Center)
+                            await driver.executeScript(
+                                "arguments[0].scrollIntoView({block: 'center', inline: 'center'});",
+                                link
+                            );
+                            await driver.sleep(200); // Stabilization pause
+
+                            // 3. Dispatch Full Mouse Event Chain
+                            // VS Code often listens for 'mousedown' or 'mouseup' on these widgets, not just 'click'
+                            console.log(`[CodeLens] Dispatching MouseEvents (mousedown + click)...`);
+                            await driver.executeScript(
+                                `
+                                var element = arguments[0];
+                                
+                                // Create mouse event options
+                                var opts = {
+                                    view: window,
+                                    bubbles: true,
+                                    cancelable: true,
+                                    buttons: 1
+                                };
+
+                                // Dispatch mousedown (often required for focus/activation)
+                                element.dispatchEvent(new MouseEvent('mousedown', opts));
+                                
+                                // Dispatch mouseup
+                                element.dispatchEvent(new MouseEvent('mouseup', opts));
+                                
+                                // Dispatch click
+                                element.dispatchEvent(new MouseEvent('click', opts));
+                            `,
+                                link
+                            );
+
+                            await applySlowMotion(driver);
+                            return true;
+                        }
+                    }
+                    return false;
+                } catch {
+                    // Ignore stale element errors and retry
+                    return false;
+                }
+            },
+            timeout,
+            `Timeout waiting to click CodeLens "${codeLensText}"`
+        );
+
+        return true;
+    } catch (e) {
+        console.log(`[CodeLens] FINAL FAILURE: ${e}`);
+        return false;
+    }
+}
+
+/**
+ * Finds the Refactor Preview tab and clicks the Apply button.
+ *
+ * @param driver - The WebDriver instance
+ * @param timeout - Maximum time to wait for Refactor Preview (default: 15000ms)
+ * @returns Promise<boolean> - True if Apply button was found and clicked, false otherwise
+ */
+export async function clickRefactorPreviewApply(
+    driver: WebDriver,
+    timeout: number = UITimeouts.VERY_LONG
+): Promise<boolean> {
+    try {
+        await driver.switchTo().defaultContent();
+
+        // Wait for Refactor Preview tab to appear
+        const refactorPreviewTab = await driver.wait(
+            async () => {
+                try {
+                    // Find tab by title
+                    const tabs = await driver.findElements(By.css(".tab, .monaco-tab, [role='tab']"));
+                    for (const tab of tabs) {
+                        const title = await tab.getText();
+                        if (title.includes("REFACTOR PREVIEW") || title.includes("Refactor Preview")) {
+                            return tab;
+                        }
+                    }
+                    return null;
+                } catch {
+                    return null;
+                }
+            },
+            timeout,
+            "Waiting for Refactor Preview tab to appear"
+        );
+
+        if (!refactorPreviewTab) {
+            console.log("[RefactorPreview] Refactor Preview tab not found");
+            return false;
+        }
+
+        // Click the tab to activate it
+        await refactorPreviewTab.click();
+        await applySlowMotion(driver);
+
+        // Wait for the Apply button to appear
+        const applyButton = await driver.wait(
+            async () => {
+                try {
+                    // Try multiple selectors for the Apply button
+                    const buttons = await driver.findElements(
+                        By.xpath(
+                            "//button[normalize-space(text())='Apply'] | //a[contains(@class, 'monaco-button') and normalize-space(text())='Apply']"
+                        )
+                    );
+
+                    for (const btn of buttons) {
+                        try {
+                            const isDisplayed = await btn.isDisplayed();
+                            if (isDisplayed) {
+                                return btn;
+                            }
+                        } catch {
+                            // Continue searching
+                        }
+                    }
+
+                    return null;
+                } catch {
+                    return null;
+                }
+            },
+            UITimeouts.MEDIUM,
+            "Waiting for Apply button in Refactor Preview"
+        );
+
+        if (applyButton) {
+            console.log("[RefactorPreview] Found Apply button, clicking...");
+            await applyButton.click();
+            await applySlowMotion(driver);
+
+            // Wait for Refactor Preview to close
+            await driver.wait(
+                async () => {
+                    try {
+                        const tabs = await driver.findElements(By.css(".tab, .monaco-tab, [role='tab']"));
+                        for (const tab of tabs) {
+                            const title = await tab.getText();
+                            if (title.includes("REFACTOR PREVIEW") || title.includes("Refactor Preview")) {
+                                return false; // Tab still exists
+                            }
+                        }
+                        return true; // Tab closed
+                    } catch {
+                        return true;
+                    }
+                },
+                UITimeouts.MEDIUM,
+                "Waiting for Refactor Preview to close"
+            );
+
+            return true;
+        }
+
+        console.log("[RefactorPreview] Apply button not found");
+        return false;
+    } catch (error) {
+        console.log(`[RefactorPreview] Error clicking Apply button: ${error}`);
+        return false;
+    }
+}
+
+/**
+ * Verifies that a checkbox is checked in the Refactor Preview.
+ *
+ * @param driver - The WebDriver instance
+ * @param fileName - The file name to check (e.g., "Subdiv resource.resource")
+ * @param timeout - Maximum time to wait (default: 10000ms)
+ * @returns Promise<boolean> - True if checkbox is checked, false otherwise
+ */
+export async function verifyRefactorPreviewCheckbox(
+    driver: WebDriver,
+    fileName: string,
+    timeout: number = UITimeouts.LONG
+): Promise<boolean> {
+    try {
+        await driver.switchTo().defaultContent();
+
+        // Wait for Refactor Preview content to load
+        await driver.sleep(1000);
+
+        // Find checkbox associated with the file
+        const checkbox = await driver.wait(
+            async () => {
+                try {
+                    // Try to find checkbox near the file name
+                    const checkboxes = await driver.findElements(By.css("input[type='checkbox']"));
+                    for (const cb of checkboxes) {
+                        try {
+                            // Check if checkbox is visible and near file name
+                            const parent = await cb.findElement(By.xpath("./.."));
+                            const parentText = await parent.getText();
+                            if (parentText.includes(fileName)) {
+                                return cb;
+                            }
+                        } catch {
+                            // Continue searching
+                        }
+                    }
+                    return null;
+                } catch {
+                    return null;
+                }
+            },
+            timeout,
+            `Waiting for checkbox for "${fileName}" in Refactor Preview`
+        );
+
+        if (checkbox) {
+            const isChecked = await checkbox.isSelected();
+            console.log(`[RefactorPreview] Checkbox for "${fileName}" is ${isChecked ? "checked" : "unchecked"}`);
+            return isChecked;
+        }
+
+        console.log(`[RefactorPreview] Checkbox for "${fileName}" not found`);
+        return false;
+    } catch (error) {
+        console.log(`[RefactorPreview] Error verifying checkbox: ${error}`);
+        return false;
+    }
+}
+
+/**
+ * Clicks the "Create Resource" button on a tree item in Test Elements view.
+ * The button uses the $(new-file) codicon and is an inline action button.
+ *
+ * @param item - The tree item (subdivision) to click the button on
+ * @param driver - The WebDriver instance
+ * @returns Promise<boolean> - True if button was found and clicked, false otherwise
+ */
+export async function clickCreateResourceButton(item: TreeItem, driver: WebDriver): Promise<boolean> {
+    try {
+        await driver.switchTo().defaultContent();
+
+        // Get the tree item label for matching
+        const itemLabel = await item.getLabel();
+        console.log(`[TreeItem] Looking for Create Resource button near item: "${itemLabel}"`);
+
+        // Find the button in the same row as the tree item
+        const button = await driver.wait(
+            async () => {
+                try {
+                    // Strategy 1: Find the tree item row first, then look for inline action buttons
+                    const allRows = await driver.findElements(By.css(".monaco-list-row"));
+
+                    for (const row of allRows) {
+                        try {
+                            const rowText = await row.getText();
+                            // Check if this row contains our tree item
+                            if (!rowText.includes(itemLabel)) {
+                                continue;
+                            }
+
+                            // Look for inline action buttons in this row
+                            // Inline action buttons are typically <a> elements with action-item class
+                            // or buttons with codicon classes
+                            const actionButtons = await row.findElements(
+                                By.css("a.action-item, button.action-item, a[class*='action'], button[class*='action']")
+                            );
+
+                            // Also look for elements containing the codicon-new-file icon
+                            const codiconButtons = await row.findElements(
+                                By.css(".codicon-new-file, [class*='codicon-new-file'], span.codicon-new-file")
+                            );
+
+                            // Combine both sets
+                            const allButtons = [...actionButtons, ...codiconButtons];
+
+                            for (const btn of allButtons) {
+                                try {
+                                    // Get the actual clickable element (might be the button itself or its parent)
+                                    let clickableElement: WebElement = btn;
+
+                                    // If it's a span with codicon, find the parent action-item
+                                    const tagName = await btn.getTagName();
+                                    if (tagName === "span") {
+                                        try {
+                                            const parent = await btn.findElement(
+                                                By.xpath(
+                                                    "./ancestor::a[contains(@class, 'action-item')] | ./ancestor::button[contains(@class, 'action-item')]"
+                                                )
+                                            );
+                                            clickableElement = parent;
+                                        } catch {
+                                            // If no parent action-item found, try clicking the span itself
+                                        }
+                                    }
+
+                                    const isDisplayed = await clickableElement.isDisplayed();
+                                    if (!isDisplayed) {
+                                        continue;
+                                    }
+
+                                    // Check by icon class (codicon-new-file)
+                                    const className = await btn.getAttribute("class");
+                                    if (className && className.includes("codicon-new-file")) {
+                                        console.log(`[TreeItem] Found button by codicon-new-file class`);
+                                        return clickableElement;
+                                    }
+
+                                    // Check by aria-label or title
+                                    const ariaLabel = await clickableElement.getAttribute("aria-label");
+                                    const title = await clickableElement.getAttribute("title");
+
+                                    if (
+                                        (ariaLabel &&
+                                            (ariaLabel.includes("Create Resource") || ariaLabel.includes("Create"))) ||
+                                        (title && (title.includes("Create Resource") || title.includes("Create")))
+                                    ) {
+                                        console.log(
+                                            `[TreeItem] Found button by aria-label/title: "${ariaLabel || title}"`
+                                        );
+                                        return clickableElement;
+                                    }
+
+                                    // Check if button contains codicon-new-file as a child
+                                    try {
+                                        const codiconChild = await clickableElement.findElement(
+                                            By.css(".codicon-new-file, span.codicon-new-file")
+                                        );
+                                        if (codiconChild) {
+                                            console.log(`[TreeItem] Found button containing codicon-new-file icon`);
+                                            return clickableElement;
+                                        }
+                                    } catch {
+                                        // No codicon child found
+                                    }
+                                } catch {
+                                    // Continue searching
+                                }
+                            }
+
+                            // Strategy 2: Look for any button/action in the row and check if it has the new-file icon
+                            const anyButtons = await row.findElements(By.css("a, button"));
+                            for (const btn of anyButtons) {
+                                try {
+                                    const isDisplayed = await btn.isDisplayed();
+                                    if (!isDisplayed) {
+                                        continue;
+                                    }
+
+                                    // Check if button contains codicon-new-file
+                                    const hasCodicon = await btn.findElements(
+                                        By.css(".codicon-new-file, span.codicon-new-file")
+                                    );
+                                    if (hasCodicon.length > 0) {
+                                        console.log(`[TreeItem] Found button with codicon-new-file child`);
+                                        return btn;
+                                    }
+
+                                    // Check aria-label
+                                    const ariaLabel = await btn.getAttribute("aria-label");
+                                    if (ariaLabel && ariaLabel.toLowerCase().includes("create resource")) {
+                                        console.log(`[TreeItem] Found button by aria-label: "${ariaLabel}"`);
+                                        return btn;
+                                    }
+                                } catch {
+                                    // Continue searching
+                                }
+                            }
+                        } catch {
+                            // Continue to next row
+                            continue;
+                        }
+                    }
+
+                    // Strategy 3: Use JavaScript to find the button
+                    console.log("[TreeItem] Trying JavaScript-based search...");
+                    const buttonFound = (await driver.executeScript(`
+                        function findCreateResourceButton(itemLabel) {
+                            const rows = document.querySelectorAll('.monaco-list-row');
+                            for (const row of rows) {
+                                const rowText = row.textContent || row.innerText || '';
+                                if (!rowText.includes('${itemLabel}')) {
+                                    continue;
+                                }
+                                
+                                // Look for action buttons with codicon-new-file
+                                const actionButtons = row.querySelectorAll('a.action-item, button.action-item, a[class*="action"], button[class*="action"]');
+                                for (const btn of actionButtons) {
+                                    // Check if button contains codicon-new-file
+                                    const codicon = btn.querySelector('.codicon-new-file, span.codicon-new-file');
+                                    if (codicon) {
+                                        return btn;
+                                    }
+                                    
+                                    // Check aria-label
+                                    const ariaLabel = btn.getAttribute('aria-label') || '';
+                                    if (ariaLabel.toLowerCase().includes('create resource')) {
+                                        return btn;
+                                    }
+                                }
+                                
+                                // Also check for any element with codicon-new-file in this row
+                                const codiconElements = row.querySelectorAll('.codicon-new-file, [class*="codicon-new-file"]');
+                                for (const codicon of codiconElements) {
+                                    const actionItem = codicon.closest('a.action-item, button.action-item, a[class*="action"], button[class*="action"]');
+                                    if (actionItem) {
+                                        return actionItem;
+                                    }
+                                }
+                            }
+                            return null;
+                        }
+                        const btn = findCreateResourceButton('${itemLabel}');
+                        if (btn) {
+                            btn.scrollIntoView({ block: 'center' });
+                            return btn;
+                        }
+                        return null;
+                    `)) as WebElement | null;
+
+                    if (buttonFound) {
+                        console.log("[TreeItem] Found button using JavaScript");
+                        return buttonFound;
+                    }
+
+                    return null;
+                } catch (error) {
+                    console.log(`[TreeItem] Error in button search: ${error}`);
+                    return null;
+                }
+            },
+            UITimeouts.LONG,
+            `Waiting for Create Resource button near item "${itemLabel}"`
+        );
+
+        if (button) {
+            console.log("[TreeItem] Found Create Resource button, clicking...");
+            // Scroll button into view if not already done
+            try {
+                await driver.executeScript("arguments[0].scrollIntoView({ block: 'center' });", button);
+            } catch {
+                // Ignore scroll errors
+            }
+
+            // Try regular click first
+            try {
+                await button.click();
+            } catch (clickError) {
+                // Fallback to JavaScript click
+                console.log(`[TreeItem] Regular click failed, trying JavaScript click: ${clickError}`);
+                await driver.executeScript("arguments[0].click();", button);
+            }
+
+            await applySlowMotion(driver);
+            return true;
+        }
+
+        console.log("[TreeItem] Create Resource button not found");
+        return false;
+    } catch (error) {
+        console.log(`[TreeItem] Error clicking Create Resource button: ${error}`);
+        return false;
+    }
+}
+
+/**
+ * Waits for the configuration to be applied by checking for pin emojis on project and TOV tree items.
+ * After configuration is created, the tree items get reordered and pin emojis (📌) are added to active items.
+ *
+ * @param driver - The WebDriver instance
+ * @param projectName - The project name to check for pin
+ * @param tovName - The TOV name to check for pin
+ * @param projectsSection - The Projects section to search in
+ * @param targetProject - The project tree item (should already be expanded)
+ * @param targetVersion - The version tree item (should already be expanded)
+ * @param timeout - Maximum time to wait (default: UITimeouts.MEDIUM)
+ * @returns Promise<boolean> - True if pins appeared or configuration already exists, false if timeout
+ */
+export async function waitForConfigurationApplied(
+    driver: WebDriver,
+    projectName: string,
+    tovName: string,
+    projectsSection: any,
+    targetProject: TreeItem,
+    targetVersion: TreeItem,
+    timeout: number = UITimeouts.MEDIUM
+): Promise<boolean> {
+    try {
+        console.log("[Configuration] Waiting for configuration to be applied (checking for pin emojis)...");
+
+        const pinsAppeared = await driver.wait(
+            async () => {
+                try {
+                    // Check the project's description for pin emoji
+                    let projectHasPin = false;
+                    try {
+                        const projectDescription = await targetProject.getDescription();
+                        if (
+                            projectDescription &&
+                            (projectDescription.includes("📌") || projectDescription.includes("pin"))
+                        ) {
+                            projectHasPin = true;
+                            console.log(`[Configuration] Found pin on project "${projectName}"`);
+                        }
+                    } catch {
+                        // Project description might not be accessible yet
+                    }
+
+                    // Check the TOV's description for pin emoji
+                    let tovHasPin = false;
+                    try {
+                        const tovDescription = await targetVersion.getDescription();
+                        if (tovDescription && (tovDescription.includes("📌") || tovDescription.includes("pin"))) {
+                            tovHasPin = true;
+                            console.log(`[Configuration] Found pin on TOV "${tovName}"`);
+                        }
+                    } catch {
+                        // TOV description might not be accessible yet
+                    }
+
+                    // If both have pins, configuration is applied
+                    if (projectHasPin && tovHasPin) {
+                        return true;
+                    }
+
+                    // If neither has pins yet, wait a bit more
+                    // If only one has a pin, also wait (might be in progress)
+                    return false;
+                } catch {
+                    return false;
+                }
+            },
+            timeout,
+            `Waiting for configuration to be applied (pins on "${projectName}" and "${tovName}")`
+        );
+
+        if (pinsAppeared) {
+            console.log("[Configuration] Configuration applied successfully - pins detected");
+            // Wait a bit more for tree to fully stabilize after reordering
+            await driver.sleep(1000);
+            return true;
+        }
+
+        // If pins didn't appear within timeout, configuration might already exist (no reordering needed)
+        console.log(
+            "[Configuration] Pins not detected within timeout - configuration may already exist or tree may not have updated"
+        );
+        // Still wait a bit for tree to stabilize
+        await driver.sleep(500);
+        return true;
+    } catch (error) {
+        console.log(`[Configuration] Error waiting for configuration to be applied: ${error}`);
+        // If timeout, assume configuration already exists and continue
+        // Still wait a bit for tree to stabilize
+        await driver.sleep(500);
+        return true;
+    }
+}
+
+/**
+ * Handles the TestBench project configuration prompt that may appear when clicking a cycle.
+ * Clicks the cycle once, then handles the configuration prompt if it appears.
+ * Waits for the configuration to be applied (tree reordering, pin emojis) before returning.
+ *
+ * @param cycleItem - The cycle tree item to click
+ * @param driver - The WebDriver instance
+ * @param projectName - The project name (for verification)
+ * @param tovName - The TOV name (for verification)
+ * @param projectsSection - The Projects section to check for pins
+ * @param targetProject - The project tree item (should already be expanded)
+ * @param targetVersion - The version tree item (should already be expanded)
+ * @returns Promise<boolean> - True if configuration was handled or not needed, false if failed
+ */
+export async function handleCycleConfigurationPrompt(
+    cycleItem: TreeItem,
+    driver: WebDriver,
+    projectName: string,
+    tovName: string,
+    projectsSection: any,
+    targetProject: TreeItem,
+    targetVersion: TreeItem
+): Promise<boolean> {
+    try {
+        console.log("[Configuration] Clicking cycle to check for configuration prompt...");
+
+        // Click the cycle once (single click) - this may trigger the configuration prompt
+        await cycleItem.click();
+        await applySlowMotion(driver);
+
+        // Wait for and click the Create button in the notification if it appears
+        const notificationText = `TestBench project configuration`;
+
+        const notificationClicked = await clickNotificationButton(driver, "Create", notificationText);
+
+        if (notificationClicked) {
+            console.log("[Configuration] Configuration prompt appeared and Create button was clicked");
+
+            // Wait for configuration to be applied (tree reordering, pin emojis)
+            const configApplied = await waitForConfigurationApplied(
+                driver,
+                projectName,
+                tovName,
+                projectsSection,
+                targetProject,
+                targetVersion
+            );
+
+            if (!configApplied) {
+                console.log(
+                    "[Configuration] Warning: Configuration may not have been fully applied, continuing anyway"
+                );
+            }
+
+            return true;
+        } else {
+            console.log("[Configuration] No configuration prompt appeared (configuration may already exist)");
+            // Configuration prompt didn't appear, which is fine - configuration may already exist
+            return true;
+        }
+    } catch (error) {
+        console.log(`[Configuration] Error handling configuration prompt: ${error}`);
+        // If there's an error, assume configuration already exists and continue
+        return true;
+    }
+}
+
+/**
+ * Waits for Projects view to appear in the sidebar.
+ *
+ * @param driver - The WebDriver instance
+ * @param timeout - Maximum time to wait (default: UITimeouts.MEDIUM)
+ * @returns Promise<boolean> - True if Projects view appeared, false if timeout
+ */
+export async function waitForProjectsView(driver: WebDriver, timeout: number = UITimeouts.MEDIUM): Promise<boolean> {
+    try {
+        await driver.wait(
+            async () => {
+                try {
+                    const sideBar = new SideBarView();
+                    const content = sideBar.getContent();
+                    const projectsSection = await findSidebarSection(content, "Projects");
+                    return projectsSection !== null;
+                } catch {
+                    return false;
+                }
+            },
+            timeout,
+            "Waiting for Projects view to appear"
+        );
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Waits for Test Themes and Test Elements views to appear in the sidebar.
+ *
+ * @param driver - The WebDriver instance
+ * @param timeout - Maximum time to wait (default: UITimeouts.MEDIUM)
+ * @returns Promise<boolean> - True if both views appeared, false if timeout
+ */
+export async function waitForTestThemesAndElementsViews(
+    driver: WebDriver,
+    timeout: number = UITimeouts.MEDIUM
+): Promise<boolean> {
+    try {
+        await driver.wait(
+            async () => {
+                try {
+                    const sideBar = new SideBarView();
+                    const content = sideBar.getContent();
+                    const testThemesSection = await findSidebarSection(content, "Test Themes");
+                    const testElementsSection = await findSidebarSection(content, "Test Elements");
+                    return testThemesSection !== null && testElementsSection !== null;
+                } catch {
+                    return false;
+                }
+            },
+            timeout,
+            "Waiting for Test Themes and Test Elements views to appear"
+        );
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Waits for a file to be opened in the editor.
+ *
+ * @param driver - The WebDriver instance
+ * @param fileName - The name of the file to wait for (can be partial match)
+ * @param timeout - Maximum time to wait (default: UITimeouts.LONG)
+ * @returns Promise<boolean> - True if file was opened, false if timeout
+ */
+export async function waitForFileInEditor(
+    driver: WebDriver,
+    fileName: string,
+    timeout: number = UITimeouts.LONG
+): Promise<boolean> {
+    try {
+        await driver.wait(
+            async () => {
+                try {
+                    const editorView = new EditorView();
+                    const editorTitles = await editorView.getOpenEditorTitles();
+                    for (const title of editorTitles) {
+                        if (title.includes(fileName)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                } catch {
+                    return false;
+                }
+            },
+            timeout,
+            `Waiting for file "${fileName}" to be opened in editor`
+        );
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Closes any open quick input dialogs (like "Go to Line") that might be blocking interactions.
+ *
+ * @param driver - The WebDriver instance
+ * @returns Promise<boolean> - True if dialog was closed or none was open, false otherwise
+ */
+export async function closeQuickInputDialog(driver: WebDriver): Promise<boolean> {
+    try {
+        await driver.switchTo().defaultContent();
+
+        // Check if quick input dialog is open
+        const quickInputElements = await driver.findElements(By.css(".quick-input-widget, .monaco-quick-open-widget"));
+        if (quickInputElements.length > 0) {
+            console.log("[Editor] Quick input dialog detected, closing...");
+            // Press Escape to close the dialog
+            await driver.actions().sendKeys(Key.ESCAPE).perform();
+            await driver.sleep(300);
+            return true;
+        }
+
+        return true;
+    } catch (_error) {
+        // If there's an error, assume no dialog was open
+        return true;
+    }
+}
+
+/**
+ * Sets the cursor position in a TextEditor without opening the "Go to Line" dialog.
+ * Uses keyboard shortcuts to navigate to the beginning of the file.
+ *
+ * @param editor - The TextEditor instance
+ * @param driver - The WebDriver instance
+ * @param lineNumber - The line number to navigate to (1-based)
+ * @param column - The column number to navigate to (0-based, default: 0)
+ * @returns Promise<boolean> - True if cursor was set successfully, false otherwise
+ */
+export async function setCursorPosition(
+    editor: TextEditor,
+    driver: WebDriver,
+    lineNumber: number = 1,
+    column: number = 0
+): Promise<boolean> {
+    try {
+        console.log(`[Editor] Setting cursor to line ${lineNumber}, column ${column}...`);
+
+        // First, close any open quick input dialogs
+        await closeQuickInputDialog(driver);
+
+        // Ensure the editor is focused
+        await editor.click();
+        await driver.sleep(200);
+
+        // Use keyboard shortcut to go to beginning of file (Ctrl+Home on Windows/Linux, Cmd+Home on Mac)
+        if (lineNumber === 1 && column === 0) {
+            // Simple case: just go to beginning of file
+            const isMac = process.platform === "darwin";
+            const homeKey = isMac ? Key.COMMAND : Key.CONTROL;
+            await driver.actions().keyDown(homeKey).sendKeys(Key.HOME).keyUp(homeKey).perform();
+            await driver.sleep(300);
+        } else {
+            // For other positions, go to beginning first, then use arrow keys
+            const isMac = process.platform === "darwin";
+            const homeKey = isMac ? Key.COMMAND : Key.CONTROL;
+            await driver.actions().keyDown(homeKey).sendKeys(Key.HOME).keyUp(homeKey).perform();
+            await driver.sleep(200);
+
+            // If we need to go to a different line, use arrow keys
+            if (lineNumber > 1) {
+                for (let i = 1; i < lineNumber; i++) {
+                    await driver.actions().sendKeys(Key.ARROW_DOWN).perform();
+                    await driver.sleep(50);
+                }
+            }
+
+            // If we need to go to a specific column, use arrow keys
+            if (column > 0) {
+                for (let i = 0; i < column; i++) {
+                    await driver.actions().sendKeys(Key.ARROW_RIGHT).perform();
+                    await driver.sleep(50);
+                }
+            }
+        }
+
+        await applySlowMotion(driver);
+        console.log(`[Editor] Cursor set to line ${lineNumber}, column ${column}`);
+        return true;
+    } catch (error) {
+        console.log(`[Editor] Error setting cursor position: ${error}`);
+        // Fallback: try clicking at the beginning of the editor
+        try {
+            await editor.click();
+            await driver.sleep(200);
+            // Click at the top-left of the editor content area
+            const editorElement = await editor.findElement(By.css(".monaco-editor, .editor-container"));
+            const location = await editorElement.getLocation();
+            // Click at the beginning (top-left with some offset for line numbers)
+            await driver
+                .actions()
+                .move({ x: location.x + 50, y: location.y + 20 })
+                .click()
+                .perform();
+            await driver.sleep(200);
+            console.log(`[Editor] Cursor set using click fallback`);
+            return true;
+        } catch (fallbackError) {
+            console.log(`[Editor] Fallback cursor positioning also failed: ${fallbackError}`);
+            return false;
+        }
+    }
+}
+
+/**
+ * Deletes all content from a specific line number onwards in a TextEditor.
+ * Keeps lines before the specified line number intact.
+ *
+ * @param editor - The TextEditor instance
+ * @param driver - The WebDriver instance
+ * @param fromLine - The line number from which to start deleting (1-based, inclusive)
+ * @returns Promise<boolean> - True if deletion was successful, false otherwise
+ */
+export async function deleteFromLineOnwards(editor: TextEditor, driver: WebDriver, fromLine: number): Promise<boolean> {
+    try {
+        console.log(`[Editor] Deleting content from line ${fromLine} onwards...`);
+
+        // Close any open quick input dialogs
+        await closeQuickInputDialog(driver);
+
+        // Ensure the editor is focused
+        await editor.click();
+        await driver.sleep(200);
+
+        // Navigate to the start of the line from which we want to delete
+        const isMac = process.platform === "darwin";
+        const ctrlKey = isMac ? Key.COMMAND : Key.CONTROL;
+
+        // Go to beginning of file first
+        await driver.actions().keyDown(ctrlKey).sendKeys(Key.HOME).keyUp(ctrlKey).perform();
+        await driver.sleep(100);
+
+        // Navigate to the target line using arrow keys
+        for (let i = 1; i < fromLine; i++) {
+            await driver.actions().sendKeys(Key.ARROW_DOWN).perform();
+            await driver.sleep(50);
+        }
+
+        // Go to the beginning of the target line
+        await driver.actions().sendKeys(Key.HOME).perform();
+        await driver.sleep(100);
+
+        // Select from current position to end of file (Ctrl+Shift+End)
+        await driver
+            .actions()
+            .keyDown(ctrlKey)
+            .keyDown(Key.SHIFT)
+            .sendKeys(Key.END)
+            .keyUp(Key.SHIFT)
+            .keyUp(ctrlKey)
+            .perform();
+        await driver.sleep(200);
+
+        // Delete the selected content
+        await driver.actions().sendKeys(Key.DELETE).perform();
+        await driver.sleep(200);
+
+        await applySlowMotion(driver);
+        console.log(`[Editor] Content from line ${fromLine} onwards deleted`);
+        return true;
+    } catch (error) {
+        console.log(`[Editor] Error deleting content from line ${fromLine}: ${error}`);
+
+        // Fallback: Try using TextEditor's text manipulation methods
+        try {
+            const isMac = process.platform === "darwin";
+            const ctrlKey = isMac ? Key.COMMAND : Key.CONTROL;
+
+            // Get current text
+            const currentText = await editor.getText();
+            const lines = currentText.split("\n");
+
+            // Keep only lines before fromLine
+            if (lines.length >= fromLine) {
+                const linesToKeep = lines.slice(0, fromLine - 1);
+                const newText = linesToKeep.join("\n");
+
+                // Select all and replace
+                await editor.click();
+                await driver.sleep(100);
+                await driver.actions().keyDown(ctrlKey).sendKeys("a").keyUp(ctrlKey).perform();
+                await driver.sleep(100);
+                await driver.actions().sendKeys(newText).perform();
+                await driver.sleep(200);
+
+                console.log(`[Editor] Content deleted using fallback method`);
+                return true;
+            }
+        } catch (fallbackError) {
+            console.log(`[Editor] Fallback deletion also failed: ${fallbackError}`);
+        }
+
+        return false;
+    }
+}
+
+/**
+ * Waits for CodeLens to appear in the active editor.
+ *
+ * @param driver - The WebDriver instance
+ * @param codeLensText - The text of the CodeLens to wait for (optional, for verification)
+ * @param timeout - Maximum time to wait (default: UITimeouts.LONG)
+ * @returns Promise<boolean> - True if CodeLens appeared, false if timeout
+ */
+export async function waitForCodeLens(
+    driver: WebDriver,
+    codeLensText?: string,
+    timeout: number = UITimeouts.LONG
+): Promise<boolean> {
+    try {
+        await driver.switchTo().defaultContent();
+
+        await driver.wait(
+            async () => {
+                try {
+                    // Check if CodeLens elements exist
+                    const codeLensElements = await driver.findElements(
+                        By.css(".codelens-decoration, .code-lens, [class*='codelens']")
+                    );
+
+                    if (codeLensElements.length === 0) {
+                        return false;
+                    }
+
+                    // If specific text is provided, verify it exists
+                    if (codeLensText) {
+                        for (const element of codeLensElements) {
+                            try {
+                                const text = await element.getText();
+                                if (text.includes(codeLensText)) {
+                                    return true;
+                                }
+                            } catch {
+                                // Continue searching
+                            }
+                        }
+                        return false;
+                    }
+
+                    // If no specific text, just check that CodeLens elements exist
+                    return codeLensElements.length > 0;
+                } catch {
+                    return false;
+                }
+            },
+            timeout,
+            codeLensText ? `Waiting for CodeLens "${codeLensText}" to appear` : "Waiting for CodeLens to appear"
+        );
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Waits for Refactor Preview tab to appear.
+ *
+ * @param driver - The WebDriver instance
+ * @param timeout - Maximum time to wait (default: UITimeouts.VERY_LONG)
+ * @returns Promise<boolean> - True if Refactor Preview appeared, false if timeout
+ */
+export async function waitForRefactorPreview(
+    driver: WebDriver,
+    timeout: number = UITimeouts.VERY_LONG
+): Promise<boolean> {
+    try {
+        await driver.switchTo().defaultContent();
+
+        await driver.wait(
+            async () => {
+                try {
+                    // Find tab by title
+                    const tabs = await driver.findElements(By.css(".tab, .monaco-tab, [role='tab']"));
+                    for (const tab of tabs) {
+                        const title = await tab.getText();
+                        if (title.includes("REFACTOR PREVIEW") || title.includes("Refactor Preview")) {
+                            return true;
+                        }
+                    }
+                    return false;
+                } catch {
+                    return false;
+                }
+            },
+            timeout,
+            "Waiting for Refactor Preview tab to appear"
+        );
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Waits for a tree item's action button to become visible.
+ * This is useful when a button only appears after expanding or interacting with a tree item.
+ *
+ * @param item - The tree item
+ * @param driver - The WebDriver instance
+ * @param buttonText - The text/aria-label of the button to wait for (optional)
+ * @param timeout - Maximum time to wait (default: UITimeouts.MEDIUM)
+ * @returns Promise<boolean> - True if button became visible, false if timeout
+ */
+export async function waitForTreeItemButton(
+    item: TreeItem,
+    driver: WebDriver,
+    buttonText?: string,
+    timeout: number = UITimeouts.MEDIUM
+): Promise<boolean> {
+    try {
+        await driver.switchTo().defaultContent();
+
+        const itemLabel = await item.getLabel();
+
+        await driver.wait(
+            async () => {
+                try {
+                    // Try to find buttons near the tree item
+                    const buttons = await driver.findElements(
+                        By.xpath(
+                            `//div[contains(@class, 'monaco-list-row')]//button[contains(@aria-label, '${buttonText || "Create"}') or contains(@title, '${buttonText || "Create"}')]`
+                        )
+                    );
+
+                    // Filter buttons to find the one near our tree item
+                    for (const btn of buttons) {
+                        try {
+                            const row = await btn.findElement(
+                                By.xpath("./ancestor::div[contains(@class, 'monaco-list-row')]")
+                            );
+                            const rowText = await row.getText();
+                            if (rowText.includes(itemLabel)) {
+                                const isDisplayed = await btn.isDisplayed();
+                                if (isDisplayed) {
+                                    return true;
+                                }
+                            }
+                        } catch {
+                            // Continue searching
+                        }
+                    }
+
+                    return false;
+                } catch {
+                    return false;
+                }
+            },
+            timeout,
+            `Waiting for button to become visible for tree item "${itemLabel}"`
+        );
+        return true;
+    } catch {
         return false;
     }
 }
