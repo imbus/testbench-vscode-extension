@@ -1283,7 +1283,7 @@ export async function saveConnection(
         );
 
         // Wait for UI to settle and for form to reset (section title changes back to "Add New Connection")
-        // or for a connection to appear in the list
+        // Also wait for connections list to be updated (connection items to appear)
         await driver.wait(
             async () => {
                 try {
@@ -1292,15 +1292,16 @@ export async function saveConnection(
                     const titleText = await sectionTitle.getText();
                     const isReset = titleText.toLowerCase().includes("add new connection");
 
-                    // Also verify connections list has items (if we just saved)
+                    // Verify connections list has items (connection was saved)
                     const connections = await getAllConnections(driver);
-                    return isReset || connections.length > 0;
+                    const hasConnections = connections.length > 0;
+                    return isReset && hasConnections;
                 } catch {
                     return false;
                 }
             },
             UITimeouts.MEDIUM,
-            "Waiting for UI to settle after save"
+            "Waiting for UI to settle after save and connection to appear in list"
         );
     }
 }

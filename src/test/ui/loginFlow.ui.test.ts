@@ -197,11 +197,23 @@ describe("Login Flow E2E Tests", function () {
                 await saveConnection(driver);
 
                 console.log("Verifying connection in list...");
+                // Wait for connections list to appear
                 const connectionsList = await driver.wait(
                     until.elementLocated(By.id(ConnectionFormElements.CONNECTIONS_LIST)),
                     10000,
                     "Waiting for connections list to appear"
                 );
+
+                // Wait for at least one connection item to appear in the list
+                await driver.wait(
+                    async () => {
+                        const connectionsItems = await connectionsList.findElements(By.css("li"));
+                        return connectionsItems.length > 0;
+                    },
+                    10000,
+                    "Waiting for connection to appear in list after save"
+                );
+
                 await applySlowMotion(driver);
 
                 const connectionsItems = await connectionsList.findElements(By.css("li"));
