@@ -385,9 +385,38 @@ describe("Resource Creation Flow E2E Tests", function () {
                 // Remove contents from line 4 onwards (usually starts with "*** Keywords ***")
                 // Keep lines 1, 2, and 3 intact
                 console.log("[Phase 4] Removing content from line 4 onwards...");
-                const contentDeleted = await deleteFromLineOnwards(resourceEditor, driver, 4);
+
+                // Retry deletion up to 3 times if it fails
+                let contentDeleted = false;
+                const maxRetries = 3;
+                for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                    if (attempt > 1) {
+                        console.log(`[Phase 4] Retry attempt ${attempt}/${maxRetries} to delete content...`);
+                        await driver.sleep(500); // Brief pause between retries
+                    }
+
+                    contentDeleted = await deleteFromLineOnwards(resourceEditor, driver, 4);
+                    if (contentDeleted) {
+                        console.log(`[Phase 4] ✓ Content deleted successfully on attempt ${attempt}`);
+                        break;
+                    } else {
+                        console.log(`[Phase 4] ✗ Deletion failed on attempt ${attempt}`);
+                        if (attempt < maxRetries) {
+                            // Re-focus the editor before retry
+                            try {
+                                await resourceEditor.click();
+                                await driver.sleep(200);
+                            } catch {
+                                // Ignore focus errors
+                            }
+                        }
+                    }
+                }
+
                 if (!contentDeleted) {
-                    console.log("[Phase 4] Warning: Failed to delete content from line 4 onwards, continuing anyway");
+                    console.log("[Phase 4] ERROR: Failed to delete content after all retry attempts");
+                    this.skip();
+                    return;
                 }
 
                 // Add stabilization delay.

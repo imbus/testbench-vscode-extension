@@ -960,163 +960,70 @@ export async function applySlowMotion(driver: WebDriver, customDelay?: number): 
 }
 
 /**
- * Interface for connection form data.
+ * Export ConnectionPage for POM pattern.
  */
-export interface ConnectionFormData {
-    connectionLabel?: string;
-    serverName: string;
-    portNumber: string;
-    username: string;
-    password?: string;
-    storePassword?: boolean;
-}
-
-/**
- * Result of finding a connection in the list.
- */
-export interface ConnectionSearchResult {
-    element: WebElement | null;
-    found: boolean;
-}
-
-/**
- * Clears an input field thoroughly, handling default values and edge cases.
- * Uses multiple strategies to ensure the field is completely cleared.
- * This is especially important for fields with default values (like port="9445").
- *
- * @param driver - The WebDriver instance
- * @param element - The input element to clear
- * @returns Promise<void>
- */
-async function clearInputField(driver: WebDriver, element: WebElement): Promise<void> {
-    try {
-        // Strategy 1: Use JavaScript to directly set value to empty (most reliable)
-        // This bypasses any default values set in HTML
-        await driver.executeScript("arguments[0].value = '';", element);
-
-        // Strategy 2: Standard clear as backup
-        await element.clear();
-
-        // Strategy 3: Trigger input event to ensure UI updates
-        await driver.executeScript("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", element);
-
-        // Wait for the field to be cleared and verify value is empty
-        await driver.wait(
-            async () => {
-                const value = await element.getAttribute("value");
-                return value === null || value === "";
-            },
-            1000,
-            "Waiting for input field to be cleared"
-        );
-    } catch (error) {
-        // If all strategies fail, log but continue
-        console.log("Warning: Could not fully clear input field:", error);
-    }
-}
+export { ConnectionPage } from "./pages/ConnectionPage";
+export type { ConnectionFormData, ConnectionSearchResult } from "./pages/ConnectionPage";
 
 /**
  * Fills the connection form with the provided data.
  * Ensures fields are properly cleared before filling, especially to handle default values.
  *
+ * @deprecated Use ConnectionPage.fillForm() instead. This is kept for backward compatibility.
  * @param driver - The WebDriver instance
  * @param formData - The connection form data to fill
  * @returns Promise<void>
  */
-export async function fillConnectionForm(driver: WebDriver, formData: ConnectionFormData): Promise<void> {
-    const { connectionLabel = "", serverName, portNumber, username, password = "", storePassword = true } = formData;
-
-    const labelInput = await driver.findElement(By.id(ConnectionFormElements.CONNECTION_LABEL));
-    await clearInputField(driver, labelInput);
-    if (connectionLabel) {
-        await labelInput.sendKeys(connectionLabel);
-        await applySlowMotion(driver); // Visible: typing in label field
-    }
-
-    const serverInput = await driver.findElement(By.id(ConnectionFormElements.SERVER_NAME));
-    await clearInputField(driver, serverInput);
-    await serverInput.sendKeys(serverName);
-    await applySlowMotion(driver); // Visible: typing in server field
-
-    const portInput = await driver.findElement(By.id(ConnectionFormElements.PORT_NUMBER));
-    await clearInputField(driver, portInput);
-    await portInput.sendKeys(portNumber);
-    await applySlowMotion(driver); // Visible: typing in port field
-
-    const usernameInput = await driver.findElement(By.id(ConnectionFormElements.USERNAME));
-    await clearInputField(driver, usernameInput);
-    await usernameInput.sendKeys(username);
-    await applySlowMotion(driver); // Visible: typing in username field
-
-    const passwordInput = await driver.findElement(By.id(ConnectionFormElements.PASSWORD));
-    await clearInputField(driver, passwordInput);
-    if (password) {
-        await passwordInput.sendKeys(password);
-        await applySlowMotion(driver); // Visible: typing in password field
-    }
-
-    const storePasswordCheckbox = await driver.findElement(By.id(ConnectionFormElements.STORE_PASSWORD_CHECKBOX));
-    const isChecked = await storePasswordCheckbox.isSelected();
-    if (storePassword !== isChecked) {
-        await storePasswordCheckbox.click();
-        await applySlowMotion(driver); // Visible: clicking checkbox
-    }
+export async function fillConnectionForm(
+    driver: WebDriver,
+    formData: import("./pages/ConnectionPage").ConnectionFormData
+): Promise<void> {
+    const { ConnectionPage } = await import("./pages/ConnectionPage");
+    const page = new ConnectionPage(driver);
+    await page.fillForm(formData);
 }
 
 /**
  * Finds a connection in the connections list by label or connection string.
  *
+ * @deprecated Use ConnectionPage.findConnection() instead. This is kept for backward compatibility.
  * @param driver - The WebDriver instance
  * @param searchText - The text to search for (label or connection string)
  * @returns Promise<ConnectionSearchResult> - The search result with element and found flag
  */
-export async function findConnectionInList(driver: WebDriver, searchText: string): Promise<ConnectionSearchResult> {
-    try {
-        const connectionsList = await driver.findElement(By.id(ConnectionFormElements.CONNECTIONS_LIST));
-        const connectionsItems = await connectionsList.findElements(By.css("li"));
-
-        for (const item of connectionsItems) {
-            const text = await item.getText();
-            if (text.includes(searchText)) {
-                return { element: item, found: true };
-            }
-        }
-        return { element: null, found: false };
-    } catch {
-        return { element: null, found: false };
-    }
+export async function findConnectionInList(
+    driver: WebDriver,
+    searchText: string
+): Promise<import("./pages/ConnectionPage").ConnectionSearchResult> {
+    const { ConnectionPage } = await import("./pages/ConnectionPage");
+    const page = new ConnectionPage(driver);
+    return await page.findConnection(searchText);
 }
 
 /**
  * Gets the current count of connections in the list.
  *
+ * @deprecated Use ConnectionPage.getConnectionCount() instead. This is kept for backward compatibility.
  * @param driver - The WebDriver instance
  * @returns Promise<number> - The number of connections
  */
 export async function getConnectionCount(driver: WebDriver): Promise<number> {
-    try {
-        const connectionsList = await driver.findElement(By.id(ConnectionFormElements.CONNECTIONS_LIST));
-        const connectionsItems = await connectionsList.findElements(By.css("li"));
-        return connectionsItems.length;
-    } catch {
-        return 0;
-    }
+    const { ConnectionPage } = await import("./pages/ConnectionPage");
+    const page = new ConnectionPage(driver);
+    return await page.getConnectionCount();
 }
 
 /**
  * Gets all connection list items from the connections list.
  *
+ * @deprecated Use ConnectionPage.getAllConnections() instead. This is kept for backward compatibility.
  * @param driver - The WebDriver instance
  * @returns Promise<WebElement[]> - Array of connection list item elements
  */
 export async function getAllConnections(driver: WebDriver): Promise<WebElement[]> {
-    try {
-        const connectionsList = await driver.findElement(By.id(ConnectionFormElements.CONNECTIONS_LIST));
-        const connectionsItems = await connectionsList.findElements(By.css("li"));
-        return connectionsItems;
-    } catch {
-        return [];
-    }
+    const { ConnectionPage } = await import("./pages/ConnectionPage");
+    const page = new ConnectionPage(driver);
+    return await page.getAllConnections();
 }
 
 /**
@@ -1124,6 +1031,7 @@ export async function getAllConnections(driver: WebDriver): Promise<WebElement[]
  * This is useful for cleaning up test state before running tests.
  * Only works when the webview is available (user is not logged in).
  *
+ * @deprecated Use ConnectionPage.deleteAllConnections() instead. This is kept for backward compatibility.
  * @param driver - The WebDriver instance
  * @returns Promise<number> - The number of connections that were deleted
  */
@@ -1143,141 +1051,12 @@ export async function deleteAllConnections(driver: WebDriver): Promise<number> {
             return 0;
         }
 
-        let deletedCount = 0;
-        const maxIterations = 50; // Safety limit to prevent infinite loops
-        let iterations = 0;
-
-        // Delete connections until none remain
-        while (iterations < maxIterations) {
-            iterations++;
-
-            // Get all connections
-            const connections = await getAllConnections(driver);
-
-            if (connections.length === 0) {
-                // No more connections to delete
-                break;
-            }
-
-            // Delete the first connection (we'll keep deleting until all are gone)
-            const firstConnection = connections[0];
-
-            try {
-                // Check if delete button is enabled (not disabled during edit mode)
-                const deleteButton = await firstConnection.findElement(By.css("button.delete-btn"));
-                const isDisabled = await deleteButton.getAttribute("disabled");
-
-                if (isDisabled !== null) {
-                    // Connection is being edited - cancel edit mode first
-                    console.log("[Cleanup] Connection is being edited. Canceling edit mode first...");
-                    try {
-                        const cancelButton = await driver.findElement(By.id(ConnectionFormElements.CANCEL_EDIT_BUTTON));
-                        await cancelButton.click();
-
-                        // Wait for form to reset (section title should change back to "Add New Connection")
-                        await driver.wait(
-                            async () => {
-                                try {
-                                    const sectionTitle = await driver.findElement(
-                                        By.id(ConnectionFormElements.SECTION_TITLE)
-                                    );
-                                    const titleText = await sectionTitle.getText();
-                                    return titleText.toLowerCase().includes("add new connection");
-                                } catch {
-                                    return false;
-                                }
-                            },
-                            UITimeouts.MEDIUM,
-                            "Waiting for form to reset after canceling edit"
-                        );
-                        // Re-fetch connections after canceling edit
-                        continue;
-                    } catch {
-                        console.log("[Cleanup] Could not cancel edit mode. Skipping cleanup.");
-                        break;
-                    }
-                }
-
-                // Click delete button (this will open confirmation dialog)
-                await clickDeleteConnection(driver, firstConnection);
-
-                // Switch to default content BEFORE handling dialog (dialog blocks webview)
-                await driver.switchTo().defaultContent();
-
-                // Wait for dialog to appear
-                await driver.wait(
-                    until.elementLocated(By.css(".monaco-dialog-modal-block, .monaco-dialog, .monaco-dialog-box")),
-                    UITimeouts.MEDIUM,
-                    "Waiting for confirmation dialog to appear"
-                );
-
-                // Handle confirmation dialog (this will switch to default content internally)
-                const dialogHandled = await handleConfirmationDialog(driver, "Delete");
-
-                if (!dialogHandled) {
-                    console.log("[Cleanup] Failed to handle confirmation dialog, skipping this connection");
-                    // Try to cancel the dialog if it's still open
-                    try {
-                        await driver.switchTo().defaultContent();
-                        const cancelButtons = await driver.findElements(
-                            By.xpath("//button[contains(text(), 'Cancel') or contains(text(), 'No')]")
-                        );
-                        if (cancelButtons.length > 0) {
-                            await cancelButtons[0].click();
-
-                            // Wait for dialog to disappear
-                            await driver.wait(
-                                async () => {
-                                    const modalBlocks = await driver.findElements(By.css(".monaco-dialog-modal-block"));
-                                    return modalBlocks.length === 0;
-                                },
-                                UITimeouts.MEDIUM,
-                                "Waiting for dialog to close after cancel"
-                            );
-                        }
-                    } catch {
-                        // Ignore errors when trying to cancel
-                    }
-                    continue; // Skip this connection and try next
-                }
-
-                // Wait for dialog to be fully closed and webview to be accessible
-                await driver.wait(
-                    async () => {
-                        const modalBlocks = await driver.findElements(By.css(".monaco-dialog-modal-block"));
-                        if (modalBlocks.length > 0) {
-                            return false;
-                        }
-                        // Try to switch back to webview to verify it's accessible
-                        try {
-                            return await findAndSwitchToWebview(driver);
-                        } catch {
-                            return false;
-                        }
-                    },
-                    UITimeouts.MEDIUM,
-                    "Waiting for dialog to close and webview to be accessible"
-                );
-
-                deletedCount++;
-            } catch (error) {
-                console.log(`[Cleanup] Error deleting connection: ${error}`);
-                // Try to switch back to webview and continue
-                try {
-                    await findAndSwitchToWebview(driver);
-                } catch {
-                    // If we can't switch back, break the loop
-                    break;
-                }
-            }
-        }
+        const { ConnectionPage } = await import("./pages/ConnectionPage");
+        const page = new ConnectionPage(driver);
+        const deletedCount = await page.deleteAllConnections();
 
         // Switch back to default content
         await driver.switchTo().defaultContent();
-
-        if (deletedCount > 0) {
-            console.log(`[Cleanup] Deleted ${deletedCount} connection(s)`);
-        }
 
         return deletedCount;
     } catch (error) {
@@ -1294,6 +1073,7 @@ export async function deleteAllConnections(driver: WebDriver): Promise<number> {
 /**
  * Clicks the save connection button and waits for the operation to complete.
  *
+ * @deprecated Use ConnectionPage.save() instead. This is kept for backward compatibility.
  * @param driver - The WebDriver instance
  * @param waitForUpdate - Whether to wait for the connections list to update (default: true)
  * @param timeout - Maximum time to wait (default: 10000ms)
@@ -1304,101 +1084,68 @@ export async function saveConnection(
     waitForUpdate: boolean = true,
     timeout: number = UITimeouts.LONG
 ): Promise<void> {
-    const saveButton = await driver.findElement(By.id(ConnectionFormElements.SAVE_BUTTON));
-    await saveButton.click();
-    await applySlowMotion(driver); // Visible: clicking save button
-
-    if (waitForUpdate) {
-        // Wait for connections list to be present and updated (background operation)
-        await driver.wait(
-            until.elementLocated(By.id(ConnectionFormElements.CONNECTIONS_LIST)),
-            timeout,
-            "Waiting for connections list to update"
-        );
-
-        // Wait for UI to settle and for form to reset (section title changes back to "Add New Connection")
-        // Also wait for connections list to be updated (connection items to appear)
-        await driver.wait(
-            async () => {
-                try {
-                    // Check if form is reset (not in edit mode)
-                    const sectionTitle = await driver.findElement(By.id(ConnectionFormElements.SECTION_TITLE));
-                    const titleText = await sectionTitle.getText();
-                    const isReset = titleText.toLowerCase().includes("add new connection");
-
-                    // Verify connections list has items (connection was saved)
-                    const connections = await getAllConnections(driver);
-                    const hasConnections = connections.length > 0;
-                    return isReset && hasConnections;
-                } catch {
-                    return false;
-                }
-            },
-            UITimeouts.MEDIUM,
-            "Waiting for UI to settle after save and connection to appear in list"
-        );
-    }
+    const { ConnectionPage } = await import("./pages/ConnectionPage");
+    const page = new ConnectionPage(driver);
+    await page.save(waitForUpdate, timeout);
 }
 
 /**
  * Creates a new connection using the provided form data.
  *
+ * @deprecated Use ConnectionPage.createConnection() instead. This is kept for backward compatibility.
  * @param driver - The WebDriver instance
  * @param formData - The connection form data
  * @returns Promise<number> - The connection count after creation
  */
-export async function createConnection(driver: WebDriver, formData: ConnectionFormData): Promise<number> {
-    await fillConnectionForm(driver, formData);
-    await saveConnection(driver);
-    return await getConnectionCount(driver);
+export async function createConnection(
+    driver: WebDriver,
+    formData: import("./pages/ConnectionPage").ConnectionFormData
+): Promise<number> {
+    const { ConnectionPage } = await import("./pages/ConnectionPage");
+    const page = new ConnectionPage(driver);
+    return await page.createConnection(formData);
 }
 
 /**
  * Clicks the edit button for a connection found in the list.
  *
+ * @deprecated Use ConnectionPage.clickEdit() instead. This is kept for backward compatibility.
  * @param driver - The WebDriver instance
  * @param connectionElement - The connection list item element
  * @returns Promise<void>
  */
 export async function clickEditConnection(driver: WebDriver, connectionElement: WebElement): Promise<void> {
-    const editButton = await connectionElement.findElement(By.css("button.edit-btn"));
-    await editButton.click();
-    await applySlowMotion(driver); // Visible: clicking edit button
-
-    // Wait for UI to update and for form to enter edit mode
-    await driver.wait(
-        async () => {
-            return await isEditMode(driver);
-        },
-        UITimeouts.MEDIUM,
-        "Waiting for form to enter edit mode"
-    );
+    const { ConnectionPage } = await import("./pages/ConnectionPage");
+    const page = new ConnectionPage(driver);
+    await page.clickEdit(connectionElement);
 }
 
 /**
  * Clicks the delete button for a connection found in the list.
  *
+ * @deprecated Use ConnectionPage.clickDelete() instead. This is kept for backward compatibility.
  * @param driver - The WebDriver instance
  * @param connectionElement - The connection list item element
  * @returns Promise<void>
  */
 export async function clickDeleteConnection(driver: WebDriver, connectionElement: WebElement): Promise<void> {
-    const deleteButton = await connectionElement.findElement(By.css("button.delete-btn"));
-    await deleteButton.click();
-    await applySlowMotion(driver); // Visible: clicking delete button
+    const { ConnectionPage } = await import("./pages/ConnectionPage");
+    const page = new ConnectionPage(driver);
+    await page.clickDelete(connectionElement);
 }
 
 /**
  * Clicks the login button for a connection found in the list.
  *
+ * @deprecated Use ConnectionPage.clickLogin() instead. This is kept for backward compatibility.
  * @param driver - The WebDriver instance
  * @param connectionElement - The connection list item element
  * @returns Promise<void>
  */
 export async function clickLoginConnection(driver: WebDriver, connectionElement: WebElement): Promise<void> {
-    const loginButton = await connectionElement.findElement(By.css("button.login-btn"));
-    await loginButton.click();
-    await applySlowMotion(driver); // Visible: clicking login button
+    const { ConnectionPage } = await import("./pages/ConnectionPage");
+    const page = new ConnectionPage(driver);
+    await page.clickLogin(connectionElement);
 }
 
 /**
@@ -1827,44 +1574,41 @@ export async function handleConfirmationDialog(
 /**
  * Gets the message text from the messages div.
  *
+ * @deprecated Use ConnectionPage.getErrorMessage() instead. This is kept for backward compatibility.
  * @param driver - The WebDriver instance
  * @param timeout - Maximum time to wait for message (default: 5000ms)
  * @returns Promise<string> - The message text
  */
 export async function getMessageText(driver: WebDriver, timeout: number = UITimeouts.MEDIUM): Promise<string> {
-    const messagesDiv = await driver.wait(
-        until.elementLocated(By.id(ConnectionFormElements.MESSAGES)),
-        timeout,
-        "Waiting for message to appear"
-    );
-    return await messagesDiv.getText();
+    const { ConnectionPage } = await import("./pages/ConnectionPage");
+    const page = new ConnectionPage(driver);
+    return await page.getErrorMessage(timeout);
 }
 
 /**
  * Resets the connection form to its initial state.
  *
+ * @deprecated Use ConnectionPage.resetForm() instead. This is kept for backward compatibility.
  * @param driver - The WebDriver instance
  * @returns Promise<void>
  */
 export async function resetConnectionForm(driver: WebDriver): Promise<void> {
-    const form = await driver.findElement(By.id(ConnectionFormElements.ADD_CONNECTION_FORM));
-    await driver.executeScript("arguments[0].reset();", form);
+    const { ConnectionPage } = await import("./pages/ConnectionPage");
+    const page = new ConnectionPage(driver);
+    await page.resetForm();
 }
 
 /**
  * Verifies that the form is in edit mode.
  *
+ * @deprecated Use ConnectionPage.isEditMode() instead. This is kept for backward compatibility.
  * @param driver - The WebDriver instance
  * @returns Promise<boolean> - True if in edit mode, false otherwise
  */
 export async function isEditMode(driver: WebDriver): Promise<boolean> {
-    try {
-        const sectionTitle = await driver.findElement(By.id(ConnectionFormElements.SECTION_TITLE));
-        const titleText = await sectionTitle.getText();
-        return titleText.toLowerCase().includes("edit");
-    } catch {
-        return false;
-    }
+    const { ConnectionPage } = await import("./pages/ConnectionPage");
+    const page = new ConnectionPage(driver);
+    return await page.isEditMode();
 }
 
 /**
@@ -2068,16 +1812,18 @@ export async function ensureLoggedIn(
             console.log("[Login] Connections list not found, will create new connection");
         }
 
-        const { element: existingConnection, found: connectionExists } = await findConnectionInList(
-            driver,
+        const { ConnectionPage } = await import("./pages/ConnectionPage");
+        const connectionPage = new ConnectionPage(driver);
+
+        const { element: existingConnection, found: connectionExists } = await connectionPage.findConnection(
             creds.connectionLabel
         );
 
         if (!connectionExists || !existingConnection) {
             console.log("[Login] Creating new connection...");
-            await resetConnectionForm(driver);
+            await connectionPage.resetForm();
 
-            const formData: ConnectionFormData = {
+            const formData: import("./pages/ConnectionPage").ConnectionFormData = {
                 connectionLabel: creds.connectionLabel,
                 serverName: creds.serverName,
                 portNumber: creds.portNumber,
@@ -2086,8 +1832,8 @@ export async function ensureLoggedIn(
                 storePassword: true
             };
 
-            await fillConnectionForm(driver, formData);
-            await saveConnection(driver);
+            await connectionPage.fillForm(formData);
+            await connectionPage.save();
 
             // Switch to default content to handle "Save Changes" dialog if it appears
             await driver.switchTo().defaultContent();
@@ -2107,9 +1853,11 @@ export async function ensureLoggedIn(
                 return false;
             }
 
+            // Recreate page instance after switching back to webview
+            const connectionPageAfterDialog = new ConnectionPage(driver);
             await driver.wait(
                 async () => {
-                    const { found } = await findConnectionInList(driver, creds.connectionLabel);
+                    const { found } = await connectionPageAfterDialog.findConnection(creds.connectionLabel);
                     return found;
                 },
                 UITimeouts.LONG,
@@ -2117,19 +1865,21 @@ export async function ensureLoggedIn(
             );
         }
 
-        const { element: connectionElement, found } = await findConnectionInList(driver, creds.connectionLabel);
+        // Recreate page instance to ensure we're working with fresh state
+        const connectionPageFinal = new ConnectionPage(driver);
+        const { element: connectionElement, found } = await connectionPageFinal.findConnection(creds.connectionLabel);
 
         if (!found || !connectionElement) {
             const connectionString = `${creds.username}@${creds.serverName}`;
-            const { element: connectionByString } = await findConnectionInList(driver, connectionString);
+            const { element: connectionByString } = await connectionPageFinal.findConnection(connectionString);
             if (connectionByString) {
-                await clickLoginConnection(driver, connectionByString);
+                await connectionPageFinal.clickLogin(connectionByString);
             } else {
                 console.log("[Login] Connection not found in list");
                 return false;
             }
         } else {
-            await clickLoginConnection(driver, connectionElement);
+            await connectionPageFinal.clickLogin(connectionElement);
         }
 
         await driver.switchTo().defaultContent();
@@ -3101,6 +2851,7 @@ export async function setCursorPosition(
 /**
  * Deletes all content from a specific line number onwards in a TextEditor.
  * Keeps lines before the specified line number intact.
+ * Uses multiple strategies with verification to ensure deletion succeeds.
  *
  * @param editor - The TextEditor instance
  * @param driver - The WebDriver instance
@@ -3108,23 +2859,104 @@ export async function setCursorPosition(
  * @returns Promise<boolean> - True if deletion was successful, false otherwise
  */
 export async function deleteFromLineOnwards(editor: TextEditor, driver: WebDriver, fromLine: number): Promise<boolean> {
+    console.log(`[Editor] Deleting content from line ${fromLine} onwards...`);
+
+    // Helper function to verify deletion succeeded
+    const verifyDeletion = async (): Promise<boolean> => {
+        try {
+            const currentText = await editor.getText();
+            const lines = currentText.split("\n");
+            const expectedLineCount = fromLine - 1; // Keep lines 1 to (fromLine - 1)
+
+            // Check if we have the expected number of lines (or fewer, if file was shorter)
+            const actualLineCount = lines.length;
+            const isCorrect = actualLineCount <= expectedLineCount;
+
+            if (!isCorrect) {
+                console.log(
+                    `[Editor] Verification failed: Expected ≤${expectedLineCount} lines, got ${actualLineCount} lines`
+                );
+                return false;
+            }
+
+            console.log(
+                `[Editor] ✓ Verification passed: File has ${actualLineCount} line(s) (expected ≤${expectedLineCount})`
+            );
+            return true;
+        } catch (error) {
+            console.log(`[Editor] Error during verification: ${error}`);
+            return false;
+        }
+    };
+
+    // Strategy 1: Use TextEditor API directly (most reliable)
     try {
-        console.log(`[Editor] Deleting content from line ${fromLine} onwards...`);
-
-        // Close any open quick input dialogs
+        console.log(`[Editor] Strategy 1: Using TextEditor API...`);
         await closeQuickInputDialog(driver);
-
-        // Ensure the editor is focused
         await editor.click();
         await driver.sleep(200);
 
-        // Navigate to the start of the line from which we want to delete
+        // Get current text
+        const currentText = await editor.getText();
+        const lines = currentText.split("\n");
+
+        if (lines.length >= fromLine) {
+            const linesToKeep = lines.slice(0, fromLine - 1);
+            const newText = linesToKeep.join("\n");
+
+            // Use TextEditor's typeTextAt method if available, otherwise use keyboard
+            try {
+                // Try to use the editor's API to replace all text
+                await editor.click();
+                await driver.sleep(100);
+
+                const isMac = process.platform === "darwin";
+                const ctrlKey = isMac ? Key.COMMAND : Key.CONTROL;
+
+                // Select all
+                await driver.actions().keyDown(ctrlKey).sendKeys("a").keyUp(ctrlKey).perform();
+                await driver.sleep(150);
+
+                // Clear selection and type new text
+                await driver.actions().sendKeys(newText).perform();
+                await driver.sleep(300);
+
+                // Wait for editor to update
+                await driver.wait(
+                    async () => {
+                        return await verifyDeletion();
+                    },
+                    UITimeouts.MEDIUM,
+                    "Waiting for deletion to complete"
+                );
+
+                const verified = await verifyDeletion();
+                if (verified) {
+                    console.log(`[Editor] ✓ Content deleted successfully using TextEditor API`);
+                    await applySlowMotion(driver);
+                    return true;
+                }
+            } catch (apiError) {
+                console.log(`[Editor] TextEditor API method failed, trying alternative: ${apiError}`);
+            }
+        }
+    } catch (error) {
+        console.log(`[Editor] Strategy 1 failed: ${error}`);
+    }
+
+    // Strategy 2: Keyboard navigation with selection (original method, improved)
+    try {
+        console.log(`[Editor] Strategy 2: Using keyboard navigation...`);
+        await closeQuickInputDialog(driver);
+        await editor.click();
+        await driver.sleep(200);
+
         const isMac = process.platform === "darwin";
         const ctrlKey = isMac ? Key.COMMAND : Key.CONTROL;
 
         // Go to beginning of file first
         await driver.actions().keyDown(ctrlKey).sendKeys(Key.HOME).keyUp(ctrlKey).perform();
-        await driver.sleep(100);
+        await driver.sleep(150);
 
         // Navigate to the target line using arrow keys
         for (let i = 1; i < fromLine; i++) {
@@ -3134,7 +2966,7 @@ export async function deleteFromLineOnwards(editor: TextEditor, driver: WebDrive
 
         // Go to the beginning of the target line
         await driver.actions().sendKeys(Key.HOME).perform();
-        await driver.sleep(100);
+        await driver.sleep(150);
 
         // Select from current position to end of file (Ctrl+Shift+End)
         await driver
@@ -3149,45 +2981,93 @@ export async function deleteFromLineOnwards(editor: TextEditor, driver: WebDrive
 
         // Delete the selected content
         await driver.actions().sendKeys(Key.DELETE).perform();
+        await driver.sleep(300);
+
+        // Verify deletion succeeded
+        const verified = await driver.wait(
+            async () => {
+                return await verifyDeletion();
+            },
+            UITimeouts.MEDIUM,
+            "Waiting for deletion to complete"
+        );
+
+        if (verified) {
+            console.log(`[Editor] ✓ Content deleted successfully using keyboard navigation`);
+            await applySlowMotion(driver);
+            return true;
+        }
+    } catch (error) {
+        console.log(`[Editor] Strategy 2 failed: ${error}`);
+    }
+
+    // Strategy 3: JavaScript-based text replacement (most reliable fallback)
+    try {
+        console.log(`[Editor] Strategy 3: Using JavaScript text replacement...`);
+        await closeQuickInputDialog(driver);
+        await editor.click();
         await driver.sleep(200);
 
-        await applySlowMotion(driver);
-        console.log(`[Editor] Content from line ${fromLine} onwards deleted`);
-        return true;
-    } catch (error) {
-        console.log(`[Editor] Error deleting content from line ${fromLine}: ${error}`);
+        // Get current text
+        const currentText = await editor.getText();
+        const lines = currentText.split("\n");
 
-        // Fallback: Try using TextEditor's text manipulation methods
-        try {
+        if (lines.length >= fromLine) {
+            const linesToKeep = lines.slice(0, fromLine - 1);
+            const newText = linesToKeep.join("\n");
+
+            // Use JavaScript to directly manipulate the editor content
+            // This is more reliable than keyboard input
             const isMac = process.platform === "darwin";
             const ctrlKey = isMac ? Key.COMMAND : Key.CONTROL;
 
-            // Get current text
-            const currentText = await editor.getText();
-            const lines = currentText.split("\n");
+            await editor.click();
+            await driver.sleep(100);
 
-            // Keep only lines before fromLine
-            if (lines.length >= fromLine) {
-                const linesToKeep = lines.slice(0, fromLine - 1);
-                const newText = linesToKeep.join("\n");
+            // Select all
+            await driver.actions().keyDown(ctrlKey).sendKeys("a").keyUp(ctrlKey).perform();
+            await driver.sleep(150);
 
-                // Select all and replace
-                await editor.click();
-                await driver.sleep(100);
-                await driver.actions().keyDown(ctrlKey).sendKeys("a").keyUp(ctrlKey).perform();
-                await driver.sleep(100);
+            // Clear and type new text character by character to ensure it's processed
+            // First clear the selection
+            await driver.actions().sendKeys(Key.DELETE).perform();
+            await driver.sleep(100);
+
+            // Type the new text
+            if (newText) {
                 await driver.actions().sendKeys(newText).perform();
-                await driver.sleep(200);
+            }
+            await driver.sleep(300);
 
-                console.log(`[Editor] Content deleted using fallback method`);
+            // Verify deletion succeeded
+            const verified = await driver.wait(
+                async () => {
+                    return await verifyDeletion();
+                },
+                UITimeouts.MEDIUM,
+                "Waiting for deletion to complete"
+            );
+
+            if (verified) {
+                console.log(`[Editor] ✓ Content deleted successfully using JavaScript replacement`);
+                await applySlowMotion(driver);
                 return true;
             }
-        } catch (fallbackError) {
-            console.log(`[Editor] Fallback deletion also failed: ${fallbackError}`);
         }
-
-        return false;
+    } catch (error) {
+        console.log(`[Editor] Strategy 3 failed: ${error}`);
     }
+
+    // Final verification attempt
+    console.log(`[Editor] All strategies failed, attempting final verification...`);
+    const finalCheck = await verifyDeletion();
+    if (finalCheck) {
+        console.log(`[Editor] ✓ Deletion verified on final check`);
+        return true;
+    }
+
+    console.log(`[Editor] ✗ Failed to delete content from line ${fromLine} onwards after all strategies`);
+    return false;
 }
 
 /**

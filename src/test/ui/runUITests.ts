@@ -132,7 +132,48 @@ async function main(): Promise<void> {
         if (specificFile) {
             console.log(`[Test Runner] Targeting specific file: ${specificFile}`);
             const fileName = specificFile.replace(".ts", ".js");
-            testFilesPattern = path.join(__dirname, fileName).replace(/\\/g, "/");
+            const compiledTestPath = path.join(__dirname, fileName);
+            testFilesPattern = compiledTestPath.replace(/\\/g, "/");
+
+            // Validate that the test file exists
+            if (!fs.existsSync(compiledTestPath)) {
+                const sourceFileName = specificFile.endsWith(".ts") ? specificFile : `${specificFile}.ts`;
+                const sourceTestPath = path.resolve(projectRoot, "src/test/ui", sourceFileName);
+                const sourceExists = fs.existsSync(sourceTestPath);
+
+                console.error("\n ERROR: Test file not found!");
+                console.error(`   Compiled file: ${compiledTestPath}`);
+                if (sourceExists) {
+                    console.error(`   Source file exists: ${sourceTestPath}`);
+                    console.error(`   The file may not have been compiled. Try running 'npm run compile-tests' first.`);
+                } else {
+                    console.error(`   Source file: ${sourceTestPath}`);
+                    console.error(`   Make sure the test file exists in 'src/test/ui/' directory.`);
+                }
+
+                // List available test files to help the user
+                try {
+                    const testDir = path.join(projectRoot, "src/test/ui");
+                    if (fs.existsSync(testDir)) {
+                        const availableFiles = fs
+                            .readdirSync(testDir)
+                            .filter((file) => file.endsWith(".ui.test.ts"))
+                            .map((file) => `   - ${file}`);
+
+                        if (availableFiles.length > 0) {
+                            console.error(`\n   Available test files:`);
+                            availableFiles.forEach((file) => console.error(file));
+                        }
+                    }
+                } catch {
+                    // Ignore errors when listing files
+                }
+
+                console.error("");
+                process.exit(1);
+            }
+
+            console.log(`[Test Runner] ✓ Test file found: ${compiledTestPath}`);
         } else {
             console.log(`[Test Runner] No specific file provided. Running all UI tests.`);
             testFilesPattern = path.join(__dirname, "**/*.ui.test.js").replace(/\\/g, "/");
