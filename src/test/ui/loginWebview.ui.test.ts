@@ -133,6 +133,29 @@ describe("Login Webview - Connection Management Tests", function () {
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
             expect(foundLoginSection).to.be.true;
         });
+
+        it("should have 'Store Password' checked by default", async function () {
+            await withWebviewContext(
+                driver,
+                async (driver) => {
+                    await resetConnectionForm(driver);
+
+                    const storePasswordCheckbox = await driver.findElement(
+                        By.id(ConnectionFormElements.STORE_PASSWORD_CHECKBOX)
+                    );
+                    const isChecked = await storePasswordCheckbox.isSelected();
+                    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                    expect(isChecked).to.be.true;
+                },
+                false // No credentials needed for this check
+            ).catch((error) => {
+                if (error.message.includes("skipped")) {
+                    this.skip();
+                } else {
+                    throw error;
+                }
+            });
+        });
     });
 
     describe("Form Validation", function () {

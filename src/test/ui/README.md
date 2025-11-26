@@ -79,9 +79,7 @@ This command will:
 To execute a specific test file instead of the entire suite, use the `test:ui-single` script. You must pass the filename (without the full path) after the `--` separator:
 
 ```bash
-npm run test:ui-single -- loginFlow.ui.test.ts
 npm run test:ui-single -- loginWebview.ui.test.ts
-npm run test:ui-single -- connectionManagement.ui.test.ts
 npm run test:ui-single -- projectsView.ui.test.ts
 npm run test:ui-single -- resourceCreationFlow.ui.test.ts
 ```
