@@ -4,7 +4,7 @@
  */
 
 import { expect } from "chai";
-import { VSBrowser, WebDriver, EditorView, By, until } from "vscode-extension-tester";
+import { VSBrowser, WebDriver, EditorView, By, until, SideBarView } from "vscode-extension-tester";
 import {
     handleAuthenticationModals,
     openTestBenchSidebar,
@@ -108,6 +108,31 @@ describe("Login Webview - Connection Management Tests", function () {
             UITimeouts.MEDIUM,
             "Waiting for webview to be available after cleanup"
         );
+    });
+
+    describe("View Structure", function () {
+        it("should display login section when not connected", async function () {
+            // Ensure we are in default content to interact with VS Code UI (Sidebar)
+            await driver.switchTo().defaultContent();
+
+            const sideBar = new SideBarView();
+            const content = sideBar.getContent();
+            const sections = await content.getSections();
+
+            expect(sections.length).to.be.greaterThan(0);
+
+            let foundLoginSection = false;
+            for (const section of sections) {
+                const title = await section.getTitle();
+                if (title.includes("Login to TestBench")) {
+                    foundLoginSection = true;
+                    break;
+                }
+            }
+
+            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+            expect(foundLoginSection).to.be.true;
+        });
     });
 
     describe("Creating Connections", function () {
@@ -275,7 +300,7 @@ describe("Login Webview - Connection Management Tests", function () {
                         const labelInput = await driver.findElement(By.id(ConnectionFormElements.CONNECTION_LABEL));
                         await labelInput.clear();
                         await labelInput.sendKeys(updatedLabel);
-                        await applySlowMotion(driver); // Visible: modifying form field
+                        await applySlowMotion(driver);
                         await saveConnection(driver);
                         await handleConfirmationDialog(driver, "Save Changes");
 
@@ -329,11 +354,11 @@ describe("Login Webview - Connection Management Tests", function () {
                         const labelInput = await driver.findElement(By.id(ConnectionFormElements.CONNECTION_LABEL));
                         await labelInput.clear();
                         await labelInput.sendKeys("This should be cancelled");
-                        await applySlowMotion(driver); // Visible: modifying form field
+                        await applySlowMotion(driver);
 
                         const cancelButton = await driver.findElement(By.id(ConnectionFormElements.CANCEL_EDIT_BUTTON));
                         await cancelButton.click();
-                        await applySlowMotion(driver); // Visible: clicking cancel button
+                        await applySlowMotion(driver);
 
                         // Wait for UI to update and for form to reset (section title should be back to "Add New Connection")
                         await driver.wait(

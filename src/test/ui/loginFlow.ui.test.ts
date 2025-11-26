@@ -32,15 +32,6 @@ describe("Login Flow E2E Tests", function () {
     before(async function () {
         browser = VSBrowser.instance;
         await ensureWorkspaceIsOpen();
-
-        // To open a specific workspace:
-        /*
-        await ensureWorkspaceIsOpen({ 
-            workspaceName: "test-resources/robot-project", 
-            cleanStart: true 
-        });
-        */
-
         driver = browser.driver;
         await new EditorView().closeAllEditors();
     });
@@ -70,7 +61,6 @@ describe("Login Flow E2E Tests", function () {
                 if (!webviewFound) {
                     console.log("Webview not found for validation test");
                     this.skip();
-                    return;
                 }
 
                 const serverInput = await driver.findElement(By.id(ConnectionFormElements.SERVER_NAME));
@@ -81,7 +71,7 @@ describe("Login Flow E2E Tests", function () {
 
                 const saveButton = await driver.findElement(By.id(ConnectionFormElements.SAVE_BUTTON));
                 await saveButton.click();
-                await applySlowMotion(driver); // Visible: clicking save button
+                await applySlowMotion(driver);
 
                 const messagesDiv = await driver.wait(
                     until.elementLocated(By.id("messages")),
@@ -103,7 +93,6 @@ describe("Login Flow E2E Tests", function () {
                 if (!webviewFound) {
                     console.log("Webview not found for port validation test");
                     this.skip();
-                    return;
                 }
 
                 await resetConnectionForm(driver);
@@ -132,11 +121,11 @@ describe("Login Flow E2E Tests", function () {
                 await driver.executeScript("arguments[0].value = '';", portInput);
                 await portInput.clear();
                 await portInput.sendKeys("abc");
-                await applySlowMotion(driver); // Visible: typing in port field
+                await applySlowMotion(driver);
 
                 const saveButton = await driver.findElement(By.id(ConnectionFormElements.SAVE_BUTTON));
                 await saveButton.click();
-                await applySlowMotion(driver); // Visible: clicking save button
+                await applySlowMotion(driver);
 
                 const messagesDiv = await driver.wait(
                     until.elementLocated(By.id("messages")),
@@ -197,7 +186,6 @@ describe("Login Flow E2E Tests", function () {
                 await saveConnection(driver);
 
                 console.log("Verifying connection in list...");
-                // Wait for connections list to appear
                 const connectionsList = await driver.wait(
                     until.elementLocated(By.id(ConnectionFormElements.CONNECTIONS_LIST)),
                     10000,
