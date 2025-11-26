@@ -16,21 +16,21 @@ async function main(): Promise<void> {
         const projectRoot = path.resolve(__dirname, "../../../");
         loadEnv(projectRoot);
 
-        // 1. Centralized storage for all transient test artifacts
+        // Centralize storage for all transient test artifacts under .test-resources
         const baseStoragePath = path.resolve(projectRoot, ".test-resources");
 
-        // 2. Sub-directories for specific components
-        const testStoragePath = path.join(baseStoragePath, "vscode-data"); // VS Code binaries & user data
+        // Sub-directories for specific components
+        const testStoragePath = path.join(baseStoragePath, "vscode-data"); // VS Code binaries
         const extensionsPath = path.join(baseStoragePath, "extensions"); // Installed extensions
-        const runtimeWorkspacePath = path.join(baseStoragePath, "workspace"); // The ACTIVE workspace used during tests
+        const runtimeWorkspacePath = path.join(baseStoragePath, "workspace"); // Active workspace used during tests
 
-        // 3. Source of truth for test files (not modified during tests)
+        // Source of truth for test files (not modified during tests)
         const fixturesPath = path.resolve(projectRoot, "src/test/ui/fixtures");
 
         console.log(`[Setup] Base Storage Path: ${baseStoragePath}`);
         console.log("[Setup] Preparing runtime workspace...");
 
-        // Clean previous runtime workspace to ensure idempotency
+        // Clean previous runtime workspace
         if (fs.existsSync(runtimeWorkspacePath)) {
             fs.rmSync(runtimeWorkspacePath, { recursive: true, force: true });
         }
@@ -78,7 +78,6 @@ async function main(): Promise<void> {
                 }
             }
 
-            // Initialize ExTester with the specific paths inside .test-resources
             const tester = new ExTester(testStoragePath, ReleaseQuality.Stable, extensionsPath);
 
             // Check if VS Code binary exists in our specific sub-folder
@@ -144,8 +143,8 @@ async function main(): Promise<void> {
 
         await exTester.runTests(testFilesPattern, {
             settings: "./src/test/ui/.vscode-test.settings.json",
-            resources: [runtimeWorkspacePath], // <--- KEY CHANGE: Opens the prepared runtime workspace
-            cleanup: false // Keep the instance open if needed for debugging (process.exit handles close)
+            resources: [runtimeWorkspacePath], // Opens the prepared runtime workspace
+            cleanup: false // Set to true to keep the instance open after tests for debugging
         });
 
         console.log("UI tests completed successfully.");

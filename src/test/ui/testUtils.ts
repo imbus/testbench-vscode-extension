@@ -246,7 +246,7 @@ export async function ensureWorkspaceIsOpen(config: WorkspaceConfig = {}): Promi
 
     // Resolve path relative to project root
     const projectRoot = path.resolve(__dirname, "../../../");
-    const workspacePath = path.join(projectRoot, workspaceName);
+    const workspacePath = path.join(projectRoot, ".test-resources", "workspace");
 
     if (cleanStart && fs.existsSync(workspacePath)) {
         console.log(`[Workspace] Cleaning existing workspace: ${workspacePath}`);
@@ -274,17 +274,17 @@ export async function ensureWorkspaceIsOpen(config: WorkspaceConfig = {}): Promi
 
     console.log(`[Workspace] Opening folder: ${workspacePath}`);
 
-    // OPTIMIZATION: Get current workbench element to detect staleness (reload)
+    // Get current workbench element to detect staleness (reload)
     let oldWorkbench: WebElement | undefined;
     try {
         oldWorkbench = await driver.findElement(By.className("monaco-workbench"));
     } catch {
-        // Element might not exist (e.g., initial empty state), which is fine
+        // Element might not exist
     }
 
     await browser.openResources(workspacePath);
 
-    // OPTIMIZATION: Wait for the old workbench to become stale (reload started)
+    // Wait for the old workbench to become stale (reload started)
     if (oldWorkbench) {
         try {
             await driver.wait(until.stalenessOf(oldWorkbench), 10000, "Waiting for VS Code reload to start");
@@ -306,7 +306,6 @@ export async function ensureWorkspaceIsOpen(config: WorkspaceConfig = {}): Promi
         `Timeout waiting for workspace '${workspaceName}' to load`
     );
 
-    // OPTIMIZATION: Wait for status bar as a proxy for "UI Ready"
     try {
         await driver.wait(
             until.elementLocated(By.id("workbench.parts.statusbar")),
@@ -338,7 +337,7 @@ export async function getCurrentWorkspacePath(driver: WebDriver): Promise<string
 
         // Try to extract workspace path from title
         const projectRoot = path.resolve(__dirname, "../../../");
-        const possibleWorkspaceNames = ["test-workspace", "workspace", "test-resources"];
+        const possibleWorkspaceNames = [".test-resources/workspace", "workspace"];
 
         for (const workspaceName of possibleWorkspaceNames) {
             const workspacePath = path.join(projectRoot, workspaceName);
@@ -351,9 +350,8 @@ export async function getCurrentWorkspacePath(driver: WebDriver): Promise<string
             }
         }
 
-        // If no match found, try to get from VS Code command
-        // Fallback: check for test-workspace as default
-        const defaultWorkspace = path.join(projectRoot, "test-workspace");
+        // Fallback
+        const defaultWorkspace = path.join(projectRoot, ".test-resources", "workspace");
         if (fs.existsSync(defaultWorkspace)) {
             return defaultWorkspace;
         }
@@ -393,7 +391,7 @@ export async function cleanupWorkspace(
         if (!targetPath) {
             // Fallback to default workspace
             const projectRoot = path.resolve(__dirname, "../../../");
-            targetPath = path.join(projectRoot, "test-workspace");
+            targetPath = path.join(projectRoot, ".test-resources", "workspace");
         }
 
         if (!fs.existsSync(targetPath)) {
