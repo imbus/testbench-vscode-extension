@@ -25,7 +25,6 @@ import {
     clickCreateResourceButton,
     clickCodeLens,
     clickRefactorPreviewApply,
-    verifyRefactorPreviewCheckbox,
     waitForProjectsView,
     waitForTestThemesAndElementsViews,
     waitForFileInEditor,
@@ -34,7 +33,8 @@ import {
     waitForTreeItemButton,
     handleCycleConfigurationPrompt,
     setCursorPosition,
-    deleteFromLineOnwards
+    deleteFromLineOnwards,
+    ensureRefactorPreviewItemChecked
 } from "./testUtils";
 import { isSlowMotionEnabled, getSlowMotionDelay, hasTestCredentials } from "./testConfig";
 
@@ -119,7 +119,6 @@ describe("Resource Creation Flow E2E Tests", function () {
                     if (!buttonClicked) {
                         console.log("[Phase 1] Failed to click 'Open Projects View' button");
                         this.skip();
-                        return;
                     }
 
                     // Wait for Projects view to appear
@@ -127,7 +126,6 @@ describe("Resource Creation Flow E2E Tests", function () {
                     if (!projectsViewAppeared) {
                         console.log("[Phase 1] Projects view did not appear after clicking button");
                         this.skip();
-                        return;
                     }
                     isInProjectsView = true;
                 }
@@ -149,7 +147,6 @@ describe("Resource Creation Flow E2E Tests", function () {
                 if (!projectsSectionUpdated) {
                     console.log("[Phase 2] Projects section not found");
                     this.skip();
-                    return;
                 }
 
                 // Wait for tree items to load
@@ -157,7 +154,6 @@ describe("Resource Creation Flow E2E Tests", function () {
                 if (!itemsLoaded) {
                     console.log("[Phase 2] Tree items did not load in time");
                     this.skip();
-                    return;
                 }
 
                 // Get all visible tree items (Projects) - only top-level items
@@ -169,7 +165,6 @@ describe("Resource Creation Flow E2E Tests", function () {
                 if (!targetProject) {
                     console.log("[Phase 2] Project 'TestBench Demo Agil 1' not found");
                     this.skip();
-                    return;
                 }
 
                 console.log("[Phase 2] Found project 'TestBench Demo Agil 1', expanding...");
@@ -180,7 +175,6 @@ describe("Resource Creation Flow E2E Tests", function () {
                 if (!versions || versions.length === 0) {
                     console.log("[Phase 2] No versions found under project");
                     this.skip();
-                    return;
                 }
 
                 // Find the TOV tree item: "Version 3.0" (non-recursive, only at current level)
@@ -188,7 +182,6 @@ describe("Resource Creation Flow E2E Tests", function () {
                 if (!targetVersion) {
                     console.log("[Phase 2] Version 'Version 3.0' not found");
                     this.skip();
-                    return;
                 }
 
                 console.log("[Phase 2] Found version 'Version 3.0', expanding...");
@@ -328,7 +321,6 @@ describe("Resource Creation Flow E2E Tests", function () {
             if (!resourceButtonClicked) {
                 console.log("[Phase 3] Failed to click Create Resource button");
                 this.skip();
-                return;
             }
 
             // Wait for file to be created and opened
@@ -409,7 +401,6 @@ describe("Resource Creation Flow E2E Tests", function () {
             if (!codeLensAppeared) {
                 console.log("[Phase 4] CodeLens 'Pull changes from TestBench' did not appear");
                 this.skip();
-                return;
             }
 
             // Locate the CodeLens action text above the first line that reads "Pull changes from TestBench"
@@ -418,7 +409,6 @@ describe("Resource Creation Flow E2E Tests", function () {
             if (!codeLensClicked) {
                 console.log("[Phase 4] Failed to click CodeLens 'Pull changes from TestBench'");
                 this.skip();
-                return;
             }
 
             // Wait for Refactor Preview to open
@@ -426,14 +416,12 @@ describe("Resource Creation Flow E2E Tests", function () {
             if (!refactorPreviewOpened) {
                 console.log("[Phase 4] Refactor Preview did not open after clicking CodeLens");
                 this.skip();
-                return;
             }
 
-            // Refactor Preview: Verify the main checkbox for Subdiv resource.resource is checked
-            const checkboxChecked = await verifyRefactorPreviewCheckbox(driver, "Subdiv resource.resource");
-            if (!checkboxChecked) {
-                console.log("[Phase 4] Warning: Checkbox for Subdiv resource.resource is not checked");
-                // Continue anyway
+            // Ensure the checkbox for Subdiv resource.resource is checked
+            const checkboxReady = await ensureRefactorPreviewItemChecked(driver, "Subdiv resource.resource");
+            if (!checkboxReady) {
+                console.log("[Phase 4] Warning: Could not ensure checkbox is checked, Apply might fail.");
             }
 
             // Click the "Apply" button inside the Refactor Preview tab
@@ -441,7 +429,6 @@ describe("Resource Creation Flow E2E Tests", function () {
             if (!applyClicked) {
                 console.log("[Phase 4] Failed to click Apply button in Refactor Preview");
                 this.skip();
-                return;
             }
 
             console.log("[Phase 4] Synchronization complete.");

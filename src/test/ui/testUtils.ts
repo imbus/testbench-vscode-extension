@@ -2263,7 +2263,7 @@ export async function doubleClickTreeItem(item: TreeItem, driver: WebDriver): Pr
 export async function clickCodeLens(
     driver: WebDriver,
     codeLensText: string,
-    _lineNumber: number = 0, // kept for compatibility but unused in this strategy
+    _lineNumber: number = 0,
     timeout: number = UITimeouts.LONG
 ): Promise<boolean> {
     await driver.switchTo().defaultContent();
@@ -2273,7 +2273,7 @@ export async function clickCodeLens(
         await driver.wait(
             async () => {
                 try {
-                    // 1. Precise XPath based on your DevTools inspection
+                    // Precise XPath based on DevTools inspection
                     // Look for <span> with class 'codelens-decoration' -> child <a> with specific text
                     const xpathSelector = `//span[contains(@class, 'codelens-decoration')]//a[contains(text(), '${codeLensText}')]`;
 
@@ -2348,6 +2348,10 @@ export async function clickCodeLens(
  * @param timeout - Maximum time to wait for Refactor Preview (default: 15000ms)
  * @returns Promise<boolean> - True if Apply button was found and clicked, false otherwise
  */
+/**
+ * Finds the Refactor Preview "Apply" button and clicks it.
+ * Uses the specific DOM structure: <a class="monaco-button ..."><span ...>Apply</span></a>
+ */
 export async function clickRefactorPreviewApply(
     driver: WebDriver,
     timeout: number = UITimeouts.VERY_LONG
@@ -2355,16 +2359,18 @@ export async function clickRefactorPreviewApply(
     try {
         await driver.switchTo().defaultContent();
 
-        // Wait for Refactor Preview tab to appear
-        const refactorPreviewTab = await driver.wait(
+        const applyButton = await driver.wait(
             async () => {
                 try {
-                    // Find tab by title
-                    const tabs = await driver.findElements(By.css(".tab, .monaco-tab, [role='tab']"));
-                    for (const tab of tabs) {
-                        const title = await tab.getText();
-                        if (title.includes("REFACTOR PREVIEW") || title.includes("Refactor Preview")) {
-                            return tab;
+                    // Specific XPath based on your inspector image:
+                    // Looks for an anchor tag with 'monaco-button' class containing a span with 'Apply'
+                    const xpathSelector = "//a[contains(@class, 'monaco-button')][.//span[contains(text(), 'Apply')]]";
+
+                    const buttons = await driver.findElements(By.xpath(xpathSelector));
+
+                    for (const btn of buttons) {
+                        if (await btn.isDisplayed()) {
+                            return btn;
                         }
                     }
                     return null;
@@ -2373,46 +2379,6 @@ export async function clickRefactorPreviewApply(
                 }
             },
             timeout,
-            "Waiting for Refactor Preview tab to appear"
-        );
-
-        if (!refactorPreviewTab) {
-            console.log("[RefactorPreview] Refactor Preview tab not found");
-            return false;
-        }
-
-        // Click the tab to activate it
-        await refactorPreviewTab.click();
-        await applySlowMotion(driver);
-
-        // Wait for the Apply button to appear
-        const applyButton = await driver.wait(
-            async () => {
-                try {
-                    // Try multiple selectors for the Apply button
-                    const buttons = await driver.findElements(
-                        By.xpath(
-                            "//button[normalize-space(text())='Apply'] | //a[contains(@class, 'monaco-button') and normalize-space(text())='Apply']"
-                        )
-                    );
-
-                    for (const btn of buttons) {
-                        try {
-                            const isDisplayed = await btn.isDisplayed();
-                            if (isDisplayed) {
-                                return btn;
-                            }
-                        } catch {
-                            // Continue searching
-                        }
-                    }
-
-                    return null;
-                } catch {
-                    return null;
-                }
-            },
-            UITimeouts.MEDIUM,
             "Waiting for Apply button in Refactor Preview"
         );
 
@@ -2420,31 +2386,10 @@ export async function clickRefactorPreviewApply(
             console.log("[RefactorPreview] Found Apply button, clicking...");
             await applyButton.click();
             await applySlowMotion(driver);
-
-            // Wait for Refactor Preview to close
-            await driver.wait(
-                async () => {
-                    try {
-                        const tabs = await driver.findElements(By.css(".tab, .monaco-tab, [role='tab']"));
-                        for (const tab of tabs) {
-                            const title = await tab.getText();
-                            if (title.includes("REFACTOR PREVIEW") || title.includes("Refactor Preview")) {
-                                return false; // Tab still exists
-                            }
-                        }
-                        return true; // Tab closed
-                    } catch {
-                        return true;
-                    }
-                },
-                UITimeouts.MEDIUM,
-                "Waiting for Refactor Preview to close"
-            );
-
             return true;
         }
 
-        console.log("[RefactorPreview] Apply button not found");
+        console.log("[RefactorPreview] Apply button not found using specific selector");
         return false;
     } catch (error) {
         console.log(`[RefactorPreview] Error clicking Apply button: ${error}`);
@@ -2468,46 +2413,79 @@ export async function verifyRefactorPreviewCheckbox(
     try {
         await driver.switchTo().defaultContent();
 
-        // Wait for Refactor Preview content to load
-        await driver.sleep(1000);
+        // Wait for the list rows to appear
+        await driver.wait(until.elementLocated(By.css(".monaco-list-row")), timeout);
 
-        // Find checkbox associated with the file
-        const checkbox = await driver.wait(
+        const isChecked = await driver.wait(
             async () => {
-                try {
-                    // Try to find checkbox near the file name
-                    const checkboxes = await driver.findElements(By.css("input[type='checkbox']"));
-                    for (const cb of checkboxes) {
-                        try {
-                            // Check if checkbox is visible and near file name
-                            const parent = await cb.findElement(By.xpath("./.."));
-                            const parentText = await parent.getText();
-                            if (parentText.includes(fileName)) {
-                                return cb;
-                            }
-                        } catch {
-                            // Continue searching
+                // Find all rows in the tree view
+                const rows = await driver.findElements(By.css(".monaco-list-row"));
+
+                for (const row of rows) {
+                    try {
+                        // Check if this row represents our file
+                        const text = await row.getText();
+                        if (text.includes(fileName)) {
+                            // Find the specific checkbox input within this row
+                            // Structure: row -> content -> input.edit-checkbox
+                            const checkbox = await row.findElement(By.css("input.edit-checkbox"));
+                            const selected = await checkbox.isSelected();
+
+                            // If we found the correct row, return its state
+                            return selected;
                         }
+                    } catch {
+                        // Stale element or other temporary error, continue to next row or retry
                     }
-                    return null;
-                } catch {
-                    return null;
                 }
+                // Return null to keep waiting if row not found yet
+                return null;
             },
             timeout,
-            `Waiting for checkbox for "${fileName}" in Refactor Preview`
+            `Waiting for checkbox row matching "${fileName}"`
         );
 
-        if (checkbox) {
-            const isChecked = await checkbox.isSelected();
-            console.log(`[RefactorPreview] Checkbox for "${fileName}" is ${isChecked ? "checked" : "unchecked"}`);
-            return isChecked;
-        }
-
-        console.log(`[RefactorPreview] Checkbox for "${fileName}" not found`);
-        return false;
+        // If the wait returns a boolean, that's our result. If it times out/returns null, default to false.
+        return !!isChecked;
     } catch (error) {
         console.log(`[RefactorPreview] Error verifying checkbox: ${error}`);
+        return false;
+    }
+}
+
+/**
+ * Ensures that the checkbox for a specific file is checked.
+ * If it is currently unchecked, this function clicks it.
+ * @param driver - The WebDriver instance
+ * @param fileName - The file name to check
+ * @returns Promise<boolean> - True if successfully ensured checked
+ */
+export async function ensureRefactorPreviewItemChecked(driver: WebDriver, fileName: string): Promise<boolean> {
+    try {
+        const isChecked = await verifyRefactorPreviewCheckbox(driver, fileName, 2000);
+        if (isChecked) {
+            console.log(`[RefactorPreview] Item "${fileName}" is already checked.`);
+            return true;
+        }
+
+        console.log(`[RefactorPreview] Item "${fileName}" is unchecked. Clicking to select...`);
+
+        // Find and click the checkbox
+        const rows = await driver.findElements(By.css(".monaco-list-row"));
+        for (const row of rows) {
+            const text = await row.getText();
+            if (text.includes(fileName)) {
+                const checkbox = await row.findElement(By.css("input.edit-checkbox"));
+
+                // Use JS click for reliability with Monaco checkboxes
+                await driver.executeScript("arguments[0].click();", checkbox);
+                await applySlowMotion(driver);
+                return true;
+            }
+        }
+        return false;
+    } catch (error) {
+        console.log(`[RefactorPreview] Error ensuring item checked: ${error}`);
         return false;
     }
 }
