@@ -35,6 +35,7 @@ testbench-language-server/**
 test-resources/
 test-workspace/
 out/test/
+src/test/
 
 # Python Environment & Files
 .venv/**

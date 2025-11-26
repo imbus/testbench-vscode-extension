@@ -1,6 +1,7 @@
 /**
  * @file src/test/ui/runUITests.ts
  * @description Entry point for running UI tests with VS Code Extension Tester.
+ * Handles workspace setup, artifact centralization, and test execution.
  */
 
 import * as path from "path";
@@ -15,11 +16,35 @@ async function main(): Promise<void> {
         const projectRoot = path.resolve(__dirname, "../../../");
         loadEnv(projectRoot);
 
-        const testStoragePath = path.resolve(projectRoot, ".test-resources");
-        const extensionsPath = path.resolve(testStoragePath, "extensions");
+        // 1. Centralized storage for all transient test artifacts
+        const baseStoragePath = path.resolve(projectRoot, ".test-resources");
+
+        // 2. Sub-directories for specific components
+        const testStoragePath = path.join(baseStoragePath, "vscode-data"); // VS Code binaries & user data
+        const extensionsPath = path.join(baseStoragePath, "extensions"); // Installed extensions
+        const runtimeWorkspacePath = path.join(baseStoragePath, "workspace"); // The ACTIVE workspace used during tests
+
+        // 3. Source of truth for test files (not modified during tests)
+        const fixturesPath = path.resolve(projectRoot, "src/test/ui/fixtures");
+
+        console.log(`[Setup] Base Storage Path: ${baseStoragePath}`);
+        console.log("[Setup] Preparing runtime workspace...");
+
+        // Clean previous runtime workspace to ensure idempotency
+        if (fs.existsSync(runtimeWorkspacePath)) {
+            fs.rmSync(runtimeWorkspacePath, { recursive: true, force: true });
+        }
+
+        // Copy fixtures to runtime workspace
+        if (fs.existsSync(fixturesPath)) {
+            console.log(`[Setup] Copying fixtures from '${fixturesPath}' to '${runtimeWorkspacePath}'...`);
+            fs.cpSync(fixturesPath, runtimeWorkspacePath, { recursive: true });
+        } else {
+            console.log(`[Setup] No fixtures found at '${fixturesPath}'. Creating empty workspace.`);
+            fs.mkdirSync(runtimeWorkspacePath, { recursive: true });
+        }
 
         console.log("[Setup] Checking VSIX status...");
-
         const packageJsonPath = path.join(projectRoot, "package.json");
         if (!fs.existsSync(packageJsonPath)) {
             throw new Error(`package.json not found at ${packageJsonPath}`);
@@ -45,19 +70,18 @@ async function main(): Promise<void> {
             }
         }
 
-        console.log("Starting UI tests...");
-        console.log(`[Setup] Storage Path:    ${testStoragePath}`);
-
         const performSetup = async (forceClean: boolean = false): Promise<ExTester> => {
             if (forceClean) {
-                console.log("[Setup] Cleaning test resources...");
+                console.log("[Setup] Cleaning VS Code data...");
                 if (fs.existsSync(testStoragePath)) {
                     fs.rmSync(testStoragePath, { recursive: true, force: true });
                 }
             }
 
+            // Initialize ExTester with the specific paths inside .test-resources
             const tester = new ExTester(testStoragePath, ReleaseQuality.Stable, extensionsPath);
 
+            // Check if VS Code binary exists in our specific sub-folder
             const hasExistingVSCode =
                 fs.existsSync(testStoragePath) &&
                 fs.readdirSync(testStoragePath).some((file) => file.includes("vscode"));
@@ -94,7 +118,6 @@ async function main(): Promise<void> {
             if (isCorruptionError) {
                 console.warn("\n[Setup] Detected corrupted VS Code archive (interrupted download).");
                 console.log("[Setup] Automatically cleaning and retrying download...\n");
-
                 exTester = await performSetup(true);
             } else {
                 throw err;
@@ -113,16 +136,16 @@ async function main(): Promise<void> {
             testFilesPattern = path.join(__dirname, fileName).replace(/\\/g, "/");
         } else {
             console.log(`[Test Runner] No specific file provided. Running all UI tests.`);
-            // Ensure globs use forward slashes even on Windows
             testFilesPattern = path.join(__dirname, "**/*.ui.test.js").replace(/\\/g, "/");
         }
 
         console.log(`[Test Runner] Test Pattern: ${testFilesPattern}`);
+        console.log(`[Test Runner] Workspace:    ${runtimeWorkspacePath}`);
 
         await exTester.runTests(testFilesPattern, {
             settings: "./src/test/ui/.vscode-test.settings.json",
-            resources: [],
-            cleanup: false
+            resources: [runtimeWorkspacePath], // <--- KEY CHANGE: Opens the prepared runtime workspace
+            cleanup: false // Keep the instance open if needed for debugging (process.exit handles close)
         });
 
         console.log("UI tests completed successfully.");
