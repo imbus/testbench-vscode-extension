@@ -3,7 +3,7 @@
  * @description Utility functions and constants for UI tests
  */
 
-import { getSlowMotionDelay, getTestCredentials, hasTestCredentials } from "./testConfig";
+import { getSlowMotionDelay, getTestCredentials, hasTestCredentials, TEST_PATHS } from "./testConfig";
 import * as path from "path";
 import * as fs from "fs";
 import {
@@ -246,7 +246,7 @@ export async function ensureWorkspaceIsOpen(config: WorkspaceConfig = {}): Promi
 
     // Resolve path relative to project root
     const projectRoot = path.resolve(__dirname, "../../../");
-    const workspacePath = path.join(projectRoot, ".test-resources", "workspace");
+    const workspacePath = path.join(projectRoot, TEST_PATHS.BASE_STORAGE, TEST_PATHS.WORKSPACE);
 
     if (cleanStart && fs.existsSync(workspacePath)) {
         console.log(`[Workspace] Cleaning existing workspace: ${workspacePath}`);
@@ -337,7 +337,8 @@ export async function getCurrentWorkspacePath(driver: WebDriver): Promise<string
 
         // Try to extract workspace path from title
         const projectRoot = path.resolve(__dirname, "../../../");
-        const possibleWorkspaceNames = [".test-resources/workspace", "workspace"];
+        const workspaceRelativePath = `${TEST_PATHS.BASE_STORAGE}/${TEST_PATHS.WORKSPACE}`;
+        const possibleWorkspaceNames = [workspaceRelativePath, TEST_PATHS.WORKSPACE];
 
         for (const workspaceName of possibleWorkspaceNames) {
             const workspacePath = path.join(projectRoot, workspaceName);
@@ -351,7 +352,7 @@ export async function getCurrentWorkspacePath(driver: WebDriver): Promise<string
         }
 
         // Fallback
-        const defaultWorkspace = path.join(projectRoot, ".test-resources", "workspace");
+        const defaultWorkspace = path.join(projectRoot, TEST_PATHS.BASE_STORAGE, TEST_PATHS.WORKSPACE);
         if (fs.existsSync(defaultWorkspace)) {
             return defaultWorkspace;
         }
@@ -391,7 +392,7 @@ export async function cleanupWorkspace(
         if (!targetPath) {
             // Fallback to default workspace
             const projectRoot = path.resolve(__dirname, "../../../");
-            targetPath = path.join(projectRoot, ".test-resources", "workspace");
+            targetPath = path.join(projectRoot, TEST_PATHS.BASE_STORAGE, TEST_PATHS.WORKSPACE);
         }
 
         if (!fs.existsSync(targetPath)) {

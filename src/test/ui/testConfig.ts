@@ -8,6 +8,26 @@ import * as path from "path";
 import * as fs from "fs";
 
 /**
+ * Test folder and file names for UI test setup.
+ */
+export const TEST_PATHS = {
+    /** Base directory for all test artifacts (relative to project root) */
+    BASE_STORAGE: ".test-resources",
+    /** Subdirectory for VS Code binaries and data */
+    VSCODE_DATA: "vscode-data",
+    /** Subdirectory for installed extensions */
+    EXTENSIONS: "extensions",
+    /** Subdirectory for runtime workspace used during tests */
+    WORKSPACE: "workspace",
+    /** Source directory for test fixtures (relative to project root) */
+    FIXTURES: "src/test/ui/fixtures",
+    /** Package.json file name */
+    PACKAGE_JSON: "package.json",
+    /** VS Code test settings file (relative to project root) */
+    VSCODE_TEST_SETTINGS: "./src/test/ui/.vscode-test.settings.json"
+} as const;
+
+/**
  * Flag to ensure environment loading only happens once (singleton pattern).
  */
 let envLoaded = false;

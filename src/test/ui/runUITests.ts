@@ -8,7 +8,7 @@ import * as path from "path";
 import * as fs from "fs";
 import * as cp from "child_process";
 import { ExTester, ReleaseQuality } from "vscode-extension-tester";
-import { loadEnv } from "./testConfig";
+import { loadEnv, TEST_PATHS } from "./testConfig";
 
 async function main(): Promise<void> {
     try {
@@ -17,15 +17,15 @@ async function main(): Promise<void> {
         loadEnv(projectRoot);
 
         // Centralize storage for all transient test artifacts under .test-resources
-        const baseStoragePath = path.resolve(projectRoot, ".test-resources");
+        const baseStoragePath = path.resolve(projectRoot, TEST_PATHS.BASE_STORAGE);
 
         // Sub-directories for specific components
-        const testStoragePath = path.join(baseStoragePath, "vscode-data"); // VS Code binaries
-        const extensionsPath = path.join(baseStoragePath, "extensions"); // Installed extensions
-        const runtimeWorkspacePath = path.join(baseStoragePath, "workspace"); // Active workspace used during tests
+        const testStoragePath = path.join(baseStoragePath, TEST_PATHS.VSCODE_DATA); // VS Code binaries
+        const extensionsPath = path.join(baseStoragePath, TEST_PATHS.EXTENSIONS); // Installed extensions
+        const runtimeWorkspacePath = path.join(baseStoragePath, TEST_PATHS.WORKSPACE); // Active workspace used during tests
 
         // Source of truth for test files (not modified during tests)
-        const fixturesPath = path.resolve(projectRoot, "src/test/ui/fixtures");
+        const fixturesPath = path.resolve(projectRoot, TEST_PATHS.FIXTURES);
 
         console.log(`[Setup] Base Storage Path: ${baseStoragePath}`);
         console.log("[Setup] Preparing runtime workspace...");
@@ -45,9 +45,9 @@ async function main(): Promise<void> {
         }
 
         console.log("[Setup] Checking VSIX status...");
-        const packageJsonPath = path.join(projectRoot, "package.json");
+        const packageJsonPath = path.join(projectRoot, TEST_PATHS.PACKAGE_JSON);
         if (!fs.existsSync(packageJsonPath)) {
-            throw new Error(`package.json not found at ${packageJsonPath}`);
+            throw new Error(`${TEST_PATHS.PACKAGE_JSON} not found at ${packageJsonPath}`);
         }
 
         const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
@@ -142,7 +142,7 @@ async function main(): Promise<void> {
         console.log(`[Test Runner] Workspace:    ${runtimeWorkspacePath}`);
 
         await exTester.runTests(testFilesPattern, {
-            settings: "./src/test/ui/.vscode-test.settings.json",
+            settings: TEST_PATHS.VSCODE_TEST_SETTINGS,
             resources: [runtimeWorkspacePath], // Opens the prepared runtime workspace
             cleanup: false // Set to true to keep the instance open after tests for debugging
         });
