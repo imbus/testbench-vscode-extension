@@ -135,6 +135,70 @@ describe("Login Webview - Connection Management Tests", function () {
         });
     });
 
+    describe("Form Validation", function () {
+        it("should show validation error when required fields are missing", async function () {
+            await withWebviewContext(
+                driver,
+                async (driver) => {
+                    await resetConnectionForm(driver);
+
+                    const saveButton = await driver.findElement(By.id(ConnectionFormElements.SAVE_BUTTON));
+                    await saveButton.click();
+
+                    const messageText = await getMessageText(driver);
+                    expect(messageText.toLowerCase()).to.include("required");
+                },
+                false
+            ).catch((error) => {
+                if (error.message.includes("skipped")) {
+                    this.skip();
+                } else {
+                    throw error;
+                }
+            });
+        });
+
+        it("should validate port number is numeric", async function () {
+            await withWebviewContext(
+                driver,
+                async (driver) => {
+                    await resetConnectionForm(driver);
+                    const credentials = getTestCredentials();
+
+                    // Create form data with invalid port "abc"
+                    const formData: ConnectionFormData = {
+                        connectionLabel: "",
+                        serverName: credentials.serverName,
+                        portNumber: "abc",
+                        username: credentials.username,
+                        password: credentials.password
+                    };
+
+                    await fillConnectionForm(driver, formData);
+
+                    const saveButton = await driver.findElement(By.id(ConnectionFormElements.SAVE_BUTTON));
+                    await saveButton.click();
+
+                    // Wait for specific port validation error
+                    const messagesDiv = await driver.wait(
+                        until.elementLocated(By.id("messages")),
+                        UITimeouts.MEDIUM,
+                        "Waiting for port validation error message"
+                    );
+                    const messageText = await messagesDiv.getText();
+                    expect(messageText.toLowerCase()).to.include("port");
+                },
+                true // requires credentials for other fields
+            ).catch((error) => {
+                if (error.message.includes("skipped")) {
+                    this.skip();
+                } else {
+                    throw error;
+                }
+            });
+        });
+    });
+
     describe("Creating Connections", function () {
         it("should create a new connection with all fields", async function () {
             await withWebviewContext(
@@ -301,7 +365,8 @@ describe("Login Webview - Connection Management Tests", function () {
                         await labelInput.clear();
                         await labelInput.sendKeys(updatedLabel);
                         await applySlowMotion(driver);
-                        await saveConnection(driver);
+
+                        await saveConnection(driver, false); // Pass 'false' to skip waiting for the UI update
                         await handleConfirmationDialog(driver, "Save Changes");
 
                         await findAndSwitchToWebview(driver);
