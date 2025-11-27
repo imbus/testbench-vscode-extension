@@ -97,7 +97,7 @@ class TestElement:
     Subdivision_key: SubdivisionKey | None = None
 
 
-def is_interaction(test_element: TestElement) -> bool:
+def is_tb_keyword(test_element: TestElement) -> bool:
     return bool(test_element.Interaction_key)
 
 
@@ -119,15 +119,13 @@ def get_test_element_uid(test_elements: list[TestElement], test_element_key: str
     return element.uniqueID
 
 
-def get_interaction_parent_key(test_elements: list[TestElement], test_element: TestElement) -> str:
+def get_tb_keyword_parent_key(test_elements: list[TestElement], test_element: TestElement) -> str:
     parent = test_element.parent or test_element.libraryKey
     return parent.serial
 
 
-def get_interactions_resource_path(
-    test_elements: list[TestElement], interaction: TestElement
-) -> Path:
-    parent_key = get_interaction_parent_key(test_elements, interaction)
+def get_keywords_resource_path(test_elements: list[TestElement], interaction: TestElement) -> Path:
+    parent_key = get_tb_keyword_parent_key(test_elements, interaction)
     path_parts = []
     subdivisions = {
         test_element.Subdivision_key.serial: test_element
@@ -141,7 +139,7 @@ def get_interactions_resource_path(
     return Path.cwd() / Path(*path_parts)
 
 
-def get_interaction_key(test_element: TestElement) -> str:
+def get_tb_keyword_key(test_element: TestElement) -> str:
     return test_element.Interaction_key.serial
 
 
