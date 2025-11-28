@@ -1539,7 +1539,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     /**
      * Clears the tree view and resets all state variables
      */
-    public clearTree(resetViewTitle?: boolean): void {
+    public clearTree(): void {
         super.clearTree();
         this.currentProjectKey = null;
         this.currentCycleKey = null;
@@ -1547,9 +1547,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         this.currentTovKey = null;
         this.isOpenedFromCycle = false;
         this._onDidChangeTreeData.fire(undefined);
-        if (resetViewTitle) {
-            this.resetTitle();
-        }
+        this.resetTitle();
         this.updateTestThemesFilterContextKey();
     }
 
