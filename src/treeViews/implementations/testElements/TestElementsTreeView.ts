@@ -4,7 +4,7 @@
  */
 
 import * as vscode from "vscode";
-import { TreeViewBase } from "../../core/TreeViewBase";
+import { TreeViewBase, RefreshOptions } from "../../core/TreeViewBase";
 import { TestElementData, TestElementItemData, TestElementsTreeItem, TestElementType } from "./TestElementsTreeItem";
 import { TreeViewConfig } from "../../core/TreeViewConfig";
 import { TestElementsDataProvider } from "./TestElementsDataProvider";
@@ -1365,13 +1365,20 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param item Optional specific item to refresh
      * @param options Optional refresh options
      */
-    public override refresh(item?: TestElementsTreeItem, options?: { immediate?: boolean }): void {
+    public override refresh(item?: TestElementsTreeItem, options?: RefreshOptions): void {
         this.logger.debug(
             `[TestElementsTreeView] Refreshing test elements tree view${item ? ` for tree item: ${item.label}` : ""}`
         );
 
         if (item) {
             super.refresh(item, options);
+            return;
+        }
+
+        // If skipDataReload is true (e.g., when filtering/searching), delegate to parent
+        // to avoid fetching data from server and just update the UI
+        if (options?.skipDataReload) {
+            super.refresh(undefined, options);
             return;
         }
 
