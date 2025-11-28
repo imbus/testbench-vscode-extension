@@ -131,7 +131,7 @@ export class TestElementsDataProvider {
                 return [];
             }
 
-            const hierarchicalTestElemData = this._buildAndFilterHierarchy(rawTestElementsData);
+            const hierarchicalTestElemData = await this._buildAndFilterHierarchy(rawTestElementsData);
 
             this.elementsCache.set(tovKey, hierarchicalTestElemData);
             this.eventBus.emit({
@@ -157,14 +157,14 @@ export class TestElementsDataProvider {
     /**
      * Orchestrates the transformation of flat test element data into a filtered hierarchy.
      * @param flatJsonTestElements - Array of raw test element data from the server
-     * @returns Array of root TestElementData objects forming the filtered hierarchy
+     * @returns Promise resolving to array of root TestElementData objects forming the filtered hierarchy
      */
-    private _buildAndFilterHierarchy(flatJsonTestElements: RawTestElement[]): TestElementData[] {
+    private async _buildAndFilterHierarchy(flatJsonTestElements: RawTestElement[]): Promise<TestElementData[]> {
         const testElementIdToDataMap = this._transformRawElements(flatJsonTestElements);
         const { roots } = this._linkParentChildRelationships(testElementIdToDataMap);
         const filteredRoots = this._filterElementTree(roots);
         this._assignHierarchicalNames(filteredRoots);
-        this._markVirtualFolders(filteredRoots);
+        await this._markVirtualFolders(filteredRoots);
         this._checkForNestedResources(filteredRoots);
 
         return filteredRoots;
@@ -345,7 +345,7 @@ export class TestElementsDataProvider {
      * from appearing on folders that don't have a direct 1:1 mapping to a local directory.
      * @param roots The root elements of the tree.
      */
-    private _markVirtualFolders(roots: TestElementData[]): void {
+    private async _markVirtualFolders(roots: TestElementData[]): Promise<void> {
         const resourceDirectoryMarker =
             getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER) || "";
 
@@ -425,7 +425,8 @@ export class TestElementsDataProvider {
             return resourcesInChildren;
         };
 
-        roots.forEach((root) => findResourcesAndMarkVirtuals(root));
+        // Process roots in parallel
+        await Promise.all(roots.map((root) => findResourcesAndMarkVirtuals(root)));
     }
 
     /**
