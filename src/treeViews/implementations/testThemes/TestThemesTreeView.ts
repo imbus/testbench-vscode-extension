@@ -578,13 +578,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * Registers event handlers (listeners) for the test themes tree view
      */
     private registerEventHandlers(): void {
-        /*
-        // cycle:selected is not emitted anymore, setupCycleClickHandlers of ProjectsTreeView handles this
-        this.eventBus.on("cycle:selected", async (event) => {
-            const { projectKey, cycleKey, tovKey, projectName, tovName, cycleLabel } = event.data;
-            await this.loadCycle(projectKey, cycleKey, tovKey, projectName, tovName, cycleLabel);
-        });
-        */
         this.eventBus.on("version:selected", async (event) => {
             const { projectKey, tovKey, projectName, tovName } = event.data;
             await this.loadTov(projectKey, tovKey, projectName, tovName);
@@ -865,6 +858,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 `[TestThemesTreeView] Loading Test Cycle '${cycleLabel}' from project '${projectName}' to get Test Theme information...`
             );
             this.stateManager.setLoading(true);
+            // Clear old tree items immediately to prevent showing stale data during loading
+            this.clearTree();
             this.dataProvider.clearCache();
 
             // Set context before fetching data so filters can be applied correctly
@@ -988,7 +983,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         try {
             this.logger.debug(`[TestThemesTreeView] Loading TOV ${tovKey} for project ${projectKey}`);
             this.stateManager.setLoading(true);
-
+            // Clear old tree items immediately to prevent showing stale data during loading
+            this.clearTree();
             this.dataProvider.clearCache();
 
             // Set context BEFORE fetching data so filters can be applied correctly
@@ -1543,7 +1539,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     /**
      * Clears the tree view and resets all state variables
      */
-    public clearTree(): void {
+    public clearTree(resetViewTitle?: boolean): void {
         super.clearTree();
         this.currentProjectKey = null;
         this.currentCycleKey = null;
@@ -1551,7 +1547,9 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         this.currentTovKey = null;
         this.isOpenedFromCycle = false;
         this._onDidChangeTreeData.fire(undefined);
-        this.resetTitle();
+        if (resetViewTitle) {
+            this.resetTitle();
+        }
         this.updateTestThemesFilterContextKey();
     }
 

@@ -357,12 +357,35 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
     }
 
     /**
-     * Handles cycle double click events.
-     * @param item The cycle tree item that was double clicked
+     * Opens a cycle by displaying test themes and test elements tree views and loading their data.
+     * @param item The cycle tree item to open
+     * @param options Optional configuration for the opening behavior
+     * @returns Promise that resolves when the cycle is opened, or null if validation fails
      */
-    private async handleCycleDoubleClick(item: ProjectsTreeItem): Promise<void> {
+    public async openCycle(
+        item: ProjectsTreeItem
+    ): Promise<{
+        projectKey: string;
+        cycleKey: string;
+        tovKey: string;
+        projectName: string;
+        tovName: string;
+        cycleLabel: string;
+    } | null> {
         if (item.data.type !== "cycle") {
-            return;
+            this.logger.warn("[ProjectsTreeView] openCycle called with non-cycle item");
+            return null;
+        }
+
+        if (!treeViews?.testThemesTree || !treeViews?.testElementsTree) {
+            this.logger.warn("[ProjectsTreeView] Required tree views are not available");
+            return null;
+        }
+
+        const connection = this.getConnection();
+        if (!connection) {
+            this.logger.warn("[ProjectsTreeView] No connection available when opening cycle");
+            return null;
         }
 
         const cycleKey = item.getCycleKey();
@@ -370,10 +393,11 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         const versionKey = item.getVersionKey();
         const projectName = item.parent?.parent?.label?.toString();
         const tovName = item.parent?.label?.toString();
+        const cycleLabel = item.label?.toString() || "";
 
         if (!cycleKey || !projectKey || !versionKey || !projectName || !tovName) {
-            this.logger.warn("[ProjectsTreeView] Missing keys for cycle selection when handling cycle double click");
-            return;
+            this.logger.warn("[ProjectsTreeView] Missing context for cycle selection");
+            return null;
         }
 
         // Display tree views first and then load data for responsive UI
@@ -388,25 +412,22 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
                 versionKey,
                 projectName,
                 tovName,
-                item.label?.toString()
+                cycleLabel
             );
         }
         if (treeViews?.testElementsTree) {
             await treeViews.testElementsTree.loadTov(versionKey, tovName, projectName, tovName);
         }
 
-        // Emit events for other trees to load
-        this.eventBus.emit({
-            type: "cycle:activated",
-            source: this.config.id,
-            data: {
-                cycleKey,
-                projectKey,
-                tovKey: versionKey,
-                cycleLabel: item.label as string
-            },
-            timestamp: Date.now()
-        });
+        return { projectKey, cycleKey, tovKey: versionKey, projectName, tovName, cycleLabel };
+    }
+
+    /**
+     * Handles cycle double click events.
+     * @param item The cycle tree item that was double clicked
+     */
+    private async handleCycleDoubleClick(item: ProjectsTreeItem): Promise<void> {
+        await this.openCycle(item);
     }
 
     /**
