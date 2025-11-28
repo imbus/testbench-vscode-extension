@@ -376,6 +376,11 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
             return;
         }
 
+        // Display tree views first and then load data for responsive UI
+        await displayTestThemeTreeView();
+        await displayTestElementsTreeView();
+        await hideProjectManagementTreeView();
+
         if (treeViews?.testThemesTree) {
             await treeViews.testThemesTree.loadCycle(
                 projectKey,
@@ -389,10 +394,6 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         if (treeViews?.testElementsTree) {
             await treeViews.testElementsTree.loadTov(versionKey, tovName, projectName, tovName);
         }
-
-        await displayTestThemeTreeView();
-        await displayTestElementsTreeView();
-        await hideProjectManagementTreeView();
 
         // Emit events for other trees to load
         this.eventBus.emit({
