@@ -602,4 +602,139 @@ suite("ResourceFileService", function () {
             assert.strictEqual(ResourceFileService.hasResourceMarker("TestTheme"), false);
         });
     });
+
+    suite("UID validation methods", function () {
+        test("readUidFromResourceFile should extract UID from file metadata", async function () {
+            const fileContent: string = "tb:uid:test-uid-123\ntb:context:Project/TOV\n*** Settings ***\n";
+            testEnv.sandbox.stub(resourceFileService, "fileExists").resolves(true);
+            // readFile with "utf-8" encoding returns a string
+            testEnv.sandbox.stub(fs.promises, "readFile").resolves(fileContent as any);
+
+            const uid: string | undefined =
+                await resourceFileService.readUidFromResourceFile("/test/path/file.resource");
+
+            assert.strictEqual(uid, "test-uid-123", "Should extract UID from metadata");
+        });
+
+        test("readUidFromResourceFile should return undefined when file doesn't exist", async function () {
+            testEnv.sandbox.stub(resourceFileService, "fileExists").resolves(false);
+
+            const uid: string | undefined =
+                await resourceFileService.readUidFromResourceFile("/test/path/file.resource");
+
+            assert.strictEqual(uid, undefined, "Should return undefined for non-existent file");
+        });
+
+        test("readUidFromResourceFile should return undefined when UID metadata is missing", async function () {
+            const fileContent: string = "*** Settings ***\n*** Keywords ***\n";
+            testEnv.sandbox.stub(resourceFileService, "fileExists").resolves(true);
+            testEnv.sandbox.stub(fs.promises, "readFile").resolves(fileContent as any);
+
+            const uid: string | undefined =
+                await resourceFileService.readUidFromResourceFile("/test/path/file.resource");
+
+            assert.strictEqual(uid, undefined, "Should return undefined when UID metadata is missing");
+        });
+
+        test("readUidFromResourceFile should handle file read errors gracefully", async function () {
+            testEnv.sandbox.stub(resourceFileService, "fileExists").resolves(true);
+            testEnv.sandbox.stub(fs.promises, "readFile").rejects(new Error("Permission denied"));
+
+            const uid: string | undefined =
+                await resourceFileService.readUidFromResourceFile("/test/path/file.resource");
+
+            assert.strictEqual(uid, undefined, "Should return undefined on read error");
+        });
+
+        test("validateResourceFileUid should return valid result when UID matches", async function () {
+            const fileContent: string = "tb:uid:test-uid-123\n*** Settings ***\n";
+            testEnv.sandbox.stub(resourceFileService, "fileExists").resolves(true);
+            testEnv.sandbox.stub(fs.promises, "readFile").resolves(fileContent as any);
+
+            const validation = await resourceFileService.validateResourceFileUid(
+                "/test/path/file.resource",
+                "test-uid-123"
+            );
+
+            assert.strictEqual(validation.isValid, true, "Should return valid when UID matches");
+            assert.strictEqual(validation.isMismatch, false, "Should not indicate mismatch");
+            assert.strictEqual(validation.fileExists, true, "Should indicate file exists");
+            assert.strictEqual(validation.fileUid, "test-uid-123", "Should return file UID");
+        });
+
+        test("validateResourceFileUid should detect UID mismatch", async function () {
+            const fileContent: string = "tb:uid:different-uid-456\n*** Settings ***\n";
+            testEnv.sandbox.stub(resourceFileService, "fileExists").resolves(true);
+            testEnv.sandbox.stub(fs.promises, "readFile").resolves(fileContent as any);
+
+            const validation = await resourceFileService.validateResourceFileUid(
+                "/test/path/file.resource",
+                "test-uid-123"
+            );
+
+            assert.strictEqual(validation.isValid, false, "Should return invalid when UID doesn't match");
+            assert.strictEqual(validation.isMismatch, true, "Should indicate mismatch");
+            assert.strictEqual(validation.fileExists, true, "Should indicate file exists");
+            assert.strictEqual(validation.fileUid, "different-uid-456", "Should return actual file UID");
+        });
+
+        test("validateResourceFileUid should handle file without UID metadata", async function () {
+            const fileContent: string = "*** Settings ***\n*** Keywords ***\n";
+            testEnv.sandbox.stub(resourceFileService, "fileExists").resolves(true);
+            testEnv.sandbox.stub(fs.promises, "readFile").resolves(fileContent as any);
+
+            const validation = await resourceFileService.validateResourceFileUid(
+                "/test/path/file.resource",
+                "test-uid-123"
+            );
+
+            assert.strictEqual(validation.isValid, false, "Should return invalid when no UID metadata");
+            assert.strictEqual(validation.isMismatch, false, "Should not indicate mismatch");
+            assert.strictEqual(validation.fileExists, true, "Should indicate file exists");
+            assert.strictEqual(validation.fileUid, undefined, "Should return undefined for file UID");
+        });
+
+        test("validateResourceFileUid should handle non-existent file", async function () {
+            testEnv.sandbox.stub(resourceFileService, "fileExists").resolves(false);
+
+            const validation = await resourceFileService.validateResourceFileUid(
+                "/test/path/file.resource",
+                "test-uid-123"
+            );
+
+            assert.strictEqual(validation.isValid, false, "Should return invalid for non-existent file");
+            assert.strictEqual(validation.isMismatch, false, "Should not indicate mismatch");
+            assert.strictEqual(validation.fileExists, false, "Should indicate file doesn't exist");
+        });
+
+        test("constructAlternativePathWithUid should append UID before file extension", function () {
+            const originalPath: string = "/test/path/Resource.resource";
+            const uid: string = "test-uid-123";
+            const expectedPath: string = "/test/path/Resource_test-uid-123.resource";
+
+            const result: string = resourceFileService.constructAlternativePathWithUid(originalPath, uid);
+
+            assert.strictEqual(result, expectedPath, "Should append UID before file extension");
+        });
+
+        test("constructAlternativePathWithUid should handle paths without extension", function () {
+            const originalPath: string = "/test/path/Resource";
+            const uid: string = "test-uid-123";
+            const expectedPath: string = "/test/path/Resource_test-uid-123";
+
+            const result: string = resourceFileService.constructAlternativePathWithUid(originalPath, uid);
+
+            assert.strictEqual(result, expectedPath, "Should append UID even without extension");
+        });
+
+        test("constructAlternativePathWithUid should handle multiple dots in filename", function () {
+            const originalPath: string = "/test/path/Resource.backup.resource";
+            const uid: string = "test-uid-123";
+            const expectedPath: string = "/test/path/Resource.backup_test-uid-123.resource";
+
+            const result: string = resourceFileService.constructAlternativePathWithUid(originalPath, uid);
+
+            assert.strictEqual(result, expectedPath, "Should append UID before last extension");
+        });
+    });
 });

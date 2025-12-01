@@ -17,6 +17,9 @@ import { StateManager } from "../../../treeViews/state/StateManager";
 import { ResourceFileService } from "../../../treeViews/implementations/testElements/ResourceFileService";
 import { testElementsConfig } from "../../../treeViews/implementations/testElements/TestElementsConfig";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
+import { UserSessionManager } from "../../../userSessionManager";
+import * as extension from "../../../extension";
+import * as configuration from "../../../configuration";
 
 suite("TestElementsTreeView", function () {
     let testEnv: TestEnvironment;
@@ -28,6 +31,7 @@ suite("TestElementsTreeView", function () {
     let mockResourceFileService: sinon.SinonStubbedInstance<ResourceFileService>;
     let getConnectionStub: sinon.SinonStub;
     let mockVSCodeTreeView: vscode.TreeView<any>;
+    let userSessionManager: UserSessionManager;
 
     const createMockTestElementData = (overrides: Partial<any> = {}) => ({
         id: "test-item-1",
@@ -101,6 +105,31 @@ suite("TestElementsTreeView", function () {
         mockResourceFileService.constructAbsolutePath.resolves(undefined);
         mockResourceFileService.pathExists.resolves(false);
         mockResourceFileService.directoryExists.resolves(false);
+        mockResourceFileService.validateResourceFileUid.resolves({
+            isValid: false,
+            fileExists: false,
+            isMismatch: false
+        });
+        mockResourceFileService.readUidFromResourceFile.resolves(undefined);
+        mockResourceFileService.constructAlternativePathWithUid.returns("/test/path/Resource_uid.resource");
+
+        // Setup userSessionManager mock
+        userSessionManager = new UserSessionManager(testEnv.mockContext);
+        testEnv.sandbox.stub(userSessionManager, "getCurrentUserId").returns("test-user-id");
+        testEnv.sandbox.stub(userSessionManager, "hasValidUserSession").returns(true);
+        (extension as any).userSessionManager = userSessionManager;
+
+        // Mock workspaceState for alternative paths persistence
+        testEnv.mockContext.workspaceState.get = testEnv.sandbox.stub().returns(undefined);
+        testEnv.mockContext.workspaceState.update = testEnv.sandbox.stub().resolves();
+
+        // Mock configuration for ResourceFileService.hasResourceMarker static method
+        testEnv.sandbox.stub(configuration, "getExtensionSetting").callsFake((key: string) => {
+            if (key === "resourceMarker" || key.includes("resourceMarker")) {
+                return ["[Robot-Resource]"];
+            }
+            return undefined;
+        });
 
         (treeView as any).registerEventHandlers();
     });
@@ -524,6 +553,339 @@ suite("TestElementsTreeView", function () {
             assert.strictEqual(result, true, "updateParentIcons should return true");
             assert.strictEqual(mockParent.data.isLocallyAvailable, true);
             assert.strictEqual(mockParent.data.localPath, "/test/path/TestFolder");
+        });
+    });
+
+    suite("Name Conflict Detection", function () {
+        test("validateAndHandleUidConflict should return alternative path when conflict detected and user chooses to create with UID", async function () {
+            const mockItem = createMockTestElementItem(
+                createMockTestElementData({
+                    uniqueID: "test-uid-123",
+                    hierarchicalName: "TestFolder/TestResource [Robot-Resource]"
+                })
+            );
+
+            // File exists with different UID
+            mockResourceFileService.pathExists.resolves(true);
+            mockResourceFileService.validateResourceFileUid.resolves({
+                isValid: false,
+                fileExists: true,
+                isMismatch: true,
+                fileUid: "different-uid-456"
+            });
+            mockResourceFileService.constructAbsolutePath.resolves("/test/path/TestResource.resource");
+            mockResourceFileService.constructAlternativePathWithUid.returns(
+                "/test/path/TestResource_test-uid-123.resource"
+            );
+
+            // User chooses "Create with UID in Filename"
+            testEnv.vscodeMocks.showWarningMessageStub.resolves("Create with UID in Filename");
+
+            const result = await (treeView as any).validateAndHandleUidConflict(
+                "/test/path/TestResource.resource",
+                mockItem
+            );
+
+            assert.strictEqual(result.canProceed, true, "Should allow proceeding");
+            assert.strictEqual(
+                result.resolvedPath,
+                "/test/path/TestResource_test-uid-123.resource",
+                "Should return alternative path with UID"
+            );
+            // Verify alternative path was stored
+            const alternativePaths = (treeView as any).alternativeResourcePaths;
+            assert.strictEqual(alternativePaths.get("test-uid-123"), "/test/path/TestResource_test-uid-123.resource");
+        });
+
+        test("validateAndHandleUidConflict should proceed when user chooses to open existing file", async function () {
+            const mockItem = createMockTestElementItem(
+                createMockTestElementData({
+                    uniqueID: "test-uid-123"
+                })
+            );
+
+            mockResourceFileService.pathExists.resolves(true);
+            mockResourceFileService.validateResourceFileUid.resolves({
+                isValid: false,
+                fileExists: true,
+                isMismatch: true,
+                fileUid: "different-uid-456"
+            });
+
+            // User chooses "Open Existing File"
+            testEnv.vscodeMocks.showWarningMessageStub.resolves("Open Existing File");
+
+            const result = await (treeView as any).validateAndHandleUidConflict(
+                "/test/path/TestResource.resource",
+                mockItem
+            );
+
+            assert.strictEqual(result.canProceed, true, "Should allow proceeding to open existing file");
+            assert.strictEqual(result.resolvedPath, undefined, "Should not return alternative path");
+        });
+
+        test("validateAndHandleUidConflict should use existing alternative path if available", async function () {
+            const mockItem = createMockTestElementItem(
+                createMockTestElementData({
+                    uniqueID: "test-uid-123",
+                    hierarchicalName: "TestFolder/TestResource [Robot-Resource]"
+                })
+            );
+
+            // Set alternative path in the map
+            (treeView as any).alternativeResourcePaths.set(
+                "test-uid-123",
+                "/test/path/TestResource_test-uid-123.resource"
+            );
+
+            mockResourceFileService.pathExists.resolves(true);
+            mockResourceFileService.validateResourceFileUid.resolves({
+                isValid: true,
+                fileExists: true,
+                isMismatch: false,
+                fileUid: "test-uid-123"
+            });
+
+            const result = await (treeView as any).validateAndHandleUidConflict(
+                "/test/path/TestResource.resource",
+                mockItem
+            );
+
+            assert.strictEqual(result.canProceed, true, "Should allow proceeding");
+            assert.strictEqual(
+                result.resolvedPath,
+                "/test/path/TestResource_test-uid-123.resource",
+                "Should return existing alternative path"
+            );
+        });
+
+        test("validateAndHandleUidConflict should proceed when file has matching UID", async function () {
+            const mockItem = createMockTestElementItem(
+                createMockTestElementData({
+                    uniqueID: "test-uid-123"
+                })
+            );
+
+            mockResourceFileService.pathExists.resolves(true);
+            mockResourceFileService.validateResourceFileUid.resolves({
+                isValid: true,
+                fileExists: true,
+                isMismatch: false,
+                fileUid: "test-uid-123"
+            });
+
+            const result = await (treeView as any).validateAndHandleUidConflict(
+                "/test/path/TestResource.resource",
+                mockItem
+            );
+
+            assert.strictEqual(result.canProceed, true, "Should allow proceeding");
+            assert.strictEqual(result.resolvedPath, undefined, "Should not return alternative path when UID matches");
+        });
+
+        test("validateAndHandleUidConflict should handle file without UID metadata", async function () {
+            const mockItem = createMockTestElementItem(
+                createMockTestElementData({
+                    uniqueID: "test-uid-123"
+                })
+            );
+
+            mockResourceFileService.pathExists.resolves(true);
+            mockResourceFileService.validateResourceFileUid.resolves({
+                isValid: false,
+                fileExists: true,
+                isMismatch: false,
+                fileUid: undefined
+            });
+
+            // User chooses to overwrite metadata
+            testEnv.vscodeMocks.showWarningMessageStub.resolves("Overwrite with New Metadata");
+
+            // Mock vscode.workspace.fs as an object
+            const mockWorkspaceFs = {
+                readFile: testEnv.sandbox.stub().resolves(new Uint8Array(Buffer.from("*** Settings ***\n", "utf-8"))),
+                writeFile: testEnv.sandbox.stub().resolves()
+            };
+            testEnv.sandbox.stub(vscode.workspace, "fs").value(mockWorkspaceFs);
+
+            const result = await (treeView as any).validateAndHandleUidConflict(
+                "/test/path/TestResource.resource",
+                mockItem
+            );
+
+            assert.strictEqual(result.canProceed, true, "Should allow proceeding after metadata update");
+        });
+
+        test("validateAndHandleUidConflict should cancel when user cancels conflict resolution", async function () {
+            const mockItem = createMockTestElementItem(
+                createMockTestElementData({
+                    uniqueID: "test-uid-123"
+                })
+            );
+
+            mockResourceFileService.pathExists.resolves(true);
+            mockResourceFileService.validateResourceFileUid.resolves({
+                isValid: false,
+                fileExists: true,
+                isMismatch: true,
+                fileUid: "different-uid-456"
+            });
+
+            // User cancels
+            testEnv.vscodeMocks.showWarningMessageStub.resolves(undefined);
+
+            const result = await (treeView as any).validateAndHandleUidConflict(
+                "/test/path/TestResource.resource",
+                mockItem
+            );
+
+            assert.strictEqual(result.canProceed, false, "Should not proceed when user cancels");
+        });
+
+        test("validateAndHandleUidConflict should handle item without UID", async function () {
+            const mockItem = createMockTestElementItem(
+                createMockTestElementData({
+                    uniqueID: undefined
+                })
+            );
+
+            const result = await (treeView as any).validateAndHandleUidConflict(
+                "/test/path/TestResource.resource",
+                mockItem
+            );
+
+            assert.strictEqual(result.canProceed, true, "Should allow proceeding when no UID present");
+        });
+
+        test("detectNameConflict should identify when multiple subdivisions map to same path", async function () {
+            const mockItem1 = createMockTestElementItem(
+                createMockTestElementData({
+                    uniqueID: "uid-1",
+                    hierarchicalName: "Folder/Resource [Robot-Resource]",
+                    displayName: "Resource [Robot-Resource]",
+                    testElementType: TestElementType.Subdivision
+                })
+            );
+
+            const mockItem2 = createMockTestElementItem(
+                createMockTestElementData({
+                    uniqueID: "uid-2",
+                    hierarchicalName: "Folder/Resource [Robot-Resource]",
+                    displayName: "Resource [Robot-Resource]",
+                    testElementType: TestElementType.Subdivision
+                })
+            );
+
+            (treeView as any).rootItems = [mockItem1, mockItem2];
+
+            // Mock constructAbsolutePath to return the same path for both items
+            // The method removes resource markers from hierarchicalName before calling constructAbsolutePath
+            // "Folder/Resource [Robot-Resource]" becomes "Folder/Resource"
+            mockResourceFileService.constructAbsolutePath.callsFake(async (name: string) => {
+                const trimmedName = name.trim();
+                if (trimmedName === "Folder/Resource" || trimmedName.includes("Folder/Resource")) {
+                    return "/test/path/Resource";
+                }
+                return undefined;
+            });
+
+            const result = await (treeView as any).detectNameConflict("/test/path/Resource.resource", "uid-1");
+
+            assert.strictEqual(result, true, "Should detect name conflict when multiple subdivisions map to same path");
+        });
+
+        test("detectNameConflict should return false when no conflict exists", async function () {
+            const mockItem = createMockTestElementItem(
+                createMockTestElementData({
+                    uniqueID: "uid-1",
+                    hierarchicalName: "Folder/Resource1 [Robot-Resource]"
+                })
+            );
+
+            (treeView as any).rootItems = [mockItem];
+            mockResourceFileService.constructAbsolutePath.resolves("/test/path/Resource1.resource");
+
+            const result = await (treeView as any).detectNameConflict("/test/path/Resource2.resource", "uid-1");
+
+            assert.strictEqual(result, false, "Should not detect conflict when paths differ");
+        });
+
+        test("loadAlternativeResourcePaths should load and validate persisted paths", async function () {
+            const storedPaths: Array<[string, string]> = [
+                ["uid-1", "/test/path/Resource1_uid-1.resource"],
+                ["uid-2", "/test/path/Resource2_uid-2.resource"]
+            ];
+
+            testEnv.mockContext.workspaceState.get = testEnv.sandbox.stub().returns(storedPaths);
+            mockResourceFileService.pathExists.resolves(true);
+            mockResourceFileService.validateResourceFileUid.callsFake(async (path: string, uid: string) => {
+                const expectedUid = storedPaths.find(([u]) => path.includes(u))?.[0];
+                return {
+                    isValid: expectedUid === uid,
+                    fileExists: true,
+                    isMismatch: expectedUid !== uid,
+                    fileUid: expectedUid
+                };
+            });
+
+            await (treeView as any).loadAlternativeResourcePaths();
+
+            const alternativePaths = (treeView as any).alternativeResourcePaths;
+            assert.strictEqual(alternativePaths.size, 2, "Should load all valid alternative paths");
+            assert.strictEqual(alternativePaths.get("uid-1"), "/test/path/Resource1_uid-1.resource");
+            assert.strictEqual(alternativePaths.get("uid-2"), "/test/path/Resource2_uid-2.resource");
+        });
+
+        test("loadAlternativeResourcePaths should filter out invalid paths", async function () {
+            const storedPaths: Array<[string, string]> = [
+                ["uid-1", "/test/path/Resource1_uid-1.resource"], // Valid
+                ["uid-2", "/test/path/Resource2_uid-2.resource"] // File doesn't exist
+            ];
+
+            testEnv.mockContext.workspaceState.get = testEnv.sandbox.stub().returns(storedPaths);
+            mockResourceFileService.pathExists.callsFake(async (path: string) => {
+                return path.includes("Resource1");
+            });
+            mockResourceFileService.validateResourceFileUid.resolves({
+                isValid: true,
+                fileExists: true,
+                isMismatch: false,
+                fileUid: "uid-1"
+            });
+
+            await (treeView as any).loadAlternativeResourcePaths();
+
+            const alternativePaths = (treeView as any).alternativeResourcePaths;
+            assert.strictEqual(alternativePaths.size, 1, "Should only load valid paths");
+            assert.strictEqual(alternativePaths.get("uid-1"), "/test/path/Resource1_uid-1.resource");
+            assert.strictEqual(alternativePaths.get("uid-2"), undefined, "Should not load non-existent paths");
+        });
+
+        test("saveAlternativeResourcePaths should save paths to workspace storage", async function () {
+            (treeView as any).alternativeResourcePaths.set("uid-1", "/test/path/Resource1_uid-1.resource");
+            (treeView as any).alternativeResourcePaths.set("uid-2", "/test/path/Resource2_uid-2.resource");
+
+            await (treeView as any).saveAlternativeResourcePaths();
+
+            const updateCall = testEnv.mockContext.workspaceState.update as sinon.SinonStub;
+            assert.ok(updateCall.called, "Should call workspaceState.update");
+            const [storageKey, data] = updateCall.firstCall.args;
+            assert.ok(storageKey.includes("alternativeResourcePaths"), "Should use correct storage key");
+            assert.ok(Array.isArray(data), "Should save as array");
+            assert.strictEqual(data.length, 2, "Should save all alternative paths");
+        });
+
+        test("saveAlternativeResourcePaths should not save when no user session", async function () {
+            (userSessionManager.hasValidUserSession as sinon.SinonStub).returns(false);
+            (treeView as any).alternativeResourcePaths.set("uid-1", "/test/path/Resource1_uid-1.resource");
+
+            await (treeView as any).saveAlternativeResourcePaths();
+
+            const updateCall = testEnv.mockContext.workspaceState.update as sinon.SinonStub;
+            assert.ok(!updateCall.called, "Should not save when no valid user session");
+
+            // Restore the original return value for other tests
+            (userSessionManager.hasValidUserSession as sinon.SinonStub).returns(true);
         });
     });
 });

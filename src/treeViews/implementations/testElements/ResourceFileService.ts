@@ -319,4 +319,73 @@ export class ResourceFileService {
             throw new Error(`Failed to create folder: ${error.message}`);
         }
     }
+
+    /**
+     * Reads the UID from a resource file's metadata.
+     * The metadata is expected to be in the format: `tb:uid:<uid>` on the first line.
+     * @param filePath The absolute path to the resource file.
+     * @returns Promise resolving to the UID string if found, or undefined if not found or file doesn't exist.
+     */
+    public async readUidFromResourceFile(filePath: string): Promise<string | undefined> {
+        try {
+            if (!(await this.fileExists(filePath))) {
+                return undefined;
+            }
+
+            const fileContent: string = await fs.promises.readFile(filePath, "utf-8");
+            const uidMatch: RegExpMatchArray | null = fileContent.match(/^tb:uid:(.+)$/m);
+            if (uidMatch) {
+                return uidMatch[1].trim();
+            }
+            return undefined;
+        } catch (error: any) {
+            this.logger.warn(
+                `[ResourceFileService] Error reading UID from resource file ${filePath}: ${error.message}`
+            );
+            return undefined;
+        }
+    }
+
+    /**
+     * Validates that a resource file matches the expected UID.
+     * @param filePath The absolute path to the resource file.
+     * @param expectedUid The expected UID.
+     * @returns Promise resolving to an object with validation result and details.
+     */
+    public async validateResourceFileUid(
+        filePath: string,
+        expectedUid: string
+    ): Promise<{ isValid: boolean; fileUid?: string; isMismatch: boolean; fileExists: boolean }> {
+        const fileExists: boolean = await this.fileExists(filePath);
+        if (!fileExists) {
+            return { isValid: false, fileExists: false, isMismatch: false };
+        }
+
+        const fileUid: string | undefined = await this.readUidFromResourceFile(filePath);
+        if (!fileUid) {
+            // File exists but has no UID metadata
+            return { isValid: false, fileExists: true, isMismatch: false, fileUid: undefined };
+        }
+
+        const isMismatch: boolean = fileUid !== expectedUid;
+        return {
+            isValid: !isMismatch,
+            fileExists: true,
+            isMismatch,
+            fileUid
+        };
+    }
+
+    /**
+     * Constructs an alternative path for a resource file when a name conflict is detected.
+     * Appends the UID to the filename to ensure uniqueness.
+     * @param originalPath The original path that has a conflict.
+     * @param uid The UID to append to the filename.
+     * @returns The alternative path with UID appended before the file extension.
+     */
+    public constructAlternativePathWithUid(originalPath: string, uid: string): string {
+        const extensionOfOriginalPath: string = path.extname(originalPath);
+        const basePath: string = originalPath.slice(0, originalPath.length - extensionOfOriginalPath.length);
+        return `${basePath}_${uid}${extensionOfOriginalPath}`;
+    }
 }

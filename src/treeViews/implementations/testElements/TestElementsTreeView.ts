@@ -12,7 +12,7 @@ import { testElementsConfig } from "./TestElementsConfig";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { ResourceFileService } from "./ResourceFileService";
 import { ContextKeys, TestElementItemTypes } from "../../../constants";
-import { treeViews } from "../../../extension";
+import { treeViews, userSessionManager } from "../../../extension";
 import { ClickHandler } from "../../core/ClickHandler";
 import {
     findKeywordPositionInResourceFile,
@@ -61,6 +61,11 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private keywordClickHandler: ClickHandler<TestElementsTreeItem>;
     private resourceFilesWatcher: vscode.FileSystemWatcher | undefined;
     private resourceAvailabilityRefreshDebounceHandle: NodeJS.Timeout | undefined;
+    // Maps subdivision UID to alternative file path (when resource file is created with UID in filename to avoid name conflicts)
+    private alternativeResourcePaths: Map<string, string> = new Map();
+    private readonly ALTERNATIVE_RESOURCE_PATHS_STORAGE_KEY =
+        "testbenchExtension.testElements.alternativeResourcePaths";
+    private alternativeResourcePathsSaveTimeout: NodeJS.Timeout | null = null;
 
     constructor(
         extensionContext: vscode.ExtensionContext,
@@ -77,6 +82,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         this.registerEventHandlers();
         this.setupKeywordClickHandlers();
         this.setupResourceFilesWatcher();
+        this.loadAlternativeResourcePaths();
     }
 
     /**
@@ -135,6 +141,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         this.eventBus.on("connection:changed", async (event) => {
             const { connected } = event.data;
             if (connected && this.currentTovKey) {
+                // Reload alternative paths in case a different user logged in
+                this.alternativeResourcePaths.clear();
+                await this.loadAlternativeResourcePaths();
                 this.refresh();
             } else if (!connected) {
                 this.clearTree();
@@ -282,6 +291,21 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 return;
             }
 
+            // Validate UID for resource file operation
+            if (resourcePath.isResourceFile) {
+                const uidValidation = await this.validateAndHandleUidConflict(
+                    resourcePath.finalPath,
+                    config.targetItem
+                );
+                if (!uidValidation.canProceed) {
+                    return;
+                }
+                // Use the validated path (might be different if conflict was resolved)
+                if (uidValidation.resolvedPath) {
+                    resourcePath.finalPath = uidValidation.resolvedPath;
+                }
+            }
+
             const resourcePathExists = await this.resourceFileService.pathExists(resourcePath.finalPath);
 
             if (!resourcePathExists) {
@@ -305,6 +329,185 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         } catch (error) {
             this.handleResourceOperationError(config.operationType, error);
         }
+    }
+
+    /**
+     * Detects name conflicts and renames of a resource file.
+     * Validates UID and handles conflicts when a resource file exists with a different UID.
+     * @param filePath The path to the resource file
+     * @param targetItem The tree item representing the resource
+     * @returns Object indicating whether to proceed and the resolved path (if different)
+     */
+    private async validateAndHandleUidConflict(
+        filePath: string,
+        targetItem: TestElementsTreeItem
+    ): Promise<{ canProceed: boolean; resolvedPath?: string }> {
+        const expectedUid: string = targetItem.data.uniqueID;
+        if (!expectedUid) {
+            this.logger.warn(
+                `[TestElementsTreeView] Cannot validate UID conflict: item ${targetItem.label} has no UID`
+            );
+            return { canProceed: true };
+        }
+
+        // Check if there's a stored alternative path for this UID (created with UID in filename)
+        const alternativeResourcePath: string | undefined = this.alternativeResourcePaths.get(expectedUid);
+        if (alternativeResourcePath && (await this.resourceFileService.pathExists(alternativeResourcePath))) {
+            const altValidation = await this.resourceFileService.validateResourceFileUid(
+                alternativeResourcePath,
+                expectedUid
+            );
+            if (altValidation.isValid) {
+                this.logger.debug(
+                    `[TestElementsTreeView] Found existing alternative path for UID ${expectedUid}: ${alternativeResourcePath}`
+                );
+                return { canProceed: true, resolvedPath: alternativeResourcePath };
+            }
+        }
+
+        const validation = await this.resourceFileService.validateResourceFileUid(filePath, expectedUid);
+
+        if (!validation.fileExists) {
+            // Check for potential name conflicts with other subdivisions
+            const conflictDetected: boolean = await this.detectNameConflict(filePath, expectedUid);
+            if (conflictDetected) {
+                this.logger.warn(
+                    `[TestElementsTreeView] Name conflict detected: another subdivision with different UID maps to the same path: ${filePath}`
+                );
+                // TODO: suggest using UID in filename?
+                return { canProceed: true };
+            }
+            return { canProceed: true };
+        }
+
+        // File exists but has no UID metadata
+        if (!validation.fileUid) {
+            const selectedPromptAction: string | undefined = await vscode.window.showWarningMessage(
+                `Resource file exists at "${filePath}" but has no UID metadata. This might be an old file or was created manually.\n\n` +
+                    `Expected UID: ${expectedUid}\n\n` +
+                    `What would you like to do?`,
+                { modal: true },
+                "Overwrite with New Metadata",
+                "Cancel"
+            );
+
+            if (selectedPromptAction === "Overwrite with New Metadata") {
+                // Update the file with correct metadata
+                const context: string = this.buildContextMetadata();
+                try {
+                    const existingContent = await vscode.workspace.fs.readFile(vscode.Uri.file(filePath));
+                    const existingText = Buffer.from(existingContent).toString("utf-8");
+                    // Preserve existing content but update metadata
+                    const lines = existingText.split("\n");
+                    const newLines = lines.filter((line) => !line.trim().startsWith("tb:uid:"));
+                    const updatedContent = `tb:uid:${expectedUid}\n${context}${newLines.join("\n")}`;
+                    await vscode.workspace.fs.writeFile(
+                        vscode.Uri.file(filePath),
+                        Buffer.from(updatedContent, "utf-8")
+                    );
+                    this.logger.info(`[TestElementsTreeView] Updated resource file metadata with UID: ${expectedUid}`);
+                    return { canProceed: true };
+                } catch (error) {
+                    this.logger.error(`[TestElementsTreeView] Error updating file metadata:`, error);
+                    vscode.window.showErrorMessage("Failed to update file metadata.");
+                    return { canProceed: false };
+                }
+            }
+            return { canProceed: false };
+        }
+
+        // File exists with different UID: conflict or rename detected
+        if (validation.isMismatch) {
+            const selectedPromptAction: string | undefined = await vscode.window.showWarningMessage(
+                `Resource file conflict detected!\n\n` +
+                    `File: ${filePath}\n` +
+                    `File UID: ${validation.fileUid}\n` +
+                    `Expected UID: ${expectedUid}\n\n` +
+                    `This usually means:\n` +
+                    `- The subdivision was renamed in TestBench, or\n` +
+                    `- Multiple subdivisions have the same name (name conflict)\n\n` +
+                    `What would you like to do?`,
+                { modal: true },
+                "Create with UID in Filename",
+                "Open Existing File"
+            );
+
+            if (selectedPromptAction === "Create with UID in Filename") {
+                const alternativeResourcePath: string = this.resourceFileService.constructAlternativePathWithUid(
+                    filePath,
+                    expectedUid
+                );
+                this.alternativeResourcePaths.set(expectedUid, alternativeResourcePath);
+                this.debouncedSaveAlternativeResourcePaths();
+                this.logger.info(
+                    `[TestElementsTreeView] Creating resource file with UID in filename to avoid conflict: ${alternativeResourcePath}`
+                );
+                return { canProceed: true, resolvedPath: alternativeResourcePath };
+            } else if (selectedPromptAction === "Open Existing File") {
+                this.logger.info(
+                    `[TestElementsTreeView] Opening existing file with different UID: ${validation.fileUid}`
+                );
+                return { canProceed: true };
+            }
+            return { canProceed: false };
+        }
+
+        // File exists with matching UID
+        return { canProceed: true };
+    }
+
+    /**
+     * Identifies name conflicts for resource files.
+     * Detects if there are other subdivisions in the tree that would map to the same file path.
+     * @param filePath The file path to check for conflicts
+     * @param currentUid The UID of the current subdivision (to exclude from conflict check)
+     * @returns True if a conflict is detected, false otherwise
+     */
+    private async detectNameConflict(filePath: string, currentUid: string): Promise<boolean> {
+        if (!this.rootItems || this.rootItems.length === 0) {
+            return false;
+        }
+
+        const allResourceSubdivisions: TestElementsTreeItem[] = [];
+        const collectResourceSubdivisions = (items: TestElementsTreeItem[]): void => {
+            for (const item of items) {
+                if (
+                    item.data.testElementType === TestElementType.Subdivision &&
+                    item.data.displayName &&
+                    ResourceFileService.hasResourceMarker(item.data.displayName) &&
+                    item.data.uniqueID !== currentUid
+                ) {
+                    allResourceSubdivisions.push(item);
+                }
+                if (item.children) {
+                    collectResourceSubdivisions(item.children as TestElementsTreeItem[]);
+                }
+            }
+        };
+        collectResourceSubdivisions(this.rootItems);
+
+        // Check if any other subdivision would map to the same path
+        for (const subdivision of allResourceSubdivisions) {
+            if (!subdivision.data.hierarchicalName) {
+                continue;
+            }
+            const cleanedResourceName: string = this.removeResourceMarkersFromHierarchicalName(
+                subdivision.data.hierarchicalName
+            ).trim();
+            const otherResourceAbsolutePath: string | undefined =
+                await this.resourceFileService.constructAbsolutePath(cleanedResourceName);
+            if (otherResourceAbsolutePath && !otherResourceAbsolutePath.endsWith(".resource")) {
+                const otherResourcePathWithExtension: string = `${otherResourceAbsolutePath}.resource`;
+                if (otherResourcePathWithExtension === filePath) {
+                    this.logger.warn(
+                        `[TestElementsTreeView] Name conflict detected: subdivision "${subdivision.data.displayName}" (UID: ${subdivision.data.uniqueID}) maps to same path as current subdivision (UID: ${currentUid})`
+                    );
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -340,6 +543,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
     /**
      * Resolves and validates the resource path for a given tree item.
+     * Checks for alternative paths (with UID in filename) first.
      * @param targetItem The tree item to resolve the path for
      * @param errorMessages Error messages to display if resolution fails
      * @returns Resolved resource path information or null if resolution fails
@@ -354,6 +558,25 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             return null;
         }
 
+        const isResourceFile = ResourceFileService.hasResourceMarker(hierarchicalName);
+
+        // Check for alternative path first (if file was created with UID in filename)
+        if (isResourceFile && targetItem.data.uniqueID) {
+            const alternativePath = this.alternativeResourcePaths.get(targetItem.data.uniqueID);
+            if (alternativePath && (await this.resourceFileService.pathExists(alternativePath))) {
+                const validation = await this.resourceFileService.validateResourceFileUid(
+                    alternativePath,
+                    targetItem.data.uniqueID
+                );
+                if (validation.isValid) {
+                    this.logger.debug(
+                        `[TestElementsTreeView] Using alternative path for UID ${targetItem.data.uniqueID}: ${alternativePath}`
+                    );
+                    return { finalPath: alternativePath, isResourceFile: true };
+                }
+            }
+        }
+
         const cleanName = this.removeResourceMarkersFromHierarchicalName(hierarchicalName).trim();
         const absolutePath = await this.resourceFileService.constructAbsolutePath(cleanName);
         if (!absolutePath) {
@@ -361,7 +584,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             return null;
         }
 
-        const isResourceFile = ResourceFileService.hasResourceMarker(hierarchicalName);
         const finalPath =
             isResourceFile && !absolutePath.endsWith(".resource") ? `${absolutePath}.resource` : absolutePath;
 
@@ -602,6 +824,11 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         clearFirst: boolean = true
     ): Promise<void> {
         try {
+            // Load alternative resource paths if not already loaded and user session is available
+            if (this.alternativeResourcePaths.size === 0 && userSessionManager.hasValidUserSession()) {
+                await this.loadAlternativeResourcePaths();
+            }
+
             this.logger.debug(
                 `[TestElementsTreeView] Loading Test Element information for Test Object Version '${tovName}' from project '${projectName}'...`
             );
@@ -688,6 +915,10 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         this.currentProjectName = null;
         this.currentTovName = null;
         this.resourceFiles.clear();
+        // Note: We keep alternativeResourcePaths across tree clears to maintain
+        // the mapping of UID -> alternative path for files created with UID in filename.
+        // This ensures that when reopening a subdivision, we can find the correct file.
+        // The mapping will be cleared when the extension is deactivated or workspace changes.
         this.resetTitle();
     }
 
@@ -809,10 +1040,57 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                                 if (isResourceFile && !resourcePath.endsWith(".resource")) {
                                     resourcePath += ".resource";
                                 }
-                                const resourcePathExists = await this.resourceFileService.pathExists(resourcePath);
-                                subdivisionItem.updateLocalAvailability(resourcePathExists, resourcePath);
 
-                                if (resourcePathExists) {
+                                // Check for alternative path first (if file was created with UID in filename)
+                                let finalResourcePath = resourcePath;
+                                let isAvailable = false;
+
+                                if (isResourceFile && subdivisionItem.data.uniqueID) {
+                                    const alternativePath = this.alternativeResourcePaths.get(
+                                        subdivisionItem.data.uniqueID
+                                    );
+                                    if (
+                                        alternativePath &&
+                                        (await this.resourceFileService.pathExists(alternativePath))
+                                    ) {
+                                        const altValidation = await this.resourceFileService.validateResourceFileUid(
+                                            alternativePath,
+                                            subdivisionItem.data.uniqueID
+                                        );
+                                        if (altValidation.isValid) {
+                                            // Use alternative path
+                                            finalResourcePath = alternativePath;
+                                            isAvailable = true;
+                                        }
+                                    }
+                                }
+
+                                // If no alternative path found or not valid, check standard path
+                                if (!isAvailable) {
+                                    const resourcePathExists = await this.resourceFileService.pathExists(resourcePath);
+
+                                    // For resource files, validate UID to ensure the file belongs to this subdivision
+                                    isAvailable = resourcePathExists;
+                                    if (isResourceFile && resourcePathExists && subdivisionItem.data.uniqueID) {
+                                        const validation = await this.resourceFileService.validateResourceFileUid(
+                                            resourcePath,
+                                            subdivisionItem.data.uniqueID
+                                        );
+                                        // Only mark as available if UID matches (or file has no UID metadata yet)
+                                        isAvailable = validation.isValid || !validation.fileUid;
+                                        if (validation.isMismatch) {
+                                            this.logger.warn(
+                                                `[TestElementsTreeView] Resource file at ${resourcePath} has UID mismatch. ` +
+                                                    `File UID: ${validation.fileUid}, Expected: ${subdivisionItem.data.uniqueID}. ` +
+                                                    `This indicates a name conflict or rename.`
+                                            );
+                                        }
+                                    }
+                                }
+
+                                subdivisionItem.updateLocalAvailability(isAvailable, finalResourcePath);
+
+                                if (isAvailable) {
                                     await this.markParentSubdivisions(subdivisionItem);
                                 }
                             }
@@ -1369,9 +1647,113 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
+     * Loads persisted alternative resource paths from storage.
+     * Validates that the files still exist before adding them to the map.
+     */
+    private async loadAlternativeResourcePaths(): Promise<void> {
+        if (!userSessionManager.hasValidUserSession()) {
+            this.logger.trace(
+                "[TestElementsTreeView] No valid user session for loading alternative resource paths, skipping"
+            );
+            return;
+        }
+
+        try {
+            const userId: string = userSessionManager.getCurrentUserId();
+            const storageKey: string = `${this.ALTERNATIVE_RESOURCE_PATHS_STORAGE_KEY}.${userId}`;
+            const storedData = this.extensionContext.workspaceState.get<Array<[string, string]>>(storageKey);
+
+            if (!storedData || !Array.isArray(storedData)) {
+                this.logger.trace("[TestElementsTreeView] No persisted alternative resource paths found");
+                return;
+            }
+
+            // Validate and load paths that still exist
+            let loadedAltResourcePathCount: number = 0;
+            for (const [uid, path] of storedData) {
+                if (await this.resourceFileService.pathExists(path)) {
+                    // Validate UID matches the file
+                    const validation = await this.resourceFileService.validateResourceFileUid(path, uid);
+                    if (validation.isValid) {
+                        this.alternativeResourcePaths.set(uid, path);
+                        loadedAltResourcePathCount++;
+                    } else {
+                        this.logger.debug(
+                            `[TestElementsTreeView] Skipping persisted alternative path for UID ${uid}: UID mismatch in file ${path}`
+                        );
+                    }
+                } else {
+                    this.logger.debug(
+                        `[TestElementsTreeView] Skipping persisted alternative path for UID ${uid}: file no longer exists at ${path}`
+                    );
+                }
+            }
+
+            if (loadedAltResourcePathCount > 0) {
+                this.logger.info(
+                    `[TestElementsTreeView] Loaded ${loadedAltResourcePathCount} persisted alternative resource path(s) for user ${userId}`
+                );
+            } else {
+                this.logger.trace("[TestElementsTreeView] No valid alternative resource paths found in storage");
+            }
+        } catch (error) {
+            this.logger.error("[TestElementsTreeView] Error loading alternative resource paths:", error);
+        }
+    }
+
+    /**
+     * Saves alternative resource paths to storage with debouncing.
+     * Debounce saves to avoid excessive writes when multiple updates occur in quick succession.
+     */
+    private debouncedSaveAlternativeResourcePaths(): void {
+        if (this.alternativeResourcePathsSaveTimeout) {
+            clearTimeout(this.alternativeResourcePathsSaveTimeout);
+        }
+
+        this.alternativeResourcePathsSaveTimeout = setTimeout(() => {
+            this.saveAlternativeResourcePaths();
+        }, 500);
+    }
+
+    /**
+     * Saves alternative resource paths to workspace storage.
+     * Uses user-specific storage keys to maintain separate mappings per user.
+     */
+    private async saveAlternativeResourcePaths(): Promise<void> {
+        if (!userSessionManager.hasValidUserSession()) {
+            this.logger.trace(
+                "[TestElementsTreeView] No valid user session for saving alternative resource paths, skipping"
+            );
+            return;
+        }
+
+        try {
+            const userId: string = userSessionManager.getCurrentUserId();
+            const storageKey: string = `${this.ALTERNATIVE_RESOURCE_PATHS_STORAGE_KEY}.${userId}`;
+
+            // Convert Map to array for storage
+            const dataToSave = Array.from(this.alternativeResourcePaths.entries());
+
+            await this.extensionContext.workspaceState.update(storageKey, dataToSave);
+            this.logger.debug(
+                `[TestElementsTreeView] Saved ${dataToSave.length} alternative resource path(s) for user ${userId}`
+            );
+        } catch (error) {
+            this.logger.error("[TestElementsTreeView] Error saving alternative resource paths:", error);
+        }
+    }
+
+    /**
      * Disposes of all resources and cleans up the tree view.
      */
     public async dispose(): Promise<void> {
+        // Clear save timeout and force save before disposing
+        if (this.alternativeResourcePathsSaveTimeout) {
+            clearTimeout(this.alternativeResourcePathsSaveTimeout);
+            this.alternativeResourcePathsSaveTimeout = null;
+        }
+        await this.saveAlternativeResourcePaths();
+
         for (const disposable of this.disposables) {
             disposable.dispose();
         }
