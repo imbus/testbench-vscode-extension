@@ -208,29 +208,28 @@ export class ResourceFileService {
             return false;
         }
 
-        const cleanedPath = this.removeResourceMarkersFromPathString(filePath);
         try {
-            await fs.promises.stat(cleanedPath);
+            await fs.promises.stat(filePath);
 
             if (process.platform === "win32" || !caseSensitiveCheck) {
                 return true;
             }
 
             // For case-sensitive systems, verify the exact filename
-            const dir = path.dirname(cleanedPath);
-            const filename = path.basename(cleanedPath);
+            const dir = path.dirname(filePath);
+            const filename = path.basename(filePath);
             const filesInDir = await fs.promises.readdir(dir);
             return filesInDir.includes(filename);
         } catch (err: any) {
             if (err.code === "ENOENT") {
-                this.logger.trace(`[ResourceFileService] Path does not exist: ${cleanedPath}`);
+                this.logger.trace(`[ResourceFileService] Path does not exist: ${filePath}`);
                 return false;
             }
             if (err.code === "EACCES") {
-                this.logger.warn(`[ResourceFileService] Permission denied accessing path: ${cleanedPath}`);
+                this.logger.warn(`[ResourceFileService] Permission denied accessing path: ${filePath}`);
                 return false;
             }
-            this.logger.error(`[ResourceFileService] Error stating file/dir "${cleanedPath}": ${err.message}`);
+            this.logger.error(`[ResourceFileService] Error stating file/dir "${filePath}": ${err.message}`);
             throw err;
         }
     }
@@ -246,20 +245,19 @@ export class ResourceFileService {
             return false;
         }
 
-        const cleanedPath = this.removeResourceMarkersFromPathString(dirPath);
         try {
-            const stats = await fs.promises.stat(cleanedPath);
+            const stats = await fs.promises.stat(dirPath);
             return stats.isDirectory();
         } catch (err: any) {
             if (err.code === "ENOENT") {
-                this.logger.debug(`[ResourceFileService] Directory does not exist: ${cleanedPath}`);
+                this.logger.debug(`[ResourceFileService] Directory does not exist: ${dirPath}`);
                 return false;
             }
             if (err.code === "EACCES") {
-                this.logger.warn(`[ResourceFileService] Permission denied accessing directory: ${cleanedPath}`);
+                this.logger.warn(`[ResourceFileService] Permission denied accessing directory: ${dirPath}`);
                 return false;
             }
-            this.logger.error(`[ResourceFileService] Error stating directory "${cleanedPath}": ${err.message}`);
+            this.logger.error(`[ResourceFileService] Error stating directory "${dirPath}": ${err.message}`);
             throw err;
         }
     }
@@ -275,20 +273,19 @@ export class ResourceFileService {
             return false;
         }
 
-        const cleanedPath = this.removeResourceMarkersFromPathString(filePath);
         try {
-            const stats = await fs.promises.stat(cleanedPath);
+            const stats = await fs.promises.stat(filePath);
             return stats.isFile();
         } catch (err: any) {
             if (err.code === "ENOENT") {
-                this.logger.debug(`[ResourceFileService] File does not exist: ${cleanedPath}`);
+                this.logger.debug(`[ResourceFileService] File does not exist: ${filePath}`);
                 return false;
             }
             if (err.code === "EACCES") {
-                this.logger.warn(`[ResourceFileService] Permission denied accessing file: ${cleanedPath}`);
+                this.logger.warn(`[ResourceFileService] Permission denied accessing file: ${filePath}`);
                 return false;
             }
-            this.logger.error(`[ResourceFileService] Error stating file "${cleanedPath}": ${err.message}`);
+            this.logger.error(`[ResourceFileService] Error stating file "${filePath}": ${err.message}`);
             throw err;
         }
     }
@@ -303,17 +300,15 @@ export class ResourceFileService {
             throw new Error("Folder path must be a non-empty string");
         }
 
-        const cleanedPath = this.removeResourceMarkersFromPathString(folderPath);
-
         try {
-            await fs.promises.mkdir(cleanedPath, { recursive: true });
+            await fs.promises.mkdir(folderPath, { recursive: true });
         } catch (error: any) {
             if (error.code === "EACCES") {
-                this.logger.error(`[ResourceFileService] Permission denied while creating folder: "${cleanedPath}"`);
-                throw new Error(`Permission denied while creating folder: ${cleanedPath}`);
+                this.logger.error(`[ResourceFileService] Permission denied while creating folder: "${folderPath}"`);
+                throw new Error(`Permission denied while creating folder: ${folderPath}`);
             }
             this.logger.error(
-                `[ResourceFileService] Failed to create folder path: "${cleanedPath}": ${error.message}`,
+                `[ResourceFileService] Failed to create folder path: "${folderPath}": ${error.message}`,
                 error
             );
             throw new Error(`Failed to create folder: ${error.message}`);
