@@ -775,9 +775,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         const collectSubdivisions = (currentItems: TestElementsTreeItem[], checkExpanded: boolean) => {
             for (const item of currentItems) {
                 if (item.data.testElementType === TestElementType.Subdivision) {
-                    if (!checkExpanded || item.collapsibleState === vscode.TreeItemCollapsibleState.Expanded) {
-                        subdivisionItems.push(item);
-                    }
+                    subdivisionItems.push(item);
                 }
                 if (
                     item.children &&
