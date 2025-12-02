@@ -146,7 +146,7 @@ Example `ls.config.json`
     - **Single-click:** Opens the corresponding resource file in the editor and jumps directly to the keyword definition
     - **Double-click:** Opens the resource file, jumps to the keyword definition, and reveals the file location in VS Code Explorer
 
-![Keyword Navigation Example](<userGuideImages/TestElementsKeywordOfResourceFile(CHECK).png>)
+![Keyword Navigation Example](userGuideImages/TestElementsKeywordOfResourceFile.png)
 
 ### Language Server Features for Resource Files
 
