@@ -48,7 +48,7 @@ DEBUG_CHECK_CONTEXT = "Checking testbench context. Selected context: {selected_c
 # COMMANDS
 COMMAND_GENERATE_TEST_SUITES = "testbench_ls.generateTestSuites"
 COMMAND_FETCH_RESULTS = "testbench_ls.fetchResults"
-COMMAND_FIND_INTERACTION_POSITION = "testbench_ls.getInteractionPosition"
+COMMAND_FIND_KEYWORD_POSITION = "testbench_ls.getKeywordPosition"
 COMMAND_UPDATE_SERVER_NAME = "testbench_ls.updateServerName"
 COMMAND_UPDATE_SERVER_PORT = "testbench_ls.updateServerPort"
 COMMAND_UPDATE_LOGIN_NAME = "testbench_ls.updateLoginName"

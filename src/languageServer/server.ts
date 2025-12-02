@@ -1357,6 +1357,10 @@ export async function findKeywordPositionInResourceFile(
     keywordName: string,
     keywordUid: string
 ): Promise<number | undefined> {
+    logger.trace(
+        `[server] findKeywordPositionInResourceFile called: uri=${uri.toString()}, keywordName=${keywordName}, keywordUid=${keywordUid}`
+    );
+
     if (!isLanguageServerRunning()) {
         logger.error("[server] Language server is not running, cannot find keyword position");
         return undefined;
@@ -1364,12 +1368,15 @@ export async function findKeywordPositionInResourceFile(
 
     try {
         const lineNumber = await vscode.commands.executeCommand(
-            "testbench_ls.getInteractionPosition",
+            "testbench_ls.getKeywordPosition",
             uri.toString(),
             keywordName,
             keywordUid
         );
         if (typeof lineNumber === "number") {
+            logger.trace(
+                `[server] Successfully found keyword position: line ${lineNumber} for keyword ${keywordName} with UID ${keywordUid}`
+            );
             return lineNumber;
         }
         return undefined;

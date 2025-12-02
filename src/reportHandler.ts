@@ -13,7 +13,7 @@ import * as testBenchTypes from "./testBenchTypes";
 import * as utils from "./utils";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
 import { AxiosResponse, AxiosInstance } from "axios";
-import { connection, logger, userSessionManager } from "./extension";
+import { connection, logger, treeViews, userSessionManager } from "./extension";
 import {
     ConfigKeys,
     StorageKeys,
@@ -261,7 +261,7 @@ export async function getJobIdOfCycleReport(
         return null;
     }
 
-    const getJobIDUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
+    const getJobIDUrl: string = `${connection.getBaseURL()}/2/projects/${projectKey}/cycles/${cycleKey}/report`;
     logger.trace(`[reportHandler] Fetching job ID of cycle report from URL: ${getJobIDUrl}`);
     try {
         const apiClient: AxiosInstance = connection.getApiClient();
@@ -313,7 +313,7 @@ export async function getJobStatus(
         logger.error("[reportHandler] No connection available, cannot get job status.");
         return null;
     }
-    const getJobStatusUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/${jobType}/job/${jobId}/v1`;
+    const getJobStatusUrl: string = `${connection.getBaseURL()}/2/projects/${projectKey}/${jobType}/job/${jobId}`;
     logger.trace(`[reportHandler] Fetching job status at: ${getJobStatusUrl}`);
 
     const apiClient: AxiosInstance = connection.getApiClient();
@@ -367,7 +367,7 @@ export async function downloadReport(
             vscode.window.showErrorMessage(missingConnectionError);
             return null;
         }
-        const downloadReportUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/report/${fileNameToDownload}/v1`;
+        const downloadReportUrl: string = `${connection.getBaseURL()}/2/projects/${projectKey}/report/${fileNameToDownload}`;
         logger.debug(`[reportHandler] Downloading report "${fileNameToDownload}" from URL: ${downloadReportUrl}`);
 
         const apiClient: AxiosInstance = connection.getApiClient();
@@ -892,13 +892,16 @@ async function chooseReportWithoutResultsZipFile(workingDirectoryPath: string): 
  *
  * @param {vscode.ExtensionContext} context The extension context.
  * @param {vscode.Progress} currentProgress Optional progress reporter.
+ * @param {vscode.CancellationToken} cancellationToken Optional cancellation token.
+ * @param {string} reportRootUID Optional report root UID to use instead of the stored UID from last generation.
  * @returns {Promise<{createdReportPath: string; outputXmlPathUsed: string; baseReportPathUsed: string} | undefined>}
  * An object with paths, or undefined on error.
  */
 export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
     context: vscode.ExtensionContext,
     currentProgress?: vscode.Progress<{ message?: string; increment?: number }>,
-    cancellationToken?: vscode.CancellationToken
+    cancellationToken?: vscode.CancellationToken,
+    reportRootUID?: string
 ): Promise<{ createdReportPath: string; outputXmlPathUsed: string; baseReportPathUsed: string } | undefined> {
     try {
         logger.trace("[reportHandler] Fetching test results and creating report with results.");
@@ -968,10 +971,17 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 return undefined;
             }
 
+            // Use the provided reportRootUID if available (for specific tree item imports),
+            // otherwise use the UID from last generation (for full cycle imports)
+            const effectiveUID = reportRootUID !== undefined ? reportRootUID : UID;
+            logger.debug(
+                `[reportHandler] Using treeRootUID for import: ${effectiveUID} (provided: ${reportRootUID !== undefined}, stored: ${UID})`
+            );
+
             const currentFiltersForImport = await TestThemesTreeView.getValidatedFiltersForApiRequest();
             const cycleStructureOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
                 basedOnExecution: executionBased === testBenchTypes.ExecutionMode.Execute,
-                treeRootUID: UID,
+                treeRootUID: effectiveUID,
                 filters: currentFiltersForImport
             };
 
@@ -1211,7 +1221,8 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 const reportCreationDetails = await fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                     context,
                     progress,
-                    cancellationToken
+                    cancellationToken,
+                    resolvedReportRootUID
                 );
                 if (cancellationToken.isCancellationRequested || !reportCreationDetails?.createdReportPath) {
                     logger.error("[reportHandler] Failed to create report with results, or process was cancelled.");
@@ -1302,7 +1313,7 @@ export async function startTestGenerationForCycle(
             );
         }
 
-        await generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
+        const generationSuccessful = await generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
             context,
             selectedCycleTreeItem,
             selectedCycleTreeItem.label,
@@ -1310,6 +1321,14 @@ export async function startTestGenerationForCycle(
             cycleKey,
             cycleUID
         );
+
+        if (generationSuccessful && treeViews?.testThemesTree) {
+            await treeViews.testThemesTree.markCycleGenerationFromProjectsView(selectedCycleTreeItem);
+        } else if (generationSuccessful) {
+            logger.warn(
+                "[reportHandler] Test themes tree view is not available, cannot apply import markings after cycle generation."
+            );
+        }
     } catch (error) {
         logger.error(
             `[reportHandler] Error in startTestGenerationForCycle: ${error instanceof Error ? error.message : String(error)}`

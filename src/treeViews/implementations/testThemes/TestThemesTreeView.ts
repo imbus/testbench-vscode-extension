@@ -4,7 +4,7 @@
  */
 
 import * as vscode from "vscode";
-import { TreeViewBase } from "../../core/TreeViewBase";
+import { RefreshOptions, TreeViewBase } from "../../core/TreeViewBase";
 import { TestThemesTreeItem, TestThemeData, TestThemeType } from "./TestThemesTreeItem";
 import { TreeViewConfig } from "../../core/TreeViewConfig";
 import { TestThemesDataProvider } from "./TestThemesDataProvider";
@@ -12,7 +12,7 @@ import { testThemesConfig } from "./TestThemesConfig";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { allExtensionCommands, ConfigKeys, ContextKeys, StorageKeys, TestThemeItemTypes } from "../../../constants";
 import { TestStructure, TestStructureNode } from "../../../testBenchTypes";
-import { getExtensionConfiguration } from "../../../configuration";
+import { getExtensionConfiguration, getExtensionSetting } from "../../../configuration";
 import {
     ALLOW_PERSISTENT_IMPORT_BUTTON,
     ENABLE_ICON_MARKING_ON_TEST_GENERATION,
@@ -20,7 +20,7 @@ import {
     treeViews,
     userSessionManager
 } from "../../../extension";
-import { MarkingModule } from "../../features/MarkingModule";
+import { MarkingModule, MarkingContext } from "../../features/MarkingModule";
 import * as reportHandler from "../../../reportHandler";
 import { TreeViewEventTypes } from "../../utils/EventBus";
 import { PersistenceModule } from "../../features/PersistenceModule";
@@ -32,6 +32,16 @@ import { ProjectsTreeItem } from "../projects/ProjectsTreeItem";
  */
 interface TestThemeFilterStorage {
     [contextKey: string]: any[];
+}
+
+/**
+ * Interface for test generation context
+ */
+interface GenerationContext {
+    projectKey: string;
+    cycleKey: string;
+    tovKey: string;
+    isOpenedFromCycle: boolean;
 }
 
 export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
@@ -64,6 +74,50 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         this.setupTestCaseSetClickHandlers();
         this.updateTestThemesFilterContextKey();
         this.setupRobotFilesWatcher();
+    }
+
+    public override async initialize(): Promise<void> {
+        await super.initialize();
+
+        const markingModule = this.getModule("marking") as MarkingModule | undefined;
+        if (markingModule) {
+            markingModule.setContextResolver(() => this.getCurrentMarkingContext());
+        }
+    }
+
+    private getCurrentMarkingContext(overrides?: Partial<MarkingContext>): MarkingContext {
+        const base: MarkingContext = {
+            projectKey: this.currentProjectKey ?? undefined,
+            tovKey: this.currentTovKey ?? undefined,
+            contextType: this.isOpenedFromCycle ? "cycle" : "tov",
+            contextId: this.getContextKey() ?? undefined
+        };
+
+        if (this.isOpenedFromCycle) {
+            base.cycleKey = this.currentCycleKey ?? undefined;
+        } else {
+            base.cycleKey = this.currentTovKey ?? undefined;
+        }
+
+        return { ...base, ...overrides };
+    }
+
+    private buildGenerationMarkingContext(context: GenerationContext): MarkingContext {
+        return this.getCurrentMarkingContext(
+            context.isOpenedFromCycle
+                ? {
+                      projectKey: context.projectKey ?? this.currentProjectKey ?? undefined,
+                      tovKey: context.tovKey ?? this.currentTovKey ?? undefined,
+                      cycleKey: context.cycleKey ?? this.currentCycleKey ?? undefined,
+                      contextType: "cycle"
+                  }
+                : {
+                      projectKey: context.projectKey ?? this.currentProjectKey ?? undefined,
+                      tovKey: context.tovKey ?? this.currentTovKey ?? undefined,
+                      cycleKey: context.tovKey ?? this.currentTovKey ?? undefined,
+                      contextType: "tov"
+                  }
+        );
     }
 
     /**
@@ -491,7 +545,9 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             vscode.commands.registerCommand(`${this.config.id}.resetCustomRoot`, async () => this.resetCustomRoot())
         );
 
-        this.disposables.push(vscode.commands.registerCommand(`${this.config.id}.refresh`, () => this.refresh()));
+        this.disposables.push(
+            vscode.commands.registerCommand(`${this.config.id}.refresh`, () => this.refreshWithCacheClear())
+        );
 
         this.disposables.push(
             vscode.commands.registerCommand(
@@ -522,13 +578,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * Registers event handlers (listeners) for the test themes tree view
      */
     private registerEventHandlers(): void {
-        /*
-        // cycle:selected is not emitted anymore, setupCycleClickHandlers of ProjectsTreeView handles this
-        this.eventBus.on("cycle:selected", async (event) => {
-            const { projectKey, cycleKey, tovKey, projectName, tovName, cycleLabel } = event.data;
-            await this.loadCycle(projectKey, cycleKey, tovKey, projectName, tovName, cycleLabel);
-        });
-        */
         this.eventBus.on("version:selected", async (event) => {
             const { projectKey, tovKey, projectName, tovName } = event.data;
             await this.loadTov(projectKey, tovKey, projectName, tovName);
@@ -694,6 +743,9 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                     }
                 }
 
+                // Clear cache before refresh to get updated lock status from server
+                // After import, items are typically locked by system and should be hidden
+                this.dataProvider.clearCache();
                 this.refresh();
             } else {
                 const importFailedMessageForUser = `Import was cancelled or did not complete successfully for ${itemLabel}`;
@@ -806,6 +858,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 `[TestThemesTreeView] Loading Test Cycle '${cycleLabel}' from project '${projectName}' to get Test Theme information...`
             );
             this.stateManager.setLoading(true);
+            // Clear old tree items immediately to prevent showing stale data during loading
+            this.clearTree();
             this.dataProvider.clearCache();
 
             // Set context before fetching data so filters can be applied correctly
@@ -929,7 +983,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         try {
             this.logger.debug(`[TestThemesTreeView] Loading TOV ${tovKey} for project ${projectKey}`);
             this.stateManager.setLoading(true);
-
+            // Clear old tree items immediately to prevent showing stale data during loading
+            this.clearTree();
             this.dataProvider.clearCache();
 
             // Set context BEFORE fetching data so filters can be applied correctly
@@ -991,8 +1046,15 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         if (nodeData.exec?.status === "NotPlanned") {
             return false;
         }
-        if (nodeData.exec?.locker === "-2") {
-            return false;
+
+        // Check if item is locked by system (-2)
+        // The locker can be either a string or an object with a key property
+        const lockerValue = nodeData.exec?.locker;
+        if (lockerValue !== null && lockerValue !== undefined) {
+            const lockerKey = typeof lockerValue === "string" ? lockerValue : lockerValue.key;
+            if (lockerKey === "-2") {
+                return false;
+            }
         }
 
         // If filter diff mode is disabled and there are filters applied,
@@ -1031,102 +1093,237 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         }
 
         try {
-            if (getExtensionConfiguration().get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR)) {
-                await vscode.commands.executeCommand(allExtensionCommands.clearInternalTestbenchFolder);
-            }
+            await this.executeClearInternalDirIfNeeded();
 
-            const projectKey = this.currentProjectKey;
-            const cycleKey = this.currentCycleKey;
-            const tovKey = this.currentTovKey;
-
-            if (!projectKey || (!cycleKey && !tovKey)) {
-                const testGenerationContextMissingErrorMessage =
-                    "[TestThemesTreeView] Could not determine the active Project, Cycle, or TOV context for test generation.";
-                const testGenerationContextMissingErrorMessageForUser =
-                    "Could not determine the active Project, Cycle, or TOV context for test generation.";
-                vscode.window.showErrorMessage(testGenerationContextMissingErrorMessageForUser);
-                this.logger.error(testGenerationContextMissingErrorMessage);
+            const context = this.validateTestGenerationContext();
+            if (!context) {
                 return;
             }
 
-            const itemLabel = item.label?.toString() || "Unknown Item";
-            const itemUID = item.data.base.uniqueID;
-
-            let testGenerationSuccessful = false;
-            if (this.isOpenedFromCycle && cycleKey) {
-                // Generation from a cycle context
-                testGenerationSuccessful =
-                    await reportHandler.generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
-                        this.extensionContext,
-                        item,
-                        itemLabel,
-                        projectKey,
-                        cycleKey,
-                        itemUID
-                    );
-            } else if (tovKey) {
-                // Generation from a TOV context
-                testGenerationSuccessful = await reportHandler.startTestGenerationUsingTOV(
-                    this.extensionContext,
-                    item,
-                    projectKey,
-                    tovKey,
-                    true
-                );
-            }
-
-            if (testGenerationSuccessful && ENABLE_ICON_MARKING_ON_TEST_GENERATION && this.isOpenedFromCycle) {
-                const markingModule = this.getModule("marking") as MarkingModule;
-                if (markingModule && item.id) {
-                    markingModule.clearAllMarkings();
-
-                    // Mark the item and its descendants for import
-                    // The marking module handles refreshing
-                    const contextKey = cycleKey || tovKey || "";
-                    markingModule.markItemWithDescendants(item, projectKey, contextKey, "import");
-
-                    const persistenceModule = this.getModule("persistence") as PersistenceModule | undefined;
-                    if (persistenceModule) {
-                        await persistenceModule.forceSave();
-                    }
-                } else {
-                    this.logger.warn(
-                        `[TestThemesTreeView] Could not mark item ${item.label}: Marking module not available or item has no ID.`
-                    );
-                }
-            } else if (
-                testGenerationSuccessful &&
-                ENABLE_ICON_MARKING_ON_TEST_GENERATION &&
-                !this.isOpenedFromCycle &&
-                tovKey
-            ) {
-                const markingModule = this.getModule("marking") as MarkingModule;
-                if (markingModule && item.id) {
-                    markingModule.clearAllMarkings();
-                    markingModule.markItemWithDescendants(item, projectKey, tovKey, "generation");
-
-                    // Force an immediate save of the state to disk to prevent data loss on reload.
-                    const persistenceModule = this.getModule("persistence") as PersistenceModule | undefined;
-                    if (persistenceModule) {
-                        await persistenceModule.forceSave();
-                    }
-                } else {
-                    this.logger.warn(
-                        `[TestThemesTreeView] Could not mark item ${item.label}: Marking module not available or item has no ID.`
-                    );
-                }
-            }
+            const testGenerationSuccessful = await this.performTestGeneration(item, context);
 
             if (testGenerationSuccessful) {
-                await this.updateRobotFileAvailabilityForAllTreeItems();
-                this._onDidChangeTreeData.fire(undefined);
+                await this.handleSuccessfulGeneration(item, context);
             }
         } catch (error) {
-            this.logger.error("[TestThemesTreeView] Error generating test cases:", error);
-            vscode.window.showErrorMessage(
-                `Error generating test cases: ${error instanceof Error ? error.message : "Unknown error"}`
+            this.handleTestGenerationError(error);
+        }
+    }
+
+    /**
+     * Clears internal TestBench directory if configured to do so.
+     */
+    private async executeClearInternalDirIfNeeded(): Promise<void> {
+        if (getExtensionConfiguration().get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR)) {
+            await vscode.commands.executeCommand(allExtensionCommands.clearInternalTestbenchFolder);
+        }
+    }
+
+    /**
+     * Validates and returns the test generation context (project, cycle, TOV keys).
+     * @returns Generation context object or null if validation fails
+     */
+    private validateTestGenerationContext(): GenerationContext | null {
+        const projectKey = this.currentProjectKey;
+        const cycleKey = this.currentCycleKey;
+        const tovKey = this.currentTovKey;
+
+        if (!projectKey || (!cycleKey && !tovKey)) {
+            const errorMessage = "Could not determine the active Project, Cycle, or TOV context for test generation.";
+            this.logger.error(`[TestThemesTreeView] ${errorMessage}`);
+            vscode.window.showErrorMessage(errorMessage);
+            return null;
+        }
+
+        return {
+            projectKey,
+            cycleKey: cycleKey || "",
+            tovKey: tovKey || "",
+            isOpenedFromCycle: this.isOpenedFromCycle
+        };
+    }
+
+    /**
+     * Performs the actual test generation based on context (cycle vs TOV).
+     * @param item The test theme tree item to generate tests for
+     * @param context The validated generation context
+     * @returns True if generation was successful, false otherwise
+     */
+    private async performTestGeneration(item: TestThemesTreeItem, context: GenerationContext): Promise<boolean> {
+        const itemLabel = item.label?.toString() || "Unknown Item";
+        const itemUID = item.data.base.uniqueID;
+
+        if (context.isOpenedFromCycle && context.cycleKey) {
+            // Generation from a cycle context
+            return await reportHandler.generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
+                this.extensionContext,
+                item,
+                itemLabel,
+                context.projectKey,
+                context.cycleKey,
+                itemUID
+            );
+        } else if (context.tovKey) {
+            // Generation from a TOV context
+            return await reportHandler.startTestGenerationUsingTOV(
+                this.extensionContext,
+                item,
+                context.projectKey,
+                context.tovKey,
+                true
             );
         }
+
+        return false;
+    }
+
+    /**
+     * Handles post-generation tasks: marking items and updating UI.
+     * @param item The test theme tree item that was generated
+     * @param context The generation context
+     */
+    private async handleSuccessfulGeneration(item: TestThemesTreeItem, context: GenerationContext): Promise<void> {
+        await this.applyPostGenerationMarking(item, context);
+        await this.updateRobotFileAvailabilityForAllTreeItems();
+        this._onDidChangeTreeData.fire(undefined);
+    }
+
+    /**
+     * Applies marking to generated items based on context (import vs generation marking).
+     * @param item The test theme tree item to mark
+     * @param context The generation context determining marking type
+     */
+    private async applyPostGenerationMarking(item: TestThemesTreeItem, context: GenerationContext): Promise<void> {
+        if (!ENABLE_ICON_MARKING_ON_TEST_GENERATION) {
+            return;
+        }
+
+        const markingModule = this.getModule("marking") as MarkingModule;
+        if (!markingModule || !item.id) {
+            this.logger.warn(
+                `[TestThemesTreeView] Could not mark item ${item.label}: Marking module not available or item has no ID.`
+            );
+            return;
+        }
+
+        markingModule.clearAllMarkings();
+
+        // Determine marking type and context key based on whether opened from cycle or TOV
+        const markingType = context.isOpenedFromCycle ? "import" : "generation";
+        const markingContext = this.buildGenerationMarkingContext(context);
+
+        markingModule.markItemWithDescendants(item, markingContext, markingType);
+
+        // Force an immediate save of the state to disk to prevent data loss on reload
+        const persistenceModule = this.getModule("persistence") as PersistenceModule | undefined;
+        if (persistenceModule) {
+            await persistenceModule.forceSave();
+        }
+    }
+
+    /**
+     * Applies import markings to all test theme items after a full cycle generation that was triggered
+     * from the projects tree view.
+     * @param cycleItem The projects tree cycle item used for generation.
+     */
+    public async markCycleGenerationFromProjectsView(cycleItem: ProjectsTreeItem): Promise<void> {
+        if (!ENABLE_ICON_MARKING_ON_TEST_GENERATION) {
+            this.logger.trace(
+                "[TestThemesTreeView] Skipping cycle generation marking because icon marking is disabled."
+            );
+            return;
+        }
+
+        const projectKey = cycleItem.getProjectKey();
+        const cycleKey = cycleItem.getCycleKey();
+        const tovKey = cycleItem.getVersionKey();
+
+        if (!projectKey || !cycleKey || !tovKey) {
+            this.logger.warn(
+                "[TestThemesTreeView] Cannot apply import markings after cycle generation: missing project, cycle, or TOV key."
+            );
+            return;
+        }
+
+        const projectName = cycleItem.parent?.parent?.label?.toString() || projectKey;
+        const tovName = cycleItem.parent?.label?.toString() || tovKey;
+        const cycleLabel = cycleItem.label?.toString() || cycleKey;
+
+        try {
+            const requiresContextReload =
+                !this.isOpenedFromCycle ||
+                this.currentProjectKey !== projectKey ||
+                this.currentCycleKey !== cycleKey ||
+                this.currentTovKey !== tovKey;
+
+            if (requiresContextReload) {
+                this.logger.debug(
+                    `[TestThemesTreeView] Loading cycle '${cycleLabel}' to apply generation markings from projects view.`
+                );
+                await this.loadCycle(projectKey, cycleKey, tovKey, projectName, tovName, cycleLabel);
+            } else {
+                await this.updateRobotFileAvailabilityForAllTreeItems();
+            }
+
+            const rootItems = this.rootItems ?? [];
+            if (rootItems.length === 0) {
+                this.logger.warn(
+                    `[TestThemesTreeView] No test theme items available to mark after generating cycle '${cycleLabel}'.`
+                );
+                return;
+            }
+
+            const markingModule = this.getModule("marking") as MarkingModule | undefined;
+            if (!markingModule) {
+                this.logger.warn(
+                    "[TestThemesTreeView] Cannot apply import markings after cycle generation: marking module unavailable."
+                );
+                return;
+            }
+
+            const persistenceModule = this.getModule("persistence") as PersistenceModule | undefined;
+
+            const generationContext: GenerationContext = {
+                projectKey,
+                cycleKey,
+                tovKey,
+                isOpenedFromCycle: true
+            };
+            const markingContext = this.buildGenerationMarkingContext(generationContext);
+
+            markingModule.clearAllMarkings();
+
+            for (const rootItem of rootItems) {
+                if (!rootItem.id) {
+                    continue;
+                }
+                markingModule.markItemWithDescendants(rootItem, markingContext, "import");
+            }
+
+            if (persistenceModule) {
+                await persistenceModule.forceSave();
+            }
+
+            this.logger.info(
+                `[TestThemesTreeView] Applied import markings for generated cycle '${cycleLabel}' (${rootItems.length} root item(s)).`
+            );
+        } catch (error) {
+            this.logger.error(
+                `[TestThemesTreeView] Failed to apply import markings after generating cycle '${cycleItem.label}'.`,
+                error
+            );
+        }
+    }
+
+    /**
+     * Handles errors during test generation.
+     * @param error The error that occurred
+     */
+    private handleTestGenerationError(error: unknown): void {
+        this.logger.error("[TestThemesTreeView] Error generating test cases:", error);
+        vscode.window.showErrorMessage(
+            `Error generating test cases: ${error instanceof Error ? error.message : "Unknown error"}`
+        );
     }
 
     /**
@@ -1212,7 +1409,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 elementType: data.elementType || TestThemeItemTypes.TEST_THEME,
                 hasChildren: data.hasChildren ?? false,
                 projectKey: this.currentProjectKey || undefined,
-                cycleKey: this.isOpenedFromCycle ? this.currentCycleKey || undefined : this.currentTovKey || undefined
+                cycleKey: this.isOpenedFromCycle ? this.currentCycleKey || undefined : this.currentTovKey || undefined,
+                tovKey: this.currentTovKey || undefined
             };
 
             const item = new TestThemesTreeItem(treeItemData, this.extensionContext, parent);
@@ -1293,7 +1491,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             if (isCurrentlyMarked) {
                 markingModule.unmarkItemByID(item.id);
             } else {
-                markingModule.markItem(item, this.currentProjectKey, this.currentCycleKey, "import");
+                markingModule.markItem(item, this.getCurrentMarkingContext(), "import");
             }
             // The marking module will trigger the necessary refresh.
         } catch (error) {
@@ -1314,6 +1512,12 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * Disposes of the tree view and all its resources
      */
     public async dispose(): Promise<void> {
+        // Clear any pending debounced refresh
+        if (this.markingRefreshDebounceHandle) {
+            clearTimeout(this.markingRefreshDebounceHandle);
+            this.markingRefreshDebounceHandle = undefined;
+        }
+
         for (const disposable of this.disposables) {
             disposable.dispose();
         }
@@ -1347,6 +1551,58 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         this.updateTestThemesFilterContextKey();
     }
 
+    public override refresh(item?: TestThemesTreeItem, options?: RefreshOptions): void {
+        if (item || options?.skipDataReload) {
+            super.refresh(item, options);
+            return;
+        }
+
+        this.refreshWithCacheClear(options).catch((error) => {
+            this.logger.error("[TestThemesTreeView] Failed to refresh test themes tree view:", error);
+        });
+    }
+
+    /**
+     * Refreshes the tree view by clearing the cache and reloading data from the server.
+     * This ensures that the latest data is fetched, including updated lock statuses and other server-side changes.
+     */
+    private async reloadCurrentContext(): Promise<boolean> {
+        if (this.currentProjectKey && this.currentCycleKey && this.isOpenedFromCycle) {
+            await this.loadCycle(
+                this.currentProjectKey,
+                this.currentCycleKey,
+                this.currentTovKey || "",
+                this.currentProjectName || "",
+                this.currentTovName || "",
+                this.currentCycleLabel || undefined
+            );
+            return true;
+        }
+
+        if (this.currentProjectKey && this.currentTovKey && !this.isOpenedFromCycle) {
+            await this.loadTov(
+                this.currentProjectKey,
+                this.currentTovKey,
+                this.currentProjectName || "",
+                this.currentTovName || ""
+            );
+            return true;
+        }
+
+        return false;
+    }
+
+    public async refreshWithCacheClear(options?: RefreshOptions): Promise<void> {
+        this.logger.debug("[TestThemesTreeView] Refreshing with cache clear to fetch latest data from server");
+        this.dataProvider.clearCache();
+
+        const reloaded = await this.reloadCurrentContext();
+
+        if (!reloaded) {
+            super.refresh(undefined, options);
+        }
+    }
+
     /**
      * Updates the test themes filter context key based on current saved filters
      */
@@ -1360,7 +1616,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Updates robot file availability for all tree items that can generate tests
+     * Updates robot file and folder availability for all tree items that can generate tests
      * and updates the context to show/hide the "Open Generated Robot File" button
      */
     private async updateRobotFileAvailabilityForAllTreeItems(): Promise<void> {
@@ -1368,28 +1624,37 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             const allTestThemeTreeItems = this.getAllTestThemeTreeItems();
             let hasAnyRobotFile = false;
 
-            const robotFileChecks = allTestThemeTreeItems
+            const availabilityChecks = allTestThemeTreeItems
                 .filter((item) => item.canGenerateTests())
                 .map(async (item) => {
                     try {
-                        const hasRobotFile = await item.checkRobotFileExists();
-                        if (hasRobotFile) {
-                            hasAnyRobotFile = true;
+                        let hasContent = false;
+
+                        // Check robot file for test case sets
+                        if (item.canHaveRobotFile()) {
+                            hasContent = await item.checkRobotFileExists();
+                            if (hasContent) {
+                                hasAnyRobotFile = true;
+                            }
+                        }
+                        // Check folder for test themes
+                        else if (item.data.elementType === TestThemeItemTypes.TEST_THEME) {
+                            hasContent = await item.checkFolderExists();
                         }
 
                         item.updateContextValue();
                     } catch (error) {
                         this.logger.error(
-                            `[TestThemesTreeView] Error checking robot file availability for ${item.data.base.name}:`,
+                            `[TestThemesTreeView] Error checking content availability for ${item.data.base.name}:`,
                             error
                         );
                     }
                 });
 
-            await Promise.all(robotFileChecks);
+            await Promise.all(availabilityChecks);
             await vscode.commands.executeCommand("setContext", ContextKeys.HAS_GENERATED_ROBOT_FILE, hasAnyRobotFile);
         } catch (error) {
-            this.logger.error("[TestThemesTreeView] Error updating robot file availability for all tree items:", error);
+            this.logger.error("[TestThemesTreeView] Error updating content availability for all tree items:", error);
             throw error;
         }
     }
@@ -1436,24 +1701,67 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Sets up a workspace file system watcher for Robot Framework files to keep
-     * item markings in sync with actual file availability.
+     * Sets up workspace file system watchers for Robot Framework files and test theme folders
+     * to keep item markings in sync with actual file and folder availability.
      */
     private setupRobotFilesWatcher(): void {
         try {
+            const schedule = () => this.scheduleMarkingRefresh();
+
             // Watch all .robot files in the workspace
             this.robotFilesWatcher = vscode.workspace.createFileSystemWatcher("**/*.robot");
-
-            const schedule = () => this.scheduleMarkingRefresh();
             this.disposables.push(
                 this.robotFilesWatcher.onDidCreate(schedule),
                 this.robotFilesWatcher.onDidChange(schedule),
                 this.robotFilesWatcher.onDidDelete(schedule),
                 this.robotFilesWatcher
             );
+
+            // Watch for workspace file system changes to detect folder operations
+            // This is more reliable than FileSystemWatcher for directory changes
+            this.disposables.push(
+                vscode.workspace.onDidCreateFiles((event) => {
+                    if (this.isRelevantWorkspaceChange(event.files)) {
+                        this.logger.trace(`[TestThemesTreeView] Detected file/folder creation in workspace`);
+                        schedule();
+                    }
+                }),
+                vscode.workspace.onDidDeleteFiles((event) => {
+                    if (this.isRelevantWorkspaceChange(event.files)) {
+                        this.logger.trace(`[TestThemesTreeView] Detected file/folder deletion in workspace`);
+                        schedule();
+                    }
+                }),
+                vscode.workspace.onDidRenameFiles((event) => {
+                    const relevantFiles = event.files.map((f) => f.oldUri).concat(event.files.map((f) => f.newUri));
+                    if (this.isRelevantWorkspaceChange(relevantFiles)) {
+                        this.logger.trace(`[TestThemesTreeView] Detected file/folder rename in workspace`);
+                        schedule();
+                    }
+                })
+            );
         } catch (error) {
-            this.logger.error("[TestThemesTreeView] Error setting up robot files watcher:", error);
+            this.logger.error("[TestThemesTreeView] Error setting up file and folder watchers:", error);
         }
+    }
+
+    /**
+     * Checks if a workspace file change is relevant to test theme marking
+     * (i.e., if it's within the output directory)
+     * @param files Array of URIs that were changed
+     * @returns True if the change is relevant to test theme folders
+     */
+    private isRelevantWorkspaceChange(files: readonly vscode.Uri[]): boolean {
+        const outputDirectory = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
+        if (!outputDirectory || files.length === 0) {
+            return false;
+        }
+
+        // Check if any of the changed files are within the output directory
+        return files.some((uri) => {
+            const relativePath = vscode.workspace.asRelativePath(uri, false);
+            return relativePath.startsWith(outputDirectory);
+        });
     }
 
     /**
@@ -1482,8 +1790,9 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
     /**
      * Synchronizes the marking state of tree items with the availability of
-     * their corresponding .robot files. If a file exists, the item is marked
-     * with type "generation", if the file is missing, any existing mark is removed.
+     * their corresponding .robot files or folders. If content exists (file for test case sets,
+     * folder for test themes), the item is marked with type "generation". If content is missing,
+     * any existing mark is removed.
      */
     public async syncMarkingsWithRobotFileAvailability(): Promise<void> {
         try {
@@ -1492,22 +1801,21 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 return;
             }
 
-            const treeItemCandidates = this.getAllTestThemeTreeItems().filter((treeItem) =>
-                treeItem.canHaveRobotFile()
-            );
+            // Process all items that can be marked (both test case sets and test themes)
+            const treeItemCandidates = this.getAllTestThemeTreeItems().filter((treeItem) => treeItem.canBeMarked());
             const desiredMarkType = this.getDesiredMarkType();
-            const { projectKey, contextKey } = this.getCurrentContextKeys();
+            const markingContext = this.getCurrentMarkingContext();
 
             const tasks = treeItemCandidates.map(async (treeItem) => {
                 try {
-                    const robotFileExistsForTreeItem = treeItem.hasGeneratedRobotFile();
+                    // Check if content exists (robot file for test case sets, folder for test themes)
+                    const contentExistsForTreeItem = treeItem.hasGeneratedContent();
                     await this.bindMarkForItemToItsExistence(
                         treeItem,
-                        robotFileExistsForTreeItem,
+                        contentExistsForTreeItem,
                         markingModule,
                         desiredMarkType,
-                        projectKey,
-                        contextKey
+                        markingContext
                     );
                 } catch (err) {
                     this.logger.error("[TestThemesTreeView] Error syncing marking for item:", err);
@@ -1516,7 +1824,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
             await Promise.all(tasks);
         } catch (error) {
-            this.logger.error("[TestThemesTreeView] Error syncing markings with robot file availability:", error);
+            this.logger.error("[TestThemesTreeView] Error syncing markings with content availability:", error);
         }
     }
 
@@ -1530,23 +1838,13 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Returns the current project and context (cycle or TOV) keys.
-     */
-    private getCurrentContextKeys(): { projectKey?: string; contextKey?: string } {
-        const projectKey = this.currentProjectKey || undefined;
-        const contextKey = this.isOpenedFromCycle ? this.currentCycleKey || undefined : this.currentTovKey || undefined;
-        return { projectKey, contextKey };
-    }
-
-    /**
      * Applies a mark to an item using the marking module or falls back to updating
      * the item's metadata when context keys are not available yet (early refresh).
      */
     private applyMarkForItem(
         item: TestThemesTreeItem,
         desiredType: "import" | "generation",
-        projectKey: string | undefined,
-        contextKey: string | undefined,
+        markingContext: MarkingContext,
         markingModule: MarkingModule
     ): void {
         const itemId = item.id;
@@ -1554,8 +1852,11 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             return;
         }
 
+        const projectKey = markingContext.projectKey ?? undefined;
+        const contextKey = markingContext.cycleKey ?? markingContext.tovKey ?? undefined;
+
         if (projectKey && contextKey) {
-            markingModule.markItem(item, projectKey, contextKey, desiredType);
+            markingModule.markItem(item, markingContext, desiredType);
             return;
         }
 
@@ -1567,6 +1868,11 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             cycleKey: contextKey || "",
             timestamp: Date.now(),
             type: desiredType,
+            tovKey: markingContext.tovKey ?? undefined,
+            contextId: markingContext.contextId ?? undefined,
+            contextType:
+                markingContext.contextType ??
+                (markingContext.cycleKey ? "cycle" : markingContext.tovKey ? "tov" : "unknown"),
             metadata: {
                 label: item.label as string,
                 contextValue: item.originalContextValue,
@@ -1578,19 +1884,18 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Connects the marking state of a single item with its file existence.
-     * - If a file exists, ensure the item is marked with the desired type.
+     * Connects the marking state of a single item with its content existence.
+     * - If content exists (file for test case sets, folder for test themes), ensure the item is marked with the desired type.
      * - If marked with a different type, upgrade when appropriate and never
      *   downgrade from 'import' to 'generation'.
-     * - If no file exists, unmark the item.
+     * - If no content exists, unmark the item.
      */
     private async bindMarkForItemToItsExistence(
         treeItem: TestThemesTreeItem,
-        robotFileExistsForTreeItem: boolean,
+        contentExistsForTreeItem: boolean,
         markingModule: MarkingModule,
         desiredType: "import" | "generation",
-        projectKey?: string,
-        contextKey?: string
+        markingContext: MarkingContext
     ): Promise<void> {
         const itemId = treeItem.id;
         if (!itemId) {
@@ -1600,9 +1905,14 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         const isMarked = markingModule.isMarked(itemId);
         const currentMark = markingModule.getMarkingInfo(itemId);
 
-        if (robotFileExistsForTreeItem) {
+        if (contentExistsForTreeItem) {
             if (!isMarked) {
-                this.applyMarkForItem(treeItem, desiredType, projectKey, contextKey, markingModule);
+                if (desiredType === "import") {
+                    // Avoid automatically marking cycle contexts based on shared folder/file names.
+                    return;
+                }
+
+                this.applyMarkForItem(treeItem, desiredType, markingContext, markingModule);
                 return;
             }
 
@@ -1611,10 +1921,14 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 if (currentMark.type === "import" && desiredType === "generation") {
                     return;
                 }
-                this.applyMarkForItem(treeItem, desiredType, projectKey, contextKey, markingModule);
+                if (desiredType === "import") {
+                    // Keep import markings explicit
+                    return;
+                }
+                this.applyMarkForItem(treeItem, desiredType, markingContext, markingModule);
             }
         } else if (isMarked) {
-            // Remove any marking for items without a file
+            // Remove any marking for items without content
             markingModule.unmarkItemByID(itemId);
         }
     }

@@ -10,7 +10,6 @@ import * as fs from "fs";
 
 import * as testBenchTypes from "./testBenchTypes";
 import * as reportHandler from "./reportHandler";
-import * as base64 from "base-64";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
@@ -32,6 +31,47 @@ import * as connectionManager from "./connectionManager";
 import { SharedSessionManager } from "./sharedSessionManager";
 import { handleLanguageServerRestartOnSessionChange } from "./languageServer/server";
 import { CacheManager } from "./core/cacheManager";
+import { LegacyPlayServerClient } from "./api/LegacyPlayServerClient";
+
+interface CachedCertificateData {
+    path: string;
+    mtimeMs: number;
+    data: Buffer;
+}
+
+let cachedCertificate: CachedCertificateData | null = null;
+
+/**
+ * Loads and caches certificate data from disk to avoid redundant reads.
+ * @param absolutePath The absolute path to the certificate file
+ * @returns The certificate data as a Buffer, or null if loading fails
+ */
+async function getCachedCertificateData(absolutePath: string): Promise<Buffer | null> {
+    try {
+        const stats = await fs.promises.stat(absolutePath);
+        if (
+            cachedCertificate &&
+            cachedCertificate.path === absolutePath &&
+            cachedCertificate.mtimeMs === stats.mtimeMs
+        ) {
+            logger.trace("[testBenchConnection] Reusing cached certificate data.");
+            return cachedCertificate.data;
+        }
+
+        const certificateBuffer = await fs.promises.readFile(absolutePath);
+        cachedCertificate = {
+            path: absolutePath,
+            mtimeMs: stats.mtimeMs,
+            data: certificateBuffer
+        };
+        logger.trace("[testBenchConnection] Loaded certificate data into cache.");
+        return certificateBuffer;
+    } catch (error) {
+        logger.warn("[testBenchConnection] Failed to load certificate data from disk:", error);
+        cachedCertificate = null;
+        return null;
+    }
+}
 
 /**
  * Manages TLS security state globally for the extension.
@@ -209,11 +249,17 @@ async function createHttpsAgent(insecure: boolean = false): Promise<HttpsProxyAg
             agentOptions.ca = defaultCAs;
             logger.debug("[testBenchConnection] Using only default system CAs.");
         } else {
-            const customCA = fs.readFileSync(absoluteCertPath);
-            const combinedCAs = [...defaultCAs, customCA];
-
-            logger.debug("[testBenchConnection] Using combined CAs (default system CAs + custom CA).");
-            agentOptions.ca = combinedCAs;
+            const customCA = await getCachedCertificateData(absoluteCertPath);
+            if (customCA) {
+                const combinedCAs = [...defaultCAs, customCA];
+                logger.debug("[testBenchConnection] Using combined CAs (default system CAs + custom CA).");
+                agentOptions.ca = combinedCAs;
+            } else {
+                logger.warn(
+                    `[testBenchConnection] Unable to load certificate at "${absoluteCertPath}". Falling back to default system CAs.`
+                );
+                agentOptions.ca = defaultCAs;
+            }
         }
     }
 
@@ -231,7 +277,8 @@ async function createHttpsAgent(insecure: boolean = false): Promise<HttpsProxyAg
 export class PlayServerConnection {
     private baseURL: string;
     private apiClient!: AxiosInstance;
-    private readonly keepAliveIntervalInSeconds: number = 30 * 1000; // 30 seconds
+    private legacyClient!: LegacyPlayServerClient;
+    private readonly keepAliveIntervalInMs: number = 30 * 1000; // 30 seconds
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
     private testElementsCache: CacheManager<string, any>;
     private testStructureCache: CacheManager<string, testBenchTypes.TestStructure>;
@@ -277,6 +324,15 @@ export class PlayServerConnection {
             httpsAgent: agentToUse,
             proxy: false
         });
+
+        // Initialize legacy client for old Play Server API calls
+        this.legacyClient = new LegacyPlayServerClient(
+            this.serverName,
+            this.sessionToken,
+            this.username,
+            agentToUse,
+            this.context
+        );
 
         if (this.sessionToken) {
             // Start the keep-alive process immediately to prevent session timeout after 5 minutes
@@ -349,7 +405,7 @@ export class PlayServerConnection {
             return null;
         }
         try {
-            const projectsURL: string = `/projects/v1`;
+            const projectsURL: string = `/2/projects`;
             logger.trace(`[testBenchConnection] Fetching projects list using URL: ${projectsURL}`);
             const projectsResponse: AxiosResponse<testBenchTypes.Project[]> = await withRetry(
                 () =>
@@ -417,7 +473,7 @@ export class PlayServerConnection {
             return null;
         }
         try {
-            const projectTreeURL: string = `/projects/${projectKey}/tree/v1`;
+            const projectTreeURL: string = `/2/projects/${projectKey}/tree`;
             logger.trace(
                 `[testBenchConnection] Fetching project tree for project key ${projectKey} using URL ${projectTreeURL}`
             );
@@ -487,191 +543,25 @@ export class PlayServerConnection {
             return cachedEntry;
         }
 
-        if (!this.sessionToken) {
-            logger.error(
-                `[testBenchConnection] Session token is null. Cannot fetch test elements for TOV key: ${tovKey}`
-            );
-            return null;
-        }
-        if (!tovKey) {
-            logger.error(`[testBenchConnection] TOV key is missing. Cannot fetch test elements.`);
-            return null;
+        // Delegate to legacy client
+        const testElements = await this.legacyClient.getTestElements(tovKey);
+
+        // Cache the result if successful
+        if (testElements) {
+            this.testElementsCache.setEntryInCache(tovKey, testElements);
         }
 
-        try {
-            const oldPlayServerPortNumber: number = 9443;
-            const oldPlayServerBaseUrl: string = `https://${this.serverName}:${oldPlayServerPortNumber}/api/1`;
-            const getTestElementsURL: string = `tovs/${tovKey}/testElements`;
-
-            const userNameFromConfig: string = this.username;
-            const encoded = base64.encode(`${userNameFromConfig}:${this.sessionToken}`);
-
-            logger.debug(
-                `[testBenchConnection] Creating session for old play server with URL ${oldPlayServerBaseUrl} to fetch test elements.`
-            );
-            const oldPlayServerSession: AxiosInstance = axios.create({
-                baseURL: oldPlayServerBaseUrl,
-                // Old play server, which runs on port 9443, uses BasicAuth.
-                // Use loginName as username, and use sessionToken as the password
-                auth: {
-                    username: this.username,
-                    password: this.sessionToken
-                },
-                headers: {
-                    Authorization: `Basic ${encoded}`,
-                    "Content-Type": "application/vnd.testbench+json; charset=utf-8"
-                },
-                proxy: false,
-                httpsAgent: this.apiClient.defaults.httpsAgent
-            });
-
-            if (!oldPlayServerSession) {
-                logger.error(
-                    `[testBenchConnection] Failed to create session for old play server with URL ${oldPlayServerBaseUrl} while fetching test elements for TOV key ${tovKey}`
-                );
-                return null;
-            }
-
-            logger.trace(
-                `[testBenchConnection] Fetching test elements for TOV key ${tovKey} from ${getTestElementsURL}`
-            );
-            const testElementsResponse: AxiosResponse = await withRetry(
-                () => oldPlayServerSession.get(getTestElementsURL),
-                3, // maxRetries
-                2000, // delayMs
-                RetryPredicateFactory.createDefaultPredicate()
-            );
-
-            // Save the JSON to a file for analyzing the structure
-            /*
-            const savePath = await vscode.window.showSaveDialog({
-                saveLabel: "Save Test Elements JSON Response From Server",
-                filters: {
-                    "JSON Files": ["json"],
-                    "All Files": ["*"],
-                },
-            });
-            if (savePath) {
-                const filePath = savePath.fsPath;
-                utils.saveJsonDataToFile(filePath, testElementsResponse.data);
-                vscode.window.showInformationMessage(`Test elements response saved to ${filePath}`);
-            } else {
-                vscode.window.showErrorMessage("No file path selected.");
-            }
-            */
-
-            logger.debug(
-                `[testBenchConnection] Response status of GET test elements request for URL ${getTestElementsURL}: ${testElementsResponse.status}`
-            );
-            if (testElementsResponse.data) {
-                // Note: The output of testElementsResponse is large
-                logger.trace(
-                    `[testBenchConnection] Fetched test elements data from URL ${getTestElementsURL}:`,
-                    testElementsResponse.data
-                );
-                this.testElementsCache.setEntryInCache(tovKey, testElementsResponse.data);
-                return testElementsResponse.data;
-            } else {
-                logger.error(
-                    `[testBenchConnection] Test elements data is not available from URL ${getTestElementsURL}.`
-                );
-                return null;
-            }
-        } catch (error) {
-            logger.error(`[testBenchConnection] Error fetching test elements for TOV key ${tovKey}: ${error}`);
-            vscode.window.showErrorMessage("Error fetching test elements. Please check the logs for details.");
-            return null;
-        }
+        return testElements;
     }
 
     // TODO: If this API call is implemented in the new play server, replace this method with the new API.
     /**
      * Returns all filters that can be accessed by the connected user.
+     *
+     * @returns {Promise<any | null>} The filters data or null if an error occurs
      */
     async getFiltersFromOldPlayServer(): Promise<any | null> {
-        if (!this.sessionToken) {
-            logger.error("[testBenchConnection] Session token is null. Cannot fetch filters");
-            return null;
-        }
-
-        try {
-            const oldPlayServerPortNumber: number = 9443;
-            const oldPlayServerBaseUrl: string = `https://${this.serverName}:${oldPlayServerPortNumber}/api/1`;
-            const getFiltersURL: string = `${oldPlayServerBaseUrl}/filters`;
-
-            logger.debug(
-                `[testBenchConnection] Creating session for old play server with URL ${oldPlayServerBaseUrl} to fetch filters`
-            );
-
-            const userNameFromConfig: string = this.username;
-            const encoded = base64.encode(`${userNameFromConfig}:${this.sessionToken}`);
-            const oldPlayServerSession: AxiosInstance = axios.create({
-                baseURL: oldPlayServerBaseUrl,
-                // Old play server, which runs on port 9443, uses BasicAuth.
-                // Use loginName as username, and use sessionToken as the password
-                auth: {
-                    username: this.username,
-                    password: this.sessionToken
-                },
-                headers: {
-                    Authorization: `Basic ${encoded}`,
-                    "Content-Type": "application/vnd.testbench+json; charset=utf-8"
-                },
-                proxy: false,
-                httpsAgent: this.apiClient.defaults.httpsAgent
-            });
-
-            if (!oldPlayServerSession) {
-                logger.error(
-                    `[testBenchConnection] Failed to create session for old play server with URL ${oldPlayServerBaseUrl} while fetching filters`
-                );
-                return null;
-            }
-
-            logger.trace(`[testBenchConnection] Fetching filters from URL ${getFiltersURL}`);
-            const getFiltersResponse: AxiosResponse = await withRetry(
-                () => oldPlayServerSession.get(getFiltersURL),
-                3, // maxRetries
-                2000, // delayMs
-                RetryPredicateFactory.createDefaultPredicate()
-            );
-
-            // Save the JSON to a file for analyzing the structure
-            /*
-            const savePath = await vscode.window.showSaveDialog({
-                saveLabel: "Save Test Elements JSON Response From Server",
-                filters: {
-                    "JSON Files": ["json"],
-                    "All Files": ["*"],
-                },
-            });
-            if (savePath) {
-                const filePath = savePath.fsPath;
-                utils.saveJsonDataToFile(filePath, getFiltersResponse.data);
-                vscode.window.showInformationMessage(`Response saved to ${filePath}`);
-            } else {
-                vscode.window.showErrorMessage("No file path selected.");
-            }
-            */
-
-            logger.debug(
-                `[testBenchConnection] Response status of get filters request for URL ${getFiltersURL}: ${getFiltersResponse.status}`
-            );
-            if (getFiltersResponse.data) {
-                logger.trace(
-                    `[testBenchConnection] Fetched filters data for request ${getFiltersURL}:`,
-                    getFiltersResponse.data
-                );
-                return getFiltersResponse.data;
-            } else {
-                logger.error(`[testBenchConnection] Filters data is not available from URL ${getFiltersURL}.`);
-                return null;
-            }
-        } catch (error) {
-            logger.error(`[testBenchConnection] Error fetching filters: ${error}`);
-            vscode.window.showErrorMessage("Error fetching filters. Please check the logs for details.");
-            return null;
-        }
+        return this.legacyClient.getFilters();
     }
 
     /**
@@ -687,7 +577,7 @@ export class PlayServerConnection {
         tovKey: string,
         tovStructureOptions: testBenchTypes.TovStructureOptions
     ): Promise<string | null> {
-        const tovReportUrl: string = `/projects/${projectKey}/tovs/${tovKey}/report/v1`;
+        const tovReportUrl: string = `/2/projects/${projectKey}/tovs/${tovKey}/report`;
 
         logger.debug(
             `[testBenchConnection] Requesting TOV report job ID using URL ${tovReportUrl} and options: ${JSON.stringify(tovStructureOptions)}`
@@ -762,7 +652,7 @@ export class PlayServerConnection {
         cycleKey: string,
         suppressFilteredData: boolean = true
     ): Promise<testBenchTypes.TestStructure | null> {
-        const testStructureOfCycleUrl = `/projects/${projectKey}/cycles/${cycleKey}/structure/v1`;
+        const testStructureOfCycleUrl = `/2/projects/${projectKey}/cycles/${cycleKey}/structure`;
         const validatedFilters = await TestThemesTreeView.getValidatedFiltersForApiRequest();
         return this._fetchTestStructureWithFilterHandling(
             testStructureOfCycleUrl,
@@ -785,7 +675,7 @@ export class PlayServerConnection {
         tovKey: string,
         suppressFilteredData: boolean = true
     ): Promise<testBenchTypes.TestStructure | null> {
-        const testStructureOfTOVUrl = `/projects/${projectKey}/tovs/${tovKey}/structure/v1`;
+        const testStructureOfTOVUrl = `/2/projects/${projectKey}/tovs/${tovKey}/structure`;
         const validatedFilters = await TestThemesTreeView.getValidatedFiltersForApiRequest();
         return this._fetchTestStructureWithFilterHandling(
             testStructureOfTOVUrl,
@@ -914,7 +804,7 @@ export class PlayServerConnection {
         projectKey: number,
         zipFilePath: string
     ): Promise<string> {
-        const importResultZipURL: string = `/projects/${projectKey}/executionResults/v1`;
+        const importResultZipURL: string = `/2/projects/${projectKey}/executionResults`;
 
         try {
             const zipFileData: Buffer = fs.readFileSync(zipFilePath);
@@ -997,7 +887,7 @@ export class PlayServerConnection {
         cycleKey: number,
         importData: testBenchTypes.ImportData
     ): Promise<string> {
-        const getJobIDOfImportUrl: string = `/projects/${projectKey}/cycles/${cycleKey}/import/v1`;
+        const getJobIDOfImportUrl: string = `/2/projects/${projectKey}/cycles/${cycleKey}/import`;
 
         logger.trace(
             `[testBenchConnection] Fetching job ID of import job from URL ${getJobIDOfImportUrl} and import data request body:`,
@@ -1077,7 +967,7 @@ export class PlayServerConnection {
 
     /**
      * Starts the keep-alive process that prevents the session from timing out.
-     * The keep-alive process sends a GET request to the server every 4 minutes.
+     * The keep-alive process sends a GET request to the server in regular intervals.
      * The constructor method of the PlayServerConnection class starts the keep-alive process automatically.
      * If the session token is null, the keep-alive process is not started.
      * If the keep-alive process is already running and it is triggered again, the previous one is stopped before starting a new one.
@@ -1086,7 +976,7 @@ export class PlayServerConnection {
         this.stopKeepAlive();
         this.keepAliveIntervalId = setInterval(() => {
             this.sendKeepAliveRequest();
-        }, this.keepAliveIntervalInSeconds);
+        }, this.keepAliveIntervalInMs);
         // this.sendKeepAliveRequest();
         logger.trace("[testBenchConnection] Keep-alive started.");
     }
@@ -1119,7 +1009,7 @@ export class PlayServerConnection {
         try {
             await withRetry(
                 () =>
-                    this.apiClient.get(`/login/session/v1`, {
+                    this.apiClient.get(`/2/login/session`, {
                         headers: { accept: "application/vnd.testbench+json" },
                         proxy: false
                     }),
@@ -1289,7 +1179,7 @@ export async function withRetry<T>(
         if (axios.isAxiosError(error)) {
             const status = error.response?.status;
             const isNetworkError = !error.response;
-            const isAuthEndpoint = error.config?.url?.includes("/login/session/v1");
+            const isAuthEndpoint = error.config?.url?.includes("/2/login/session");
 
             if (!isAuthEndpoint && (status === 401 || status === 403 || isNetworkError)) {
                 logger.warn(
@@ -1642,7 +1532,7 @@ export async function loginToServerAndGetSessionDetails(
     };
 
     const baseURL: string = `https://${serverName}:${portNumber}/api`;
-    const loginURL: string = `${baseURL}/login/session/v1`;
+    const loginURL: string = `${baseURL}/2/login/session`;
 
     logger.trace(`[testBenchConnection] Endpoint used for login is '${loginURL}', user ${username}.`);
 

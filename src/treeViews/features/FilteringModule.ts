@@ -202,7 +202,7 @@ export class FilteringModule implements TreeViewModule {
             )
         );
         this.updateState();
-        this.context.refresh({ immediate: true });
+        this.context.refresh({ immediate: true, skipDataReload: true });
     }
 
     /**

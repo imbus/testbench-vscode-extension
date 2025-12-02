@@ -64,7 +64,7 @@ from .messages import (
     COMMAND_ATTEMPT_PUSH_SUBDIVISION,
     COMMAND_CREATE_KEYWORD,
     COMMAND_FETCH_RESULTS,
-    COMMAND_FIND_INTERACTION_POSITION,
+    COMMAND_FIND_KEYWORD_POSITION,
     COMMAND_GENERATE_TEST_SUITES,
     COMMAND_PULL_KEYWORD,
     COMMAND_PULL_SUBDIVISION,
@@ -112,7 +112,7 @@ from .messages import (
     WARNING_MISSING_CONTEXT,
     WORKSPACE_APPLY_EDIT_LABEL,
 )
-from .testbench_api.testbench_patch import patch_interaction_details, post_interaction_details
+from .testbench_api.testbench_patch import patch_tb_keyword_details, post_tb_keyword_details
 from .testbench_resource.resource_documentation import ResourceDocumentation
 from .testbench_resource.resource_utils import (
     get_comment_section_end_position,
@@ -127,12 +127,12 @@ from .testbench_resource.resource_utils import (
     robot_model_to_string,
 )
 from .testbench_resource.subdivision2resource import (
-    create_keyword_from_interaction,
+    create_rf_keyword_from_tb_keyword,
     create_resource_from_subdivision,
 )
 from .testbench_resource.testbench_resource_model import (
     TestBenchResourceModel,
-    get_interaction_call_type,
+    get_tb_keyword_call_type,
     get_kw_name,
     get_kw_uid,
 )
@@ -199,7 +199,7 @@ def generate_test_suites(ls: LanguageServer, kwargs):
     toml_settings = get_tb2robot_file_configuration(None)
     settings = {
         "clean": kwargs.get("clean"),
-        "compound-interaction-logging": kwargs.get("compound_interaction_logging"),
+        "compound-keyword-logging": kwargs.get("compound_keyword_logging"),
         "config": None,
         "fully-qualified": kwargs.get("fully_qualified"),
         "library-regex": list(
@@ -555,7 +555,7 @@ def attempt_push_keyword(ls: LanguageServer, args):
     change_identifier = ChangeAnnotationIdentifier()
     existing_keywords = resource.get_keywords(keyword_uid)
     try:
-        new_keyword = create_keyword_from_interaction(
+        new_keyword = create_rf_keyword_from_tb_keyword(
             keyword_uid,
         )
     except TestBenchKeywordNotFound as e:
@@ -644,10 +644,10 @@ def push_testbench_subdivision(ls: LanguageServer, kwargs):
             .replace("<hr>", "<br/>")
         )
         html_description = f"<html><body>{new_docu}</body></html>"
-        call_type = get_interaction_call_type(keyword)
+        call_type = get_tb_keyword_call_type(keyword)
         try:
             tb_connection = TestBenchResourceConnection.singleton()
-            response = patch_interaction_details(
+            response = patch_tb_keyword_details(
                 tb_connection,
                 keyword_uid,
                 keyword.name,
@@ -844,7 +844,7 @@ def show_testbench_keyword_diff(ls: LanguageServer, kwargs):
     change_identifier = ChangeAnnotationIdentifier()
     existing_keywords = resource.get_keywords(keyword_uid)
     try:
-        new_keyword = create_keyword_from_interaction(
+        new_keyword = create_rf_keyword_from_tb_keyword(
             keyword_uid,
         )
     except TestBenchKeywordNotFound as e:
@@ -883,7 +883,7 @@ def pull_testbench_keyword(ls: LanguageServer, args):
         )
         return
     try:
-        new_keyword = create_keyword_from_interaction(
+        new_keyword = create_rf_keyword_from_tb_keyword(
             keyword_uid,
         )
     except TestBenchKeywordNotFound as e:
@@ -950,11 +950,11 @@ def push_testbench_keyword(ls: LanguageServer, kwargs):
         rd.get_keyword_documentation(keyword_uid).replace("<br>", "<br/>").replace("<hr>", "<br/>")
     )
     html_description = f"<html><body>{new_docu}</body></html>"
-    call_type = get_interaction_call_type(robot_keywords[0])
+    call_type = get_tb_keyword_call_type(robot_keywords[0])
 
     try:
         tb_connection = TestBenchResourceConnection.singleton()
-        response = patch_interaction_details(
+        response = patch_tb_keyword_details(
             tb_connection,
             keyword_uid,
             robot_keywords[0].name,
@@ -997,10 +997,10 @@ def create_testbench_keyword(ls: LanguageServer, kwargs):
     html_description = f"<html><body>{new_docu}</body></html>"
     arguments = rd.get_keyword_arguments(keyword_name)
     tb_parameters = [{"name": arg, "evaluationType": "CallByValue"} for arg in arguments]
-    call_type = get_interaction_call_type(robot_keywords[0])
+    call_type = get_tb_keyword_call_type(robot_keywords[0])
     try:
         tb_connection = TestBenchResourceConnection.singleton()
-        response = post_interaction_details(
+        response = post_tb_keyword_details(
             tb_connection,
             robot_keywords[0].name,
             html_description,
@@ -1011,7 +1011,7 @@ def create_testbench_keyword(ls: LanguageServer, kwargs):
         created_kw_uid = response.get("uniqueID")
         show_info(ls, INFO_CREATED_KEYWORD.format(uid=created_kw_uid))
         change_identifier = ChangeAnnotationIdentifier()
-        new_keyword = create_keyword_from_interaction(
+        new_keyword = create_rf_keyword_from_tb_keyword(
             created_kw_uid,
         )
         edits = create_keyword_edits(robot_keywords[0], new_keyword, change_identifier)
@@ -1159,44 +1159,44 @@ def did_change(ls: LanguageServer, params: DidOpenTextDocumentParams):
     )
 
 
-@testbench_ls.command(COMMAND_FIND_INTERACTION_POSITION)
-def find_interaction_position(ls: LanguageServer, args) -> int | None:
-    document_uri, interaction_name, interaction_uid, *_ = args
+@testbench_ls.command(COMMAND_FIND_KEYWORD_POSITION)
+def find_keyword_position(ls: LanguageServer, args) -> int | None:
+    document_uri, keyword_name, keyword_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
     resource = TestBenchResourceModel.from_file(document.source)
-    keywords_by_uid = resource.get_keywords(interaction_uid)
+    keywords_by_uid = resource.get_keywords(keyword_uid)
     if len(keywords_by_uid) > 1:
         show_warning(
             ls,
-            ERROR_DUPLICATE_KEYWORD_UID.format(uid=interaction_uid),
+            ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
         )
         log(
             ls,
-            ERROR_DUPLICATE_KEYWORD_UID_IN_FILE.format(uid=interaction_uid, uri=document_uri),
+            ERROR_DUPLICATE_KEYWORD_UID_IN_FILE.format(uid=keyword_uid, uri=document_uri),
             LogLevel.DEBUG,
         )
         return None
     if len(keywords_by_uid) == 1:
         return keywords_by_uid[0].lineno - 1
-    keywords_by_name = resource.get_keywords_by_name(interaction_name)
+    keywords_by_name = resource.get_keywords_by_name(keyword_name)
     if len(keywords_by_name) > 1:
         show_warning(
             ls,
-            ERROR_DUPLICATE_KEYWORD_NAME.format(name=interaction_name),
+            ERROR_DUPLICATE_KEYWORD_NAME.format(name=keyword_name),
         )
         log(
             ls,
-            ERROR_DUPLICATE_KEYWORD_NAME_IN_FILE.format(name=interaction_name, uri=document_uri),
+            ERROR_DUPLICATE_KEYWORD_NAME_IN_FILE.format(name=keyword_name, uri=document_uri),
             LogLevel.DEBUG,
         )
         return None
     if len(keywords_by_uid) == 1:
         return keywords_by_name[0].lineno - 1
-    show_info(ls, INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST.format(name=interaction_name))
+    show_info(ls, INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST.format(name=keyword_name))
     log(
         ls,
         INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST_IN_FILE.format(
-            name=interaction_name, uid=interaction_uid, uri=document_uri
+            name=keyword_name, uid=keyword_uid, uri=document_uri
         ),
         LogLevel.INFO,
     )

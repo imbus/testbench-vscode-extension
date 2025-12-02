@@ -23,7 +23,7 @@ export class tb2robotLib {
         let isGenerateTestsCommandSuccessful: boolean = false;
         const use_config_file: boolean | undefined = getExtensionSetting<boolean>(ConfigKeys.USE_CONFIG_FILE_SETTING);
         const clean: boolean | undefined = getExtensionSetting<boolean>(ConfigKeys.TB2ROBOT_CLEAN);
-        const compound_interaction_logging: string | undefined = getExtensionSetting<string>(
+        const compound_keyword_logging: string | undefined = getExtensionSetting<string>(
             ConfigKeys.TB2ROBOT_COMPOUND_LOGGING
         );
         const fully_qualified: boolean | undefined = getExtensionSetting<boolean>(ConfigKeys.TB2ROBOT_FULLY_QUALIFIED);
@@ -46,7 +46,7 @@ export class tb2robotLib {
         isGenerateTestsCommandSuccessful = await vscode.commands.executeCommand("testbench_ls.generateTestSuites", {
             use_config_file: use_config_file,
             clean: clean,
-            compound_interaction_logging: compound_interaction_logging,
+            compound_keyword_logging: compound_keyword_logging,
             config: use_config_file,
             fully_qualified: fully_qualified,
             library_marker: libraryMarker,

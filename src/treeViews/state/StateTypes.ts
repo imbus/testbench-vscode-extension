@@ -60,6 +60,9 @@ export interface MarkingInfo {
     cycleKey: string;
     timestamp: number;
     type: string;
+    tovKey?: string;
+    contextId?: string;
+    contextType?: "cycle" | "tov" | "unknown";
     metadata?: Record<string, any>;
 }
 

@@ -7,14 +7,20 @@ import assert from "assert";
 import * as vscode from "vscode";
 import { TestThemesTreeItem, TestThemeData } from "../../../treeViews/implementations/testThemes/TestThemesTreeItem";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
+import { UserSessionManager } from "../../../userSessionManager";
+import * as extension from "../../../extension";
 
 suite("TestThemesTreeItem", function () {
     let testEnv: TestEnvironment;
     let mockContext: vscode.ExtensionContext;
+    let userSessionManager: UserSessionManager;
 
     this.beforeEach(function () {
         testEnv = setupTestEnvironment();
         mockContext = testEnv.mockContext;
+        userSessionManager = new UserSessionManager(mockContext);
+        testEnv.sandbox.stub(userSessionManager, "getCurrentUserId").returns("test-user-id");
+        (extension as any).userSessionManager = userSessionManager;
     });
 
     this.afterEach(function () {
@@ -59,7 +65,7 @@ suite("TestThemesTreeItem", function () {
             elementType: "TestThemeNode",
             hasChildren: false,
             projectKey: "project-1",
-            cycleKey: "tov-1"
+            tovKey: "tov-1"
         };
 
         const cycleItem = new TestThemesTreeItem(cycleData, mockContext);
@@ -74,9 +80,11 @@ suite("TestThemesTreeItem", function () {
         const tovId = tovItem.id;
 
         assert.notStrictEqual(cycleId, tovId, "Items from different contexts should have different IDs");
-
-        assert.ok(cycleId && cycleId.includes("cycle:project-1:cycle-1"), "Cycle item ID should contain cycle context");
-        assert.ok(tovId && tovId.includes("tov:project-1:tov-1"), "TOV item ID should contain TOV context");
+        assert.ok(
+            cycleId && cycleId.includes("cycle:project-1:unknown-tov:cycle-1"),
+            "Cycle item ID should contain cycle context"
+        );
+        assert.ok(tovId && tovId.includes("tov:project-1:tov-1:tov-1"), "TOV item ID should contain TOV context");
     });
 
     test("should generate same ID for same item in same context", () => {

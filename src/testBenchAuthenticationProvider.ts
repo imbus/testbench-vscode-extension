@@ -17,6 +17,13 @@ interface TestBenchSessionData {
     userKey: string; // TestBench user key
 }
 
+class UserCancelledError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "UserCancelledError";
+    }
+}
+
 export class TestBenchAuthenticationProvider implements vscode.AuthenticationProvider {
     public static readonly id = TESTBENCH_AUTH_PROVIDER_ID;
     public static readonly label = TESTBENCH_AUTH_PROVIDER_LABEL;
@@ -109,324 +116,358 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
      * missing connection information, or other issues during session creation.
      */
     async createSession(scopes: readonly string[]): Promise<vscode.AuthenticationSession> {
-        const isSilent: boolean = this._isAttemptingSilentAutoLogin;
+        const isSilentLogin = this.consumeSilentAutoLoginFlag();
+
+        try {
+            const { connection, initialPassword } = await this.selectConnectionInQuickPick(isSilentLogin);
+            const passwordResult = await this.resolvePasswordForConnection(connection, initialPassword, isSilentLogin);
+            this.validateConnectionDetailsForLogin(connection, passwordResult.password);
+            const { loginResult, usingSharedSession } = await this.performLogin(connection, passwordResult.password);
+            await this.offerToStorePassword(connection, passwordResult, passwordResult.password);
+            return await this.storeSession(connection, loginResult, scopes, usingSharedSession);
+        } catch (error: any) {
+            if (error instanceof UserCancelledError) {
+                logger.debug(`[AuthenticationProvider] ${error.message}`);
+            } else {
+                logger.error(`[AuthenticationProvider] Error during session creation: ${error.message || error}`);
+                if (!isSilentLogin) {
+                    await connectionManager.clearActiveConnection(this.context);
+                }
+            }
+            throw error;
+        }
+    }
+
+    /*
+     * Consumes the silent auto-login flag by resetting it for future attempts.
+     * @return true if the current attempt is a silent auto-login, false otherwise.
+     */
+    private consumeSilentAutoLoginFlag(): boolean {
+        const isSilentAttempt = this._isAttemptingSilentAutoLogin;
         if (this._isAttemptingSilentAutoLogin) {
             this._isAttemptingSilentAutoLogin = false;
             logger.debug("[AuthenticationProvider] Silent auto-login attempt detected while creating session.");
         }
+        return isSilentAttempt;
+    }
 
-        try {
-            let targetConnection: TestBenchConnection | undefined;
-            let passwordToUse: string | undefined;
+    /**
+     * Selects a TestBench connection for the session.
+     * @param isSilent - Whether the selection is for a silent auto-login.
+     * @returns A promise that resolves to an object containing the selected connection and an optional initial password.
+     */
+    private async selectConnectionInQuickPick(isSilent: boolean): Promise<{
+        connection: TestBenchConnection;
+        initialPassword?: string;
+    }> {
+        const activeConnectionId = await connectionManager.getActiveConnectionId(this.context);
+        if (activeConnectionId) {
+            const connections = await connectionManager.getConnections(this.context);
+            const activeConnection = connections.find((item) => item.id === activeConnectionId);
+            if (activeConnection) {
+                return { connection: activeConnection };
+            }
 
-            const activeConnectionIdFromManager: string | undefined = await connectionManager.getActiveConnectionId(
-                this.context
+            logger.warn(
+                `[AuthenticationProvider] Active connection ID ${activeConnectionId} was set, but connection not found.`
+            );
+            await connectionManager.clearActiveConnection(this.context);
+            if (isSilent) {
+                throw new Error("Active connection for auto-login not found.");
+            }
+        }
+
+        if (isSilent) {
+            throw new Error("No active connection available for silent auto-login.");
+        }
+
+        const connections = await connectionManager.getConnections(this.context);
+        const quickPickItems: (vscode.QuickPickItem & {
+            connection?: TestBenchConnection;
+            isAddNew?: boolean;
+        })[] = [
+            ...connections.map((item) => ({
+                label: item.label,
+                description: `${item.username}@${item.serverName}:${item.portNumber}`,
+                connection: item
+            })),
+            {
+                label: "$(add) Add New TestBench Connection...",
+                isAddNew: true,
+                description: "Configure a new connection connection"
+            }
+        ];
+
+        const selection = await vscode.window.showQuickPick(quickPickItems, {
+            placeHolder: "Select a TestBench Connection or Add New",
+            ignoreFocusOut: true
+        });
+
+        if (!selection) {
+            throw new UserCancelledError("TestBench login cancelled by user.");
+        }
+
+        if (!selection.isAddNew && selection.connection) {
+            return { connection: selection.connection };
+        }
+
+        const newConnectionDetails = await this.promptForNewConnectionDetails();
+        if (!newConnectionDetails) {
+            throw new UserCancelledError("Connection creation cancelled by user.");
+        }
+
+        if (newConnectionDetails.label && newConnectionDetails.label.trim()) {
+            const existingConnectionByLabel = await connectionManager.findConnectionByLabel(
+                this.context,
+                newConnectionDetails.label.trim()
             );
 
-            if (activeConnectionIdFromManager) {
-                const allConnections: connectionManager.TestBenchConnection[] = await connectionManager.getConnections(
-                    this.context
+            if (existingConnectionByLabel) {
+                throw new Error(
+                    `A connection with the label "${newConnectionDetails.label}" already exists. Connection labels must be unique.`
                 );
-                targetConnection = allConnections.find((p) => p.id === activeConnectionIdFromManager);
-                if (!targetConnection) {
-                    logger.warn(
-                        `[AuthenticationProvider] Active connection ID ${activeConnectionIdFromManager} was set, but connection not found.`
-                    );
-                    await connectionManager.clearActiveConnection(this.context);
-                    if (isSilent) {
-                        throw new Error("Active connection for auto-login not found.");
-                    }
-                }
             }
+        }
 
-            if (!targetConnection) {
-                if (isSilent) {
-                    throw new Error("No active connection available for silent auto-login.");
-                }
-                const connections = await connectionManager.getConnections(this.context);
-                const quickPickItems: (vscode.QuickPickItem & {
-                    connection?: TestBenchConnection;
-                    isAddNew?: boolean;
-                })[] = [
-                    ...connections.map((p) => ({
-                        label: p.label,
-                        description: `${p.username}@${p.serverName}:${p.portNumber}`,
-                        connection: p
-                    })),
-                    {
-                        label: "$(add) Add New TestBench Connection...",
-                        isAddNew: true,
-                        description: "Configure a new connection connection"
-                    }
-                ];
+        const tempConnectionId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+        const connection: TestBenchConnection = {
+            id: tempConnectionId,
+            label: newConnectionDetails.label || `${newConnectionDetails.username}@${newConnectionDetails.serverName}`,
+            serverName: newConnectionDetails.serverName,
+            portNumber: newConnectionDetails.portNumber,
+            username: newConnectionDetails.username
+        };
 
-                const selection = await vscode.window.showQuickPick(quickPickItems, {
-                    placeHolder: "Select a TestBench Connection or Add New",
-                    ignoreFocusOut: true
+        let initialPassword = newConnectionDetails.password;
+        const saveNewConnectionChoice = await vscode.window.showQuickPick(["Yes", "No"], {
+            placeHolder: `Save new connection "${connection.label}"?`,
+            ignoreFocusOut: true
+        });
+
+        if (saveNewConnectionChoice === "Yes") {
+            try {
+                const savedId = await connectionManager.saveConnection(this.context, {
+                    ...connection,
+                    password: initialPassword
                 });
-
-                if (!selection) {
-                    throw new Error("TestBench login cancelled by user (QuickPick).");
-                }
-
-                if (selection.isAddNew || !selection.connection) {
-                    const newConnectionDetails = await this.promptForNewConnectionDetails();
-                    if (!newConnectionDetails) {
-                        throw new Error("Connection creation cancelled.");
-                    }
-
-                    // Check for duplicate label if provided
-                    if (newConnectionDetails.label && newConnectionDetails.label.trim()) {
-                        const existingConnectionByLabel: connectionManager.TestBenchConnection | undefined =
-                            await connectionManager.findConnectionByLabel(
-                                this.context,
-                                newConnectionDetails.label.trim()
-                            );
-
-                        if (existingConnectionByLabel) {
-                            throw new Error(
-                                `A connection with the label "${newConnectionDetails.label}" already exists. Connection labels must be unique.`
-                            );
-                        }
-                    }
-
-                    // Create temp connection object with a temporary ID for unsaved connections
-                    const tempConnectionId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
-                    targetConnection = {
-                        id: tempConnectionId,
-                        label:
-                            newConnectionDetails.label ||
-                            `${newConnectionDetails.username}@${newConnectionDetails.serverName}`,
-                        serverName: newConnectionDetails.serverName,
-                        portNumber: newConnectionDetails.portNumber,
-                        username: newConnectionDetails.username
-                    };
-                    passwordToUse = newConnectionDetails.password;
-
-                    const saveNewConnectionChoice: string | undefined = await vscode.window.showQuickPick(
-                        ["Yes", "No"],
-                        {
-                            placeHolder: `Save new connection "${targetConnection.label}"?`,
-                            ignoreFocusOut: true
-                        }
-                    );
-
-                    if (saveNewConnectionChoice === "Yes") {
-                        try {
-                            const savedId: string = await connectionManager.saveConnection(this.context, {
-                                ...targetConnection,
-                                password: passwordToUse
-                            });
-                            targetConnection.id = savedId;
-                            await connectionManager.setActiveConnectionId(this.context, targetConnection.id);
-                        } catch (saveError: any) {
-                            logger.error(
-                                `[AuthenticationProvider] Failed to save new connection: ${saveError.message}`
-                            );
-                            throw new Error(`Failed to save connection: ${saveError.message}`);
-                        }
-                    } else if (!passwordToUse) {
-                        throw new Error("Password required for unsaved connection.");
-                    }
-                } else {
-                    targetConnection = selection.connection;
-                }
+                connection.id = savedId;
+                initialPassword = undefined;
+            } catch (saveError: any) {
+                logger.error(`[AuthenticationProvider] Failed to save new connection: ${saveError.message}`);
+                throw new Error(`Failed to save connection: ${saveError.message}`);
             }
+        } else if (!initialPassword) {
+            throw new Error("Password required for unsaved connection.");
+        }
 
-            if (passwordToUse === undefined && targetConnection) {
-                passwordToUse = await connectionManager.getPasswordForConnection(this.context, targetConnection.id);
+        return { connection, initialPassword };
+    }
 
-                if (passwordToUse === undefined) {
-                    const manuallyEnteredPassword: string | undefined = await vscode.window.showInputBox({
-                        prompt: `Enter password for ${targetConnection.label}${isSilent ? " (auto-login attempt)" : ""}`,
-                        password: true,
-                        ignoreFocusOut: true
-                    });
-
-                    if (manuallyEnteredPassword === undefined) {
-                        throw new Error(`Password entry cancelled${isSilent ? " for auto-login" : ""}.`);
-                    }
-                    if (manuallyEnteredPassword === "") {
-                        // User entered an empty password
-                        throw new Error(
-                            `Password cannot be empty. Please enter a valid password or cancel${isSilent ? " (auto-login attempt)" : ""}.`
-                        );
-                    }
-                    passwordToUse = manuallyEnteredPassword;
-                } else if (passwordToUse === "") {
-                    if (isSilent) {
-                        throw new Error(
-                            `Empty password stored for connection "${targetConnection.label}". Auto-login failed. Please update connection interactively.`
-                        );
-                    }
-                    const manuallyEnteredPassword: string | undefined = await vscode.window.showInputBox({
-                        prompt: `Enter password for ${targetConnection.label} (stored password was empty)`,
-                        password: true,
-                        ignoreFocusOut: true
-                    });
-                    if (manuallyEnteredPassword === undefined) {
-                        throw new Error("Password entry cancelled.");
-                    }
-                    if (manuallyEnteredPassword === "") {
-                        throw new Error("Password cannot be empty. Please enter a valid password or cancel.");
-                    }
-                    passwordToUse = manuallyEnteredPassword;
-                }
-            }
-            if (!targetConnection || passwordToUse === undefined) {
-                throw new Error("Connection details or password not available for login.");
-            }
-            if (passwordToUse === "") {
+    /**
+     * Resolves the password for a given connection, either from the initial input or by prompting the user.
+     * @param connection - The TestBench connection for which to resolve the password.
+     * @param initialPassword - An optional initial password provided by the user.
+     * @param isSilent - Whether the resolution is for a silent auto-login.
+     * @returns A promise that resolves to an object containing the resolved password and metadata about its origin.
+     */
+    private async resolvePasswordForConnection(
+        connection: TestBenchConnection,
+        initialPassword: string | undefined,
+        isSilent: boolean
+    ): Promise<{ password: string; wasManuallyProvided: boolean; hadStoredPassword: boolean }> {
+        if (initialPassword !== undefined) {
+            if (initialPassword === "") {
                 throw new Error("Cannot attempt login with an empty password.");
             }
+            return {
+                password: initialPassword,
+                wasManuallyProvided: true,
+                hadStoredPassword: false
+            };
+        }
 
-            try {
-                this.validateConnectionForLogin(targetConnection, passwordToUse);
-            } catch (validationError: any) {
-                logger.error(`[AuthenticationProvider] Connection validation failed: ${validationError.message}`);
-                throw validationError;
-            }
+        const storedPassword = await connectionManager.getPasswordForConnection(this.context, connection.id);
+        if (storedPassword === undefined) {
+            const password = await this.promptForPassword(
+                `Enter password for ${connection.label}${isSilent ? " (auto-login attempt)" : ""}`,
+                isSilent
+            );
+            return { password, wasManuallyProvided: true, hadStoredPassword: false };
+        }
 
-            // Check for existing shared session before creating a new login
-            const sharedSessionManager = SharedSessionManager.getInstance(this.context);
-            const existingSharedSession = await sharedSessionManager.getSharedSession();
-
-            let loginResult: TestBenchLoginResult | null = null;
-            let usingSharedSession = false;
-
-            if (
-                existingSharedSession &&
-                existingSharedSession.connectionId === targetConnection.id &&
-                existingSharedSession.serverName === targetConnection.serverName &&
-                existingSharedSession.portNumber === targetConnection.portNumber &&
-                existingSharedSession.username === targetConnection.username
-            ) {
-                logger.debug("[AuthenticationProvider] Found existing shared session, attempting to validate...");
-
-                // Create a temporary connection to validate the session
-                const tempConnection = new PlayServerConnection(
-                    targetConnection.serverName,
-                    targetConnection.portNumber,
-                    targetConnection.username,
-                    existingSharedSession.sessionToken,
-                    this.context,
-                    existingSharedSession.isInsecure
+        if (storedPassword === "") {
+            if (isSilent) {
+                throw new Error(
+                    `Empty password stored for connection "${connection.label}". Auto-login failed. Please update connection interactively.`
                 );
-                await tempConnection.initialize();
+            }
+            const password = await this.promptForPassword(
+                `Enter password for ${connection.label} (stored password was empty)`,
+                isSilent
+            );
+            return { password, wasManuallyProvided: true, hadStoredPassword: false };
+        }
 
-                const isValid = await sharedSessionManager.validateSession(tempConnection);
+        return {
+            password: storedPassword,
+            wasManuallyProvided: false,
+            hadStoredPassword: true
+        };
+    }
 
-                if (isValid) {
-                    logger.info("[AuthenticationProvider] Using existing shared session instead of creating new login");
-                    loginResult = {
+    private async promptForPassword(prompt: string, isSilent: boolean): Promise<string> {
+        const manuallyEnteredPassword = await vscode.window.showInputBox({
+            prompt,
+            password: true,
+            ignoreFocusOut: true
+        });
+
+        if (manuallyEnteredPassword === undefined) {
+            throw new UserCancelledError(`Password entry cancelled${isSilent ? " for auto-login" : ""}.`);
+        }
+
+        if (manuallyEnteredPassword === "") {
+            throw new Error("Password cannot be empty. Please enter a valid password or cancel.");
+        }
+
+        return manuallyEnteredPassword;
+    }
+
+    private async performLogin(
+        connection: TestBenchConnection,
+        password: string
+    ): Promise<{ loginResult: TestBenchLoginResult; usingSharedSession: boolean }> {
+        const sharedSessionManager = SharedSessionManager.getInstance(this.context);
+        const existingSharedSession = await sharedSessionManager.getSharedSession();
+
+        if (
+            existingSharedSession &&
+            existingSharedSession.connectionId === connection.id &&
+            existingSharedSession.serverName === connection.serverName &&
+            existingSharedSession.portNumber === connection.portNumber &&
+            existingSharedSession.username === connection.username
+        ) {
+            logger.debug("[AuthenticationProvider] Found existing shared session, attempting to validate...");
+
+            const tempConnection = new PlayServerConnection(
+                connection.serverName,
+                connection.portNumber,
+                connection.username,
+                existingSharedSession.sessionToken,
+                this.context,
+                existingSharedSession.isInsecure
+            );
+            await tempConnection.initialize();
+
+            const isValid = await sharedSessionManager.validateSession(tempConnection);
+            if (isValid) {
+                logger.info("[AuthenticationProvider] Using existing shared session instead of creating new login");
+                return {
+                    loginResult: {
                         sessionToken: existingSharedSession.sessionToken,
                         userKey: existingSharedSession.userKey,
                         loginName: existingSharedSession.loginName,
                         isInsecure: existingSharedSession.isInsecure
-                    };
-                    usingSharedSession = true;
-                } else {
-                    logger.debug(
-                        "[AuthenticationProvider] Shared session is no longer valid, proceeding with new login"
-                    );
-                    await sharedSessionManager.clearSharedSession();
-                }
+                    },
+                    usingSharedSession: true
+                };
             }
 
-            // Only perform new login if not using a shared session
-            if (!loginResult) {
-                loginResult = await loginToServerAndGetSessionDetails(
-                    targetConnection.serverName,
-                    targetConnection.portNumber,
-                    targetConnection.username,
-                    passwordToUse
-                );
-            }
-
-            if (!loginResult || !loginResult.sessionToken || !loginResult.userKey) {
-                await connectionManager.clearActiveConnection(this.context);
-                throw new Error("Login to TestBench failed.");
-            }
-            const initialPasswordFromStorage: string | undefined = await connectionManager.getPasswordForConnection(
-                this.context,
-                targetConnection.id
-            );
-            const wasPasswordManuallyEnteredOrCorrected =
-                (initialPasswordFromStorage === undefined || initialPasswordFromStorage === "") &&
-                passwordToUse &&
-                passwordToUse.length > 0;
-
-            if (wasPasswordManuallyEnteredOrCorrected && targetConnection.id) {
-                const storePasswordAfterLoginChoice = await vscode.window.showQuickPick(["Yes", "No"], {
-                    placeHolder: `Save password for connection "${targetConnection.label}"?`,
-                    ignoreFocusOut: true
-                });
-                if (storePasswordAfterLoginChoice === "Yes") {
-                    await connectionManager.saveConnection(this.context, {
-                        ...targetConnection,
-                        password: passwordToUse
-                    });
-                }
-            }
-
-            const vsCodeSessionId: string = targetConnection.id;
-            const sessionData: TestBenchSessionData = {
-                sessionId: vsCodeSessionId,
-                connectionId: targetConnection.id,
-                testBenchSessionToken: loginResult.sessionToken,
-                accountLabel: `${targetConnection.username}@${targetConnection.serverName}`,
-                userKey: loginResult.userKey
-            };
-            this.activeSessions.set(vsCodeSessionId, sessionData);
-            await connectionManager.setActiveConnectionId(this.context, targetConnection.id);
-
-            this._onDidChangeSessions.fire({
-                added: [
-                    {
-                        id: vsCodeSessionId,
-                        accessToken: sessionData.testBenchSessionToken,
-                        account: { label: sessionData.accountLabel, id: sessionData.userKey },
-                        scopes
-                    }
-                ],
-                removed: [],
-                changed: []
-            });
-            logger.debug(
-                `[AuthenticationProvider] TestBench session created successfully for '${sessionData.accountLabel}'.`
-            );
-
-            // Store the session in shared session manager if it's a new login
-            if (!usingSharedSession) {
-                await sharedSessionManager.storeSharedSession(
-                    vsCodeSessionId,
-                    loginResult.sessionToken,
-                    loginResult.userKey,
-                    loginResult.loginName,
-                    targetConnection.id,
-                    targetConnection.serverName,
-                    targetConnection.portNumber,
-                    targetConnection.username,
-                    loginResult.isInsecure
-                );
-                logger.debug(
-                    "[AuthenticationProvider] Stored new session in shared session manager for cross-window access"
-                );
-            }
-
-            return {
-                id: vsCodeSessionId,
-                accessToken: sessionData.testBenchSessionToken,
-                account: { label: sessionData.accountLabel, id: sessionData.userKey },
-                scopes
-            };
-        } catch (error: any) {
-            logger.error(`[AuthenticationProvider] Error during session creation: ${error.message || error}`);
-            if (!isSilent) {
-                await connectionManager.clearActiveConnection(this.context);
-            }
-            throw error;
+            logger.debug("[AuthenticationProvider] Shared session is no longer valid, proceeding with new login");
+            await sharedSessionManager.clearSharedSession();
         }
+
+        const loginResult = await loginToServerAndGetSessionDetails(
+            connection.serverName,
+            connection.portNumber,
+            connection.username,
+            password
+        );
+
+        if (!loginResult || !loginResult.sessionToken || !loginResult.userKey) {
+            await connectionManager.clearActiveConnection(this.context);
+            throw new Error("Login to TestBench failed.");
+        }
+
+        return { loginResult, usingSharedSession: false };
+    }
+
+    private async offerToStorePassword(
+        connection: TestBenchConnection,
+        passwordResult: { wasManuallyProvided: boolean; hadStoredPassword: boolean },
+        password: string
+    ): Promise<void> {
+        if (!passwordResult.wasManuallyProvided || passwordResult.hadStoredPassword || !password || !connection.id) {
+            return;
+        }
+
+        const storePasswordAfterLoginChoice = await vscode.window.showQuickPick(["Yes", "No"], {
+            placeHolder: `Save password for connection "${connection.label}"?`,
+            ignoreFocusOut: true
+        });
+
+        if (storePasswordAfterLoginChoice === "Yes") {
+            await connectionManager.saveConnection(this.context, {
+                ...connection,
+                password
+            });
+        }
+    }
+
+    private async storeSession(
+        connection: TestBenchConnection,
+        loginResult: TestBenchLoginResult,
+        scopes: readonly string[],
+        usingSharedSession: boolean
+    ): Promise<vscode.AuthenticationSession> {
+        const sessionId = connection.id;
+        const sessionData: TestBenchSessionData = {
+            sessionId,
+            connectionId: connection.id,
+            testBenchSessionToken: loginResult.sessionToken,
+            accountLabel: `${connection.username}@${connection.serverName}`,
+            userKey: loginResult.userKey
+        };
+
+        this.activeSessions.set(sessionId, sessionData);
+        await connectionManager.setActiveConnectionId(this.context, connection.id);
+
+        const authSession: vscode.AuthenticationSession = {
+            id: sessionId,
+            accessToken: sessionData.testBenchSessionToken,
+            account: { label: sessionData.accountLabel, id: sessionData.userKey },
+            scopes
+        };
+
+        this._onDidChangeSessions.fire({
+            added: [authSession],
+            removed: [],
+            changed: []
+        });
+
+        if (!usingSharedSession) {
+            const sharedSessionManager = SharedSessionManager.getInstance(this.context);
+            await sharedSessionManager.storeSharedSession(
+                sessionId,
+                loginResult.sessionToken,
+                loginResult.userKey,
+                loginResult.loginName,
+                connection.id,
+                connection.serverName,
+                connection.portNumber,
+                connection.username,
+                loginResult.isInsecure
+            );
+            logger.debug(
+                "[AuthenticationProvider] Stored new session in shared session manager for cross-window access"
+            );
+        }
+
+        logger.debug(
+            `[AuthenticationProvider] TestBench session created successfully for '${sessionData.accountLabel}'.`
+        );
+
+        return authSession;
     }
 
     /**
@@ -541,7 +582,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
      * @param password The password to validate
      * @throws Error if validation fails
      */
-    private validateConnectionForLogin(connection: TestBenchConnection, password: string | undefined): void {
+    private validateConnectionDetailsForLogin(connection: TestBenchConnection, password: string | undefined): void {
         if (!connection) {
             throw new Error("Connection details are required for login.");
         }
