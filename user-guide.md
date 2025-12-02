@@ -1,8 +1,11 @@
+# User Guide for the TestBench VS Code Extension
+
 This guide explains how to use the TestBench VS Code Extension to navigate inside projects, generate Robot Framework tests, execute them, import results back to TestBench and manage Robot Framework resource files.
 
 ## Requirements
 
-- Python 3.10 or newer installed on your system
+- **Visual Studio Code** version 1.95.0 or higher
+- **Python** 3.10 or newer installed on your system
 - An open VS Code workspace. Without a workspace, the extension runs in read-only mode and features like test generation and importing results are disabled
 
 **Note:** The following VS Code extensions are required dependencies and will be automatically installed (if not already present) when you install the TestBench extension:
@@ -339,3 +342,17 @@ These settings control how the extension generates Robot Framework test suites f
 - If problems persist, use the command 'TestBench: Clear All Extension Data' to reset all persistent extension data (including stored connections) in the current workspace. **Warning:** This action cannot be undone
 
 ![Clear All Extension Data Command](userGuideImages/ClearAllExtensionDataCommand.png)
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Contributing / Feedback
+
+If you encounter any issues or have suggestions for improvements, please open an issue on our [GitHub repository](https://github.com/imbus/testbench-vs-code-extension).
+
+Please check out our [contribution guidelines](CONTRIBUTING.md) for details on how to report issues or suggest enhancements before submitting a pull request.
+
+## Release Notes
+
+See [CHANGELOG.md](CHANGELOG.md) for a detailed list of changes.

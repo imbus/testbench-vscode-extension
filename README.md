@@ -1,45 +1,47 @@
 # TestBench Extension for Visual Studio Code
 
-The **TestBench Extension** for Visual Studio Code enables seamless synchronization between [TestBench](https://www.testbench.com/) and [Robot Framework](https://github.com/robotframework/robotframework) files managed in VS Code. It allows you to:
+The **TestBench Extension** enables synchronization between [TestBench](https://www.testbench.com/) and [Robot Framework](https://github.com/robotframework/robotframework) files in VS Code. Manage your TestBench projects, generate Robot Framework tests, execute them, and import results back to TestBench from within your IDE.
 
-- Synchronize Robot Framework keywords between VS Code and TestBench
-- Export test cases specified in TestBench to run them with Robot Framework
-- Import Robot Framework execution results back into TestBench
-- Visualize your TestBench project structure and navigate through the corresponding Robot Framework files
+## Features Overview
+
+- **Secure Connections**: Manage multiple TestBench server connections in Login view
+- **Projects View**: Browse and navigate through TestBench projects, Test Object Versions (TOVs), and Test Cycles in Projects view
+- **Context Configuration**: Set an active project and TOV to define the current context for the extension in Projects view
+- **Test Themes View**: Browse and navigate through Test Themes and Test Case Sets in Test Themes view
+- **Test Elements View**: Browse and navigate through Test Elements such as subdivisions and keywords in Test Elements view
+- **Search & Filter**: Search functionality across all tree views with configurable search criteria in Projects view, Test Themes view, and Test Elements view
+- **Test Generation**: Generate Robot Framework test suites in Test Themes view with configurable test generation settings
+- **Result Import**: Import Robot Framework execution results back to TestBench to update execution status and verdicts in Test Themes view
+- **Resource Management**: Create, edit, and synchronize Robot Framework resource files with TestBench subdivisions in Test Elements view
+- **Keyword Synchronization**: Pull and push Robot Framework keywords between VS Code and TestBench using CodeLens actions in Robot Framework resource files
 
 ## Requirements
 
-- Visual Studio Code version 1.95.0 or higher
-- Python 3.10 or higher
+- **Visual Studio Code** version 1.95.0 or higher
+- **Python** 3.10 or higher
+- An open VS Code workspace (required for test generation and result import features)
 
-## Usage
+### Required Extensions
 
-- **Log in to the TestBench Server**
+The following extensions are automatically installed as dependencies when you install the TestBench extension:
 
-    Log in to the TestBench server by entering your credentials in the login form. You can securely store your password by selecting the **Store Password** option. If you enable **Automatic Login**, the extension will log in automatically upon activation, provided your password is stored. Once logged in, a project selection form will appear, allowing you to choose a project, a Test Object Version, or a Test Cycle to work with.
+- **Python extension** (`ms-python.python`) - Required for Python support
+- **RobotCode extension** (`d-biehl.robotcode`) - Required for Robot Framework test execution
 
-- **Extension Views**
+## Quick Start
 
-    After selecting the context of your project, the **Project Details** will be displayed in the form of **Test Themes** and **Test Elements** views. You can navigate through these elements by expanding or clicking on the tree items. If the corresponding files exist in the local file system, they will open automatically.
+1. Open the TestBench view in VS Code (activity bar icon)
+2. Create or select a TestBench connection and log in
+3. After the first login, the Projects view opens automatically
+4. Select an active project and TOV to define the current context for the extension in Projects view by right-clicking on a project or TOV and selecting "Set as Active Project" or "Set as Active TOV"
+5. Open a TOV or Cycle in the Projects view to open the Test Themes view and Test Elements view together for that context
+6. Generate Robot Framework tests by clicking the Robot Framework icon next to any tree item in the Test Themes view
+7. Execute the created robotframework tests using RobotCode extension
+8. Import results back to TestBench using the Import button next to generated tree items in the Test Themes view
 
-- **Generate Test Cases**
+## Documentation
 
-    The extension allows you to generate Robot Framework test cases for Test Object Versions, Test Cycles, Test Themes, and Test Case Sets.
-
-    To generate test cases for a TOV or cycle, click the **Generate Test Cases** button on the corresponding element in the project management tree.
-
-    To generate test cases for a specific test theme or a test case set, click the **Generate Test Cases** button on the respective element in the Test Theme Tree.
-
-- **Execute and Import Test Results**
-
-    Once you’ve executed the generated Robot Framework tests (e.g., via [RobotCode](https://robotcode.io/)), you can click the **Import** button in the **Test Themes** view to send the test results back to TestBench. This option does only exist for test cycles.
-
-- **Synchronize Robot Framework Keywords**
-
-    The extension also displays all subdivisions corresponding to Robot Framework resource files in the **Test Elements** view.  
-     Each subdivision ending with `[Robot-Resource]` is considered a Robot Framework resource file and is displayed in the tree view. The **Test Elements** view can be used to navigate between different resource files or even to create them if they do not exist.
-
-    When opening a Robot Framework resource file that is linked to a TestBench subdivision, code lenses are displayed in the editor. These can be used to pull or push changes of single keywords or the whole resource file from or to TestBench.
+For comprehensive documentation including detailed feature descriptions, configuration settings, and a troubleshooting guide, see the [User Guide](user-guide.md).
 
 ## License
 
