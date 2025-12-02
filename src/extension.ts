@@ -483,6 +483,13 @@ async function handleInitialSession(context: vscode.ExtensionContext): Promise<v
 async function performAutomaticLogin(context: vscode.ExtensionContext): Promise<void> {
     logger.trace(`[extension] Performing automatic login on activation.`);
     try {
+        const storedConnections = await connectionManager.getConnections(context);
+        if (storedConnections.length === 0) {
+            logger.trace("[extension] No stored connections found. Skipping automatic login.");
+            // getLoginWebViewProvider()?.updateWebviewHTMLContent();
+            return;
+        }
+
         authProviderInstance?.markNextLoginAsSilent();
         const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
             createIfNone: true
