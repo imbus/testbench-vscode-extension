@@ -177,7 +177,7 @@ Settings are grouped in VS Code under these sections
 - **Automatic Login After Extension Activation**
     - **Type:** Boolean
     - **Default:** `false`
-    - **Description:** When enabled, the extension automatically attempts to log in to the TestBench server using the last used connection (if one exists) when the extension is activated.
+    - **Description:** When enabled, the extension automatically attempts to log in to the TestBench server using the last used connection after the extension is activated.
 
 #### Logger Settings
 

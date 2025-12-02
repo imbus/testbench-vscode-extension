@@ -114,7 +114,7 @@ export class SharedSessionManager {
     public async validateSession(connection: PlayServerConnection): Promise<boolean> {
         try {
             const apiClient = connection.getApiClient();
-            const response = await apiClient.get(`/login/session/v1`, {
+            const response = await apiClient.get(`/2/login/session`, {
                 headers: { accept: "application/vnd.testbench+json" },
                 proxy: false,
                 validateStatus: () => true

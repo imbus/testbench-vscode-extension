@@ -24,6 +24,11 @@ import { CacheManager } from "../../core/cacheManager";
 
 const ROOT_ITEMS_CACHE_KEY = "root_items";
 
+export interface RefreshOptions {
+    immediate?: boolean;
+    skipDataReload?: boolean;
+}
+
 export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.TreeDataProvider<T> {
     protected readonly _onDidChangeTreeData = new vscode.EventEmitter<T | undefined | null | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -483,7 +488,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
      * @param item Optional specific item to refresh
      * @param options Optional refresh options including immediate flag
      */
-    public refresh(item?: T, options?: { immediate?: boolean }): void {
+    public refresh(item?: T, options?: RefreshOptions): void {
         this.logger.trace(
             this.buildLogPrefix(
                 `Refreshing tree view${item ? ` for item: ${item.label}` : ""}${options?.immediate ? " immediately" : ""}`
@@ -494,11 +499,26 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             this._dataFetchDebounceTimeout = undefined;
         }
 
+        const skipDataReload = options?.skipDataReload ?? false;
+
         if (!item) {
             // Full refresh
             this._intentionallyCleared = false;
-            // Reset flag for full refresh
-            this.loadData(options);
+
+            if (skipDataReload) {
+                this.logger.trace(this.buildLogPrefix("Skipping data reload per refresh options."));
+                if (options?.immediate) {
+                    this._onDidChangeTreeData.fire(undefined);
+                } else {
+                    this._dataFetchDebounceTimeout = setTimeout(() => {
+                        this._onDidChangeTreeData.fire(undefined);
+                        this._dataFetchDebounceTimeout = undefined;
+                    }, TreeViewTiming.UI_REFRESH_DEBOUNCE_MS);
+                }
+            } else {
+                // Reset flag for full refresh
+                this.loadData(options);
+            }
         } else {
             // Partial refresh
             if (options?.immediate) {
@@ -768,7 +788,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     }
 
     /**
-     * Updates the TreeView message based on the current state
+     * Updates the tree view message based on current state.
      */
     private updateTreeViewMessage(): void {
         if (!this.vscTreeView) {
@@ -776,59 +796,105 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
         }
 
         try {
-            const state = this.stateManager?.getState();
-
-            if (!state) {
-                this.vscTreeView.message = undefined;
-                return;
-            }
-
-            if (state.error) {
-                this.vscTreeView.message = this.config.ui.errorMessage;
-                return;
-            }
-
-            if (state.loading) {
-                this.vscTreeView.message = this.config.ui.loadingMessage;
-                return;
-            }
-
-            const filteringModule = this.getModule("filtering") as FilteringModule | undefined;
-            if (filteringModule && filteringModule.isActive() && this.getCurrentRootItems().length > 0) {
-                const filteredRootItems = filteringModule.filterTreeItems(this.getCurrentRootItems());
-                const textFilter = filteringModule.getTextFilter();
-                if (filteredRootItems.length === 0) {
-                    if (textFilter?.searchText) {
-                        this.vscTreeView.message = `No items found for "${textFilter.searchText}"`;
-                    } else {
-                        this.vscTreeView.message = "All items have been filtered.";
-                    }
-                    return;
-                } else if (textFilter?.searchText) {
-                    this.vscTreeView.message = `Search results for: "${textFilter.searchText}"`;
-                    return;
-                }
-            }
-
-            if (this.getCurrentRootItems().length === 0 && !this._intentionallyCleared) {
-                this.vscTreeView.message = this.config.ui.emptyMessage;
-                return;
-            }
-
-            this.vscTreeView.message = undefined;
+            const message = this.determineTreeViewMessage();
+            this.vscTreeView.message = message;
         } catch (error) {
-            if (this.vscTreeView) {
-                this.vscTreeView.message = undefined;
-            }
+            this.vscTreeView.message = undefined;
             this.logger.error(this.buildLogPrefix("Error updating tree view message:"), error);
         }
+    }
+
+    /**
+     * Determines the appropriate message to display in the tree view.
+     * @returns The message string or undefined if no message should be displayed
+     */
+    private determineTreeViewMessage(): string | undefined {
+        const state = this.stateManager?.getState();
+        if (!state) {
+            return undefined;
+        }
+
+        // Error state
+        if (state.error) {
+            return this.config.ui.errorMessage;
+        }
+
+        // Loading state
+        if (state.loading) {
+            return this.config.ui.loadingMessage;
+        }
+
+        // Filtering messages
+        const filterMessage = this.getFilteringMessage();
+        if (filterMessage) {
+            return filterMessage;
+        }
+
+        // Empty state
+        if (this.shouldShowEmptyMessage()) {
+            return this.config.ui.emptyMessage;
+        }
+
+        // No message needed
+        return undefined;
+    }
+
+    /**
+     * Gets the appropriate filtering-related message if filtering is active.
+     * @returns Filter message string or undefined if no filter message is applicable
+     */
+    private getFilteringMessage(): string | undefined {
+        const filteringModule = this.getModule("filtering") as FilteringModule | undefined;
+        if (!filteringModule?.isActive()) {
+            return undefined;
+        }
+
+        const rootItems = this.getCurrentRootItems();
+        if (rootItems.length === 0) {
+            return undefined;
+        }
+
+        const filteredItems = filteringModule.filterTreeItems(rootItems);
+        const textFilter = filteringModule.getTextFilter();
+
+        // No items match the filter
+        if (filteredItems.length === 0) {
+            return this.buildNoMatchesMessage(textFilter?.searchText);
+        }
+
+        // Items match, show search context if text filter is active
+        if (textFilter?.searchText) {
+            return `Search results for: "${textFilter.searchText}"`;
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Builds the appropriate message when no items match the filter.
+     * @param searchText The search text if a text filter is active
+     * @returns Message string for no matches
+     */
+    private buildNoMatchesMessage(searchText?: string): string {
+        if (searchText) {
+            return `No items found for "${searchText}"`;
+        }
+        return "All items have been filtered.";
+    }
+
+    /**
+     * Determines if the empty message should be shown.
+     * @returns True if empty message should be displayed
+     */
+    private shouldShowEmptyMessage(): boolean {
+        return this.getCurrentRootItems().length === 0 && !this._intentionallyCleared;
     }
 
     /**
      * Loads data for the tree view with optional immediate refresh
      * @param options Optional parameters for data loading behavior
      */
-    protected async loadData(options?: { immediate?: boolean }): Promise<void> {
+    protected async loadData(options?: RefreshOptions): Promise<void> {
         if (this._isLoading) {
             return;
         }

@@ -4,7 +4,7 @@
  */
 
 import * as vscode from "vscode";
-import { TreeViewBase } from "../../core/TreeViewBase";
+import { TreeViewBase, RefreshOptions } from "../../core/TreeViewBase";
 import { TestElementData, TestElementItemData, TestElementsTreeItem, TestElementType } from "./TestElementsTreeItem";
 import { TreeViewConfig } from "../../core/TreeViewConfig";
 import { TestElementsDataProvider } from "./TestElementsDataProvider";
@@ -42,6 +42,12 @@ interface ResourceOperationConfig {
         folderNotFound: string;
     };
 }
+
+/**
+ * When enabled, parent subdivision items are visually marked when any child subdivision
+ * or keyword resource is created locally.
+ */
+const ENABLE_PARENT_MARKING = true;
 
 export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private dataProvider: TestElementsDataProvider;
@@ -150,6 +156,15 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 this.refresh();
             }
         });
+
+        // Check icons for newly expanded items to support lazy loading
+        this.eventBus.on("tree:itemExpanded", async (event) => {
+            const item = event.data.item;
+            if (item instanceof TestElementsTreeItem && item.data.testElementType === TestElementType.Subdivision) {
+                await this.updateSubdivisionIcons([item], false);
+                this._onDidChangeTreeData.fire(item);
+            }
+        });
     }
 
     /**
@@ -183,6 +198,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         this.resourceAvailabilityRefreshDebounceHandle = setTimeout(async () => {
             try {
                 await this.refreshResourceAvailabilityFromWorkspace();
+                await this.updateAllParentMarkings();
             } catch (error) {
                 this.logger.error(
                     "[TestElementsTreeView] Error during debounced resource availability refresh:",
@@ -193,6 +209,39 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
+     * Updates parent marking flags for all subdivision items in the tree.
+     * This is called after file system changes to ensure parent markings are accurate.
+     */
+    private async updateAllParentMarkings(): Promise<void> {
+        if (!ENABLE_PARENT_MARKING || !this.rootItems || this.rootItems.length === 0) {
+            return;
+        }
+
+        try {
+            const subdivisionItems: TestElementsTreeItem[] = [];
+            const collectSubdivisions = (currentItems: TestElementsTreeItem[]) => {
+                for (const item of currentItems) {
+                    if (item.data.testElementType === TestElementType.Subdivision) {
+                        subdivisionItems.push(item);
+                    }
+                    if (item.children) {
+                        collectSubdivisions(item.children as TestElementsTreeItem[]);
+                    }
+                }
+            };
+            collectSubdivisions(this.rootItems);
+
+            // Update hasLocalChildren flag for each subdivision
+            for (const item of subdivisionItems) {
+                const hasLocalChildren = await this.hasAnyLocalChildResources(item);
+                item.hasLocalChildren = hasLocalChildren;
+            }
+        } catch (error) {
+            this.logger.error("[TestElementsTreeView] Error updating all parent markings:", error);
+        }
+    }
+
+    /**
      * Recomputes resource availability for subdivision items and updates icons and keywords.
      */
     private async refreshResourceAvailabilityFromWorkspace(): Promise<void> {
@@ -200,7 +249,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             if (!this.rootItems || this.rootItems.length === 0) {
                 return;
             }
-            await this.updateSubdivisionIcons(this.rootItems);
+            await this.updateSubdivisionIcons(this.rootItems, false);
             this._onDidChangeTreeData.fire(undefined);
         } catch (error) {
             this.logger.error("[TestElementsTreeView] Error refreshing resource availability from workspace:", error);
@@ -225,117 +274,230 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param config The configuration object defining the operation to perform.
      */
     private async _handleResourceOperation(config: ResourceOperationConfig): Promise<void> {
-        const {
-            operationType,
-            createMissing,
-            revealInExplorer,
-            targetItem,
-            keywordItem: keywordItem,
-            errorMessages
-        } = config;
-
-        // Resource operations use language server commands, ensure it's running
         try {
-            if (!isLanguageServerRunning()) {
-                const cfgExists = await hasLsConfig();
-                if (!cfgExists) {
-                    vscode.window.showWarningMessage(
-                        "Language server is not available because no project configuration was found (.testbench/ls.config.json). Create it first."
-                    );
-                    return;
-                }
+            await this.ensureLanguageServerReady();
 
-                // Attempt to initialize LS from current config, then wait for readiness
-                await updateOrRestartLS();
-                await vscode.window.withProgress(
-                    {
-                        location: vscode.ProgressLocation.Notification,
-                        title: "Waiting for Language Server",
-                        cancellable: true
-                    },
-                    async (progress, cancellationToken) => {
-                        progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
-                        await waitForLanguageServerReady(30000, 100, cancellationToken);
-                    }
-                );
-            }
-
-            const hierarchicalName = targetItem.data.hierarchicalName;
-            if (!hierarchicalName) {
-                vscode.window.showErrorMessage(errorMessages.noHierarchicalName);
-                return;
-            }
-            const cleanName = this.removeResourceMarkersFromHierarchicalName(hierarchicalName).trim();
-            const absolutePath = await this.resourceFileService.constructAbsolutePath(cleanName);
-            if (!absolutePath) {
-                vscode.window.showErrorMessage(errorMessages.noPath);
+            const resourcePath = await this.resolveResourcePathForTreeItem(config.targetItem, config.errorMessages);
+            if (!resourcePath) {
                 return;
             }
 
-            const isResourceFile = ResourceFileService.hasResourceMarker(hierarchicalName);
-            const finalPath =
-                isResourceFile && !absolutePath.endsWith(".resource") ? `${absolutePath}.resource` : absolutePath;
+            const resourcePathExists = await this.resourceFileService.pathExists(resourcePath.finalPath);
 
-            const exists = await this.resourceFileService.pathExists(finalPath);
-
-            if (!exists) {
-                if (!createMissing) {
-                    vscode.window.showWarningMessage(
-                        isResourceFile ? errorMessages.fileNotFound : errorMessages.folderNotFound
-                    );
-                    return;
-                }
-
-                const uid = targetItem.data.uniqueID;
-                if (isResourceFile && !uid) {
-                    vscode.window.showErrorMessage(errorMessages.noUid.replace("{label}", targetItem.label as string));
-                    return;
-                }
-
-                if (isResourceFile) {
-                    let context = "";
-                    if (this.currentProjectName && this.currentTovName) {
-                        context = `tb:context:${this.currentProjectName}/${this.currentTovName}\n`;
-                    }
-                    const content = `tb:uid:${uid}\n${context}\n`;
-                    await this.resourceFileService.ensureFileExists(finalPath, content);
-                    const uri = vscode.Uri.file(finalPath);
-                    vscode.commands.executeCommand("testbench_ls.pullSubdivision", uri.toString(), uid, false);
-                } else {
-                    try {
-                        await this.resourceFileService.ensureFolderPathExists(finalPath);
-                    } catch (error) {
-                        vscode.window.showErrorMessage(
-                            `Failed to create folder: ${error instanceof Error ? error.message : "Unknown error"}`
-                        );
-                        return;
-                    }
-                }
-
-                targetItem.updateLocalAvailability(true, finalPath);
-                await this.updateParentIcons(targetItem);
-                this.refreshItemWithParents(targetItem);
-            }
-
-            if (operationType === "keyword" && keywordItem) {
-                await this.openFileAndJumpToKeyword(
-                    finalPath,
-                    keywordItem.data.originalName,
-                    keywordItem.data.uniqueID
+            if (!resourcePathExists) {
+                const createdResource = await this.handleMissingResource(
+                    resourcePath,
+                    config.targetItem,
+                    config.createMissing,
+                    config.errorMessages
                 );
-            } else if (operationType !== "folder") {
-                await this.openFileInVSCodeEditor(finalPath);
+                if (!createdResource) {
+                    return;
+                }
             }
 
-            if (revealInExplorer) {
-                await this.revealFileInVSCodeExplorer(finalPath);
-            }
-        } catch (error) {
-            this.logger.error(`[TestElementsTreeView] Error during resource operation '${operationType}':`, error);
-            vscode.window.showErrorMessage(
-                `Operation failed: ${error instanceof Error ? error.message : "Unknown error"}`
+            await this.executeResourceOperation(
+                config.operationType,
+                resourcePath.finalPath,
+                config.keywordItem,
+                config.revealInExplorer
             );
+        } catch (error) {
+            this.handleResourceOperationError(config.operationType, error);
         }
+    }
+
+    /**
+     * Ensures the language server is running and ready for resource operations.
+     * @throws Error if language server configuration is missing
+     */
+    private async ensureLanguageServerReady(): Promise<void> {
+        if (isLanguageServerRunning()) {
+            return;
+        }
+
+        const cfgExists = await hasLsConfig();
+        if (!cfgExists) {
+            vscode.window.showWarningMessage(
+                "Language server is not available because no project configuration was found (.testbench/ls.config.json). Create it first."
+            );
+            throw new Error("Language server configuration missing");
+        }
+
+        await updateOrRestartLS();
+        await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: "Waiting for Language Server",
+                cancellable: true
+            },
+            async (progress, cancellationToken) => {
+                progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
+                await waitForLanguageServerReady(30000, 100, cancellationToken);
+            }
+        );
+    }
+
+    /**
+     * Resolves and validates the resource path for a given tree item.
+     * @param targetItem The tree item to resolve the path for
+     * @param errorMessages Error messages to display if resolution fails
+     * @returns Resolved resource path information or null if resolution fails
+     */
+    private async resolveResourcePathForTreeItem(
+        targetItem: TestElementsTreeItem,
+        errorMessages: ResourceOperationConfig["errorMessages"]
+    ): Promise<{ finalPath: string; isResourceFile: boolean } | null> {
+        const hierarchicalName = targetItem.data.hierarchicalName;
+        if (!hierarchicalName) {
+            vscode.window.showErrorMessage(errorMessages.noHierarchicalName);
+            return null;
+        }
+
+        const cleanName = this.removeResourceMarkersFromHierarchicalName(hierarchicalName).trim();
+        const absolutePath = await this.resourceFileService.constructAbsolutePath(cleanName);
+        if (!absolutePath) {
+            vscode.window.showErrorMessage(errorMessages.noPath);
+            return null;
+        }
+
+        const isResourceFile = ResourceFileService.hasResourceMarker(hierarchicalName);
+        const finalPath =
+            isResourceFile && !absolutePath.endsWith(".resource") ? `${absolutePath}.resource` : absolutePath;
+
+        return { finalPath, isResourceFile };
+    }
+
+    /**
+     * Handles the creation of missing resources (files or folders).
+     * @param resourcePath The resolved resource path information
+     * @param targetItem The tree item representing the resource
+     * @param createMissing Whether to create the missing resource
+     * @param errorMessages Error messages to display
+     * @returns True if the resource was created or creation was not needed, false otherwise
+     */
+    private async handleMissingResource(
+        resourcePath: { finalPath: string; isResourceFile: boolean },
+        targetItem: TestElementsTreeItem,
+        createMissing: boolean,
+        errorMessages: ResourceOperationConfig["errorMessages"]
+    ): Promise<boolean> {
+        if (!createMissing) {
+            vscode.window.showWarningMessage(
+                resourcePath.isResourceFile ? errorMessages.fileNotFound : errorMessages.folderNotFound
+            );
+            return false;
+        }
+
+        if (resourcePath.isResourceFile) {
+            const created = await this.createResourceFile(resourcePath.finalPath, targetItem, errorMessages);
+            if (!created) {
+                return false;
+            }
+        } else {
+            const created = await this.createResourceFolder(resourcePath.finalPath);
+            if (!created) {
+                return false;
+            }
+        }
+
+        targetItem.updateLocalAvailability(true, resourcePath.finalPath);
+        await this.updateParentIcons(targetItem);
+        await this.markParentSubdivisions(targetItem);
+        this.refreshItemWithParents(targetItem);
+
+        return true;
+    }
+
+    /**
+     * Creates a resource file with appropriate metadata.
+     * @param filePath The path where the resource file should be created
+     * @param targetItem The tree item representing the resource
+     * @param errorMessages Error messages to display if creation fails
+     * @returns True if the file was created successfully, false otherwise
+     */
+    private async createResourceFile(
+        filePath: string,
+        targetItem: TestElementsTreeItem,
+        errorMessages: ResourceOperationConfig["errorMessages"]
+    ): Promise<boolean> {
+        const uid = targetItem.data.uniqueID;
+        if (!uid) {
+            vscode.window.showErrorMessage(errorMessages.noUid.replace("{label}", targetItem.label as string));
+            return false;
+        }
+
+        const context = this.buildContextMetadata();
+        const content = `tb:uid:${uid}\n${context}\n`;
+
+        await this.resourceFileService.ensureFileExists(filePath, content);
+
+        const uri = vscode.Uri.file(filePath);
+        vscode.commands.executeCommand("testbench_ls.pullSubdivision", uri.toString(), uid, false);
+
+        return true;
+    }
+
+    /**
+     * Creates a resource folder.
+     * @param folderPath The path where the folder should be created
+     * @returns True if the folder was created successfully, false otherwise
+     */
+    private async createResourceFolder(folderPath: string): Promise<boolean> {
+        try {
+            await this.resourceFileService.ensureFolderPathExists(folderPath);
+            return true;
+        } catch (error) {
+            vscode.window.showErrorMessage(
+                `Failed to create folder: ${error instanceof Error ? error.message : "Unknown error"}`
+            );
+            return false;
+        }
+    }
+
+    /**
+     * Builds context metadata string for resource file content.
+     * @returns Context metadata string or empty string if context is not available
+     */
+    private buildContextMetadata(): string {
+        if (this.currentProjectName && this.currentTovName) {
+            return `tb:context:${this.currentProjectName}/${this.currentTovName}\n`;
+        }
+        return "";
+    }
+
+    /**
+     * Executes the requested resource operation (open file, jump to keyword, reveal in explorer).
+     * @param operationType The type of operation to perform
+     * @param resourcePath The path to the resource
+     * @param keywordItem Optional keyword item for keyword jump operations
+     * @param revealInExplorer Whether to reveal the resource in VS Code explorer
+     */
+    private async executeResourceOperation(
+        operationType: ResourceOperationConfig["operationType"],
+        resourcePath: string,
+        keywordItem?: TestElementsTreeItem,
+        revealInExplorer?: boolean
+    ): Promise<void> {
+        if (operationType === "keyword" && keywordItem) {
+            await this.openFileAndJumpToKeyword(resourcePath, keywordItem.data.originalName, keywordItem.data.uniqueID);
+        } else if (operationType !== "folder") {
+            await this.openFileInVSCodeEditor(resourcePath);
+        }
+
+        if (revealInExplorer) {
+            await this.revealFileInVSCodeExplorer(resourcePath);
+        }
+    }
+
+    /**
+     * Handles errors that occur during resource operations.
+     * @param operationType The type of operation that failed
+     * @param error The error that occurred
+     */
+    private handleResourceOperationError(operationType: string, error: unknown): void {
+        this.logger.error(`[TestElementsTreeView] Error during resource operation '${operationType}':`, error);
+        vscode.window.showErrorMessage(`Operation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
 
     /**
@@ -392,7 +554,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             (this as any).updateTreeViewMessage();
 
             this._onDidChangeTreeData.fire(undefined);
-            this.updateSubdivisionIcons(newRootItems);
+            // Only check visible items initially
+            await this.updateSubdivisionIcons(newRootItems, true);
 
             const loadTime = Date.now() - startTime;
             this.logger.debug(
@@ -447,9 +610,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             if (clearFirst || this.currentTovKey !== tovKey) {
                 // Preserve UI state (expansion, marking, etc.) during data reload
                 this.clearTreeDataOnly();
+                // Only clear cache when TOV actually changes
+                this.dataProvider.clearCache(tovKey);
             }
-
-            this.dataProvider.clearCache(tovKey); // Only clear cache for this specific TOV
 
             this.currentTovKey = tovKey;
             this.currentTovLabel = tovLabel || null;
@@ -476,7 +639,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
             this.rootItems = fetchedHierarchicalTestElements.map((element) => this._buildTreeItems(element));
 
-            await this.updateSubdivisionIcons(this.rootItems);
+            // Only check icons for visible/expanded items initially for better performance
+            // Remaining items will be checked when expanded
+            await this.updateSubdivisionIcons(this.rootItems, true);
 
             // Set the last data fetch timestamp to prevent infinite loading
             // This is important even for empty results to prevent the tree from continuously trying to load data
@@ -571,8 +736,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this.rootItems = rootTestElementItems;
             (this as any)._lastDataFetch = Date.now();
 
-            // Async icon updates to avoid blocking UI
-            this.updateSubdivisionIcons(rootTestElementItems).then(() => {
+            // Async icon updates for visible items only
+            this.updateSubdivisionIcons(rootTestElementItems, true).then(() => {
                 this._onDidChangeTreeData.fire(undefined);
             });
 
@@ -586,9 +751,10 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     /**
      * Updates all subdivision icons by checking for their existence on the local file system
      * @param items Array of tree items to process
+     * @param onlyVisible If true, only checks visible/expanded items to save performance
      * @returns Promise that resolves when all icon updates are complete
      */
-    private async updateSubdivisionIcons(items: TestElementsTreeItem[]): Promise<void> {
+    private async updateSubdivisionIcons(items: TestElementsTreeItem[], onlyVisible: boolean = false): Promise<void> {
         // The python regex processing is done in language server via testbench_ls.get_resource_directory_subdivision_index command.
         // Language server initialization should be awaited here to prevent error logs caused by this command call.
         if (!isLanguageServerRunning()) {
@@ -606,47 +772,152 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         }
 
         const subdivisionItems: TestElementsTreeItem[] = [];
-        const collectSubdivisions = (currentItems: TestElementsTreeItem[]) => {
+        const collectSubdivisions = (currentItems: TestElementsTreeItem[], checkExpanded: boolean) => {
             for (const item of currentItems) {
                 if (item.data.testElementType === TestElementType.Subdivision) {
-                    subdivisionItems.push(item);
+                    if (!checkExpanded || item.collapsibleState === vscode.TreeItemCollapsibleState.Expanded) {
+                        subdivisionItems.push(item);
+                    }
                 }
-                if (item.children) {
-                    collectSubdivisions(item.children as TestElementsTreeItem[]);
+                if (
+                    item.children &&
+                    (!checkExpanded || item.collapsibleState === vscode.TreeItemCollapsibleState.Expanded)
+                ) {
+                    collectSubdivisions(item.children as TestElementsTreeItem[], checkExpanded);
                 }
             }
         };
-        collectSubdivisions(items);
+        collectSubdivisions(items, onlyVisible);
 
-        // Process file checks in parallel for all subdivisions.
-        await Promise.all(
-            subdivisionItems.map(async (item) => {
-                try {
-                    if (item.data.isVirtual) {
-                        return;
-                    }
-                    const hierarchicalName = item.data.hierarchicalName;
-                    if (hierarchicalName) {
-                        const isResourceFile = ResourceFileService.hasResourceMarker(hierarchicalName);
-                        const cleanName = this.removeResourceMarkersFromHierarchicalName(hierarchicalName).trim();
-                        let resourcePath = await this.resourceFileService.constructAbsolutePath(cleanName);
-
-                        if (resourcePath) {
-                            if (isResourceFile && !resourcePath.endsWith(".resource")) {
-                                resourcePath += ".resource";
-                            }
-                            const exists = await this.resourceFileService.pathExists(resourcePath);
-                            item.updateLocalAvailability(exists, resourcePath);
+        // Process file checks in batches to yield to UI thread
+        const BATCH_SIZE = 20;
+        for (let i = 0; i < subdivisionItems.length; i += BATCH_SIZE) {
+            const batch = subdivisionItems.slice(i, i + BATCH_SIZE);
+            await Promise.all(
+                batch.map(async (subdivisionItem) => {
+                    try {
+                        if (subdivisionItem.data.isVirtual) {
+                            return;
                         }
+                        const hierarchicalName = subdivisionItem.data.hierarchicalName;
+                        if (hierarchicalName) {
+                            const isResourceFile = ResourceFileService.hasResourceMarker(hierarchicalName);
+                            const cleanName = this.removeResourceMarkersFromHierarchicalName(hierarchicalName).trim();
+                            let resourcePath = await this.resourceFileService.constructAbsolutePath(cleanName);
+
+                            if (resourcePath) {
+                                if (isResourceFile && !resourcePath.endsWith(".resource")) {
+                                    resourcePath += ".resource";
+                                }
+                                const resourcePathExists = await this.resourceFileService.pathExists(resourcePath);
+                                subdivisionItem.updateLocalAvailability(resourcePathExists, resourcePath);
+
+                                if (resourcePathExists) {
+                                    await this.markParentSubdivisions(subdivisionItem);
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        this.logger.error(
+                            `[TestElementsTreeView] Error updating subdivision icon for tree item ${subdivisionItem.label}:`,
+                            error
+                        );
                     }
-                } catch (error) {
-                    this.logger.error(
-                        `[TestElementsTreeView] Error updating subdivision icon for tree item ${item.label}:`,
-                        error
+                })
+            );
+            // Yield to UI thread between batches to keep UI responsive
+            if (i + BATCH_SIZE < subdivisionItems.length) {
+                await new Promise((resolve) => setImmediate(resolve));
+            }
+        }
+    }
+
+    /**
+     * Checks if a subdivision item has any locally available child resources.
+     * This recursively checks all descendants to see if any resource files exist.
+     * @param item The subdivision item to check
+     * @returns True if any child resources exist locally, false otherwise
+     */
+    private async hasAnyLocalChildResources(item: TestElementsTreeItem): Promise<boolean> {
+        if (item.data.isLocallyAvailable) {
+            return true;
+        }
+
+        if (item.children && item.children.length > 0) {
+            for (const child of item.children as TestElementsTreeItem[]) {
+                if (child.data.testElementType === TestElementType.Subdivision) {
+                    const hasLocal = await this.hasAnyLocalChildResources(child);
+                    if (hasLocal) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Marks parent subdivision items to indicate they have locally available child resources.
+     * This is called when a resource is created to visually mark the parent hierarchy.
+     * @param item The tree item whose parents should be marked
+     */
+    private async markParentSubdivisions(item: TestElementsTreeItem): Promise<void> {
+        if (!ENABLE_PARENT_MARKING) {
+            return;
+        }
+
+        try {
+            let parent = item.parent as TestElementsTreeItem | null;
+            while (parent) {
+                if (parent.data.testElementType === TestElementType.Subdivision) {
+                    parent.hasLocalChildren = true;
+                    this.logger.trace(
+                        `[TestElementsTreeView] Marked parent subdivision '${parent.label}' as having local children`
                     );
                 }
-            })
-        );
+                parent = parent.parent as TestElementsTreeItem | null;
+            }
+        } catch (error) {
+            this.logger.error(
+                `[TestElementsTreeView] Error marking parent subdivisions for item ${item.label}:`,
+                error
+            );
+        }
+    }
+
+    /**
+     * Unmarks parent subdivision items if they no longer have any locally available child resources.
+     * This is called when a resource is deleted to update the parent hierarchy marking.
+     * @param item The tree item whose parents should be checked and potentially unmarked
+     */
+    private async unmarkParentSubdivisionsIfNeeded(item: TestElementsTreeItem): Promise<void> {
+        if (!ENABLE_PARENT_MARKING) {
+            return;
+        }
+
+        try {
+            let parent = item.parent as TestElementsTreeItem | null;
+            while (parent) {
+                if (parent.data.testElementType === TestElementType.Subdivision) {
+                    // Check if this parent still has any local child resources
+                    const hasLocalChildren = await this.hasAnyLocalChildResources(parent);
+                    parent.hasLocalChildren = hasLocalChildren;
+
+                    if (!hasLocalChildren) {
+                        this.logger.trace(
+                            `[TestElementsTreeView] Unmarked parent subdivision '${parent.label}' - no local children remaining`
+                        );
+                    }
+                }
+                parent = parent.parent as TestElementsTreeItem | null;
+            }
+        } catch (error) {
+            this.logger.error(
+                `[TestElementsTreeView] Error unmarking parent subdivisions for item ${item.label}:`,
+                error
+            );
+        }
     }
 
     /**
@@ -719,7 +990,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @returns The created tree item
      */
     protected createTreeItem(data: TestElementData, parent?: TestElementsTreeItem): TestElementsTreeItem {
-        const testElementType = this.convertToTestElementTypeEnum(data.testElementType);
+        const testElementType = data.testElementType;
 
         // Convert TestElementData to the extended TestElementItemData
         const itemData: TestElementItemData = {
@@ -874,9 +1145,14 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         let textDocument: vscode.TextDocument;
         let textEditor: vscode.TextEditor;
 
+        this.logger.trace(
+            `[TestElementsTreeView] openFileAndJumpToKeyword called: resourcePath=${resourcePath}, keywordName=${keywordName}, uid=${uid}`
+        );
+
         try {
             textDocument = await vscode.workspace.openTextDocument(resourcePath);
             textEditor = await vscode.window.showTextDocument(textDocument);
+            this.logger.debug(`[TestElementsTreeView] Successfully opened resource file: ${resourcePath}`);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             this.logger.error(
@@ -889,9 +1165,16 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         try {
             const keywordLineNumber = await findKeywordPositionInResourceFile(textDocument.uri, keywordName, uid);
             if (keywordLineNumber !== undefined) {
+                this.logger.trace(
+                    `[TestElementsTreeView] Found keyword at line ${keywordLineNumber}, positioning cursor`
+                );
                 const position = new vscode.Position(keywordLineNumber, 0);
                 textEditor.selection = new vscode.Selection(position, position);
                 textEditor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+            } else {
+                this.logger.warn(
+                    `[TestElementsTreeView] Keyword '${keywordName}' with UID ${uid} not found in resource file ${resourcePath}`
+                );
             }
         } catch (positioningError) {
             const errorMessage = positioningError instanceof Error ? positioningError.message : "Unknown error";
@@ -1032,12 +1315,15 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param item The keyword tree item that was single clicked
      */
     private async handleKeywordSingleClick(item: TestElementsTreeItem): Promise<void> {
+        this.logger.debug(
+            `[TestElementsTreeView] handleKeywordSingleClick called for keyword: ${item.label}, type: ${item.data.testElementType}, uid: ${item.data.uniqueID}`
+        );
         const parentResource = item.parent as TestElementsTreeItem;
         if (!parentResource) {
+            this.logger.error(`[TestElementsTreeView] Could not find parent resource for keyword ${item.label}`);
             vscode.window.showErrorMessage(`Could not find the parent resource for keyword ${item.label}`);
             return;
         }
-
         await this._handleResourceOperation({
             operationType: "keyword",
             createMissing: false,
@@ -1071,7 +1357,11 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param item The keyword item that was clicked
      */
     public async handleKeywordClick(item: TestElementsTreeItem): Promise<void> {
+        this.logger.debug(
+            `[TestElementsTreeView] handleKeywordClick called for item: ${item.label}, type: ${item.data.testElementType}, id: ${item.id}, uid: ${item.data.uniqueID}`
+        );
         if (!item.id) {
+            this.logger.warn(`[TestElementsTreeView] handleKeywordClick called for item without ID: ${item.label}`);
             return;
         }
 
@@ -1101,13 +1391,20 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param item Optional specific item to refresh
      * @param options Optional refresh options
      */
-    public override refresh(item?: TestElementsTreeItem, options?: { immediate?: boolean }): void {
+    public override refresh(item?: TestElementsTreeItem, options?: RefreshOptions): void {
         this.logger.debug(
             `[TestElementsTreeView] Refreshing test elements tree view${item ? ` for tree item: ${item.label}` : ""}`
         );
 
         if (item) {
             super.refresh(item, options);
+            return;
+        }
+
+        // If skipDataReload is true (e.g., when filtering/searching), delegate to parent
+        // to avoid fetching data from server and just update the UI
+        if (options?.skipDataReload) {
+            super.refresh(undefined, options);
             return;
         }
 

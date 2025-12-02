@@ -55,7 +55,8 @@ suite("MarkingModule", () => {
             label: "Test Item",
             originalContextValue: "TestThemeNode",
             setMetadata: () => {},
-            getMetadata: () => undefined
+            getMetadata: () => undefined,
+            updateContextValue: () => {}
         } as any;
     });
 
@@ -66,9 +67,14 @@ suite("MarkingModule", () => {
     test("should respect showImportButton configuration when applying import marking", async () => {
         // Initialize the module
         await markingModule.initialize(mockContext);
+        markingModule.setContextResolver(() => ({ projectKey: "project1", cycleKey: "cycle1", contextType: "cycle" }));
 
         // Mark an item for import
-        markingModule.markItem(mockItem, "project1", "cycle1", "import");
+        markingModule.markItem(
+            mockItem,
+            { projectKey: "project1", cycleKey: "cycle1", contextType: "cycle" },
+            "import"
+        );
 
         // Test with showImportButton = true (should apply marking)
         if (mockContext.config.modules.marking) {
@@ -114,9 +120,14 @@ suite("MarkingModule", () => {
     test("should apply non-import marking regardless of showImportButton setting", async () => {
         // Initialize the module
         await markingModule.initialize(mockContext);
+        markingModule.setContextResolver(() => ({ projectKey: "project1", cycleKey: "cycle1", contextType: "cycle" }));
 
         // Mark an item for generation (not import)
-        markingModule.markItem(mockItem, "project1", "cycle1", "generation");
+        markingModule.markItem(
+            mockItem,
+            { projectKey: "project1", cycleKey: "cycle1", contextType: "cycle" },
+            "generation"
+        );
 
         // Test with showImportButton = false (should still apply generation marking)
         if (mockContext.config.modules.marking) {
@@ -149,7 +160,12 @@ suite("MarkingModule", () => {
 
     test("should emit global marking cleared event when clearing all markings", async () => {
         await markingModule.initialize(mockContext);
-        markingModule.markItem(mockItem, "project1", "cycle1", "import");
+        markingModule.setContextResolver(() => ({ projectKey: "project1", cycleKey: "cycle1", contextType: "cycle" }));
+        markingModule.markItem(
+            mockItem,
+            { projectKey: "project1", cycleKey: "cycle1", contextType: "cycle" },
+            "import"
+        );
 
         const emittedEvents: any[] = [];
         const originalEmit = mockContext.eventBus.emit;
@@ -171,7 +187,12 @@ suite("MarkingModule", () => {
 
     test("should not emit global marking cleared event when clearing all markings with emitGlobalEvent=false", async () => {
         await markingModule.initialize(mockContext);
-        markingModule.markItem(mockItem, "project1", "cycle1", "import");
+        markingModule.setContextResolver(() => ({ projectKey: "project1", cycleKey: "cycle1", contextType: "cycle" }));
+        markingModule.markItem(
+            mockItem,
+            { projectKey: "project1", cycleKey: "cycle1", contextType: "cycle" },
+            "import"
+        );
 
         const emittedEvents: any[] = [];
         const originalEmit = mockContext.eventBus.emit;

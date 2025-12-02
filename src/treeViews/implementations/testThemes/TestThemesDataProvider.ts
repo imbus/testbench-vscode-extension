@@ -201,6 +201,40 @@ export class TestThemesDataProvider {
     }
 
     /**
+     * Normalizes a locker value from the server
+     * The server can return locker as either:
+     * - null
+     * - a string (e.g., "-2")
+     * - an object with key and name properties (e.g., { key: "-2", name: "System" })
+     *
+     * @param locker The raw locker value from the server
+     * @return Normalized locker as string or null, or the object if it has the correct structure
+     */
+    private normalizeLocker(locker: any): string | { key: string; name: string } | null {
+        if (locker === null || locker === undefined) {
+            return null;
+        }
+
+        // If it's already a string, return it as is
+        if (typeof locker === "string") {
+            return locker;
+        }
+
+        // If it's an object with key and name properties, return it as is
+        // This allows the _isVisible method to handle it properly
+        if (typeof locker === "object" && locker.key !== undefined && locker.name !== undefined) {
+            return { key: String(locker.key), name: String(locker.name) };
+        }
+
+        // Fallback: try to extract the key property if it exists
+        if (typeof locker === "object" && locker.key !== undefined) {
+            return String(locker.key);
+        }
+
+        return null;
+    }
+
+    /**
      * Normalizes a single node within the test structure
      * @param node The raw node data
      * @return Normalized node object
@@ -217,12 +251,12 @@ export class TestThemesDataProvider {
             },
             spec: {
                 key: node.spec?.key || "",
-                locker: node.spec?.locker || null,
+                locker: this.normalizeLocker(node.spec?.locker),
                 status: node.spec?.status || "None"
             },
             aut: {
                 key: node.aut?.key || "",
-                locker: node.aut?.locker || null,
+                locker: this.normalizeLocker(node.aut?.locker),
                 status: node.aut?.status || "None"
             },
             exec: node.exec
@@ -231,7 +265,7 @@ export class TestThemesDataProvider {
                       execStatus: node.exec.execStatus || "None",
                       verdict: node.exec.verdict || "None",
                       key: node.exec.key || "",
-                      locker: node.exec.locker || null
+                      locker: this.normalizeLocker(node.exec.locker)
                   }
                 : null,
             filters: node.filters || [],
@@ -288,12 +322,12 @@ export class TestThemesDataProvider {
             },
             spec: {
                 key: item.spec?.key || "",
-                locker: item.spec?.locker || null,
+                locker: this.normalizeLocker(item.spec?.locker),
                 status: item.spec?.status || "None"
             },
             aut: {
                 key: item.aut?.key || "",
-                locker: item.aut?.locker || null,
+                locker: this.normalizeLocker(item.aut?.locker),
                 status: item.aut?.status || "None"
             },
             exec: item.exec
@@ -302,7 +336,7 @@ export class TestThemesDataProvider {
                       execStatus: item.exec.execStatus || "None",
                       verdict: item.exec.verdict || "None",
                       key: item.exec.key || "",
-                      locker: item.exec.locker || null
+                      locker: this.normalizeLocker(item.exec.locker)
                   }
                 : null,
             filters: item.filters || [],

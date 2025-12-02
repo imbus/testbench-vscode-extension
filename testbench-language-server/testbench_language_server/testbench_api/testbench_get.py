@@ -1,5 +1,5 @@
 from .legacy_model import TestElement
-from .model import InteractionDetails
+from .model import KeywordDetails
 from .model_utils import from_dict
 from .testbench_resource_connection import TestBenchResourceConnection
 
@@ -25,13 +25,13 @@ def get_test_element(tb_connection: TestBenchResourceConnection, uid: str) -> di
     )
 
 
-def get_interaction(
-    tb_connection: TestBenchResourceConnection, project_key: str, interaction_key: str
-) -> InteractionDetails:
+def get_tb_keyword(
+    tb_connection: TestBenchResourceConnection, project_key: str, keyword_key: str
+) -> KeywordDetails:
     return from_dict(
-        InteractionDetails,
+        KeywordDetails,
         tb_connection.connection.session.get(
-            f"{tb_connection.connection.server_url}projects/{project_key}/interactions/{interaction_key}/v1",
-            params={"projectKey": project_key, "interactionKey": interaction_key},
+            f"{tb_connection.connection.server_url}2/projects/{project_key}/keywords/{keyword_key}",
+            params={"projectKey": project_key, "keywordKey": keyword_key},
         ).json(),
     )

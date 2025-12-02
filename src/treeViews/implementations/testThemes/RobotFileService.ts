@@ -22,6 +22,13 @@ export interface RobotFileInfo {
     duplicateFiles?: string[];
 }
 
+export interface FolderInfo {
+    exists: boolean;
+    folderPath?: string;
+    folderName?: string;
+    duplicateFolders?: string[];
+}
+
 export class RobotFileService {
     constructor(private readonly logger: TestBenchLogger) {}
 
@@ -343,5 +350,131 @@ export class RobotFileService {
             this.logger.error("[RobotFileService] Error showing duplicate file warning:", error);
             return undefined;
         }
+    }
+
+    /**
+     * Checks if a folder exists locally for a given test theme
+     * @param item The test theme tree item
+     * @returns Promise resolving to FolderInfo with existence status and folder path
+     */
+    public async checkFolderExists(item: TestThemesTreeItem): Promise<FolderInfo> {
+        try {
+            const workspaceLocation = await validateAndReturnWorkspaceLocation();
+            if (!workspaceLocation) {
+                this.logger.error(
+                    "[RobotFileService] Workspace location is not available while checking folder existence"
+                );
+                return { exists: false };
+            }
+
+            const generatedRobotFilesOutputDirectory = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
+            if (!generatedRobotFilesOutputDirectory) {
+                this.logger.warn(
+                    "[RobotFileService] Output directory is not configured while checking folder existence"
+                );
+                return { exists: false };
+            }
+
+            const folderName = this.generateFolderName(item.data.base.name, item.data.base.numbering);
+            const generationOutputPath = path.join(workspaceLocation, generatedRobotFilesOutputDirectory);
+            const foundFoldersInOutputPath = await this.findAllFolders(generationOutputPath, folderName);
+
+            if (foundFoldersInOutputPath.length === 0) {
+                return {
+                    exists: false,
+                    folderName: folderName
+                };
+            }
+
+            if (foundFoldersInOutputPath.length === 1) {
+                this.logger.trace(
+                    `[RobotFileService] Found folder for test theme "${item.data.base.name}": ${foundFoldersInOutputPath[0]}`
+                );
+                return {
+                    exists: true,
+                    folderPath: foundFoldersInOutputPath[0],
+                    folderName: folderName
+                };
+            }
+
+            // Multiple folders found, nested folder structure, use the first one found
+            this.logger.trace(
+                `[RobotFileService] Found ${foundFoldersInOutputPath.length} folders for test theme "${item.data.base.name}", using first match`
+            );
+            return {
+                exists: true,
+                folderPath: foundFoldersInOutputPath[0],
+                folderName: folderName,
+                duplicateFolders: foundFoldersInOutputPath.slice(1)
+            };
+        } catch (error) {
+            this.logger.error(`[RobotFileService] Error checking folder existence:`, error);
+            return { exists: false };
+        }
+    }
+
+    /**
+     * Recursively finds all folders with the given name in the output directory
+     * @param searchPath The path to search in
+     * @param folderName The folder name to search for
+     * @returns Array of found folder paths
+     */
+    private async findAllFolders(searchPath: string, folderName: string): Promise<string[]> {
+        const foundFolders: string[] = [];
+        try {
+            const items = await fs.promises.readdir(searchPath, { withFileTypes: true });
+
+            for (const item of items) {
+                const fullPath = path.join(searchPath, item.name);
+
+                if (item.isDirectory()) {
+                    // Check if this directory matches the folder name
+                    if (item.name === folderName) {
+                        foundFolders.push(fullPath);
+                    }
+                    // Recursively search in subdirectories
+                    const subFolders = await this.findAllFolders(fullPath, folderName);
+                    foundFolders.push(...subFolders);
+                }
+            }
+        } catch (error: any) {
+            if (error.code === "ENOENT") {
+                // Directory doesn't exist, which is fine - return empty array
+                this.logger.trace(`[RobotFileService] Directory does not exist: ${searchPath}`);
+            } else {
+                this.logger.error(`[RobotFileService] Error reading directory ${searchPath}:`, error);
+            }
+        }
+
+        return foundFolders;
+    }
+
+    /**
+     * Generates a folder name based on the test theme name and numbering.
+     * Uses the same naming convention as testbench2robotframework:
+     * - Takes the last part of the numbering (after last dot) as prefix
+     * - Replaces invalid file path characters with underscores
+     * @param treeItemName The name of the test theme
+     * @param treeItemNumbering The numbering prefix for the tree item
+     * @returns The generated folder name
+     */
+    private generateFolderName(treeItemName: string, treeItemNumbering: string): string {
+        const lastNumberingPart = treeItemNumbering ? treeItemNumbering.split(".")?.pop() || treeItemNumbering : "";
+        const prefixOfFolderName = lastNumberingPart ? `${lastNumberingPart}_` : "";
+        // Characters to replace with underscore (same as for robot files):
+        // ["<", ">", ":", "\"", "/", "\\", "|", "?", "*", " "]
+        const normalizedName = treeItemName.replace(/[<>:"/\\|?*\s]/g, "_");
+
+        return `${prefixOfFolderName}${normalizedName}`;
+    }
+
+    /**
+     * Gets the folder path for a given test theme item
+     * @param item The test theme tree item
+     * @returns Promise resolving to the folder path or undefined if not found
+     */
+    public async getFolderPath(item: TestThemesTreeItem): Promise<string | undefined> {
+        const folderInfo = await this.checkFolderExists(item);
+        return folderInfo.exists ? folderInfo.folderPath : undefined;
     }
 }

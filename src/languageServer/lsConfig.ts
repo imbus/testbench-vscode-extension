@@ -212,8 +212,6 @@ export async function validateAndFixLsConfigInteractively(
  * Prompts the user to create `ls.config.json` when it is missing and a project/TOV context is known.
  * If the user selects "Create", the configuration is written using the provided context.
  *
- * This helper centralizes the repeated UX flow used across the extension.
- *
  * @param projectName The TestBench project name to set in the configuration
  * @param tovName The Test Object Version name to set in the configuration
  */
