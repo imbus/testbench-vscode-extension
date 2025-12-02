@@ -485,16 +485,14 @@ async function performAutomaticLogin(context: vscode.ExtensionContext): Promise<
     try {
         const storedConnections = await connectionManager.getConnections(context);
         if (storedConnections.length === 0) {
-            logger.debug(
-                "[extension] No stored connections found. Skipping automatic login and showing login webview."
-            );
+            logger.debug("[extension] No stored connections found. Skipping automatic login.");
             return;
         }
 
         // Check if last used connection exists
         const activeConnection = await connectionManager.getActiveConnection(context);
         if (!activeConnection) {
-            logger.debug("[extension] No active connection found. Skipping automatic login and showing login webview.");
+            logger.debug("[extension] No active connection found. Skipping automatic login.");
             return;
         }
 
