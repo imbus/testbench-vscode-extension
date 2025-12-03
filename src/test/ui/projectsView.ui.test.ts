@@ -4,11 +4,9 @@
  */
 
 import { expect } from "chai";
-import { VSBrowser, WebDriver, SideBarView, EditorView, TreeItem } from "vscode-extension-tester";
+import { SideBarView, TreeItem, WebDriver } from "vscode-extension-tester";
 import {
-    openTestBenchSidebar,
     applySlowMotion,
-    ensureLoggedIn,
     findTreeItemByLabel,
     expandTreeItemIfNeeded,
     waitForTreeItems,
@@ -16,13 +14,8 @@ import {
     clickNotificationButton,
     cleanupWorkspace
 } from "./testUtils";
-import {
-    isSlowMotionEnabled,
-    getSlowMotionDelay,
-    hasTestCredentials,
-    getTestData,
-    logTestDataConfig
-} from "./testConfig";
+import { getTestData, logTestDataConfig } from "./testConfig";
+import { TestContext, setupTestHooks } from "./testHooks";
 
 /**
  * Recursively expands all collapsible tree items in a tree section.
@@ -99,45 +92,23 @@ async function findProjectsSection(content: any): Promise<any | null> {
 }
 
 describe("Projects View UI Tests", function () {
-    let browser: VSBrowser;
-    let driver: WebDriver;
+    const ctx: TestContext = {} as TestContext;
 
     this.timeout(120000);
 
-    before(async function () {
-        browser = VSBrowser.instance;
-        driver = browser.driver;
-        await new EditorView().closeAllEditors();
+    // Setup shared test hooks (before, after, beforeEach, afterEach)
+    setupTestHooks(ctx, {
+        suiteName: "ProjectsView",
+        requiresLogin: true,
+        openSidebar: true
     });
 
-    after(async function () {
-        await new EditorView().closeAllEditors();
-    });
-
-    beforeEach(async function () {
-        if (isSlowMotionEnabled()) {
-            console.log(`[Slow Motion] Enabled with ${getSlowMotionDelay()}ms delay`);
-        } else {
-            console.log("[Slow Motion] Disabled");
-        }
-
-        await openTestBenchSidebar(driver);
-
-        // Ensure user is logged in before running Projects View tests
-        if (hasTestCredentials()) {
-            const loggedIn = await ensureLoggedIn(driver);
-            if (!loggedIn) {
-                console.log("[ProjectsView] Failed to login. Skipping tests.");
-                this.skip();
-            }
-        } else {
-            console.log("[ProjectsView] Test credentials not available. Skipping tests.");
-            this.skip();
-        }
-    });
+    // Convenience getters for driver (for use in tests)
+    const getDriver = () => ctx.driver;
 
     describe("Projects View Detection and Expansion", function () {
         it("should detect Projects view and expand all collapsible tree items", async function () {
+            const driver = getDriver();
             const sideBar = new SideBarView();
             const content = sideBar.getContent();
 
@@ -187,6 +158,7 @@ describe("Projects View UI Tests", function () {
         });
 
         it("should verify Projects view structure (Projects -> Versions -> Cycles)", async function () {
+            const driver = getDriver();
             const sideBar = new SideBarView();
             const content = sideBar.getContent();
 
@@ -254,6 +226,7 @@ describe("Projects View UI Tests", function () {
 
     describe("Cycle Configuration Notification", function () {
         it("should click cycle tree item and handle configuration notification", async function () {
+            const driver = getDriver();
             const testData = getTestData();
             logTestDataConfig();
 

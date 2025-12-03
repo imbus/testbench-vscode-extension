@@ -8,11 +8,10 @@
  */
 
 import { expect } from "chai";
-import { VSBrowser, WebDriver, SideBarView, EditorView, TextEditor } from "vscode-extension-tester";
+import { SideBarView, EditorView, TextEditor } from "vscode-extension-tester";
 import {
     openTestBenchSidebar,
     applySlowMotion,
-    ensureLoggedIn,
     findTreeItemByLabel,
     findTreeItemByLabelAtLevel,
     expandTreeItemIfNeeded,
@@ -36,54 +35,28 @@ import {
     deleteFromLineOnwards,
     ensureRefactorPreviewItemChecked
 } from "./testUtils";
-import {
-    isSlowMotionEnabled,
-    getSlowMotionDelay,
-    hasTestCredentials,
-    getTestData,
-    logTestDataConfig
-} from "./testConfig";
+import { getTestData, logTestDataConfig } from "./testConfig";
+import { TestContext, setupTestHooks } from "./testHooks";
 
 describe("Resource Creation Flow E2E Tests", function () {
-    let browser: VSBrowser;
-    let driver: WebDriver;
+    const ctx: TestContext = {} as TestContext;
 
     this.timeout(300000); // 5 minutes timeout for full flow
 
-    before(async function () {
-        browser = VSBrowser.instance;
-        driver = browser.driver;
-        await new EditorView().closeAllEditors();
+    // Setup shared test hooks (before, after, beforeEach, afterEach)
+    setupTestHooks(ctx, {
+        suiteName: "ResourceCreationFlow",
+        requiresLogin: true,
+        openSidebar: true,
+        timeout: 300000
     });
 
-    after(async function () {
-        await new EditorView().closeAllEditors();
-    });
-
-    beforeEach(async function () {
-        if (isSlowMotionEnabled()) {
-            console.log(`[Slow Motion] Enabled with ${getSlowMotionDelay()}ms delay`);
-        } else {
-            console.log("[Slow Motion] Disabled");
-        }
-
-        await openTestBenchSidebar(driver);
-
-        // Ensure user is logged in before running tests
-        if (hasTestCredentials()) {
-            const loggedIn = await ensureLoggedIn(driver);
-            if (!loggedIn) {
-                console.log("[ResourceCreationFlow] Failed to login. Skipping tests.");
-                this.skip();
-            }
-        } else {
-            console.log("[ResourceCreationFlow] Test credentials not available. Skipping tests.");
-            this.skip();
-        }
-    });
+    // Convenience getter for driver (for use in tests)
+    const getDriver = () => ctx.driver;
 
     describe("Complete Resource Creation Flow", function () {
         it("should complete full resource creation and synchronization flow", async function () {
+            const driver = getDriver();
             const testData = getTestData();
             logTestDataConfig();
 

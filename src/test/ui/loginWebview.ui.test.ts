@@ -4,7 +4,7 @@
  */
 
 import { expect } from "chai";
-import { VSBrowser, WebDriver, EditorView, By, until, SideBarView } from "vscode-extension-tester";
+import { WebDriver, By, until, SideBarView } from "vscode-extension-tester";
 import {
     handleAuthenticationModals,
     openTestBenchSidebar,
@@ -20,6 +20,7 @@ import {
     UITimeouts
 } from "./testUtils";
 import { getTestCredentials, hasTestCredentials } from "./testConfig";
+import { TestContext, createBeforeHook, createAfterHook, logSlowMotionStatus } from "./testHooks";
 
 /**
  * Wrapper function to execute test code within webview context with proper cleanup.
@@ -59,22 +60,18 @@ async function withWebviewContext(
 }
 
 describe("Login Webview - Connection Management Tests", function () {
-    let browser: VSBrowser;
-    let driver: WebDriver;
+    const ctx: TestContext = {} as TestContext;
 
     this.timeout(120000);
 
-    before(async function () {
-        browser = VSBrowser.instance;
-        driver = browser.driver;
-        await new EditorView().closeAllEditors();
-    });
+    before(createBeforeHook(ctx, { suiteName: "LoginWebview" }));
+    after(createAfterHook({ suiteName: "LoginWebview" }));
 
-    after(async function () {
-        await new EditorView().closeAllEditors();
-    });
-
+    // Custom beforeEach for login webview tests - requires logged OUT state
     beforeEach(async function () {
+        logSlowMotionStatus();
+
+        const driver = ctx.driver;
         await openTestBenchSidebar(driver);
         await attemptLogout(driver);
         await deleteAllConnections(driver);
@@ -99,8 +96,12 @@ describe("Login Webview - Connection Management Tests", function () {
         );
     });
 
+    // Convenience getter for driver (for use in tests)
+    const getDriver = () => ctx.driver;
+
     describe("View Structure", function () {
         it("should display login section when not connected", async function () {
+            const driver = getDriver();
             // Ensure we are in default content to interact with VS Code UI (Sidebar)
             await driver.switchTo().defaultContent();
 
@@ -125,7 +126,7 @@ describe("Login Webview - Connection Management Tests", function () {
 
         it("should have 'Store Password' checked by default", async function () {
             await withWebviewContext(
-                driver,
+                getDriver(),
                 async (driver) => {
                     const connectionPage = new ConnectionPage(driver);
                     await connectionPage.resetForm();
@@ -151,7 +152,7 @@ describe("Login Webview - Connection Management Tests", function () {
     describe("Form Validation", function () {
         it("should show validation error when required fields are missing", async function () {
             await withWebviewContext(
-                driver,
+                getDriver(),
                 async (driver) => {
                     const connectionPage = new ConnectionPage(driver);
                     await connectionPage.resetForm();
@@ -174,7 +175,7 @@ describe("Login Webview - Connection Management Tests", function () {
 
         it("should validate port number is numeric", async function () {
             await withWebviewContext(
-                driver,
+                getDriver(),
                 async (driver) => {
                     const connectionPage = new ConnectionPage(driver);
                     await connectionPage.resetForm();
@@ -212,7 +213,7 @@ describe("Login Webview - Connection Management Tests", function () {
     describe("Creating Connections", function () {
         it("should show validation error when required fields are missing (duplicate)", async function () {
             await withWebviewContext(
-                driver,
+                getDriver(),
                 async (driver) => {
                     const connectionPage = new ConnectionPage(driver);
                     await connectionPage.resetForm();
@@ -235,7 +236,7 @@ describe("Login Webview - Connection Management Tests", function () {
 
         it("should create a new connection with all fields", async function () {
             await withWebviewContext(
-                driver,
+                getDriver(),
                 async (driver) => {
                     const connectionPage = new ConnectionPage(driver);
                     const credentials = getTestCredentials();
@@ -279,7 +280,7 @@ describe("Login Webview - Connection Management Tests", function () {
 
         it("should create a connection without optional label", async function () {
             await withWebviewContext(
-                driver,
+                getDriver(),
                 async (driver) => {
                     const connectionPage = new ConnectionPage(driver);
                     const credentials = getTestCredentials();
@@ -313,7 +314,7 @@ describe("Login Webview - Connection Management Tests", function () {
     describe("Editing Connections", function () {
         it("should enter edit mode when edit button is clicked", async function () {
             await withWebviewContext(
-                driver,
+                getDriver(),
                 async (driver) => {
                     const connectionPage = new ConnectionPage(driver);
                     const credentials = getTestCredentials();
@@ -354,7 +355,7 @@ describe("Login Webview - Connection Management Tests", function () {
 
         it("should update connection when changes are saved", async function () {
             await withWebviewContext(
-                driver,
+                getDriver(),
                 async (driver) => {
                     const connectionPage = new ConnectionPage(driver);
                     const credentials = getTestCredentials();
@@ -410,7 +411,7 @@ describe("Login Webview - Connection Management Tests", function () {
 
         it("should cancel edit mode and reset form", async function () {
             await withWebviewContext(
-                driver,
+                getDriver(),
                 async (driver) => {
                     const connectionPage = new ConnectionPage(driver);
                     const credentials = getTestCredentials();
@@ -460,7 +461,7 @@ describe("Login Webview - Connection Management Tests", function () {
     describe("Removing Connections", function () {
         it("should delete a connection when delete button is clicked and confirmed", async function () {
             await withWebviewContext(
-                driver,
+                getDriver(),
                 async (driver) => {
                     const connectionPage = new ConnectionPage(driver);
                     const credentials = getTestCredentials();
@@ -515,7 +516,7 @@ describe("Login Webview - Connection Management Tests", function () {
     describe("Logging In", function () {
         it("should login with an existing connection", async function () {
             await withWebviewContext(
-                driver,
+                getDriver(),
                 async (driver) => {
                     const connectionPage = new ConnectionPage(driver);
                     const credentials = getTestCredentials();
@@ -554,7 +555,7 @@ describe("Login Webview - Connection Management Tests", function () {
     describe("Form State Management", function () {
         it("should disable other actions when editing a connection", async function () {
             await withWebviewContext(
-                driver,
+                getDriver(),
                 async (driver) => {
                     const connectionPage = new ConnectionPage(driver);
                     const credentials = getTestCredentials();
@@ -605,7 +606,7 @@ describe("Login Webview - Connection Management Tests", function () {
 
         it("should show correct button text in edit mode", async function () {
             await withWebviewContext(
-                driver,
+                getDriver(),
                 async (driver) => {
                     const connectionPage = new ConnectionPage(driver);
                     const credentials = getTestCredentials();
