@@ -1,18 +1,13 @@
 /**
  * @file src/test/ui/index.ts
- * @description Test loader for UI tests
+ * @description Test loader for UI tests.
  */
 
 import * as path from "path";
 import Mocha from "mocha";
 import { glob } from "glob";
-import { loadEnv } from "./testConfig";
-
-// Load environment variables from .env files if they exist
-// This allows using .env files for test credentials without hardcoding
-// Supports both .env and testBenchConnection.env files
-const projectRoot = path.resolve(__dirname, "../../../");
-loadEnv(projectRoot);
+// The loadEnv() function in testConfig.ts is called automatically on import
+import "./testConfig";
 
 export async function run(): Promise<void> {
     // Create the mocha test
