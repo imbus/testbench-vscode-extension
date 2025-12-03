@@ -966,72 +966,11 @@ export { ConnectionPage } from "./pages/ConnectionPage";
 export type { ConnectionFormData, ConnectionSearchResult } from "./pages/ConnectionPage";
 
 /**
- * Fills the connection form with the provided data.
- * Ensures fields are properly cleared before filling, especially to handle default values.
- *
- * @deprecated Use ConnectionPage.fillForm() instead. This is kept for backward compatibility.
- * @param driver - The WebDriver instance
- * @param formData - The connection form data to fill
- * @returns Promise<void>
- */
-export async function fillConnectionForm(
-    driver: WebDriver,
-    formData: import("./pages/ConnectionPage").ConnectionFormData
-): Promise<void> {
-    const { ConnectionPage } = await import("./pages/ConnectionPage");
-    const page = new ConnectionPage(driver);
-    await page.fillForm(formData);
-}
-
-/**
- * Finds a connection in the connections list by label or connection string.
- *
- * @deprecated Use ConnectionPage.findConnection() instead. This is kept for backward compatibility.
- * @param driver - The WebDriver instance
- * @param searchText - The text to search for (label or connection string)
- * @returns Promise<ConnectionSearchResult> - The search result with element and found flag
- */
-export async function findConnectionInList(
-    driver: WebDriver,
-    searchText: string
-): Promise<import("./pages/ConnectionPage").ConnectionSearchResult> {
-    const { ConnectionPage } = await import("./pages/ConnectionPage");
-    const page = new ConnectionPage(driver);
-    return await page.findConnection(searchText);
-}
-
-/**
- * Gets the current count of connections in the list.
- *
- * @deprecated Use ConnectionPage.getConnectionCount() instead. This is kept for backward compatibility.
- * @param driver - The WebDriver instance
- * @returns Promise<number> - The number of connections
- */
-export async function getConnectionCount(driver: WebDriver): Promise<number> {
-    const { ConnectionPage } = await import("./pages/ConnectionPage");
-    const page = new ConnectionPage(driver);
-    return await page.getConnectionCount();
-}
-
-/**
- * Gets all connection list items from the connections list.
- *
- * @deprecated Use ConnectionPage.getAllConnections() instead. This is kept for backward compatibility.
- * @param driver - The WebDriver instance
- * @returns Promise<WebElement[]> - Array of connection list item elements
- */
-export async function getAllConnections(driver: WebDriver): Promise<WebElement[]> {
-    const { ConnectionPage } = await import("./pages/ConnectionPage");
-    const page = new ConnectionPage(driver);
-    return await page.getAllConnections();
-}
-
-/**
  * Deletes all existing TestBench connections.
- * This is useful for cleaning up test state before running tests.
+ * A wrapper that handles webview switching before delegating to ConnectionPage.
+ * Use this function when you need to delete connections from outside the webview context.
  * Only works when the webview is available (user is not logged in).
  *
- * @deprecated Use ConnectionPage.deleteAllConnections() instead. This is kept for backward compatibility.
  * @param driver - The WebDriver instance
  * @returns Promise<number> - The number of connections that were deleted
  */
@@ -1068,84 +1007,6 @@ export async function deleteAllConnections(driver: WebDriver): Promise<number> {
         }
         return 0;
     }
-}
-
-/**
- * Clicks the save connection button and waits for the operation to complete.
- *
- * @deprecated Use ConnectionPage.save() instead. This is kept for backward compatibility.
- * @param driver - The WebDriver instance
- * @param waitForUpdate - Whether to wait for the connections list to update (default: true)
- * @param timeout - Maximum time to wait (default: 10000ms)
- * @returns Promise<void>
- */
-export async function saveConnection(
-    driver: WebDriver,
-    waitForUpdate: boolean = true,
-    timeout: number = UITimeouts.LONG
-): Promise<void> {
-    const { ConnectionPage } = await import("./pages/ConnectionPage");
-    const page = new ConnectionPage(driver);
-    await page.save(waitForUpdate, timeout);
-}
-
-/**
- * Creates a new connection using the provided form data.
- *
- * @deprecated Use ConnectionPage.createConnection() instead. This is kept for backward compatibility.
- * @param driver - The WebDriver instance
- * @param formData - The connection form data
- * @returns Promise<number> - The connection count after creation
- */
-export async function createConnection(
-    driver: WebDriver,
-    formData: import("./pages/ConnectionPage").ConnectionFormData
-): Promise<number> {
-    const { ConnectionPage } = await import("./pages/ConnectionPage");
-    const page = new ConnectionPage(driver);
-    return await page.createConnection(formData);
-}
-
-/**
- * Clicks the edit button for a connection found in the list.
- *
- * @deprecated Use ConnectionPage.clickEdit() instead. This is kept for backward compatibility.
- * @param driver - The WebDriver instance
- * @param connectionElement - The connection list item element
- * @returns Promise<void>
- */
-export async function clickEditConnection(driver: WebDriver, connectionElement: WebElement): Promise<void> {
-    const { ConnectionPage } = await import("./pages/ConnectionPage");
-    const page = new ConnectionPage(driver);
-    await page.clickEdit(connectionElement);
-}
-
-/**
- * Clicks the delete button for a connection found in the list.
- *
- * @deprecated Use ConnectionPage.clickDelete() instead. This is kept for backward compatibility.
- * @param driver - The WebDriver instance
- * @param connectionElement - The connection list item element
- * @returns Promise<void>
- */
-export async function clickDeleteConnection(driver: WebDriver, connectionElement: WebElement): Promise<void> {
-    const { ConnectionPage } = await import("./pages/ConnectionPage");
-    const page = new ConnectionPage(driver);
-    await page.clickDelete(connectionElement);
-}
-
-/**
- * Clicks the login button for a connection found in the list.
- *
- * @deprecated Use ConnectionPage.clickLogin() instead. This is kept for backward compatibility.
- * @param driver - The WebDriver instance
- * @param connectionElement - The connection list item element
- * @returns Promise<void>
- */
-export async function clickLoginConnection(driver: WebDriver, connectionElement: WebElement): Promise<void> {
-    const { ConnectionPage } = await import("./pages/ConnectionPage");
-    const page = new ConnectionPage(driver);
-    await page.clickLogin(connectionElement);
 }
 
 /**
@@ -1569,46 +1430,6 @@ export async function handleConfirmationDialog(
         }
         return false;
     }
-}
-
-/**
- * Gets the message text from the messages div.
- *
- * @deprecated Use ConnectionPage.getErrorMessage() instead. This is kept for backward compatibility.
- * @param driver - The WebDriver instance
- * @param timeout - Maximum time to wait for message (default: 5000ms)
- * @returns Promise<string> - The message text
- */
-export async function getMessageText(driver: WebDriver, timeout: number = UITimeouts.MEDIUM): Promise<string> {
-    const { ConnectionPage } = await import("./pages/ConnectionPage");
-    const page = new ConnectionPage(driver);
-    return await page.getErrorMessage(timeout);
-}
-
-/**
- * Resets the connection form to its initial state.
- *
- * @deprecated Use ConnectionPage.resetForm() instead. This is kept for backward compatibility.
- * @param driver - The WebDriver instance
- * @returns Promise<void>
- */
-export async function resetConnectionForm(driver: WebDriver): Promise<void> {
-    const { ConnectionPage } = await import("./pages/ConnectionPage");
-    const page = new ConnectionPage(driver);
-    await page.resetForm();
-}
-
-/**
- * Verifies that the form is in edit mode.
- *
- * @deprecated Use ConnectionPage.isEditMode() instead. This is kept for backward compatibility.
- * @param driver - The WebDriver instance
- * @returns Promise<boolean> - True if in edit mode, false otherwise
- */
-export async function isEditMode(driver: WebDriver): Promise<boolean> {
-    const { ConnectionPage } = await import("./pages/ConnectionPage");
-    const page = new ConnectionPage(driver);
-    return await page.isEditMode();
 }
 
 /**
