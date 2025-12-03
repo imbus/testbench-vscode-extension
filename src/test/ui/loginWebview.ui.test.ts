@@ -233,7 +233,8 @@ describe("Login Webview - Connection Management Tests", function () {
                     );
 
                     const { found } = await connectionPage.findConnection(connectionLabel);
-                    expect(found).to.be.true; // eslint-disable-line @typescript-eslint/no-unused-expressions
+                    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                    expect(found, `Connection '${connectionLabel}' should exist in the list after saving`).to.be.true;
                 },
                 true
             ).catch((error) => {
@@ -265,7 +266,11 @@ describe("Login Webview - Connection Management Tests", function () {
 
                     const expectedConnectionString = `${credentials.username}@${credentials.serverName}`;
                     const { found } = await connectionPage.findConnection(expectedConnectionString);
-                    expect(found).to.be.true; // eslint-disable-line @typescript-eslint/no-unused-expressions
+                    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                    expect(
+                        found,
+                        `Connection '${expectedConnectionString}' should exist in the list when created without label`
+                    ).to.be.true;
                 },
                 true
             ).catch((error) => {
@@ -297,17 +302,20 @@ describe("Login Webview - Connection Management Tests", function () {
                     await connectionPage.createConnection(formData);
 
                     const { element, found } = await connectionPage.findConnection(connectionLabel);
-                    expect(found).to.be.true; // eslint-disable-line @typescript-eslint/no-unused-expressions
+                    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                    expect(found, `Connection '${connectionLabel}' should exist before editing`).to.be.true;
 
                     if (found && element) {
                         await connectionPage.clickEdit(element);
 
                         const inEditMode = await connectionPage.isEditMode();
-                        expect(inEditMode).to.be.true; // eslint-disable-line @typescript-eslint/no-unused-expressions
+                        // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                        expect(inEditMode, "Form should be in edit mode after clicking edit button").to.be.true;
 
                         const cancelButton = await driver.findElement(By.id(ConnectionFormElements.CANCEL_EDIT_BUTTON));
                         const isDisplayed = await cancelButton.isDisplayed();
-                        expect(isDisplayed).to.be.true; // eslint-disable-line @typescript-eslint/no-unused-expressions
+                        // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                        expect(isDisplayed, "Cancel button should be visible in edit mode").to.be.true;
                     }
                 },
                 true
@@ -339,7 +347,8 @@ describe("Login Webview - Connection Management Tests", function () {
                     await connectionPage.createConnection(formData);
 
                     const { element, found } = await connectionPage.findConnection(originalLabel);
-                    expect(found).to.be.true; // eslint-disable-line @typescript-eslint/no-unused-expressions
+                    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                    expect(found, `Connection '${originalLabel}' should exist before updating`).to.be.true;
 
                     if (found && element) {
                         await connectionPage.clickEdit(element);
@@ -363,7 +372,8 @@ describe("Login Webview - Connection Management Tests", function () {
                         );
 
                         const { found: updatedFound } = await connectionPage.findConnection(updatedLabel);
-                        expect(updatedFound).to.be.true; // eslint-disable-line @typescript-eslint/no-unused-expressions
+                        // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                        expect(updatedFound, `Connection should have updated label '${updatedLabel}'`).to.be.true;
                     }
                 },
                 true
@@ -394,7 +404,8 @@ describe("Login Webview - Connection Management Tests", function () {
                     await connectionPage.createConnection(formData);
 
                     const { element, found } = await connectionPage.findConnection(connectionLabel);
-                    expect(found).to.be.true; // eslint-disable-line @typescript-eslint/no-unused-expressions
+                    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                    expect(found, `Connection '${connectionLabel}' should exist before testing cancel`).to.be.true;
 
                     if (found && element) {
                         await connectionPage.clickEdit(element);
@@ -411,7 +422,11 @@ describe("Login Webview - Connection Management Tests", function () {
                         expect(titleText).to.include("Add New Connection");
 
                         const { found: originalFound } = await connectionPage.findConnection(connectionLabel);
-                        expect(originalFound).to.be.true; // eslint-disable-line @typescript-eslint/no-unused-expressions
+                        // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                        expect(
+                            originalFound,
+                            `Original connection '${connectionLabel}' should still exist after canceling edit`
+                        ).to.be.true;
                     }
                 },
                 true
@@ -446,12 +461,14 @@ describe("Login Webview - Connection Management Tests", function () {
                     const initialCount = await connectionPage.getConnectionCount();
 
                     const { element, found } = await connectionPage.findConnection(connectionLabel);
-                    expect(found).to.be.true; // eslint-disable-line @typescript-eslint/no-unused-expressions
+                    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                    expect(found, `Connection '${connectionLabel}' should exist before deletion`).to.be.true;
 
                     if (found && element) {
                         // Use the high-level delete method that handles the dialog
                         const deleted = await connectionPage.deleteConnection(element);
-                        expect(deleted).to.be.true; // eslint-disable-line @typescript-eslint/no-unused-expressions
+                        // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                        expect(deleted, "Delete operation should complete successfully").to.be.true;
 
                         await driver.wait(
                             async () => {
@@ -466,7 +483,9 @@ describe("Login Webview - Connection Management Tests", function () {
                         expect(finalCount).to.be.lessThan(initialCount);
 
                         const { found: deletedFound } = await connectionPage.findConnection(connectionLabel);
-                        expect(deletedFound).to.be.false; // eslint-disable-line @typescript-eslint/no-unused-expressions
+                        // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                        expect(deletedFound, `Connection '${connectionLabel}' should not exist after deletion`).to.be
+                            .false;
                     }
                 },
                 true
@@ -499,7 +518,8 @@ describe("Login Webview - Connection Management Tests", function () {
                     await connectionPage.createConnection(formData);
 
                     const { element, found } = await connectionPage.findConnection(connectionLabel);
-                    expect(found).to.be.true; // eslint-disable-line @typescript-eslint/no-unused-expressions
+                    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                    expect(found, `Connection '${connectionLabel}' should exist before login attempt`).to.be.true;
 
                     if (found && element) {
                         await connectionPage.clickLogin(element);
@@ -548,7 +568,8 @@ describe("Login Webview - Connection Management Tests", function () {
                     await connectionPage.createConnection(formData2);
 
                     const { element, found } = await connectionPage.findConnection(connection1Label);
-                    expect(found).to.be.true; // eslint-disable-line @typescript-eslint/no-unused-expressions
+                    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                    expect(found, `First connection '${connection1Label}' should exist`).to.be.true;
 
                     if (found && element) {
                         await connectionPage.clickEdit(element);
@@ -557,7 +578,9 @@ describe("Login Webview - Connection Management Tests", function () {
                         if (connection2Element) {
                             const deleteButton = await connection2Element.findElement(By.css("button.delete-btn"));
                             const isDisabled = await deleteButton.getAttribute("disabled");
-                            expect(isDisabled).to.not.be.null; // eslint-disable-line @typescript-eslint/no-unused-expressions
+                            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                            expect(isDisabled, "Delete button on other connections should be disabled during edit mode")
+                                .to.not.be.null;
                         }
                     }
                 },
@@ -589,7 +612,9 @@ describe("Login Webview - Connection Management Tests", function () {
                     await connectionPage.createConnection(formData);
 
                     const { element, found } = await connectionPage.findConnection(connectionLabel);
-                    expect(found).to.be.true; // eslint-disable-line @typescript-eslint/no-unused-expressions
+                    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                    expect(found, `Connection '${connectionLabel}' should exist before checking button text`).to.be
+                        .true;
 
                     if (found && element) {
                         await connectionPage.clickEdit(element);

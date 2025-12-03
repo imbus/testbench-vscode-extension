@@ -39,7 +39,8 @@ async function expandAllTreeItems(items: TreeItem[], driver: WebDriver): Promise
 
                 // Verify it's expanded
                 const expanded = await item.isExpanded();
-                expect(expanded).to.be.true; // eslint-disable-line @typescript-eslint/no-unused-expressions
+                // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                expect(expanded, "Tree item should be expanded after calling expand()").to.be.true;
 
                 expandedCount++;
 
@@ -114,7 +115,8 @@ describe("Projects View UI Tests", function () {
 
             // Find the Projects section
             const projectsSection = await findProjectsSection(content);
-            expect(projectsSection).to.not.be.null; // eslint-disable-line @typescript-eslint/no-unused-expressions
+            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+            expect(projectsSection, "Projects section should be present in the sidebar").to.not.be.null;
 
             if (!projectsSection) {
                 console.log("[ProjectsView] Projects section not found in sidebar");
@@ -150,7 +152,9 @@ describe("Projects View UI Tests", function () {
                 const hasChildren = await item.hasChildren();
                 if (hasChildren) {
                     const isExpanded = await item.isExpanded();
-                    expect(isExpanded).to.be.true; // eslint-disable-line @typescript-eslint/no-unused-expressions
+                    const label = await item.getLabel();
+                    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                    expect(isExpanded, `Tree item '${label}' with children should be expanded`).to.be.true;
                 }
             }
 
@@ -209,9 +213,13 @@ describe("Projects View UI Tests", function () {
 
                         // Verify cycles are not collapsible
                         for (const cycle of cycles) {
-                            const hasChildren = await cycle.hasChildren();
-                            expect(hasChildren).to.be.false; // eslint-disable-line @typescript-eslint/no-unused-expressions
                             const cycleLabel = await cycle.getLabel();
+                            const hasChildren = await cycle.hasChildren();
+                            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                            expect(
+                                hasChildren,
+                                `Cycle '${cycleLabel}' should not have children (cycles are leaf nodes)`
+                            ).to.be.false;
                             console.log(`[ProjectsView] Cycle '${cycleLabel}' is not collapsible (as expected)`);
                         }
                     } else {
