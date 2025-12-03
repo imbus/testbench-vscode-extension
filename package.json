@@ -40,6 +40,7 @@
         ],
         "configuration": [
             {
+                "id": "login",
                 "title": "Login",
                 "properties": {
                     "testbenchExtension.automaticLoginAfterExtensionActivation": {
@@ -52,6 +53,7 @@
                 }
             },
             {
+                "id": "logger",
                 "title": "Logger",
                 "properties": {
                     "testbenchExtension.testbenchLogLevel": {
@@ -80,6 +82,7 @@
                 }
             },
             {
+                "id": "testbench2robotframework",
                 "title": "TestBench2RobotFramework",
                 "properties": {
                     "testbenchExtension.UseConfigurationFile": {
@@ -228,6 +231,7 @@
                 }
             },
             {
+                "id": "testGeneration",
                 "title": "Test Generation",
                 "properties": {
                     "testbenchExtension.clearInternalTestbenchDirectoryBeforeTestGeneration": {
@@ -247,6 +251,7 @@
                 }
             },
             {
+                "id": "connection",
                 "title": "Connection",
                 "properties": {
                     "testbenchExtension.certificatePath": {
