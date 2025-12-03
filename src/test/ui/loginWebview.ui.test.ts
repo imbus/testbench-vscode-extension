@@ -4,23 +4,20 @@
  */
 
 import { expect } from "chai";
-import { WebDriver, By, until, SideBarView } from "vscode-extension-tester";
+import { WebDriver, SideBarView, By } from "vscode-extension-tester";
 import {
     handleAuthenticationModals,
-    openTestBenchSidebar,
     findAndSwitchToWebview,
     isWebviewAvailable,
-    attemptLogout,
     generateUniqueConnectionLabel,
     applySlowMotion,
-    deleteAllConnections,
     ConnectionPage,
     ConnectionFormData,
     ConnectionFormElements,
     UITimeouts
 } from "./testUtils";
 import { getTestCredentials, hasTestCredentials } from "./testConfig";
-import { TestContext, createBeforeHook, createAfterHook, logSlowMotionStatus } from "./testHooks";
+import { TestContext, setupLoginWebviewTestHooks } from "./testHooks";
 
 /**
  * Wrapper function to execute test code within webview context with proper cleanup.
@@ -63,40 +60,10 @@ describe("Login Webview - Connection Management Tests", function () {
     const ctx: TestContext = {} as TestContext;
 
     this.timeout(120000);
-
-    before(createBeforeHook(ctx, { suiteName: "LoginWebview" }));
-    after(createAfterHook({ suiteName: "LoginWebview" }));
-
-    // Custom beforeEach for login webview tests - requires logged OUT state
-    beforeEach(async function () {
-        logSlowMotionStatus();
-
-        const driver = ctx.driver;
-        await openTestBenchSidebar(driver);
-        await attemptLogout(driver);
-        await deleteAllConnections(driver);
-        await driver.switchTo().defaultContent();
-
-        await driver.wait(
-            until.elementLocated(By.css(".monaco-workbench")),
-            UITimeouts.MEDIUM,
-            "Waiting for workbench to be ready"
-        );
-
-        await driver.wait(
-            async () => {
-                try {
-                    return await isWebviewAvailable(driver);
-                } catch {
-                    return false;
-                }
-            },
-            UITimeouts.MEDIUM,
-            "Waiting for webview to be available after cleanup"
-        );
+    setupLoginWebviewTestHooks(ctx, {
+        suiteName: "LoginWebview"
     });
 
-    // Convenience getter for driver (for use in tests)
     const getDriver = () => ctx.driver;
 
     describe("View Structure", function () {

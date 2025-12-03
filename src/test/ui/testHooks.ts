@@ -5,7 +5,7 @@
  */
 
 import { VSBrowser, WebDriver, EditorView } from "vscode-extension-tester";
-import { openTestBenchSidebar, ensureLoggedIn } from "./testUtils";
+import { openTestBenchSidebar, ensureLoggedIn, UITimeouts } from "./testUtils";
 import { isSlowMotionEnabled, getSlowMotionDelay, hasTestCredentials } from "./testConfig";
 
 /**
@@ -42,7 +42,7 @@ const DEFAULT_OPTIONS: Required<TestHooksOptions> = {
     openSidebar: true,
     closeEditors: true,
     logSlowMotion: true,
-    timeout: 120000,
+    timeout: UITimeouts.WORKSPACE_LOAD,
     suiteName: "UITest"
 };
 
@@ -207,13 +207,75 @@ export function setupTestHooks(context: TestContext, options: TestHooksOptions =
 }
 
 /**
+ * Options for configuring login webview test hooks.
+ */
+export interface LoginWebviewHooksOptions extends TestHooksOptions {
+    /** Custom beforeEach logic to run after standard cleanup (logout, delete connections) */
+    customBeforeEach?: (driver: WebDriver) => Promise<void>;
+}
+
+/**
+ * Creates a beforeEach hook specifically for login webview tests.
+ * These tests require the user to be logged OUT and all connections deleted.
+ *
+ * @param getDriver - Function that returns the WebDriver instance
+ * @param options - Hook configuration options
+ * @returns Async function suitable for Mocha's `beforeEach` hook
+ */
+export function createLoginWebviewBeforeEachHook(
+    getDriver: () => WebDriver,
+    options: LoginWebviewHooksOptions = {}
+): (this: Mocha.Context) => Promise<void> {
+    const opts = { ...DEFAULT_OPTIONS, ...options, suiteName: options.suiteName || "LoginWebview" };
+
+    return async function (this: Mocha.Context): Promise<void> {
+        const driver = getDriver();
+
+        if (opts.logSlowMotion) {
+            logSlowMotionStatus();
+        }
+
+        await openTestBenchSidebar(driver);
+        const { attemptLogout, deleteAllConnections, isWebviewAvailable } = await import("./testUtils");
+        await attemptLogout(driver);
+        await deleteAllConnections(driver);
+        await driver.switchTo().defaultContent();
+
+        // Wait for workbench to be ready
+        const { until, By } = await import("vscode-extension-tester");
+        await driver.wait(
+            until.elementLocated(By.css(".monaco-workbench")),
+            UITimeouts.MEDIUM,
+            "Waiting for workbench to be ready"
+        );
+
+        // Wait for webview to be available after cleanup
+        await driver.wait(
+            async () => {
+                try {
+                    return await isWebviewAvailable(driver);
+                } catch {
+                    return false;
+                }
+            },
+            UITimeouts.MEDIUM,
+            "Waiting for webview to be available after cleanup"
+        );
+
+        if (options.customBeforeEach) {
+            await options.customBeforeEach(driver);
+        }
+    };
+}
+
+/**
  * Sets up hooks for login webview tests (which have different requirements).
  * These tests need the user to be logged OUT, not logged in.
  *
  * @param context - Test context object to populate with browser/driver
  * @param options - Hook configuration options (requiresLogin is forced to false)
  */
-export function setupLoginWebviewTestHooks(context: TestContext, options: TestHooksOptions = {}): void {
+export function setupLoginWebviewTestHooks(context: TestContext, options: LoginWebviewHooksOptions = {}): void {
     const opts = {
         ...DEFAULT_OPTIONS,
         ...options,
@@ -223,6 +285,6 @@ export function setupLoginWebviewTestHooks(context: TestContext, options: TestHo
 
     before(createBeforeHook(context, opts));
     after(createAfterHook(opts));
-    // Note: loginWebview.ui.test.ts has custom beforeEach that handles logout
-    // Don't register a standard beforeEach here
+    beforeEach(createLoginWebviewBeforeEachHook(() => context.driver, opts));
+    afterEach(createAfterEachHook(() => context.driver, opts));
 }

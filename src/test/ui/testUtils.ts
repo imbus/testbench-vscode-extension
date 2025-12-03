@@ -131,10 +131,10 @@ export async function attemptLogout(driver: WebDriver): Promise<boolean> {
  * Handles authentication modal by clicking the "Allow" button if present.
  *
  * @param driver - The WebDriver instance
- * @param timeout - Maximum time to wait for the button (default: 5000ms)
+ * @param timeout - Maximum time to wait for the button (default: UITimeouts.MEDIUM)
  * @returns Promise<boolean> - True if button was found and clicked, false otherwise
  */
-export async function handleAllowButton(driver: WebDriver, timeout: number = 5000): Promise<boolean> {
+export async function handleAllowButton(driver: WebDriver, timeout: number = UITimeouts.MEDIUM): Promise<boolean> {
     try {
         // Wait for modal to appear and find Allow button
         const allowButtons = await driver.wait(async () => {
@@ -169,10 +169,13 @@ export async function handleAllowButton(driver: WebDriver, timeout: number = 500
  * Handles certificate warning modal by clicking the "Proceed Anyway" button if present.
  *
  * @param driver - The WebDriver instance
- * @param timeout - Maximum time to wait for the button (default: 5000ms)
+ * @param timeout - Maximum time to wait for the button (default: UITimeouts.MEDIUM)
  * @returns Promise<boolean> - True if button was found and clicked, false otherwise
  */
-export async function handleProceedAnywayButton(driver: WebDriver, timeout: number = 5000): Promise<boolean> {
+export async function handleProceedAnywayButton(
+    driver: WebDriver,
+    timeout: number = UITimeouts.MEDIUM
+): Promise<boolean> {
     try {
         console.log("Checking for certificate warning...");
         const proceedButtons = await driver.wait(async () => {
@@ -289,7 +292,7 @@ export async function ensureWorkspaceIsOpen(config: WorkspaceConfig = {}): Promi
     // Wait for the old workbench to become stale (reload started)
     if (oldWorkbench) {
         try {
-            await driver.wait(until.stalenessOf(oldWorkbench), 10000, "Waiting for VS Code reload to start");
+            await driver.wait(until.stalenessOf(oldWorkbench), UITimeouts.LONG, "Waiting for VS Code reload to start");
         } catch {
             console.log("[Workspace] Warning: Window reload detected via staleness timed out or was too fast.");
         }
@@ -304,14 +307,14 @@ export async function ensureWorkspaceIsOpen(config: WorkspaceConfig = {}): Promi
     // Using generic class selector which is more stable than ID
     await driver.wait(
         until.elementLocated(By.className("monaco-workbench")),
-        120000,
+        UITimeouts.WORKSPACE_LOAD,
         `Timeout waiting for workspace '${workspaceName}' to load`
     );
 
     try {
         await driver.wait(
             until.elementLocated(By.id("workbench.parts.statusbar")),
-            15000,
+            UITimeouts.VERY_LONG,
             "Waiting for status bar (UI ready)"
         );
     } catch {
@@ -353,7 +356,6 @@ export async function getCurrentWorkspacePath(driver: WebDriver): Promise<string
             }
         }
 
-        // Fallback
         const defaultWorkspace = path.join(projectRoot, TEST_PATHS.BASE_STORAGE, TEST_PATHS.WORKSPACE);
         if (fs.existsSync(defaultWorkspace)) {
             return defaultWorkspace;
@@ -528,7 +530,7 @@ export async function openTestBenchSidebar(driver?: WebDriver): Promise<void> {
                                         return false;
                                     }
                                 },
-                                10000,
+                                UITimeouts.LONG,
                                 "Waiting for TestBench sidebar to initialize",
                                 500
                             );
@@ -561,7 +563,7 @@ export async function openTestBenchSidebar(driver?: WebDriver): Promise<void> {
                 );
 
                 if (driver) {
-                    await driver.sleep(1000);
+                    await driver.sleep(UITimeouts.MINIMAL);
                 }
             } else {
                 throw new Error(
@@ -614,13 +616,13 @@ export async function isWebviewAvailable(_driver: WebDriver): Promise<boolean> {
  *
  * @param driver - The WebDriver instance
  * @param markAttribute - Optional attribute name to mark the iframe (default: 'data-test-webview')
- * @param timeout - Maximum time to wait for webview (default: 15000ms)
+ * @param timeout - Maximum time to wait for webview (default: UITimeouts.VERY_LONG)
  * @returns Promise<boolean> - True if webview was found and switched to, false otherwise
  */
 export async function findAndSwitchToWebview(
     driver: WebDriver,
     markAttribute: string = "data-test-webview",
-    timeout: number = 15000
+    timeout: number = UITimeouts.VERY_LONG
 ): Promise<boolean> {
     try {
         // Wait for webview to be available with a single attempt using proper waits
@@ -654,7 +656,7 @@ export async function findAndSwitchToWebview(
             },
             timeout,
             "Waiting for webview iframe",
-            1000
+            UITimeouts.MINIMAL
         );
 
         if (!iframeFound) {
@@ -692,9 +694,9 @@ export async function findAndSwitchToWebview(
             `)) as { loaded: boolean; hasForm?: boolean; hasServerField?: boolean; forms?: number; reason?: string };
                 return result.loaded;
             },
-            10000,
+            UITimeouts.LONG,
             "Waiting for content to load in active-frame",
-            1000
+            UITimeouts.MINIMAL
         );
 
         if (!contentLoaded) {
@@ -753,10 +755,12 @@ export const ConnectionFormElements = {
  * Delays are used for fixed sleep durations (driver.sleep).
  */
 export const UITimeouts = {
+    MINIMAL: 1000,
     SHORT: 2000,
     MEDIUM: 5000,
     LONG: 10000,
-    VERY_LONG: 15000
+    VERY_LONG: 15000,
+    WORKSPACE_LOAD: 120000
 } as const;
 
 /**
@@ -1052,7 +1056,7 @@ export async function handleConfirmationDialog(
                         return false;
                     }
                 },
-                2000,
+                UITimeouts.SHORT,
                 "Waiting for dialog to fully render"
             );
 
@@ -1141,7 +1145,7 @@ export async function handleConfirmationDialog(
                         );
                     }
 
-                    // Also try by aria-label
+                    // Try by aria-label
                     if (buttons.length === 0) {
                         buttons = await driver.findElements(By.xpath(`//button[@aria-label='${buttonText}']`));
                     }
@@ -1176,7 +1180,7 @@ export async function handleConfirmationDialog(
                         return false;
                     }
                 },
-                1000,
+                UITimeouts.MINIMAL,
                 "Waiting for button to be clickable"
             );
 
@@ -1293,7 +1297,6 @@ export async function handleConfirmationDialog(
                 "Waiting for dialog to be focused"
             );
 
-            // Press Enter to activate the primary button (Delete is highlighted/primary)
             await driver.actions().sendKeys(Key.ENTER).perform();
 
             // Wait for dialog to close
@@ -1621,7 +1624,6 @@ export async function ensureLoggedIn(
             return false;
         }
 
-        // Wait for connections list to be available
         try {
             await driver.wait(
                 until.elementLocated(By.id(ConnectionFormElements.CONNECTIONS_LIST)),
@@ -1776,9 +1778,8 @@ export async function getSectionTitle(section: any): Promise<string | null> {
  */
 export async function clickToolbarButton(section: any, buttonTitle: string, driver: WebDriver): Promise<boolean> {
     try {
-        // Get the toolbar actions
-        const actions = await section.getActions();
-        for (const action of actions) {
+        const toolbarActions = await section.getActions();
+        for (const action of toolbarActions) {
             const title = await action.getTitle();
             if (title.includes(buttonTitle)) {
                 await action.click();
@@ -1803,7 +1804,6 @@ export async function clickToolbarButton(section: any, buttonTitle: string, driv
  */
 export async function doubleClickTreeItem(item: TreeItem, driver: WebDriver): Promise<void> {
     try {
-        // Get the element and perform double-click
         const element = await item.findElement(By.css(".monaco-icon-name-container"));
         await driver.actions().doubleClick(element).perform();
         await applySlowMotion(driver);
@@ -1857,14 +1857,14 @@ export async function clickCodeLens(
                         if (await link.isDisplayed()) {
                             console.log(`[CodeLens] Found visible link for "${codeLensText}"`);
 
-                            // 2. Scroll into view (Center)
+                            // Scroll into view (Center)
                             await driver.executeScript(
                                 "arguments[0].scrollIntoView({block: 'center', inline: 'center'});",
                                 link
                             );
-                            await driver.sleep(200); // Stabilization pause
+                            await driver.sleep(200);
 
-                            // 3. Dispatch Full Mouse Event Chain
+                            // Dispatch Full Mouse Event Chain
                             // VS Code often listens for 'mousedown' or 'mouseup' on these widgets, not just 'click'
                             console.log(`[CodeLens] Dispatching MouseEvents (mousedown + click)...`);
                             await driver.executeScript(
@@ -2033,7 +2033,7 @@ export async function verifyRefactorPreviewCheckbox(
  */
 export async function ensureRefactorPreviewItemChecked(driver: WebDriver, fileName: string): Promise<boolean> {
     try {
-        const isChecked = await verifyRefactorPreviewCheckbox(driver, fileName, 2000);
+        const isChecked = await verifyRefactorPreviewCheckbox(driver, fileName, UITimeouts.SHORT);
         if (isChecked) {
             console.log(`[RefactorPreview] Item "${fileName}" is already checked.`);
             return true;
