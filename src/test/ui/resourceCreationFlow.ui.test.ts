@@ -126,6 +126,7 @@ describe("Resource Creation Flow E2E Tests", function () {
                 if (!projectsSectionUpdated) {
                     console.log("[Phase 2] Projects section not found");
                     this.skip();
+                    return;
                 }
 
                 // Wait for tree items to load
@@ -133,6 +134,7 @@ describe("Resource Creation Flow E2E Tests", function () {
                 if (!itemsLoaded) {
                     console.log("[Phase 2] Tree items did not load in time");
                     this.skip();
+                    return;
                 }
 
                 // Get all visible tree items (Projects) - only top-level items
@@ -144,6 +146,7 @@ describe("Resource Creation Flow E2E Tests", function () {
                 if (!targetProject) {
                     console.log(`[Phase 2] Project '${testData.projectName}' not found`);
                     this.skip();
+                    return;
                 }
 
                 console.log(`[Phase 2] Found project '${testData.projectName}', expanding...`);
@@ -154,6 +157,7 @@ describe("Resource Creation Flow E2E Tests", function () {
                 if (!versions || versions.length === 0) {
                     console.log("[Phase 2] No versions found under project");
                     this.skip();
+                    return;
                 }
 
                 // Find the TOV tree item (non-recursive, only at current level)
@@ -161,6 +165,7 @@ describe("Resource Creation Flow E2E Tests", function () {
                 if (!targetVersion) {
                     console.log(`[Phase 2] Version '${testData.versionName}' not found`);
                     this.skip();
+                    return;
                 }
 
                 console.log(`[Phase 2] Found version '${testData.versionName}', expanding...`);
@@ -239,6 +244,10 @@ describe("Resource Creation Flow E2E Tests", function () {
             // ============================================
             console.log("[Phase 3] Starting Resource Creation (Test Elements View)...");
 
+            // Wait for views to fully stabilize after navigation
+            console.log("[Phase 3] Waiting for views to stabilize after navigation...");
+            await driver.sleep(2000);
+
             // Clean up workspace before creating resource
             console.log("[Phase 3] Cleaning workspace before test...");
             await cleanupWorkspace(driver, undefined, {
@@ -255,7 +264,7 @@ describe("Resource Creation Flow E2E Tests", function () {
                 return;
             }
 
-            // Wait for tree items to load
+            // Wait for tree items to load with retry logic
             const testElementsLoaded = await waitForTreeItems(testElementsSection, driver);
             if (!testElementsLoaded) {
                 console.log("[Phase 3] Test Elements tree items did not load in time");
@@ -263,12 +272,43 @@ describe("Resource Creation Flow E2E Tests", function () {
                 return;
             }
 
-            // Locate the subdivision tree item named: "[subdivisionName] [Robot-Resource]"
-            const testElementItems = await testElementsSection.getVisibleItems();
-            const targetSubdivision = await findTreeItemByLabel(testElementItems, testData.subdivisionName);
+            // Locate the subdivision tree item with retry logic
+            // The tree may take time to fully populate after configuration is applied
+            let targetSubdivision = null;
+            const maxSubdivisionRetries = 5;
+            const retryDelay = 2000;
+
+            for (let attempt = 1; attempt <= maxSubdivisionRetries; attempt++) {
+                console.log(
+                    `[Phase 3] Looking for subdivision '${testData.subdivisionName}' (attempt ${attempt}/${maxSubdivisionRetries})...`
+                );
+
+                // Re-fetch the section in case it was refreshed
+                const refreshedContent = sideBar.getContent();
+                const refreshedSection = await findSidebarSection(refreshedContent, "Test Elements");
+
+                if (refreshedSection) {
+                    const testElementItems = await refreshedSection.getVisibleItems();
+                    console.log(`[Phase 3] Found ${testElementItems.length} items in Test Elements tree`);
+
+                    targetSubdivision = await findTreeItemByLabel(testElementItems, testData.subdivisionName);
+
+                    if (targetSubdivision) {
+                        console.log(`[Phase 3] ✓ Found subdivision on attempt ${attempt}`);
+                        break;
+                    }
+                }
+
+                if (attempt < maxSubdivisionRetries) {
+                    console.log(`[Phase 3] Subdivision not found, waiting ${retryDelay}ms before retry...`);
+                    await driver.sleep(retryDelay);
+                }
+            }
 
             if (!targetSubdivision) {
-                console.log(`[Phase 3] Subdivision '${testData.subdivisionName} [Robot-Resource]' not found`);
+                console.log(
+                    `[Phase 3] Subdivision '${testData.subdivisionName} [Robot-Resource]' not found after ${maxSubdivisionRetries} attempts`
+                );
                 this.skip();
                 return;
             }

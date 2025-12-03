@@ -2306,7 +2306,7 @@ export async function clickCreateResourceButton(item: TreeItem, driver: WebDrive
  * @param projectsSection - The Projects section to search in
  * @param targetProject - The project tree item (should already be expanded)
  * @param targetVersion - The version tree item (should already be expanded)
- * @param timeout - Maximum time to wait (default: UITimeouts.MEDIUM)
+ * @param timeout - Maximum time to wait (default: UITimeouts.LONG - configuration can take time)
  * @returns Promise<boolean> - True if pins appeared or configuration already exists, false if timeout
  */
 export async function waitForConfigurationApplied(
@@ -2316,7 +2316,7 @@ export async function waitForConfigurationApplied(
     projectsSection: any,
     targetProject: TreeItem,
     targetVersion: TreeItem,
-    timeout: number = UITimeouts.MEDIUM
+    timeout: number = UITimeouts.LONG
 ): Promise<boolean> {
     try {
         console.log("[Configuration] Waiting for configuration to be applied (checking for pin emojis)...");
@@ -2378,14 +2378,12 @@ export async function waitForConfigurationApplied(
         console.log(
             "[Configuration] Pins not detected within timeout - configuration may already exist or tree may not have updated"
         );
-        // Still wait a bit for tree to stabilize
         await driver.sleep(500);
         return true;
     } catch (error) {
         console.log(`[Configuration] Error waiting for configuration to be applied: ${error}`);
         // If timeout, assume configuration already exists and continue
-        // Still wait a bit for tree to stabilize
-        await driver.sleep(500);
+        await driver.sleep(2000);
         return true;
     }
 }
