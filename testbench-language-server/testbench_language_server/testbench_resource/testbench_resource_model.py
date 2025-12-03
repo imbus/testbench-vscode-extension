@@ -19,7 +19,7 @@ from robot.api.parsing import (
 )
 from robot.parsing.model import Block, Statement
 
-from ..testbench_api.model import InteractionCallType
+from ..testbench_api.model import KeywordCallType
 
 
 class TestBenchResourceModel:
@@ -276,8 +276,8 @@ def get_kw_name(kw: Keyword) -> str:
     return kw.name if kw and kw.name else ""
 
 
-def get_interaction_call_type(keyword: Keyword) -> str:
+def get_tb_keyword_call_type(keyword: Keyword) -> str:
     tags = get_kw_tags(keyword)
     if "tb:check" in tags:
-        return InteractionCallType.Check
-    return InteractionCallType.Flow
+        return KeywordCallType.Check
+    return KeywordCallType.Flow

@@ -4,7 +4,7 @@
  */
 
 import * as vscode from "vscode";
-import { TreeViewBase } from "../../core/TreeViewBase";
+import { TreeViewBase, RefreshOptions } from "../../core/TreeViewBase";
 import { TestElementData, TestElementItemData, TestElementsTreeItem, TestElementType } from "./TestElementsTreeItem";
 import { TreeViewConfig } from "../../core/TreeViewConfig";
 import { TestElementsDataProvider } from "./TestElementsDataProvider";
@@ -156,6 +156,15 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 this.refresh();
             }
         });
+
+        // Check icons for newly expanded items to support lazy loading
+        this.eventBus.on("tree:itemExpanded", async (event) => {
+            const item = event.data.item;
+            if (item instanceof TestElementsTreeItem && item.data.testElementType === TestElementType.Subdivision) {
+                await this.updateSubdivisionIcons([item], false);
+                this._onDidChangeTreeData.fire(item);
+            }
+        });
     }
 
     /**
@@ -240,7 +249,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             if (!this.rootItems || this.rootItems.length === 0) {
                 return;
             }
-            await this.updateSubdivisionIcons(this.rootItems);
+            await this.updateSubdivisionIcons(this.rootItems, false);
             this._onDidChangeTreeData.fire(undefined);
         } catch (error) {
             this.logger.error("[TestElementsTreeView] Error refreshing resource availability from workspace:", error);
@@ -545,7 +554,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             (this as any).updateTreeViewMessage();
 
             this._onDidChangeTreeData.fire(undefined);
-            this.updateSubdivisionIcons(newRootItems);
+            // Only check visible items initially
+            await this.updateSubdivisionIcons(newRootItems, true);
 
             const loadTime = Date.now() - startTime;
             this.logger.debug(
@@ -600,9 +610,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             if (clearFirst || this.currentTovKey !== tovKey) {
                 // Preserve UI state (expansion, marking, etc.) during data reload
                 this.clearTreeDataOnly();
+                // Only clear cache when TOV actually changes
+                this.dataProvider.clearCache(tovKey);
             }
-
-            this.dataProvider.clearCache(tovKey); // Only clear cache for this specific TOV
 
             this.currentTovKey = tovKey;
             this.currentTovLabel = tovLabel || null;
@@ -629,7 +639,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
             this.rootItems = fetchedHierarchicalTestElements.map((element) => this._buildTreeItems(element));
 
-            await this.updateSubdivisionIcons(this.rootItems);
+            // Only check icons for visible/expanded items initially for better performance
+            // Remaining items will be checked when expanded
+            await this.updateSubdivisionIcons(this.rootItems, true);
 
             // Set the last data fetch timestamp to prevent infinite loading
             // This is important even for empty results to prevent the tree from continuously trying to load data
@@ -724,8 +736,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this.rootItems = rootTestElementItems;
             (this as any)._lastDataFetch = Date.now();
 
-            // Async icon updates to avoid blocking UI
-            this.updateSubdivisionIcons(rootTestElementItems).then(() => {
+            // Async icon updates for visible items only
+            this.updateSubdivisionIcons(rootTestElementItems, true).then(() => {
                 this._onDidChangeTreeData.fire(undefined);
             });
 
@@ -739,9 +751,10 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     /**
      * Updates all subdivision icons by checking for their existence on the local file system
      * @param items Array of tree items to process
+     * @param onlyVisible If true, only checks visible/expanded items to save performance
      * @returns Promise that resolves when all icon updates are complete
      */
-    private async updateSubdivisionIcons(items: TestElementsTreeItem[]): Promise<void> {
+    private async updateSubdivisionIcons(items: TestElementsTreeItem[], onlyVisible: boolean = false): Promise<void> {
         // The python regex processing is done in language server via testbench_ls.get_resource_directory_subdivision_index command.
         // Language server initialization should be awaited here to prevent error logs caused by this command call.
         if (!isLanguageServerRunning()) {
@@ -759,51 +772,64 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         }
 
         const subdivisionItems: TestElementsTreeItem[] = [];
-        const collectSubdivisions = (currentItems: TestElementsTreeItem[]) => {
+        const collectSubdivisions = (currentItems: TestElementsTreeItem[], checkExpanded: boolean) => {
             for (const item of currentItems) {
                 if (item.data.testElementType === TestElementType.Subdivision) {
-                    subdivisionItems.push(item);
+                    if (!checkExpanded || item.collapsibleState === vscode.TreeItemCollapsibleState.Expanded) {
+                        subdivisionItems.push(item);
+                    }
                 }
-                if (item.children) {
-                    collectSubdivisions(item.children as TestElementsTreeItem[]);
+                if (
+                    item.children &&
+                    (!checkExpanded || item.collapsibleState === vscode.TreeItemCollapsibleState.Expanded)
+                ) {
+                    collectSubdivisions(item.children as TestElementsTreeItem[], checkExpanded);
                 }
             }
         };
-        collectSubdivisions(items);
+        collectSubdivisions(items, onlyVisible);
 
-        // Process file checks in parallel for all subdivisions.
-        await Promise.all(
-            subdivisionItems.map(async (item) => {
-                try {
-                    if (item.data.isVirtual) {
-                        return;
-                    }
-                    const hierarchicalName = item.data.hierarchicalName;
-                    if (hierarchicalName) {
-                        const isResourceFile = ResourceFileService.hasResourceMarker(hierarchicalName);
-                        const cleanName = this.removeResourceMarkersFromHierarchicalName(hierarchicalName).trim();
-                        let resourcePath = await this.resourceFileService.constructAbsolutePath(cleanName);
+        // Process file checks in batches to yield to UI thread
+        const BATCH_SIZE = 20;
+        for (let i = 0; i < subdivisionItems.length; i += BATCH_SIZE) {
+            const batch = subdivisionItems.slice(i, i + BATCH_SIZE);
+            await Promise.all(
+                batch.map(async (subdivisionItem) => {
+                    try {
+                        if (subdivisionItem.data.isVirtual) {
+                            return;
+                        }
+                        const hierarchicalName = subdivisionItem.data.hierarchicalName;
+                        if (hierarchicalName) {
+                            const isResourceFile = ResourceFileService.hasResourceMarker(hierarchicalName);
+                            const cleanName = this.removeResourceMarkersFromHierarchicalName(hierarchicalName).trim();
+                            let resourcePath = await this.resourceFileService.constructAbsolutePath(cleanName);
 
-                        if (resourcePath) {
-                            if (isResourceFile && !resourcePath.endsWith(".resource")) {
-                                resourcePath += ".resource";
-                            }
-                            const exists = await this.resourceFileService.pathExists(resourcePath);
-                            item.updateLocalAvailability(exists, resourcePath);
+                            if (resourcePath) {
+                                if (isResourceFile && !resourcePath.endsWith(".resource")) {
+                                    resourcePath += ".resource";
+                                }
+                                const resourcePathExists = await this.resourceFileService.pathExists(resourcePath);
+                                subdivisionItem.updateLocalAvailability(resourcePathExists, resourcePath);
 
-                            if (exists) {
-                                await this.markParentSubdivisions(item);
+                                if (resourcePathExists) {
+                                    await this.markParentSubdivisions(subdivisionItem);
+                                }
                             }
                         }
+                    } catch (error) {
+                        this.logger.error(
+                            `[TestElementsTreeView] Error updating subdivision icon for tree item ${subdivisionItem.label}:`,
+                            error
+                        );
                     }
-                } catch (error) {
-                    this.logger.error(
-                        `[TestElementsTreeView] Error updating subdivision icon for tree item ${item.label}:`,
-                        error
-                    );
-                }
-            })
-        );
+                })
+            );
+            // Yield to UI thread between batches to keep UI responsive
+            if (i + BATCH_SIZE < subdivisionItems.length) {
+                await new Promise((resolve) => setImmediate(resolve));
+            }
+        }
     }
 
     /**
@@ -964,7 +990,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @returns The created tree item
      */
     protected createTreeItem(data: TestElementData, parent?: TestElementsTreeItem): TestElementsTreeItem {
-        const testElementType = this.convertToTestElementTypeEnum(data.testElementType);
+        const testElementType = data.testElementType;
 
         // Convert TestElementData to the extended TestElementItemData
         const itemData: TestElementItemData = {
@@ -1119,9 +1145,14 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         let textDocument: vscode.TextDocument;
         let textEditor: vscode.TextEditor;
 
+        this.logger.trace(
+            `[TestElementsTreeView] openFileAndJumpToKeyword called: resourcePath=${resourcePath}, keywordName=${keywordName}, uid=${uid}`
+        );
+
         try {
             textDocument = await vscode.workspace.openTextDocument(resourcePath);
             textEditor = await vscode.window.showTextDocument(textDocument);
+            this.logger.debug(`[TestElementsTreeView] Successfully opened resource file: ${resourcePath}`);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             this.logger.error(
@@ -1134,9 +1165,16 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         try {
             const keywordLineNumber = await findKeywordPositionInResourceFile(textDocument.uri, keywordName, uid);
             if (keywordLineNumber !== undefined) {
+                this.logger.trace(
+                    `[TestElementsTreeView] Found keyword at line ${keywordLineNumber}, positioning cursor`
+                );
                 const position = new vscode.Position(keywordLineNumber, 0);
                 textEditor.selection = new vscode.Selection(position, position);
                 textEditor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+            } else {
+                this.logger.warn(
+                    `[TestElementsTreeView] Keyword '${keywordName}' with UID ${uid} not found in resource file ${resourcePath}`
+                );
             }
         } catch (positioningError) {
             const errorMessage = positioningError instanceof Error ? positioningError.message : "Unknown error";
@@ -1277,12 +1315,15 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param item The keyword tree item that was single clicked
      */
     private async handleKeywordSingleClick(item: TestElementsTreeItem): Promise<void> {
+        this.logger.debug(
+            `[TestElementsTreeView] handleKeywordSingleClick called for keyword: ${item.label}, type: ${item.data.testElementType}, uid: ${item.data.uniqueID}`
+        );
         const parentResource = item.parent as TestElementsTreeItem;
         if (!parentResource) {
+            this.logger.error(`[TestElementsTreeView] Could not find parent resource for keyword ${item.label}`);
             vscode.window.showErrorMessage(`Could not find the parent resource for keyword ${item.label}`);
             return;
         }
-
         await this._handleResourceOperation({
             operationType: "keyword",
             createMissing: false,
@@ -1316,7 +1357,11 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param item The keyword item that was clicked
      */
     public async handleKeywordClick(item: TestElementsTreeItem): Promise<void> {
+        this.logger.debug(
+            `[TestElementsTreeView] handleKeywordClick called for item: ${item.label}, type: ${item.data.testElementType}, id: ${item.id}, uid: ${item.data.uniqueID}`
+        );
         if (!item.id) {
+            this.logger.warn(`[TestElementsTreeView] handleKeywordClick called for item without ID: ${item.label}`);
             return;
         }
 
@@ -1346,13 +1391,20 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param item Optional specific item to refresh
      * @param options Optional refresh options
      */
-    public override refresh(item?: TestElementsTreeItem, options?: { immediate?: boolean }): void {
+    public override refresh(item?: TestElementsTreeItem, options?: RefreshOptions): void {
         this.logger.debug(
             `[TestElementsTreeView] Refreshing test elements tree view${item ? ` for tree item: ${item.label}` : ""}`
         );
 
         if (item) {
             super.refresh(item, options);
+            return;
+        }
+
+        // If skipDataReload is true (e.g., when filtering/searching), delegate to parent
+        // to avoid fetching data from server and just update the UI
+        if (options?.skipDataReload) {
+            super.refresh(undefined, options);
             return;
         }
 

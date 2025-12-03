@@ -663,7 +663,7 @@ export class TreeViewFactory {
 
     /**
      * Restores a previously saved view state.
-     * Updates the language server, loads data into the tree views based on the saved context,
+     * Loads data into the tree views based on the saved context,
      * and adjusts the visibility of the tree views accordingly.
      * @param savedViewId The identifier of the view to restore
      * @param savedContext An object containing the saved view information (project, TOV, cycle data)

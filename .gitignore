@@ -4,7 +4,6 @@
 # UI Test Artifacts
 .test-resources/
 test-resources/
-VSCode-win32-*/
 
 # VS Code package
 *.vsix

@@ -26,7 +26,9 @@ interface RawTestElement {
     type?: string;
     regexMatch?: boolean;
     Subdivision_key?: { serial: string };
+    // TODO: API v1 uses Interaction_key for Keywords, Keyword_key is not used yet. Replace API v1 support when no longer needed
     Keyword_key?: { serial: string };
+    Interaction_key?: { serial: string };
     Condition_key?: { serial: string };
     DataType_key?: { serial: string };
 }
@@ -129,7 +131,7 @@ export class TestElementsDataProvider {
                 return [];
             }
 
-            const hierarchicalTestElemData = this._buildAndFilterHierarchy(rawTestElementsData);
+            const hierarchicalTestElemData = await this._buildAndFilterHierarchy(rawTestElementsData);
 
             this.elementsCache.set(tovKey, hierarchicalTestElemData);
             this.eventBus.emit({
@@ -155,14 +157,14 @@ export class TestElementsDataProvider {
     /**
      * Orchestrates the transformation of flat test element data into a filtered hierarchy.
      * @param flatJsonTestElements - Array of raw test element data from the server
-     * @returns Array of root TestElementData objects forming the filtered hierarchy
+     * @returns Promise resolving to array of root TestElementData objects forming the filtered hierarchy
      */
-    private _buildAndFilterHierarchy(flatJsonTestElements: RawTestElement[]): TestElementData[] {
+    private async _buildAndFilterHierarchy(flatJsonTestElements: RawTestElement[]): Promise<TestElementData[]> {
         const testElementIdToDataMap = this._transformRawElements(flatJsonTestElements);
         const { roots } = this._linkParentChildRelationships(testElementIdToDataMap);
         const filteredRoots = this._filterElementTree(roots);
         this._assignHierarchicalNames(filteredRoots);
-        this._markVirtualFolders(filteredRoots);
+        await this._markVirtualFolders(filteredRoots);
         this._checkForNestedResources(filteredRoots);
 
         return filteredRoots;
@@ -247,6 +249,9 @@ export class TestElementsDataProvider {
                             parentSerialFromDetails = String(potentialParent.details.Subdivision_key.serial);
                         } else if (potentialParent.details?.Keyword_key?.serial) {
                             parentSerialFromDetails = String(potentialParent.details.Keyword_key.serial);
+                        } else if (potentialParent.details?.Interaction_key?.serial) {
+                            // TODO: Replace API v1 (Interaction_key usage) with API v2 (Keyword_key) if no longer needed
+                            parentSerialFromDetails = String(potentialParent.details.Interaction_key.serial);
                         }
 
                         if (parentSerialFromDetails === serialToFind) {
@@ -340,7 +345,7 @@ export class TestElementsDataProvider {
      * from appearing on folders that don't have a direct 1:1 mapping to a local directory.
      * @param roots The root elements of the tree.
      */
-    private _markVirtualFolders(roots: TestElementData[]): void {
+    private async _markVirtualFolders(roots: TestElementData[]): Promise<void> {
         const resourceDirectoryMarker =
             getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER) || "";
 
@@ -420,7 +425,8 @@ export class TestElementsDataProvider {
             return resourcesInChildren;
         };
 
-        roots.forEach((root) => findResourcesAndMarkVirtuals(root));
+        // Process roots in parallel
+        await Promise.all(roots.map((root) => findResourcesAndMarkVirtuals(root)));
     }
 
     /**
@@ -468,7 +474,12 @@ export class TestElementsDataProvider {
         if (item.Subdivision_key?.serial) {
             return TestElementType.Subdivision;
         }
-        if (item.Keyword_key?.serial) {
+        // TODO: Replace API v1 support when no longer needed
+        // Check both Keyword_key and Interaction_key (API v1)
+        if (item.Keyword_key?.serial || item.Interaction_key?.serial) {
+            this.logger.trace(
+                `[TestElementsDataProvider] Identified element "${item.name}" as Keyword (Keyword_key: ${!!item.Keyword_key?.serial}, Interaction_key: ${!!item.Interaction_key?.serial})`
+            );
             return TestElementType.Keyword;
         }
         if (item.Condition_key?.serial) {
@@ -477,6 +488,9 @@ export class TestElementsDataProvider {
         if (item.DataType_key?.serial) {
             return TestElementType.DataType;
         }
+        this.logger.trace(
+            `[TestElementsDataProvider] Element "${item.name}" could not be typed (no matching key found), defaulting to Other`
+        );
         return TestElementType.Other;
     }
 
@@ -489,12 +503,10 @@ export class TestElementsDataProvider {
         const elementType = this._getTestElementType(raw);
         switch (elementType) {
             case TestElementType.Subdivision:
-            case TestElementType.Keyword:
             case TestElementType.Condition:
             case TestElementType.DataType: {
                 const keyFieldMap: Record<string, string> = {
                     [TestElementType.Subdivision]: "Subdivision_key",
-                    [TestElementType.Keyword]: "Keyword_key", // Server API v2 uses Keyword_key (was Interaction_key in v1)
                     [TestElementType.Condition]: "Condition_key",
                     [TestElementType.DataType]: "DataType_key"
                 };
@@ -502,6 +514,17 @@ export class TestElementsDataProvider {
                 const specificKey = raw[keyField as keyof RawTestElement] as { serial: string } | undefined;
                 if (specificKey?.serial && raw.uniqueID) {
                     return `${specificKey.serial}_${raw.uniqueID}`;
+                }
+                this.logger.warn(
+                    `[TestElementsDataProvider] Test element tree item with UID ${raw.uniqueID} and type ${elementType} is missing specific key serial.`
+                );
+                return raw.uniqueID || `fallback_${Date.now()}_${Math.random()}`;
+            }
+            case TestElementType.Keyword: {
+                // Check both Keyword_key and Interaction_key (API v1)
+                const keywordKey = raw.Keyword_key || raw.Interaction_key;
+                if (keywordKey?.serial && raw.uniqueID) {
+                    return `${keywordKey.serial}_${raw.uniqueID}`;
                 }
                 this.logger.warn(
                     `[TestElementsDataProvider] Test element tree item with UID ${raw.uniqueID} and type ${elementType} is missing specific key serial.`

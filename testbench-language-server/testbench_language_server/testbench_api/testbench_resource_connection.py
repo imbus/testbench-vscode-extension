@@ -1,4 +1,4 @@
-from TestBenchCliReporter.testbench import Connection
+from testbench_cli_reporter.testbench import Connection
 
 
 class TestBenchResourceConnection:

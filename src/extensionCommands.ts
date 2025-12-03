@@ -256,58 +256,39 @@ const handleOpenTOV = async (tovItem: ProjectsTreeItem) => {
 };
 
 const handleOpenCycle = async (cycleItem: ProjectsTreeItem) => {
-    if (!treeViews?.testThemesTree) {
+    if (!treeViews?.projectsTree) {
         return;
     }
 
-    if (!connection) {
-        getLogger().warn(`[extensionCommands] handleOpenCycle called without active connection.`);
-        vscode.window.showWarningMessage("No active connection available. Please log in first.");
-        return;
-    }
-
-    const projectKey = cycleItem.getProjectKey();
-    const cycleKey = cycleItem.getCycleKey();
-    const versionKey = cycleItem.getVersionKey();
-    const projectName = cycleItem.parent?.parent?.label?.toString();
-    const tovName = cycleItem.parent?.label?.toString();
-
-    if (projectKey && cycleKey && versionKey && projectName && tovName) {
-        await treeViews.saveUIContext("testThemes", {
-            isCycle: true,
-            projectKey,
-            cycleKey,
-            tovKey: versionKey,
-            projectName,
-            tovName,
-            cycleLabel: cycleItem.label?.toString()
-        });
-        await displayTestThemeTreeView();
-        await displayTestElementsTreeView();
-        await hideProjectManagementTreeView();
-
-        await promptCreateLsConfigIfMissing(projectName, tovName);
-        const cfg = await readLsConfig();
-        if (!cfg || !cfg.projectName || cfg.projectName.trim() === "" || cfg.tovName === undefined) {
-            await validateAndFixLsConfigInteractively(cfg || undefined);
+    const openedCycleResult = await treeViews.projectsTree.openCycle(cycleItem);
+    if (!openedCycleResult) {
+        if (!getConnection()) {
+            getLogger().warn(`[extensionCommands] handleOpenCycle called without active connection.`);
+            vscode.window.showWarningMessage("No active connection available. Please log in first.");
+            return;
         }
-        await treeViews.testThemesTree.loadCycle(
-            projectKey,
-            cycleKey,
-            versionKey,
-            projectName,
-            tovName,
-            cycleItem.label?.toString()
-        );
-        if (treeViews.testElementsTree) {
-            await treeViews.testElementsTree.loadTov(versionKey, cycleItem.label?.toString(), projectName, tovName);
-        }
-        getLogger().info(
-            `[extensionCommands] Successfully opened Test Cycle '${cycleItem.label?.toString()}' for TOV '${tovName}' in project '${projectName}'.`
-        );
-    } else {
         throw new Error("Invalid cycle item: missing project, cycle, or version key");
     }
+
+    await treeViews.saveUIContext("testThemes", {
+        isCycle: true,
+        projectKey: openedCycleResult.projectKey,
+        cycleKey: openedCycleResult.cycleKey,
+        tovKey: openedCycleResult.tovKey,
+        projectName: openedCycleResult.projectName,
+        tovName: openedCycleResult.tovName,
+        cycleLabel: openedCycleResult.cycleLabel
+    });
+
+    await promptCreateLsConfigIfMissing(openedCycleResult.projectName, openedCycleResult.tovName);
+    const cfg = await readLsConfig();
+    if (!cfg || !cfg.projectName || cfg.projectName.trim() === "" || cfg.tovName === undefined) {
+        await validateAndFixLsConfigInteractively(cfg || undefined);
+    }
+
+    getLogger().info(
+        `[extensionCommands] Successfully opened Test Cycle '${openedCycleResult.cycleLabel}' for TOV '${openedCycleResult.tovName}' in project '${openedCycleResult.projectName}'.`
+    );
 };
 
 /* =============================================================================
