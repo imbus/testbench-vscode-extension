@@ -126,7 +126,13 @@ const ENV_VARS = {
     TESTBENCH_USERNAME: "TESTBENCH_TEST_USERNAME",
     TESTBENCH_PASSWORD: "TESTBENCH_TEST_PASSWORD",
     UI_TEST_SLOW_MOTION: "UI_TEST_SLOW_MOTION",
-    UI_TEST_SLOW_MOTION_DELAY: "UI_TEST_SLOW_MOTION_DELAY"
+    UI_TEST_SLOW_MOTION_DELAY: "UI_TEST_SLOW_MOTION_DELAY",
+    // Test data environment variables
+    TEST_PROJECT_NAME: "TEST_PROJECT_NAME",
+    TEST_VERSION_NAME: "TEST_VERSION_NAME",
+    TEST_CYCLE_NAME: "TEST_CYCLE_NAME",
+    TEST_SUBDIVISION_NAME: "TEST_SUBDIVISION_NAME",
+    TEST_RESOURCE_FILE_NAME: "TEST_RESOURCE_FILE_NAME"
 } as const;
 
 /**
@@ -273,4 +279,96 @@ export function getSlowMotionDelay(): number {
  */
 export function isSlowMotionEnabled(): boolean {
     return getSlowMotionDelay() > 0;
+}
+
+// ============================================
+// Test Data Configuration
+// ============================================
+
+/**
+ * Interface for TestBench project hierarchy test data.
+ * Used to configure which project, version, cycle, etc. to use in tests.
+ */
+export interface TestDataConfig {
+    /** Project name to navigate to (e.g., "TestBench Demo Agil") */
+    projectName: string;
+    /** Version/TOV name within the project (e.g., "Version 3.0") */
+    versionName: string;
+    /** Cycle name within the version (e.g., "3.0.2") */
+    cycleName: string;
+    /** Subdivision name for resource creation tests (e.g., "Resource Subdivision") */
+    subdivisionName: string;
+    /** Expected resource file name (e.g., "Resource Subdivision.resource") */
+    resourceFileName: string;
+}
+
+/**
+ * Default test data values.
+ * These are used when environment variables are not set.
+ */
+const DEFAULT_TEST_DATA: TestDataConfig = {
+    projectName: "TestBench Demo Agil 1",
+    versionName: "Version 3.0",
+    cycleName: "3.0.2",
+    subdivisionName: "Resource Subdivision 1",
+    resourceFileName: "Resource Subdivision 1.resource"
+};
+
+/**
+ * Gets test data configuration from environment variables.
+ * Falls back to default values if environment variables are not set.
+ *
+ * Environment variables:
+ * - TEST_PROJECT_NAME: Project name to use in tests
+ * - TEST_VERSION_NAME: Version/TOV name to use in tests
+ * - TEST_CYCLE_NAME: Cycle name to use in tests
+ * - TEST_SUBDIVISION_NAME: Subdivision name for resource tests
+ * - TEST_RESOURCE_FILE_NAME: Expected resource file name
+ *
+ * @returns TestDataConfig object with test data values
+ */
+export function getTestData(): TestDataConfig {
+    const getEnvVar = (envVar: string, defaultValue: string): string => {
+        const value = process.env[envVar];
+        if (value === undefined || value === null || value.trim() === "") {
+            return defaultValue;
+        }
+        return value.trim();
+    };
+
+    const testData: TestDataConfig = {
+        projectName: getEnvVar(ENV_VARS.TEST_PROJECT_NAME, DEFAULT_TEST_DATA.projectName),
+        versionName: getEnvVar(ENV_VARS.TEST_VERSION_NAME, DEFAULT_TEST_DATA.versionName),
+        cycleName: getEnvVar(ENV_VARS.TEST_CYCLE_NAME, DEFAULT_TEST_DATA.cycleName),
+        subdivisionName: getEnvVar(ENV_VARS.TEST_SUBDIVISION_NAME, DEFAULT_TEST_DATA.subdivisionName),
+        resourceFileName: getEnvVar(ENV_VARS.TEST_RESOURCE_FILE_NAME, DEFAULT_TEST_DATA.resourceFileName)
+    };
+
+    return testData;
+}
+
+/**
+ * Logs the current test data configuration.
+ * Useful for debugging which values are being used.
+ */
+export function logTestDataConfig(): void {
+    const testData = getTestData();
+    const usingDefaults = {
+        projectName: !process.env[ENV_VARS.TEST_PROJECT_NAME]?.trim(),
+        versionName: !process.env[ENV_VARS.TEST_VERSION_NAME]?.trim(),
+        cycleName: !process.env[ENV_VARS.TEST_CYCLE_NAME]?.trim(),
+        subdivisionName: !process.env[ENV_VARS.TEST_SUBDIVISION_NAME]?.trim(),
+        resourceFileName: !process.env[ENV_VARS.TEST_RESOURCE_FILE_NAME]?.trim()
+    };
+
+    console.log("[TestData] Current test data configuration:");
+    console.log(`[TestData]   Project: "${testData.projectName}"${usingDefaults.projectName ? " (default)" : ""}`);
+    console.log(`[TestData]   Version: "${testData.versionName}"${usingDefaults.versionName ? " (default)" : ""}`);
+    console.log(`[TestData]   Cycle: "${testData.cycleName}"${usingDefaults.cycleName ? " (default)" : ""}`);
+    console.log(
+        `[TestData]   Subdivision: "${testData.subdivisionName}"${usingDefaults.subdivisionName ? " (default)" : ""}`
+    );
+    console.log(
+        `[TestData]   Resource File: "${testData.resourceFileName}"${usingDefaults.resourceFileName ? " (default)" : ""}`
+    );
 }

@@ -36,7 +36,13 @@ import {
     deleteFromLineOnwards,
     ensureRefactorPreviewItemChecked
 } from "./testUtils";
-import { isSlowMotionEnabled, getSlowMotionDelay, hasTestCredentials } from "./testConfig";
+import {
+    isSlowMotionEnabled,
+    getSlowMotionDelay,
+    hasTestCredentials,
+    getTestData,
+    logTestDataConfig
+} from "./testConfig";
 
 describe("Resource Creation Flow E2E Tests", function () {
     let browser: VSBrowser;
@@ -78,6 +84,9 @@ describe("Resource Creation Flow E2E Tests", function () {
 
     describe("Complete Resource Creation Flow", function () {
         it("should complete full resource creation and synchronization flow", async function () {
+            const testData = getTestData();
+            logTestDataConfig();
+
             // ============================================
             // Phase 1: Login and Context Verification
             // ============================================
@@ -102,13 +111,10 @@ describe("Resource Creation Flow E2E Tests", function () {
                 const testThemesTitle = await getSectionTitle(testThemesSection);
                 console.log(`[Phase 1] Test Themes view title: "${testThemesTitle}"`);
 
-                const expectedProjectName = "TestBench Demo Agil 1";
-                const expectedCycleName = "3.0.2";
-
                 if (
                     testThemesTitle &&
-                    testThemesTitle.includes(expectedProjectName) &&
-                    testThemesTitle.includes(expectedCycleName)
+                    testThemesTitle.includes(testData.projectName) &&
+                    testThemesTitle.includes(testData.cycleName)
                 ) {
                     console.log("[Phase 1] Context is correct. Skipping to Phase 3.");
                     // Skip to Phase 3 (will be handled below)
@@ -160,14 +166,14 @@ describe("Resource Creation Flow E2E Tests", function () {
                 const projectItems = await projectsSectionUpdated.getVisibleItems();
                 expect(projectItems.length).to.be.greaterThan(0, "Expected at least one project in the tree");
 
-                // Find the Project tree item: "TestBench Demo Agil 1" (non-recursive, only at current level)
-                const targetProject = await findTreeItemByLabelAtLevel(projectItems, "TestBench Demo Agil 1");
+                // Find the Project tree item (non-recursive, only at current level)
+                const targetProject = await findTreeItemByLabelAtLevel(projectItems, testData.projectName);
                 if (!targetProject) {
-                    console.log("[Phase 2] Project 'TestBench Demo Agil 1' not found");
+                    console.log(`[Phase 2] Project '${testData.projectName}' not found`);
                     this.skip();
                 }
 
-                console.log("[Phase 2] Found project 'TestBench Demo Agil 1', expanding...");
+                console.log(`[Phase 2] Found project '${testData.projectName}', expanding...`);
                 await expandTreeItemIfNeeded(targetProject, driver);
 
                 // Get children (versions) of the project - only after expanding
@@ -177,14 +183,14 @@ describe("Resource Creation Flow E2E Tests", function () {
                     this.skip();
                 }
 
-                // Find the TOV tree item: "Version 3.0" (non-recursive, only at current level)
-                const targetVersion = await findTreeItemByLabelAtLevel(versions, "Version 3.0");
+                // Find the TOV tree item (non-recursive, only at current level)
+                const targetVersion = await findTreeItemByLabelAtLevel(versions, testData.versionName);
                 if (!targetVersion) {
-                    console.log("[Phase 2] Version 'Version 3.0' not found");
+                    console.log(`[Phase 2] Version '${testData.versionName}' not found`);
                     this.skip();
                 }
 
-                console.log("[Phase 2] Found version 'Version 3.0', expanding...");
+                console.log(`[Phase 2] Found version '${testData.versionName}', expanding...`);
                 await expandTreeItemIfNeeded(targetVersion, driver);
 
                 // Get children (cycles) of the version - only after expanding
@@ -195,24 +201,22 @@ describe("Resource Creation Flow E2E Tests", function () {
                     return;
                 }
 
-                // Locate the Cycle tree item: "3.0.2" (non-recursive, only at current level)
-                const targetCycle = await findTreeItemByLabelAtLevel(cycles, "3.0.2");
+                // Locate the Cycle tree item (non-recursive, only at current level)
+                const targetCycle = await findTreeItemByLabelAtLevel(cycles, testData.cycleName);
                 if (!targetCycle) {
-                    console.log("[Phase 2] Cycle '3.0.2' not found");
+                    console.log(`[Phase 2] Cycle '${testData.cycleName}' not found`);
                     this.skip();
                     return;
                 }
 
-                console.log("[Phase 2] Found cycle '3.0.2'");
+                console.log(`[Phase 2] Found cycle '${testData.cycleName}'`);
 
                 // Click the cycle once to check for configuration prompt
-                const projectName = "TestBench Demo Agil 1";
-                const tovName = "Version 3.0";
                 const configHandled = await handleCycleConfigurationPrompt(
                     targetCycle,
                     driver,
-                    projectName,
-                    tovName,
+                    testData.projectName,
+                    testData.versionName,
                     projectsSectionUpdated,
                     targetProject,
                     targetVersion
@@ -225,22 +229,24 @@ describe("Resource Creation Flow E2E Tests", function () {
                 // Re-locate the cycle after tree reordering (pins may have changed tree structure)
                 // Re-fetch the version's children to get updated cycle items
                 const cyclesAfterConfig = await targetVersion.getChildren();
-                let targetCycleAfterConfig = await findTreeItemByLabelAtLevel(cyclesAfterConfig, "3.0.2");
+                let targetCycleAfterConfig = await findTreeItemByLabelAtLevel(cyclesAfterConfig, testData.cycleName);
 
                 // If cycle not found in children, try getting all visible items again
                 if (!targetCycleAfterConfig) {
                     const allItems = await projectsSectionUpdated.getVisibleItems();
                     // Try to find the cycle by searching recursively (since tree may have reordered)
-                    targetCycleAfterConfig = await findTreeItemByLabel(allItems, "3.0.2");
+                    targetCycleAfterConfig = await findTreeItemByLabel(allItems, testData.cycleName);
                 }
 
                 if (!targetCycleAfterConfig) {
-                    console.log("[Phase 2] Cycle '3.0.2' not found after configuration - using original reference");
+                    console.log(
+                        `[Phase 2] Cycle '${testData.cycleName}' not found after configuration - using original reference`
+                    );
                     targetCycleAfterConfig = targetCycle;
                 }
 
-                console.log("[Phase 2] Double-clicking cycle '3.0.2'...");
-                // Action: Double-click the "3.0.2" tree item
+                console.log(`[Phase 2] Double-clicking cycle '${testData.cycleName}'...`);
+                // Action: Double-click the cycle tree item
                 await doubleClickTreeItem(targetCycleAfterConfig, driver);
 
                 // Wait for Test Themes and Test Elements views to appear
@@ -284,12 +290,12 @@ describe("Resource Creation Flow E2E Tests", function () {
                 return;
             }
 
-            // Locate the subdivision tree item named: "Subdiv resource [Robot-Resource]"
+            // Locate the subdivision tree item named: "[subdivisionName] [Robot-Resource]"
             const testElementItems = await testElementsSection.getVisibleItems();
-            const targetSubdivision = await findTreeItemByLabel(testElementItems, "Subdiv resource");
+            const targetSubdivision = await findTreeItemByLabel(testElementItems, testData.subdivisionName);
 
             if (!targetSubdivision) {
-                console.log("[Phase 3] Subdivision 'Subdiv resource [Robot-Resource]' not found");
+                console.log(`[Phase 3] Subdivision '${testData.subdivisionName} [Robot-Resource]' not found`);
                 this.skip();
                 return;
             }
@@ -324,13 +330,13 @@ describe("Resource Creation Flow E2E Tests", function () {
             }
 
             // Wait for file to be created and opened
-            const fileOpened = await waitForFileInEditor(driver, "Subdiv resource");
+            const fileOpened = await waitForFileInEditor(driver, testData.subdivisionName);
             if (fileOpened) {
                 // Verify the exact file name
                 const editorView = new EditorView();
                 const editorTitles = await editorView.getOpenEditorTitles();
                 for (const title of editorTitles) {
-                    if (title.includes("Subdiv resource.resource") || title.includes("Subdiv resource")) {
+                    if (title.includes(testData.resourceFileName) || title.includes(testData.subdivisionName)) {
                         console.log(`[Phase 3] Resource file opened: "${title}"`);
                         break;
                     }
@@ -351,14 +357,14 @@ describe("Resource Creation Flow E2E Tests", function () {
             await openTestBenchSidebar(driver);
             await applySlowMotion(driver);
 
-            // Return focus to the active editor window for Subdiv resource.resource
+            // Return focus to the active editor window for resource file
             const editorView2 = new EditorView();
             let resourceEditor: TextEditor | null = null;
 
             // Find and focus the resource file editor
             const openEditorTitles = await editorView2.getOpenEditorTitles();
             for (const title of openEditorTitles) {
-                if (title.includes("Subdiv resource.resource") || title.includes("Subdiv resource")) {
+                if (title.includes(testData.resourceFileName) || title.includes(testData.subdivisionName)) {
                     resourceEditor = (await editorView2.openEditor(title)) as TextEditor;
                     await applySlowMotion(driver);
                     break;
@@ -369,7 +375,7 @@ describe("Resource Creation Flow E2E Tests", function () {
                 console.log("[Phase 4] Resource editor not found. Trying to open file...");
                 // Try to open the file if it exists
                 try {
-                    resourceEditor = (await editorView2.openEditor("Subdiv resource.resource")) as TextEditor;
+                    resourceEditor = (await editorView2.openEditor(testData.resourceFileName)) as TextEditor;
                 } catch {
                     console.log("[Phase 4] Could not open resource file. Continuing...");
                 }
@@ -447,8 +453,8 @@ describe("Resource Creation Flow E2E Tests", function () {
                 this.skip();
             }
 
-            // Ensure the checkbox for Subdiv resource.resource is checked
-            const checkboxReady = await ensureRefactorPreviewItemChecked(driver, "Subdiv resource.resource");
+            // Ensure the checkbox for resource file is checked
+            const checkboxReady = await ensureRefactorPreviewItemChecked(driver, testData.resourceFileName);
             if (!checkboxReady) {
                 console.log("[Phase 4] Warning: Could not ensure checkbox is checked, Apply might fail.");
             }

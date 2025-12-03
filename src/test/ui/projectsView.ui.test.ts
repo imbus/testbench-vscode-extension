@@ -16,7 +16,13 @@ import {
     clickNotificationButton,
     cleanupWorkspace
 } from "./testUtils";
-import { isSlowMotionEnabled, getSlowMotionDelay, hasTestCredentials } from "./testConfig";
+import {
+    isSlowMotionEnabled,
+    getSlowMotionDelay,
+    hasTestCredentials,
+    getTestData,
+    logTestDataConfig
+} from "./testConfig";
 
 /**
  * Recursively expands all collapsible tree items in a tree section.
@@ -248,6 +254,9 @@ describe("Projects View UI Tests", function () {
 
     describe("Cycle Configuration Notification", function () {
         it("should click cycle tree item and handle configuration notification", async function () {
+            const testData = getTestData();
+            logTestDataConfig();
+
             // Clean up workspace, excluding .testbench folder
             console.log("[ProjectsView] Cleaning workspace before test...");
             await cleanupWorkspace(driver, undefined, {
@@ -277,15 +286,15 @@ describe("Projects View UI Tests", function () {
             const projectItems = await projectsSection.getVisibleItems();
             expect(projectItems.length).to.be.greaterThan(0, "Expected at least one project in the tree");
 
-            // Find the project "TestBench Demo Agil 1"
-            const targetProject = await findTreeItemByLabel(projectItems, "TestBench Demo Agil 1");
+            // Find the target project
+            const targetProject = await findTreeItemByLabel(projectItems, testData.projectName);
             if (!targetProject) {
-                console.log("[ProjectsView] Project 'TestBench Demo Agil 1' not found");
+                console.log(`[ProjectsView] Project '${testData.projectName}' not found`);
                 this.skip();
                 return;
             }
 
-            console.log("[ProjectsView] Found project 'TestBench Demo Agil 1'");
+            console.log(`[ProjectsView] Found project '${testData.projectName}'`);
 
             // Expand the project if it has children and is not expanded
             await expandTreeItemIfNeeded(targetProject, driver);
@@ -298,15 +307,15 @@ describe("Projects View UI Tests", function () {
                 return;
             }
 
-            // Find the version "Version 3.0"
-            const targetVersion = await findTreeItemByLabel(versions, "Version 3.0");
+            // Find the target version
+            const targetVersion = await findTreeItemByLabel(versions, testData.versionName);
             if (!targetVersion) {
-                console.log("[ProjectsView] Version 'Version 3.0' not found");
+                console.log(`[ProjectsView] Version '${testData.versionName}' not found`);
                 this.skip();
                 return;
             }
 
-            console.log("[ProjectsView] Found version 'Version 3.0'");
+            console.log(`[ProjectsView] Found version '${testData.versionName}'`);
 
             // Expand the version if it has children and is not expanded
             await expandTreeItemIfNeeded(targetVersion, driver);
@@ -319,15 +328,15 @@ describe("Projects View UI Tests", function () {
                 return;
             }
 
-            // Find the cycle "3.0.2"
-            const targetCycle = await findTreeItemByLabel(cycles, "3.0.2");
+            // Find the target cycle
+            const targetCycle = await findTreeItemByLabel(cycles, testData.cycleName);
             if (!targetCycle) {
-                console.log("[ProjectsView] Cycle '3.0.2' not found");
+                console.log(`[ProjectsView] Cycle '${testData.cycleName}' not found`);
                 this.skip();
                 return;
             }
 
-            console.log("[ProjectsView] Found cycle '3.0.2', clicking...");
+            console.log(`[ProjectsView] Found cycle '${testData.cycleName}', clicking...`);
 
             // Click the cycle (single click) - this should trigger the notification
             await targetCycle.click();
