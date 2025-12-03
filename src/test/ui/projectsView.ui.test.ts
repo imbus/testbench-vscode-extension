@@ -15,7 +15,7 @@ import {
     cleanupWorkspace
 } from "./testUtils";
 import { getTestData, logTestDataConfig } from "./testConfig";
-import { TestContext, setupTestHooks } from "./testHooks";
+import { TestContext, setupTestHooks, collapseAllTreeItems } from "./testHooks";
 
 /**
  * Recursively expands all collapsible tree items in a tree section.
@@ -106,6 +106,29 @@ describe("Projects View UI Tests", function () {
 
     // Convenience getters for driver (for use in tests)
     const getDriver = () => ctx.driver;
+
+    // Reset tree state
+    afterEach(async function () {
+        const driver = getDriver();
+        if (!driver) {
+            return;
+        }
+
+        try {
+            const sideBar = new SideBarView();
+            const content = sideBar.getContent();
+            const projectsSection = await findProjectsSection(content);
+
+            if (projectsSection) {
+                const collapsedCount = await collapseAllTreeItems(driver, projectsSection);
+                if (collapsedCount > 0) {
+                    console.log(`[ProjectsView] Cleaned up: collapsed ${collapsedCount} tree item(s)`);
+                }
+            }
+        } catch (error) {
+            console.log(`[ProjectsView] Cleanup warning: ${error}`);
+        }
+    });
 
     describe("Projects View Detection and Expansion", function () {
         it("should detect Projects view and expand all collapsible tree items", async function () {

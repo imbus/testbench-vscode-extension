@@ -444,6 +444,90 @@ export function setupTestHooks(context: TestContext, options: TestHooksOptions =
 }
 
 /**
+ * Resets the extension state by navigating to Projects view.
+ * Useful for ensuring a known state before tests that depend on specific views.
+ *
+ * This function:
+ * 1. Opens the TestBench sidebar
+ * 2. If in Test Themes/Elements views, clicks "Open Projects View" to return to Projects
+ * 3. Waits for Projects view to be visible
+ *
+ * @param driver - WebDriver instance
+ * @param suiteName - Name of the test suite for logging
+ * @returns Promise<boolean> - True if reset was successful, false otherwise
+ */
+export async function resetToProjectsView(driver: WebDriver, suiteName: string = "TestHooks"): Promise<boolean> {
+    try {
+        await driver.switchTo().defaultContent();
+        await openTestBenchSidebar(driver);
+
+        const { SideBarView } = await import("vscode-extension-tester");
+        const { findSidebarSection, clickToolbarButton, waitForProjectsView } = await import("./testUtils");
+
+        const sideBar = new SideBarView();
+        const content = sideBar.getContent();
+
+        // Check if we're already in Projects view
+        const projectsSection = await findSidebarSection(content, "Projects");
+        if (projectsSection) {
+            console.log(`[${suiteName}] Already in Projects view`);
+            return true;
+        }
+
+        // We might be in Test Themes/Elements view - try to navigate back
+        const testThemesSection = await findSidebarSection(content, "Test Themes");
+        if (testThemesSection) {
+            console.log(`[${suiteName}] In Test Themes view, navigating back to Projects...`);
+            const clicked = await clickToolbarButton(testThemesSection, "Open Projects View", driver);
+            if (clicked) {
+                const appeared = await waitForProjectsView(driver);
+                if (appeared) {
+                    console.log(`[${suiteName}] Successfully returned to Projects view`);
+                    return true;
+                }
+            }
+        }
+
+        console.log(`[${suiteName}] Could not reset to Projects view`);
+        return false;
+    } catch (error) {
+        console.log(`[${suiteName}] Error resetting to Projects view: ${error}`);
+        return false;
+    }
+}
+
+/**
+ * Collapses all expanded tree items in a tree section.
+ * Useful for resetting tree state between tests to ensure isolation.
+ *
+ * @param driver - WebDriver instance
+ * @param section - The tree section containing items to collapse
+ * @returns Promise<number> - Number of items collapsed
+ */
+export async function collapseAllTreeItems(driver: WebDriver, section: any): Promise<number> {
+    let collapsedCount = 0;
+    try {
+        const items = await section.getVisibleItems();
+        for (const item of items) {
+            try {
+                const hasChildren = await item.hasChildren();
+                const isExpanded = await item.isExpanded();
+                if (hasChildren && isExpanded) {
+                    await item.collapse();
+                    await driver.sleep(100); // Brief pause for UI update
+                    collapsedCount++;
+                }
+            } catch {
+                // Item may have been removed or become stale, continue
+            }
+        }
+    } catch {
+        // Section may not be available
+    }
+    return collapsedCount;
+}
+
+/**
  * Options for configuring login webview test hooks.
  */
 export interface LoginWebviewHooksOptions extends TestHooksOptions {

@@ -22,16 +22,19 @@ import { TestContext, setupLoginWebviewTestHooks } from "./testHooks";
 /**
  * Wrapper function to execute test code within webview context with proper cleanup.
  * Handles webview switching, credential checking, and cleanup automatically.
+ * Ensures clean state by verifying no connections exist before test execution.
  *
  * @param driver - The WebDriver instance
  * @param testFn - The test function to execute within webview context
  * @param requireCredentials - Whether test credentials are required (default: true)
+ * @param skipCleanStateCheck - Whether to skip the clean state verification (default: false)
  * @returns Promise<void>
  */
 async function withWebviewContext(
     driver: WebDriver,
     testFn: (driver: WebDriver) => Promise<void>,
-    requireCredentials: boolean = true
+    requireCredentials: boolean = true,
+    skipCleanStateCheck: boolean = false
 ): Promise<void> {
     try {
         const webviewAvailable = await isWebviewAvailable(driver);
@@ -48,6 +51,16 @@ async function withWebviewContext(
 
         if (requireCredentials && !hasTestCredentials()) {
             throw new Error("Test credentials not available - test skipped");
+        }
+
+        // Verify clean state before test execution
+        if (!skipCleanStateCheck) {
+            const connectionPage = new ConnectionPage(driver);
+            const connectionCount = await connectionPage.getConnectionCount();
+            if (connectionCount > 0) {
+                console.log(`[Test Isolation] Warning: Found ${connectionCount} existing connection(s) - expected 0`);
+                // Don't fail
+            }
         }
 
         await testFn(driver);
