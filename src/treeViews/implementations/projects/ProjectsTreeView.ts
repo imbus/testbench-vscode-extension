@@ -362,9 +362,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
      * @param options Optional configuration for the opening behavior
      * @returns Promise that resolves when the cycle is opened, or null if validation fails
      */
-    public async openCycle(
-        item: ProjectsTreeItem
-    ): Promise<{
+    public async openCycle(item: ProjectsTreeItem): Promise<{
         projectKey: string;
         cycleKey: string;
         tovKey: string;
