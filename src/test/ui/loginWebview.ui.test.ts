@@ -178,29 +178,6 @@ describe("Login Webview - Connection Management Tests", function () {
     });
 
     describe("Creating Connections", function () {
-        it("should show validation error when required fields are missing (duplicate)", async function () {
-            await withWebviewContext(
-                getDriver(),
-                async (driver) => {
-                    const connectionPage = new ConnectionPage(driver);
-                    await connectionPage.resetForm();
-
-                    const saveButton = await driver.findElement(By.id(ConnectionFormElements.SAVE_BUTTON));
-                    await saveButton.click();
-
-                    const messageText = await connectionPage.getErrorMessage();
-                    expect(messageText.toLowerCase()).to.include("required");
-                },
-                false
-            ).catch((error) => {
-                if (error.message.includes("skipped")) {
-                    this.skip();
-                } else {
-                    throw error;
-                }
-            });
-        });
-
         it("should create a new connection with all fields", async function () {
             await withWebviewContext(
                 getDriver(),
