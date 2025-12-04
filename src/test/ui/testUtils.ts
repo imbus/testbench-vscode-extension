@@ -2407,7 +2407,20 @@ export async function verifyRefactorPreviewCheckbox(
         // If the wait returns a boolean, that's our result. If it times out/returns null, default to false.
         return !!isChecked;
     } catch (error) {
-        logger.error("RefactorPreview", "Error verifying checkbox", error);
+        // Timeout is expected if Refactor Preview is still loading or checkbox row hasn't appeared yet
+        const isTimeoutError =
+            error instanceof Error &&
+            (error.name === "TimeoutError" || error.message.includes("Timeout") || error.message.includes("timeout"));
+
+        if (isTimeoutError) {
+            logger.debug(
+                "RefactorPreview",
+                `Timeout verifying checkbox for "${fileName}" - Refactor Preview may still be loading (this is expected)`
+            );
+        } else {
+            // For non-timeout errors, log as warning since they're unexpected but not critical
+            logger.warn("RefactorPreview", "Error verifying checkbox", error);
+        }
         return false;
     }
 }
