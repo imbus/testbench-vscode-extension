@@ -8,13 +8,20 @@ import * as path from "path";
 import * as fs from "fs";
 import * as cp from "child_process";
 import { ExTester, ReleaseQuality } from "vscode-extension-tester";
-import { loadEnv, TEST_PATHS } from "./testConfig";
+import { loadEnv, TEST_PATHS, getLoggerConfig } from "./testConfig";
+import { initializeTestLogger, getTestLogger } from "./testLogger";
 
 async function main(): Promise<void> {
     try {
-        console.log("Loading environment variables...");
         const projectRoot = path.resolve(__dirname, "../../../");
         loadEnv(projectRoot);
+
+        // Initialize the test logger early
+        const loggerConfig = getLoggerConfig();
+        const logger = await initializeTestLogger(projectRoot, loggerConfig);
+        logger.info("Setup", "Loading environment variables...");
+        logger.info("Setup", "UI Test Runner starting...");
+        logger.info("Setup", `Project Root: ${projectRoot}`);
 
         // Centralize storage for all transient test artifacts under .test-resources
         const baseStoragePath = path.resolve(projectRoot, TEST_PATHS.BASE_STORAGE);
@@ -27,8 +34,8 @@ async function main(): Promise<void> {
         // Source of truth for test files (not modified during tests)
         const fixturesPath = path.resolve(projectRoot, TEST_PATHS.FIXTURES);
 
-        console.log(`[Setup] Base Storage Path: ${baseStoragePath}`);
-        console.log("[Setup] Preparing runtime workspace...");
+        logger.info("Setup", `Base Storage Path: ${baseStoragePath}`);
+        logger.info("Setup", "Preparing runtime workspace...");
 
         // Clean previous runtime workspace
         if (fs.existsSync(runtimeWorkspacePath)) {
@@ -37,14 +44,14 @@ async function main(): Promise<void> {
 
         // Copy fixtures to runtime workspace
         if (fs.existsSync(fixturesPath)) {
-            console.log(`[Setup] Copying fixtures from '${fixturesPath}' to '${runtimeWorkspacePath}'...`);
+            logger.info("Setup", `Copying fixtures from '${fixturesPath}' to '${runtimeWorkspacePath}'...`);
             fs.cpSync(fixturesPath, runtimeWorkspacePath, { recursive: true });
         } else {
-            console.log(`[Setup] No fixtures found at '${fixturesPath}'. Creating empty workspace.`);
+            logger.warn("Setup", `No fixtures found at '${fixturesPath}'. Creating empty workspace.`);
             fs.mkdirSync(runtimeWorkspacePath, { recursive: true });
         }
 
-        console.log("[Setup] Checking VSIX status...");
+        logger.info("Setup", "Checking VSIX status...");
         const packageJsonPath = path.join(projectRoot, TEST_PATHS.PACKAGE_JSON);
         if (!fs.existsSync(packageJsonPath)) {
             throw new Error(`${TEST_PATHS.PACKAGE_JSON} not found at ${packageJsonPath}`);
@@ -55,24 +62,24 @@ async function main(): Promise<void> {
         const vsixPath = path.join(projectRoot, vsixName);
 
         if (fs.existsSync(vsixPath)) {
-            console.log(`[Setup] Found existing VSIX: ${vsixName}. Skipping package creation.`);
+            logger.info("Setup", `Found existing VSIX: ${vsixName}. Skipping package creation.`);
         } else {
-            console.log(`[Setup] VSIX not found (${vsixName}). Creating package...`);
+            logger.info("Setup", `VSIX not found (${vsixName}). Creating package...`);
             try {
                 cp.execSync("npm run vsix-package", {
                     cwd: projectRoot,
                     stdio: "inherit"
                 });
-                console.log("[Setup] VSIX package created successfully.");
+                logger.info("Setup", "VSIX package created successfully.");
             } catch (error) {
-                console.error("[Setup] Failed to create VSIX package.");
+                logger.error("Setup", "Failed to create VSIX package.");
                 throw error;
             }
         }
 
         const performSetup = async (forceClean: boolean = false): Promise<ExTester> => {
             if (forceClean) {
-                console.log("[Setup] Cleaning VS Code data...");
+                logger.info("Setup", "Cleaning VS Code data...");
                 if (fs.existsSync(testStoragePath)) {
                     fs.rmSync(testStoragePath, { recursive: true, force: true });
                 }
@@ -86,15 +93,15 @@ async function main(): Promise<void> {
                 fs.readdirSync(testStoragePath).some((file) => file.includes("vscode"));
 
             if (hasExistingVSCode && !forceClean) {
-                console.log("[Setup] Detected existing VS Code. Skipping download.");
+                logger.info("Setup", "Detected existing VS Code. Skipping download.");
             } else {
-                console.log("[Setup] Downloading VS Code...");
+                logger.info("Setup", "Downloading VS Code...");
                 await tester.downloadCode();
             }
 
             await tester.downloadChromeDriver();
 
-            console.log(`[Setup] Installing extension from: ${vsixPath}`);
+            logger.info("Setup", `Installing extension from: ${vsixPath}`);
             await tester.installVsix({
                 vsixFile: vsixPath,
                 installDependencies: true
@@ -115,22 +122,22 @@ async function main(): Promise<void> {
                     err.message.includes("invalid signature"));
 
             if (isCorruptionError) {
-                console.warn("\n[Setup] Detected corrupted VS Code archive (interrupted download).");
-                console.log("[Setup] Automatically cleaning and retrying download...\n");
+                logger.warn("Setup", "Detected corrupted VS Code archive (interrupted download).");
+                logger.info("Setup", "Automatically cleaning and retrying download...");
                 exTester = await performSetup(true);
             } else {
                 throw err;
             }
         }
 
-        console.log("Running UI tests...");
+        logger.info("TestRunner", "Running UI tests...");
 
         // Handle arguments
         const specificFile = process.argv[2];
         let testFilesPattern: string;
 
         if (specificFile) {
-            console.log(`[Test Runner] Targeting specific file: ${specificFile}`);
+            logger.info("TestRunner", `Targeting specific file: ${specificFile}`);
             const fileName = specificFile.replace(".ts", ".js");
             const compiledTestPath = path.join(__dirname, fileName);
             testFilesPattern = compiledTestPath.replace(/\\/g, "/");
@@ -141,14 +148,17 @@ async function main(): Promise<void> {
                 const sourceTestPath = path.resolve(projectRoot, "src/test/ui", sourceFileName);
                 const sourceExists = fs.existsSync(sourceTestPath);
 
-                console.error("\n ERROR: Test file not found!");
-                console.error(`   Compiled file: ${compiledTestPath}`);
+                logger.error("TestRunner", "Test file not found!");
+                logger.error("TestRunner", `Compiled file: ${compiledTestPath}`);
                 if (sourceExists) {
-                    console.error(`   Source file exists: ${sourceTestPath}`);
-                    console.error(`   The file may not have been compiled. Try running 'npm run compile-tests' first.`);
+                    logger.error("TestRunner", `Source file exists: ${sourceTestPath}`);
+                    logger.error(
+                        "TestRunner",
+                        "The file may not have been compiled. Try running 'npm run compile-tests' first."
+                    );
                 } else {
-                    console.error(`   Source file: ${sourceTestPath}`);
-                    console.error(`   Make sure the test file exists in 'src/test/ui/' directory.`);
+                    logger.error("TestRunner", `Source file: ${sourceTestPath}`);
+                    logger.error("TestRunner", "Make sure the test file exists in 'src/test/ui/' directory.");
                 }
 
                 // List available test files to help the user
@@ -161,26 +171,26 @@ async function main(): Promise<void> {
                             .map((file) => `   - ${file}`);
 
                         if (availableFiles.length > 0) {
-                            console.error(`\n   Available test files:`);
-                            availableFiles.forEach((file) => console.error(file));
+                            logger.error("TestRunner", "Available test files:");
+                            availableFiles.forEach((file) => logger.error("TestRunner", file));
                         }
                     }
                 } catch {
                     // Ignore errors when listing files
                 }
 
-                console.error("");
+                logger.close();
                 process.exit(1);
             }
 
-            console.log(`[Test Runner] ✓ Test file found: ${compiledTestPath}`);
+            logger.info("TestRunner", `✓ Test file found: ${compiledTestPath}`);
         } else {
-            console.log(`[Test Runner] No specific file provided. Running all UI tests.`);
+            logger.info("TestRunner", "No specific file provided. Running all UI tests.");
             testFilesPattern = path.join(__dirname, "**/*.ui.test.js").replace(/\\/g, "/");
         }
 
-        console.log(`[Test Runner] Test Pattern: ${testFilesPattern}`);
-        console.log(`[Test Runner] Workspace:    ${runtimeWorkspacePath}`);
+        logger.info("TestRunner", `Test Pattern: ${testFilesPattern}`);
+        logger.info("TestRunner", `Workspace: ${runtimeWorkspacePath}`);
 
         await exTester.runTests(testFilesPattern, {
             settings: TEST_PATHS.VSCODE_TEST_SETTINGS,
@@ -188,10 +198,13 @@ async function main(): Promise<void> {
             cleanup: true // Set to true to keep the instance open after tests for debugging
         });
 
-        console.log("UI tests completed successfully.");
+        logger.info("TestRunner", "UI tests completed successfully.");
+        logger.close();
         process.exit(0);
     } catch (err) {
-        console.error("Failed to run UI tests:", err);
+        const logger = getTestLogger();
+        logger.error("TestRunner", `Failed to run UI tests: ${err}`);
+        logger.close();
         process.exit(1);
     }
 }

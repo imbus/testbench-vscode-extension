@@ -9,6 +9,7 @@ import * as path from "path";
 import { VSBrowser, WebDriver, EditorView, Workbench, By, until } from "vscode-extension-tester";
 import { openTestBenchSidebar, ensureLoggedIn, UITimeouts } from "./testUtils";
 import { isSlowMotionEnabled, getSlowMotionDelay, hasTestCredentials, TEST_PATHS } from "./testConfig";
+import { getTestLogger } from "./testLogger";
 
 /**
  * Waits for VS Code workbench to be fully loaded and ready.
@@ -18,7 +19,8 @@ import { isSlowMotionEnabled, getSlowMotionDelay, hasTestCredentials, TEST_PATHS
  * @returns Promise<boolean> - True if workbench is ready, false if timeout
  */
 async function waitForVSCodeReady(driver: WebDriver, timeout: number = 60000): Promise<boolean> {
-    console.log("[VSCode] Waiting for VS Code to be ready...");
+    const logger = getTestLogger();
+    logger.info("VSCode", "Waiting for VS Code to be ready...");
 
     try {
         //  Wait for the main workbench element
@@ -37,7 +39,7 @@ async function waitForVSCodeReady(driver: WebDriver, timeout: number = 60000): P
         // Verify workbench is still present
         const workbench = await driver.findElements(By.css(".monaco-workbench"));
         if (workbench.length === 0) {
-            console.log("[VSCode] Workbench disappeared, waiting again...");
+            logger.warn("VSCode", "Workbench disappeared, waiting again...");
             await driver.wait(
                 until.elementLocated(By.css(".monaco-workbench")),
                 timeout / 2,
@@ -46,10 +48,10 @@ async function waitForVSCodeReady(driver: WebDriver, timeout: number = 60000): P
             await driver.sleep(1000);
         }
 
-        console.log("[VSCode] ✓ VS Code is ready");
+        logger.info("VSCode", "✓ VS Code is ready");
         return true;
     } catch (error) {
-        console.log(`[VSCode] ✗ Failed to wait for VS Code: ${error}`);
+        logger.error("VSCode", `✗ Failed to wait for VS Code: ${error}`);
         return false;
     }
 }
@@ -106,10 +108,11 @@ const DEFAULT_OPTIONS: Required<TestHooksOptions> = {
  * Called at the start of each test when logSlowMotion is enabled.
  */
 export function logSlowMotionStatus(): void {
+    const logger = getTestLogger();
     if (isSlowMotionEnabled()) {
-        console.log(`[Slow Motion] Enabled with ${getSlowMotionDelay()}ms delay`);
+        logger.info("SlowMotion", `Enabled with ${getSlowMotionDelay()}ms delay`);
     } else {
-        console.log("[Slow Motion] Disabled");
+        logger.debug("SlowMotion", "Disabled");
     }
 }
 
@@ -127,6 +130,7 @@ export async function captureScreenshot(
     testName: string,
     suiteName: string = "UITest"
 ): Promise<string | null> {
+    const logger = getTestLogger();
     try {
         // Create screenshots directory if it doesn't exist
         const projectRoot = path.resolve(__dirname, "../../../");
@@ -144,10 +148,10 @@ export async function captureScreenshot(
         const screenshot = await driver.takeScreenshot();
         fs.writeFileSync(filepath, screenshot, "base64");
 
-        console.log(`[Screenshot] Saved: ${filepath}`);
+        logger.info("Screenshot", `Saved: ${filepath}`);
         return filepath;
     } catch (error) {
-        console.log(`[Screenshot] Failed to capture screenshot: ${error}`);
+        logger.error("Screenshot", `Failed to capture screenshot: ${error}`);
         return null;
     }
 }
@@ -160,6 +164,7 @@ export async function captureScreenshot(
  * @returns Promise<number> - Number of notifications cleared
  */
 export async function clearAllNotifications(driver: WebDriver): Promise<number> {
+    const logger = getTestLogger();
     try {
         await driver.switchTo().defaultContent();
 
@@ -208,12 +213,12 @@ export async function clearAllNotifications(driver: WebDriver): Promise<number> 
         }
 
         if (clearedCount > 0) {
-            console.log(`[Cleanup] Cleared ${clearedCount} notification(s)`);
+            logger.debug("Cleanup", `Cleared ${clearedCount} notification(s)`);
         }
 
         return clearedCount;
     } catch (error) {
-        console.log(`[Cleanup] Error clearing notifications: ${error}`);
+        logger.warn("Cleanup", `Error clearing notifications: ${error}`);
         return 0;
     }
 }
@@ -258,15 +263,16 @@ export async function isTestBenchSidebarOpen(_driver: WebDriver): Promise<boolea
  * @returns Promise<boolean> - True if logged in, false if test should be skipped
  */
 export async function ensureLoggedInOrSkip(driver: WebDriver, suiteName: string, skipFn: () => void): Promise<boolean> {
+    const logger = getTestLogger();
     if (!hasTestCredentials()) {
-        console.log(`[${suiteName}] Test credentials not available. Skipping tests.`);
+        logger.warn(suiteName, "Test credentials not available. Skipping tests.");
         skipFn();
         return false;
     }
 
     const loggedIn = await ensureLoggedIn(driver);
     if (!loggedIn) {
-        console.log(`[${suiteName}] Failed to login. Skipping tests.`);
+        logger.warn(suiteName, "Failed to login. Skipping tests.");
         skipFn();
         return false;
     }
@@ -286,8 +292,11 @@ export function createBeforeHook(context: TestContext, options: TestHooksOptions
     const opts = { ...DEFAULT_OPTIONS, ...options };
 
     return async function (): Promise<void> {
+        const logger = getTestLogger();
         context.browser = VSBrowser.instance;
         context.driver = context.browser.driver;
+
+        logger.suiteStart(opts.suiteName);
 
         // Wait for VS Code to be fully loaded before any interactions
         const isReady = await waitForVSCodeReady(context.driver, opts.timeout);
@@ -299,7 +308,7 @@ export function createBeforeHook(context: TestContext, options: TestHooksOptions
             try {
                 await new EditorView().closeAllEditors();
             } catch (error) {
-                console.log(`[${opts.suiteName}] Warning: Could not close editors: ${error}`);
+                logger.warn(opts.suiteName, `Could not close editors: ${error}`);
                 // Don't fail the hook, editors might already be closed
             }
         }
@@ -317,14 +326,16 @@ export function createAfterHook(options: TestHooksOptions = {}): () => Promise<v
     const opts = { ...DEFAULT_OPTIONS, ...options };
 
     return async function (): Promise<void> {
+        const logger = getTestLogger();
         if (opts.closeEditors) {
             try {
                 await new EditorView().closeAllEditors();
             } catch (error) {
-                console.log(`[${opts.suiteName}] Warning: Could not close editors in after hook: ${error}`);
+                logger.warn(opts.suiteName, `Could not close editors in after hook: ${error}`);
                 // Don't fail the hook
             }
         }
+        logger.suiteEnd(opts.suiteName);
     };
 }
 
@@ -344,6 +355,10 @@ export function createBeforeEachHook(
 
     return async function (this: Mocha.Context): Promise<void> {
         const driver = getDriver();
+        const logger = getTestLogger();
+        const testTitle = this.currentTest?.title || "unknown";
+
+        logger.testStart(opts.suiteName, testTitle);
 
         if (opts.logSlowMotion) {
             logSlowMotionStatus();
@@ -355,7 +370,7 @@ export function createBeforeEachHook(
                 if (!isOpen) {
                     await openTestBenchSidebar(driver);
                 } else {
-                    console.log(`[${opts.suiteName}] TestBench sidebar is already open`);
+                    logger.debug(opts.suiteName, "TestBench sidebar is already open");
                 }
             } else {
                 await openTestBenchSidebar(driver);
@@ -388,21 +403,23 @@ export function createAfterEachHook(
 
     return async function (this: Mocha.Context): Promise<void> {
         const driver = getDriver();
+        const logger = getTestLogger();
         const testTitle = this.currentTest?.title || "unknown";
         const testState = this.currentTest?.state;
         const testDuration = this.currentTest?.duration;
 
         // Log test result
         if (testState === "failed") {
-            console.log(`[${opts.suiteName}] ✗ Test failed: "${testTitle}"`);
+            logger.testFail(testTitle, this.currentTest?.err, testDuration);
 
             // Capture screenshot on failure
             if (opts.captureScreenshotOnFailure) {
                 await captureScreenshot(driver, testTitle, opts.suiteName);
             }
         } else if (testState === "passed") {
-            const durationStr = testDuration ? ` (${testDuration}ms)` : "";
-            console.log(`[${opts.suiteName}] ✓ Test passed: "${testTitle}"${durationStr}`);
+            logger.testPass(testTitle, testDuration);
+        } else if (testState === "pending") {
+            logger.testSkip(testTitle);
         }
 
         // Clear notifications to ensure clean state for next test
@@ -457,6 +474,7 @@ export function setupTestHooks(context: TestContext, options: TestHooksOptions =
  * @returns Promise<boolean> - True if reset was successful, false otherwise
  */
 export async function resetToProjectsView(driver: WebDriver, suiteName: string = "TestHooks"): Promise<boolean> {
+    const logger = getTestLogger();
     try {
         await driver.switchTo().defaultContent();
         await openTestBenchSidebar(driver);
@@ -470,28 +488,28 @@ export async function resetToProjectsView(driver: WebDriver, suiteName: string =
         // Check if we're already in Projects view
         const projectsSection = await findSidebarSection(content, "Projects");
         if (projectsSection) {
-            console.log(`[${suiteName}] Already in Projects view`);
+            logger.debug(suiteName, "Already in Projects view");
             return true;
         }
 
         // We might be in Test Themes/Elements view - try to navigate back
         const testThemesSection = await findSidebarSection(content, "Test Themes");
         if (testThemesSection) {
-            console.log(`[${suiteName}] In Test Themes view, navigating back to Projects...`);
+            logger.info(suiteName, "In Test Themes view, navigating back to Projects...");
             const clicked = await clickToolbarButton(testThemesSection, "Open Projects View", driver);
             if (clicked) {
                 const appeared = await waitForProjectsView(driver);
                 if (appeared) {
-                    console.log(`[${suiteName}] Successfully returned to Projects view`);
+                    logger.info(suiteName, "Successfully returned to Projects view");
                     return true;
                 }
             }
         }
 
-        console.log(`[${suiteName}] Could not reset to Projects view`);
+        logger.warn(suiteName, "Could not reset to Projects view");
         return false;
     } catch (error) {
-        console.log(`[${suiteName}] Error resetting to Projects view: ${error}`);
+        logger.error(suiteName, `Error resetting to Projects view: ${error}`);
         return false;
     }
 }
@@ -629,6 +647,7 @@ export function createLoginWebviewBeforeEachHook(
         await openTestBenchSidebar(driver);
 
         const { attemptLogout, deleteAllConnections, isWebviewAvailable } = await import("./testUtils");
+        const logger = getTestLogger();
 
         // Attempt logout with retry
         let logoutSuccess = false;
@@ -638,7 +657,7 @@ export function createLoginWebviewBeforeEachHook(
                 logoutSuccess = true;
                 break;
             } catch (error) {
-                console.log(`[${opts.suiteName}] Logout attempt ${attempt}/${opts.maxCleanupRetries} failed: ${error}`);
+                logger.warn(opts.suiteName, `Logout attempt ${attempt}/${opts.maxCleanupRetries} failed: ${error}`);
                 if (attempt < opts.maxCleanupRetries) {
                     await closeStuckDialogs(driver);
                     await driver.sleep(500);
@@ -647,7 +666,7 @@ export function createLoginWebviewBeforeEachHook(
         }
 
         if (!logoutSuccess) {
-            console.log(`[${opts.suiteName}] All logout attempts failed - may already be logged out`);
+            logger.debug(opts.suiteName, "All logout attempts failed - may already be logged out");
         }
 
         // Delete all connections with retry
@@ -660,17 +679,16 @@ export function createLoginWebviewBeforeEachHook(
                 const isClean = await verifyCleanWebviewState(driver);
                 if (isClean) {
                     cleanupSuccess = true;
-                    console.log(`[${opts.suiteName}] ✓ Cleanup verified: webview is in clean state`);
+                    logger.info(opts.suiteName, "✓ Cleanup verified: webview is in clean state");
                     break;
                 } else {
-                    console.log(
-                        `[${opts.suiteName}] Cleanup attempt ${attempt}/${opts.maxCleanupRetries}: connections still exist`
+                    logger.warn(
+                        opts.suiteName,
+                        `Cleanup attempt ${attempt}/${opts.maxCleanupRetries}: connections still exist`
                     );
                 }
             } catch (error) {
-                console.log(
-                    `[${opts.suiteName}] Cleanup attempt ${attempt}/${opts.maxCleanupRetries} failed: ${error}`
-                );
+                logger.warn(opts.suiteName, `Cleanup attempt ${attempt}/${opts.maxCleanupRetries} failed: ${error}`);
             }
 
             // Recovery actions between retries
@@ -683,10 +701,10 @@ export function createLoginWebviewBeforeEachHook(
         }
 
         if (!cleanupSuccess) {
-            console.log(`[${opts.suiteName}] ⚠ Warning: Cleanup may not be complete after all retry attempts`);
+            logger.warn(opts.suiteName, "⚠ Warning: Cleanup may not be complete after all retry attempts");
 
             if (opts.skipOnCleanupFailure) {
-                console.log(`[${opts.suiteName}] Skipping test due to cleanup failure`);
+                logger.info(opts.suiteName, "Skipping test due to cleanup failure");
                 this.skip();
                 return;
             }
@@ -703,7 +721,7 @@ export function createLoginWebviewBeforeEachHook(
                 "Waiting for workbench to be ready"
             );
         } catch (error) {
-            console.log(`[${opts.suiteName}] Warning: Workbench wait timed out: ${error}`);
+            logger.warn(opts.suiteName, `Workbench wait timed out: ${error}`);
         }
 
         // Wait for webview to be available after cleanup
@@ -720,7 +738,7 @@ export function createLoginWebviewBeforeEachHook(
                 "Waiting for webview to be available after cleanup"
             );
         } catch (error) {
-            console.log(`[${opts.suiteName}] Warning: Webview availability wait timed out: ${error}`);
+            logger.warn(opts.suiteName, `Webview availability wait timed out: ${error}`);
             // Continue anyway - the test will handle webview availability checks
         }
 

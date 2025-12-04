@@ -6,6 +6,7 @@
 
 import { WebDriver, By, WebElement, until } from "vscode-extension-tester";
 import { ConnectionFormElements, UITimeouts, applySlowMotion } from "../testUtils";
+import { getTestLogger } from "../testLogger";
 
 /**
  * Interface for connection form data.
@@ -114,12 +115,13 @@ export class ConnectionPage {
                 );
 
                 // Dialog appeared, handle it using dynamic import to avoid circular dependency
+                const logger = getTestLogger();
                 const { handleConfirmationDialog } = await import("../testUtils");
                 const dialogHandled = await handleConfirmationDialog(this.driver, "Save Changes", UITimeouts.SHORT);
                 if (dialogHandled) {
-                    console.log("[ConnectionPage] Handled 'Save Changes' overwrite dialog");
+                    logger.info("ConnectionPage", "Handled 'Save Changes' overwrite dialog");
                 } else {
-                    console.log("[ConnectionPage] 'Save Changes' dialog appeared but could not be handled");
+                    logger.warn("ConnectionPage", "'Save Changes' dialog appeared but could not be handled");
                 }
 
                 // Wait for dialog to fully close
@@ -140,7 +142,8 @@ export class ConnectionPage {
             await findAndSwitchToWebview(this.driver);
         } catch (error) {
             // If dialog handling fails, try to switch back to webview and continue
-            console.log("[ConnectionPage] Error handling Save Changes dialog, continuing anyway:", error);
+            const logger = getTestLogger();
+            logger.warn("ConnectionPage", "Error handling Save Changes dialog, continuing anyway:", error);
             try {
                 const { findAndSwitchToWebview } = await import("../testUtils");
                 await findAndSwitchToWebview(this.driver);
@@ -365,6 +368,7 @@ export class ConnectionPage {
      * @returns True if deletion was successful, false otherwise
      */
     public async deleteConnection(connectionElement: WebElement): Promise<boolean> {
+        const logger = getTestLogger();
         try {
             // Click delete button (this will open confirmation dialog)
             await this.clickDelete(connectionElement);
@@ -384,7 +388,7 @@ export class ConnectionPage {
             const dialogHandled = await handleConfirmationDialog(this.driver, "Delete");
 
             if (!dialogHandled) {
-                console.log("[ConnectionPage] Failed to handle confirmation dialog");
+                logger.warn("ConnectionPage", "Failed to handle confirmation dialog");
                 return false;
             }
 
@@ -402,13 +406,13 @@ export class ConnectionPage {
             const { findAndSwitchToWebview } = await import("../testUtils");
             const webviewFound = await findAndSwitchToWebview(this.driver);
             if (!webviewFound) {
-                console.log("[ConnectionPage] Could not switch back to webview after delete");
+                logger.warn("ConnectionPage", "Could not switch back to webview after delete");
                 return false;
             }
 
             return true;
         } catch (error) {
-            console.log(`[ConnectionPage] Error deleting connection: ${error}`);
+            logger.error("ConnectionPage", `Error deleting connection: ${error}`);
             // Try to switch back to webview
             try {
                 const { findAndSwitchToWebview } = await import("../testUtils");
@@ -439,6 +443,7 @@ export class ConnectionPage {
      * @returns The number of connections that were deleted
      */
     public async deleteAllConnections(): Promise<number> {
+        const logger = getTestLogger();
         try {
             let deletedCount = 0;
             const maxIterations = 50; // Safety limit to prevent infinite loops
@@ -466,13 +471,13 @@ export class ConnectionPage {
 
                     if (isDisabled !== null) {
                         // Connection is being edited - cancel edit mode first
-                        console.log("[ConnectionPage] Connection is being edited. Canceling edit mode first...");
+                        logger.info("ConnectionPage", "Connection is being edited. Canceling edit mode first...");
                         try {
                             await this.cancelEdit();
                             // Re-fetch connections after canceling edit
                             continue;
                         } catch {
-                            console.log("[ConnectionPage] Could not cancel edit mode. Skipping cleanup.");
+                            logger.warn("ConnectionPage", "Could not cancel edit mode. Skipping cleanup.");
                             break;
                         }
                     }
@@ -495,7 +500,7 @@ export class ConnectionPage {
                     const dialogHandled = await handleConfirmationDialog(this.driver, "Delete");
 
                     if (!dialogHandled) {
-                        console.log("[ConnectionPage] Failed to handle confirmation dialog, skipping this connection");
+                        logger.warn("ConnectionPage", "Failed to handle confirmation dialog, skipping this connection");
                         // Try to cancel the dialog if it's still open
                         try {
                             await this.driver.switchTo().defaultContent();
@@ -538,17 +543,17 @@ export class ConnectionPage {
                         const { findAndSwitchToWebview } = await import("../testUtils");
                         const webviewFound = await findAndSwitchToWebview(this.driver);
                         if (!webviewFound) {
-                            console.log("[ConnectionPage] Could not switch back to webview after dialog");
+                            logger.warn("ConnectionPage", "Could not switch back to webview after dialog");
                             break;
                         }
                     } catch (error) {
-                        console.log(`[ConnectionPage] Error switching back to webview: ${error}`);
+                        logger.error("ConnectionPage", `Error switching back to webview: ${error}`);
                         break;
                     }
 
                     deletedCount++;
                 } catch (error) {
-                    console.log(`[ConnectionPage] Error deleting connection: ${error}`);
+                    logger.error("ConnectionPage", `Error deleting connection: ${error}`);
                     // Try to switch back to webview and continue
                     try {
                         const { findAndSwitchToWebview } = await import("../testUtils");
@@ -561,12 +566,12 @@ export class ConnectionPage {
             }
 
             if (deletedCount > 0) {
-                console.log(`[ConnectionPage] Deleted ${deletedCount} connection(s)`);
+                logger.info("ConnectionPage", `Deleted ${deletedCount} connection(s)`);
             }
 
             return deletedCount;
         } catch (error) {
-            console.log(`[ConnectionPage] Error during connection cleanup: ${error}`);
+            logger.error("ConnectionPage", `Error during connection cleanup: ${error}`);
             return 0;
         }
     }
@@ -602,7 +607,8 @@ export class ConnectionPage {
                 "Waiting for input field to be cleared"
             );
         } catch (error) {
-            console.log("Warning: Could not fully clear input field:", error);
+            const logger = getTestLogger();
+            logger.warn("ConnectionPage", "Warning: Could not fully clear input field:", error);
         }
     }
 

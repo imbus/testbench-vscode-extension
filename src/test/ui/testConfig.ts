@@ -6,6 +6,7 @@
 
 import * as path from "path";
 import * as fs from "fs";
+import { logger } from "./testLogger";
 
 /**
  * Test folder and file names for UI test setup.
@@ -63,35 +64,36 @@ export function loadEnv(projectRoot?: string): boolean {
             if (fs.existsSync(envPath)) {
                 const result = dotenv.config({ path: envPath, override: false });
                 if (!result.error) {
-                    console.log(`[Env] Loaded env file from: ${envPath}`);
+                    logger.info("Env", `Loaded env file from: ${envPath}`);
                     loadedAny = true;
                     // Continue to try other files (don't break) to allow multiple env files
                 } else {
-                    console.log(`[Env] Error loading env file from ${envPath}:`, result.error);
+                    logger.warn("Env", `Error loading env file from ${envPath}:`, result.error);
                 }
             }
         }
 
         if (!loadedAny) {
-            console.log(`[Env] No .env files found. Environment variables must be set manually.`);
-            console.log(`[Env] Looked in: ${possiblePaths.join(", ")}`);
+            logger.warn("Env", "No .env files found. Environment variables must be set manually.");
+            logger.trace("Env", `Looked in: ${possiblePaths.join(", ")}`);
         }
 
-        console.log(`[Env] TESTBENCH_TEST_SERVER_NAME=${process.env.TESTBENCH_TEST_SERVER_NAME || "not set"}`);
-        console.log(`[Env] TESTBENCH_TEST_USERNAME=${process.env.TESTBENCH_TEST_USERNAME || "not set"}`);
-        console.log(`[Env] TESTBENCH_TEST_PORT_NUMBER=${process.env.TESTBENCH_TEST_PORT_NUMBER || "not set"}`);
-        console.log(
-            `[Env] TESTBENCH_TEST_CONNECTION_LABEL=${process.env.TESTBENCH_TEST_CONNECTION_LABEL || "not set"}`
+        logger.trace("Env", `TESTBENCH_TEST_SERVER_NAME=${process.env.TESTBENCH_TEST_SERVER_NAME || "not set"}`);
+        logger.trace("Env", `TESTBENCH_TEST_USERNAME=${process.env.TESTBENCH_TEST_USERNAME || "not set"}`);
+        logger.trace("Env", `TESTBENCH_TEST_PORT_NUMBER=${process.env.TESTBENCH_TEST_PORT_NUMBER || "not set"}`);
+        logger.trace(
+            "Env",
+            `TESTBENCH_TEST_CONNECTION_LABEL=${process.env.TESTBENCH_TEST_CONNECTION_LABEL || "not set"}`
         );
-        console.log(`[Env] UI_TEST_SLOW_MOTION=${process.env.UI_TEST_SLOW_MOTION || "not set"}`);
-        console.log(`[Env] UI_TEST_SLOW_MOTION_DELAY=${process.env.UI_TEST_SLOW_MOTION_DELAY || "not set"}`);
+        logger.trace("Env", `UI_TEST_SLOW_MOTION=${process.env.UI_TEST_SLOW_MOTION || "not set"}`);
+        logger.trace("Env", `UI_TEST_SLOW_MOTION_DELAY=${process.env.UI_TEST_SLOW_MOTION_DELAY || "not set"}`);
 
         envLoaded = true;
         return loadedAny;
     } catch (error) {
         // dotenv is optional, if not available, env vars must be set manually
-        console.log("[Env] Error loading .env files:", error);
-        console.log("[Env] Continuing without .env file - environment variables must be set manually");
+        logger.error("Env", "Error loading .env files:", error);
+        logger.info("Env", "Continuing without .env file - environment variables must be set manually");
         envLoaded = true; // Mark as loaded to prevent retry loops
         return false;
     }
@@ -133,7 +135,11 @@ const ENV_VARS = {
     TEST_CYCLE_NAME: "TEST_CYCLE_NAME",
     TEST_SUBDIVISION_NAME: "TEST_SUBDIVISION_NAME",
     TEST_RESOURCE_FILE_NAME: "TEST_RESOURCE_FILE_NAME",
-    TEST_THEME_NAME: "TEST_THEME_NAME"
+    TEST_THEME_NAME: "TEST_THEME_NAME",
+    // Logging configuration
+    UI_TEST_LOG_LEVEL: "UI_TEST_LOG_LEVEL",
+    UI_TEST_LOG_TO_FILE: "UI_TEST_LOG_TO_FILE",
+    UI_TEST_LOG_TO_CONSOLE: "UI_TEST_LOG_TO_CONSOLE"
 } as const;
 
 /**
@@ -168,21 +174,26 @@ export function getTestCredentials(): TestCredentials {
     };
 
     // Debug: Log what we're reading from environment
-    console.log("[TestConfig] Reading credentials from environment:");
-    console.log(
-        `[TestConfig]   ${ENV_VARS.TESTBENCH_SERVER_NAME}=${process.env[ENV_VARS.TESTBENCH_SERVER_NAME] || "not set"}`
+    logger.trace("TestConfig", "Reading credentials from environment:");
+    logger.trace(
+        "TestConfig",
+        `  ${ENV_VARS.TESTBENCH_SERVER_NAME}=${process.env[ENV_VARS.TESTBENCH_SERVER_NAME] || "not set"}`
     );
-    console.log(
-        `[TestConfig]   ${ENV_VARS.TESTBENCH_USERNAME}=${process.env[ENV_VARS.TESTBENCH_USERNAME] || "not set"}`
+    logger.trace(
+        "TestConfig",
+        `  ${ENV_VARS.TESTBENCH_USERNAME}=${process.env[ENV_VARS.TESTBENCH_USERNAME] || "not set"}`
     );
-    console.log(
-        `[TestConfig]   ${ENV_VARS.TESTBENCH_PORT_NUMBER}=${process.env[ENV_VARS.TESTBENCH_PORT_NUMBER] || "not set"}`
+    logger.trace(
+        "TestConfig",
+        `  ${ENV_VARS.TESTBENCH_PORT_NUMBER}=${process.env[ENV_VARS.TESTBENCH_PORT_NUMBER] || "not set"}`
     );
-    console.log(
-        `[TestConfig]   ${ENV_VARS.TESTBENCH_CONNECTION_LABEL}=${process.env[ENV_VARS.TESTBENCH_CONNECTION_LABEL] || "not set"}`
+    logger.trace(
+        "TestConfig",
+        `  ${ENV_VARS.TESTBENCH_CONNECTION_LABEL}=${process.env[ENV_VARS.TESTBENCH_CONNECTION_LABEL] || "not set"}`
     );
-    console.log(
-        `[TestConfig]   ${ENV_VARS.TESTBENCH_PASSWORD}=${process.env[ENV_VARS.TESTBENCH_PASSWORD] ? "***" : "not set"}`
+    logger.trace(
+        "TestConfig",
+        `  ${ENV_VARS.TESTBENCH_PASSWORD}=${process.env[ENV_VARS.TESTBENCH_PASSWORD] ? "***" : "not set"}`
     );
 
     const credentials: TestCredentials = {
@@ -203,18 +214,20 @@ export function getTestCredentials(): TestCredentials {
     };
 
     if (usingDefaults.serverName || usingDefaults.username) {
-        console.log(
-            "[TestConfig] ⚠️  WARNING: Using default values for:",
-            Object.entries(usingDefaults)
-                .filter(([_, usingDefault]) => usingDefault)
-                .map(([key]) => key)
-                .join(", ")
+        logger.warn(
+            "TestConfig",
+            "⚠️  WARNING: Using default values for: " +
+                Object.entries(usingDefaults)
+                    .filter(([_, usingDefault]) => usingDefault)
+                    .map(([key]) => key)
+                    .join(", ")
         );
-        console.log(
-            "[TestConfig] Make sure testBenchConnection.env file exists in project root with required variables."
+        logger.warn(
+            "TestConfig",
+            "Make sure testBenchConnection.env file exists in project root with required variables."
         );
     } else {
-        console.log("[TestConfig] All credentials loaded from environment variables");
+        logger.info("TestConfig", "All credentials loaded from environment variables");
     }
 
     // Validate that we have at least the minimum required credentials
@@ -263,13 +276,13 @@ export function getSlowMotionDelay(): number {
     if (delayMs) {
         const parsed = parseInt(delayMs, 10);
         if (!isNaN(parsed) && parsed > 0) {
-            console.log(`[Slow Motion] Enabled with delay: ${parsed}ms`);
+            logger.info("Slow Motion", `Enabled with delay: ${parsed}ms`);
             return parsed;
         }
     }
 
     // Default slow motion delay: 1000ms (1 second)
-    console.log(`[Slow Motion] Enabled with default delay: 1000ms`);
+    logger.info("Slow Motion", "Enabled with default delay: 1000ms");
     return 1000;
 }
 
@@ -368,17 +381,88 @@ export function logTestDataConfig(): void {
         testThemeName: !process.env[ENV_VARS.TEST_THEME_NAME]?.trim()
     };
 
-    console.log("[TestData] Current test data configuration:");
-    console.log(`[TestData]   Project: "${testData.projectName}"${usingDefaults.projectName ? " (default)" : ""}`);
-    console.log(`[TestData]   Version: "${testData.versionName}"${usingDefaults.versionName ? " (default)" : ""}`);
-    console.log(`[TestData]   Cycle: "${testData.cycleName}"${usingDefaults.cycleName ? " (default)" : ""}`);
-    console.log(
-        `[TestData]   Subdivision: "${testData.subdivisionName}"${usingDefaults.subdivisionName ? " (default)" : ""}`
+    logger.info("TestData", "Current test data configuration:");
+    logger.info("TestData", `  Project: "${testData.projectName}"${usingDefaults.projectName ? " (default)" : ""}`);
+    logger.info("TestData", `  Version: "${testData.versionName}"${usingDefaults.versionName ? " (default)" : ""}`);
+    logger.info("TestData", `  Cycle: "${testData.cycleName}"${usingDefaults.cycleName ? " (default)" : ""}`);
+    logger.info(
+        "TestData",
+        `  Subdivision: "${testData.subdivisionName}"${usingDefaults.subdivisionName ? " (default)" : ""}`
     );
-    console.log(
-        `[TestData]   Resource File: "${testData.resourceFileName}"${usingDefaults.resourceFileName ? " (default)" : ""}`
+    logger.info(
+        "TestData",
+        `  Resource File: "${testData.resourceFileName}"${usingDefaults.resourceFileName ? " (default)" : ""}`
     );
-    console.log(
-        `[TestData]   Test Theme: "${testData.testThemeName}"${usingDefaults.testThemeName ? " (default)" : ""}`
+    logger.info(
+        "TestData",
+        `  Test Theme: "${testData.testThemeName}"${usingDefaults.testThemeName ? " (default)" : ""}`
     );
+}
+
+// ============================================
+// Logger Configuration
+// ============================================
+
+import { LogLevel, TestLoggerConfig } from "./testLogger";
+
+/**
+ * Log level string to enum mapping.
+ */
+const LOG_LEVEL_MAP: Record<string, LogLevel> = {
+    trace: LogLevel.TRACE,
+    debug: LogLevel.DEBUG,
+    info: LogLevel.INFO,
+    warn: LogLevel.WARN,
+    error: LogLevel.ERROR,
+    none: LogLevel.NONE
+};
+
+/**
+ * Gets the log level from environment variable.
+ *
+ * @returns LogLevel enum value
+ */
+export function getLogLevel(): LogLevel {
+    const levelStr = process.env[ENV_VARS.UI_TEST_LOG_LEVEL]?.toLowerCase().trim();
+    if (levelStr && levelStr in LOG_LEVEL_MAP) {
+        return LOG_LEVEL_MAP[levelStr];
+    }
+    return LogLevel.TRACE; // Default
+}
+
+/**
+ * Checks if file logging is enabled.
+ *
+ * @returns True if file logging is enabled (default: true)
+ */
+export function isFileLoggingEnabled(): boolean {
+    const value = process.env[ENV_VARS.UI_TEST_LOG_TO_FILE]?.toLowerCase().trim();
+    return value !== "false" && value !== "0";
+}
+
+/**
+ * Checks if console logging is enabled.
+ *
+ * @returns True if console logging is enabled (default: true)
+ */
+export function isConsoleLoggingEnabled(): boolean {
+    const value = process.env[ENV_VARS.UI_TEST_LOG_TO_CONSOLE]?.toLowerCase().trim();
+    return value !== "false" && value !== "0";
+}
+
+/**
+ * Gets the logger configuration from environment variables.
+ *
+ * @returns TestLoggerConfig object
+ */
+export function getLoggerConfig(): TestLoggerConfig {
+    return {
+        logLevel: getLogLevel(),
+        consoleOutput: isConsoleLoggingEnabled(),
+        logDirectory: path.join(TEST_PATHS.BASE_STORAGE, "logs"),
+        logFileName: "ui-tests",
+        maxFileSize: 5 * 1024 * 1024, // 5 MB
+        maxLogFiles: 5,
+        includeTimestamp: true
+    };
 }

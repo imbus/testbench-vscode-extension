@@ -18,6 +18,7 @@ import {
 } from "./testUtils";
 import { getTestCredentials, hasTestCredentials } from "./testConfig";
 import { TestContext, setupLoginWebviewTestHooks } from "./testHooks";
+import { getTestLogger } from "./testLogger";
 
 /**
  * Wrapper function to execute test code within webview context with proper cleanup.
@@ -36,16 +37,17 @@ async function withWebviewContext(
     requireCredentials: boolean = true,
     skipCleanStateCheck: boolean = false
 ): Promise<void> {
+    const logger = getTestLogger();
     try {
         const webviewAvailable = await isWebviewAvailable(driver);
         if (!webviewAvailable) {
-            console.log("Webview not available - user is logged in. Test requires webview to be visible.");
+            logger.warn("Webview", "Webview not available - user is logged in. Test requires webview to be visible.");
             throw new Error("Webview not available - user is logged in - test skipped");
         }
 
         const webviewFound = await findAndSwitchToWebview(driver);
         if (!webviewFound) {
-            console.log("Webview not found");
+            logger.warn("Webview", "Webview not found");
             throw new Error("Webview not found - test skipped");
         }
 
@@ -58,7 +60,7 @@ async function withWebviewContext(
             const connectionPage = new ConnectionPage(driver);
             const connectionCount = await connectionPage.getConnectionCount();
             if (connectionCount > 0) {
-                console.log(`[Test Isolation] Warning: Found ${connectionCount} existing connection(s) - expected 0`);
+                logger.warn("TestIsolation", `Found ${connectionCount} existing connection(s) - expected 0`);
                 // Don't fail
             }
         }

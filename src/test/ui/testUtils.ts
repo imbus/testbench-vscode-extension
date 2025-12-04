@@ -4,6 +4,7 @@
  */
 
 import { getSlowMotionDelay, getTestCredentials, hasTestCredentials, TEST_PATHS } from "./testConfig";
+import { logger } from "./testLogger";
 import * as path from "path";
 import * as fs from "fs";
 import {
@@ -51,11 +52,11 @@ export async function attemptLogout(driver: WebDriver): Promise<boolean> {
         // Check if already logged out (webview is available)
         const alreadyLoggedOut = await isWebviewAvailable(driver);
         if (alreadyLoggedOut) {
-            console.log("[Logout] Already logged out - webview is available");
+            logger.trace("Logout", "Already logged out - webview is available");
             return true;
         }
 
-        console.log("[Logout] Attempting to logout...");
+        logger.trace("Logout", "Attempting to logout...");
         const workbench = new Workbench();
         const commandPalette = await workbench.openCommandPrompt();
 
@@ -80,7 +81,7 @@ export async function attemptLogout(driver: WebDriver): Promise<boolean> {
             const text = await pick.getText();
             if (text.includes("Logout") || text.includes("testbenchExtension.logout")) {
                 logoutCommandFound = true;
-                console.log(`[Logout] Found logout command: ${text}`);
+                logger.trace("Logout", `Found logout command: ${text}`);
                 await pick.select();
 
                 // Wait for logout to complete and webview to become available
@@ -92,17 +93,17 @@ export async function attemptLogout(driver: WebDriver): Promise<boolean> {
                         UITimeouts.LONG,
                         "Waiting for logout to complete (webview to become available)"
                     );
-                    console.log("[Logout] Logout successful - webview is now available");
+                    logger.trace("Logout", "Logout successful - webview is now available");
                     return true;
                 } catch {
-                    console.log("[Logout] Warning: Logout command executed but webview still not available");
+                    logger.warn("Logout", "Logout command executed but webview still not available");
                     return false;
                 }
             }
         }
 
         if (!logoutCommandFound) {
-            console.log("[Logout] Logout command not found - user may already be logged out");
+            logger.trace("Logout", "Logout command not found - user may already be logged out");
             await commandPalette.cancel();
             // Check if webview is available (might already be logged out)
             const webviewAvailable = await isWebviewAvailable(driver);
@@ -112,12 +113,12 @@ export async function attemptLogout(driver: WebDriver): Promise<boolean> {
         return false;
     } catch (error) {
         // If command palette fails, log error but don't fail the test
-        console.log("[Logout] Error during logout attempt:", error);
+        logger.error("Logout", "Error during logout attempt:", error);
         // Check if we're already logged out
         try {
             const webviewAvailable = await isWebviewAvailable(driver);
             if (webviewAvailable) {
-                console.log("[Logout] Webview is available despite error - assuming already logged out");
+                logger.trace("Logout", "Webview is available despite error - assuming already logged out");
                 return true;
             }
         } catch {
@@ -144,7 +145,7 @@ export async function handleAllowButton(driver: WebDriver, timeout: number = UIT
 
         if (allowButtons && allowButtons.length > 0) {
             await allowButtons[0].click();
-            console.log(`Clicked ${ModalButtonTexts.ALLOW} button`);
+            logger.trace("Modal", `Clicked ${ModalButtonTexts.ALLOW} button`);
 
             // Wait for modal to disappear
             await driver.wait(
@@ -160,7 +161,7 @@ export async function handleAllowButton(driver: WebDriver, timeout: number = UIT
 
         return false;
     } catch (error) {
-        console.log(`Could not find or click ${ModalButtonTexts.ALLOW} button:`, error);
+        logger.debug("Modal", `Could not find or click ${ModalButtonTexts.ALLOW} button:`, error);
         return false;
     }
 }
@@ -177,7 +178,7 @@ export async function handleProceedAnywayButton(
     timeout: number = UITimeouts.MEDIUM
 ): Promise<boolean> {
     try {
-        console.log("Checking for certificate warning...");
+        logger.trace("Modal", "Checking for certificate warning...");
         const proceedButtons = await driver.wait(async () => {
             const elements = await driver.findElements(By.xpath(ModalButtonSelectors.PROCEED_ANYWAY));
             return elements.length > 0 ? elements : null;
@@ -185,7 +186,7 @@ export async function handleProceedAnywayButton(
 
         if (proceedButtons && proceedButtons.length > 0) {
             await proceedButtons[0].click();
-            console.log(`Clicked ${ModalButtonTexts.PROCEED_ANYWAY} button for untrusted certificate`);
+            logger.trace("Modal", `Clicked ${ModalButtonTexts.PROCEED_ANYWAY} button for untrusted certificate`);
 
             // Wait for action to complete and modal to disappear
             await driver.wait(
@@ -201,7 +202,7 @@ export async function handleProceedAnywayButton(
 
         return false;
     } catch (error) {
-        console.log(`Could not find or click ${ModalButtonTexts.PROCEED_ANYWAY} button:`, error);
+        logger.debug("Modal", `Could not find or click ${ModalButtonTexts.PROCEED_ANYWAY} button:`, error);
         return false;
     }
 }
@@ -254,12 +255,12 @@ export async function ensureWorkspaceIsOpen(config: WorkspaceConfig = {}): Promi
     const workspacePath = path.join(projectRoot, TEST_PATHS.BASE_STORAGE, TEST_PATHS.WORKSPACE);
 
     if (cleanStart && fs.existsSync(workspacePath)) {
-        console.log(`[Workspace] Cleaning existing workspace: ${workspacePath}`);
+        logger.trace("Workspace", `Cleaning existing workspace: ${workspacePath}`);
         fs.rmSync(workspacePath, { recursive: true, force: true });
     }
 
     if (!fs.existsSync(workspacePath)) {
-        console.log(`[Workspace] Creating folder: ${workspacePath}`);
+        logger.trace("Workspace", `Creating folder: ${workspacePath}`);
         fs.mkdirSync(workspacePath, { recursive: true });
     }
 
@@ -267,17 +268,17 @@ export async function ensureWorkspaceIsOpen(config: WorkspaceConfig = {}): Promi
     try {
         const title = await driver.getTitle();
         const folderName = path.basename(workspaceName);
-        console.log(`[Workspace] Current window title: '${title}'`);
+        logger.trace("Workspace", `Current window title: '${title}'`);
 
         if (title && (title.includes(folderName) || title.includes(workspaceName))) {
-            console.log(`[Workspace] '${folderName}' appears to be already open.`);
+            logger.trace("Workspace", `'${folderName}' appears to be already open.`);
             return;
         }
     } catch (error) {
-        console.log(`[Workspace] Could not check if workspace is open: ${error}`);
+        logger.debug("Workspace", `Could not check if workspace is open: ${error}`);
     }
 
-    console.log(`[Workspace] Opening folder: ${workspacePath}`);
+    logger.trace("Workspace", `Opening folder: ${workspacePath}`);
 
     // Get current workbench element to detect staleness (reload)
     let oldWorkbench: WebElement | undefined;
@@ -294,14 +295,14 @@ export async function ensureWorkspaceIsOpen(config: WorkspaceConfig = {}): Promi
         try {
             await driver.wait(until.stalenessOf(oldWorkbench), UITimeouts.LONG, "Waiting for VS Code reload to start");
         } catch {
-            console.log("[Workspace] Warning: Window reload detected via staleness timed out or was too fast.");
+            logger.warn("Workspace", "Window reload detected via staleness timed out or was too fast.");
         }
     }
 
     // Ensure driver context is correct
     await driver.switchTo().defaultContent();
 
-    console.log("[Workspace] Waiting for workbench to load...");
+    logger.trace("Workspace", "Waiting for workbench to load...");
 
     // Wait for the workbench to fully reload.
     // Using generic class selector which is more stable than ID
@@ -318,10 +319,10 @@ export async function ensureWorkspaceIsOpen(config: WorkspaceConfig = {}): Promi
             "Waiting for status bar (UI ready)"
         );
     } catch {
-        console.log("[Workspace] Warning: Status bar not found, proceeding anyway.");
+        logger.warn("Workspace", "Status bar not found, proceeding anyway.");
     }
 
-    console.log(`[Workspace] Workspace '${workspaceName}' loaded successfully.`);
+    logger.trace("Workspace", `Workspace '${workspaceName}' loaded successfully.`);
 }
 
 /**
@@ -336,7 +337,7 @@ export async function getCurrentWorkspacePath(driver: WebDriver): Promise<string
         // Get the window title which typically contains the workspace folder name
         const title = await driver.getTitle();
         if (!title) {
-            console.log("[Workspace] Could not get window title");
+            logger.debug("Workspace", "Could not get window title");
             return null;
         }
 
@@ -361,10 +362,10 @@ export async function getCurrentWorkspacePath(driver: WebDriver): Promise<string
             return defaultWorkspace;
         }
 
-        console.log("[Workspace] Could not determine workspace path from title");
+        logger.debug("Workspace", "Could not determine workspace path from title");
         return null;
     } catch (error) {
-        console.log(`[Workspace] Error getting workspace path: ${error}`);
+        logger.error("Workspace", `Error getting workspace path: ${error}`);
         return null;
     }
 }
@@ -400,12 +401,12 @@ export async function cleanupWorkspace(
         }
 
         if (!fs.existsSync(targetPath)) {
-            console.log(`[Workspace Cleanup] Workspace path does not exist: ${targetPath}`);
+            logger.debug("Workspace Cleanup", `Workspace path does not exist: ${targetPath}`);
             return false;
         }
 
-        console.log(`[Workspace Cleanup] Cleaning workspace: ${targetPath}`);
-        console.log(`[Workspace Cleanup] Excluding: ${exclude.length > 0 ? exclude.join(", ") : "none"}`);
+        logger.trace("Workspace Cleanup", `Cleaning workspace: ${targetPath}`);
+        logger.trace("Workspace Cleanup", `Excluding: ${exclude.length > 0 ? exclude.join(", ") : "none"}`);
 
         // Normalize exclude paths to handle both relative and absolute paths
         const normalizedExcludes = exclude.map((item) => {
@@ -441,7 +442,7 @@ export async function cleanupWorkspace(
             const itemPath = path.join(targetPath, item.name);
 
             if (shouldExclude(itemPath, item.name)) {
-                console.log(`[Workspace Cleanup] Excluding: ${item.name}`);
+                logger.trace("Workspace Cleanup", `Excluding: ${item.name}`);
                 skippedCount++;
                 continue;
             }
@@ -449,21 +450,21 @@ export async function cleanupWorkspace(
             try {
                 if (item.isDirectory()) {
                     fs.rmSync(itemPath, { recursive: true, force: true });
-                    console.log(`[Workspace Cleanup] Deleted folder: ${item.name}`);
+                    logger.trace("Workspace Cleanup", `Deleted folder: ${item.name}`);
                 } else {
                     fs.unlinkSync(itemPath);
-                    console.log(`[Workspace Cleanup] Deleted file: ${item.name}`);
+                    logger.trace("Workspace Cleanup", `Deleted file: ${item.name}`);
                 }
                 deletedCount++;
             } catch (error) {
-                console.log(`[Workspace Cleanup] Error deleting ${item.name}: ${error}`);
+                logger.error("Workspace Cleanup", `Error deleting ${item.name}: ${error}`);
             }
         }
 
-        console.log(`[Workspace Cleanup] Cleanup complete. Deleted: ${deletedCount}, Excluded: ${skippedCount}`);
+        logger.trace("Workspace Cleanup", `Cleanup complete. Deleted: ${deletedCount}, Excluded: ${skippedCount}`);
         return true;
     } catch (error) {
-        console.log(`[Workspace Cleanup] Error during cleanup: ${error}`);
+        logger.error("Workspace Cleanup", `Error during cleanup: ${error}`);
         return false;
     }
 }
@@ -498,7 +499,7 @@ export async function openTestBenchSidebar(driver?: WebDriver): Promise<void> {
                             }
                         }
                         if (foundTestBench) {
-                            console.log("[Sidebar] TestBench sidebar is already open");
+                            logger.trace("Sidebar", "TestBench sidebar is already open");
                             return;
                         }
                     }
@@ -543,8 +544,9 @@ export async function openTestBenchSidebar(driver?: WebDriver): Promise<void> {
                     if (attempt === maxRetries - 1) {
                         throw error;
                     }
-                    console.log(
-                        `[Sidebar] Stale element detected on control, will retry (attempt ${attempt + 1}/${maxRetries})`
+                    logger.debug(
+                        "Sidebar",
+                        `Stale element detected on control, will retry (attempt ${attempt + 1}/${maxRetries})`
                     );
                     lastError = error as Error;
                     break; // Break inner loop to retry outer loop
@@ -558,8 +560,9 @@ export async function openTestBenchSidebar(driver?: WebDriver): Promise<void> {
         } catch (error) {
             lastError = error as Error;
             if (attempt < maxRetries - 1) {
-                console.log(
-                    `[Sidebar] Error opening sidebar, retrying (attempt ${attempt + 1}/${maxRetries}): ${error}`
+                logger.debug(
+                    "Sidebar",
+                    `Error opening sidebar, retrying (attempt ${attempt + 1}/${maxRetries}): ${error}`
                 );
 
                 if (driver) {
@@ -605,7 +608,7 @@ export async function isWebviewAvailable(_driver: WebDriver): Promise<boolean> {
         return true;
     } catch (error) {
         // If we can't determine, assume webview might be available
-        console.log("Could not determine webview availability:", error);
+        logger.debug("Webview", "Could not determine webview availability:", error);
         return true;
     }
 }
@@ -720,7 +723,7 @@ export async function findAndSwitchToWebview(
         // Webview loading is a background operation, no slow motion needed
         return true;
     } catch (error) {
-        console.log("Error finding webview:", error);
+        logger.error("Webview", "Error finding webview:", error);
         try {
             await driver.switchTo().defaultContent();
         } catch {
@@ -795,7 +798,7 @@ export async function waitForCondition(
         }
         await driver.sleep(pollInterval);
     }
-    console.log(`[Wait] Timeout waiting for ${description}`);
+    logger.debug("Wait", `Timeout waiting for ${description}`);
     return false;
 }
 
@@ -1030,7 +1033,7 @@ export async function waitForNotification(
     try {
         await driver.switchTo().defaultContent();
 
-        console.log(`[Notification] Waiting for notification containing: "${textToMatch}"...`);
+        logger.trace("Notification", `Waiting for notification containing: "${textToMatch}"...`);
 
         await driver.wait(
             async () => {
@@ -1048,7 +1051,7 @@ export async function waitForNotification(
                         try {
                             const text = await container.getText();
                             if (text.includes(textToMatch)) {
-                                console.log(`[Notification] Found notification: "${text.substring(0, 100)}..."`);
+                                logger.trace("Notification", `Found notification: "${text.substring(0, 100)}..."`);
                                 return true;
                             }
                         } catch {
@@ -1064,8 +1067,9 @@ export async function waitForNotification(
                         try {
                             const text = await item.getText();
                             if (text.includes(textToMatch)) {
-                                console.log(
-                                    `[Notification] Found notification in center: "${text.substring(0, 100)}..."`
+                                logger.trace(
+                                    "Notification",
+                                    `Found notification in center: "${text.substring(0, 100)}..."`
                                 );
                                 return true;
                             }
@@ -1085,7 +1089,7 @@ export async function waitForNotification(
 
         return true;
     } catch (error) {
-        console.log(`[Notification] Notification not found within timeout: ${error}`);
+        logger.debug("Notification", `Notification not found within timeout: ${error}`);
         return false;
     }
 }
@@ -1114,7 +1118,7 @@ export async function findTreeItemByLabelAtLevel(
             }
         } catch (error) {
             // Log error but continue searching
-            console.log(`[TreeItem] Error checking tree item: ${error}`);
+            logger.debug("TreeItem", `Error checking tree item: ${error}`);
         }
     }
 
@@ -1156,7 +1160,7 @@ export async function findTreeItemByLabel(
             }
         } catch (error) {
             // Log error but continue searching
-            console.log(`[TreeItem] Error checking tree item: ${error}`);
+            logger.debug("TreeItem", `Error checking tree item: ${error}`);
         }
     }
 
@@ -1199,7 +1203,7 @@ export async function waitForTreeItemChildren(
         );
         return true;
     } catch (error) {
-        console.log(`[TreeItem] Timeout waiting for children to load: ${error}`);
+        logger.debug("TreeItem", `Timeout waiting for children to load: ${error}`);
         return false;
     }
 }
@@ -1230,14 +1234,14 @@ export async function expandTreeItemIfNeeded(item: TreeItem, driver: WebDriver):
         // Wait for children to actually load (smart wait instead of fixed delay)
         const childrenLoaded = await waitForTreeItemChildren(item, driver);
         if (!childrenLoaded) {
-            console.log(`[TreeItem] Warning: Children may not have loaded for tree item`);
+            logger.warn("TreeItem", "Children may not have loaded for tree item");
         }
 
         // Verify it's expanded
         const expanded = await item.isExpanded();
         return expanded;
     } catch (error) {
-        console.log(`[TreeItem] Error expanding tree item: ${error}`);
+        logger.error("TreeItem", `Error expanding tree item: ${error}`);
         return false;
     }
 }
@@ -1310,14 +1314,14 @@ export async function deleteAllConnections(driver: WebDriver): Promise<number> {
         // Check if webview is available (user must not be logged in)
         const webviewAvailable = await isWebviewAvailable(driver);
         if (!webviewAvailable) {
-            console.log("[Cleanup] Webview not available - user is logged in. Cannot delete connections.");
+            logger.trace("Cleanup", "Webview not available - user is logged in. Cannot delete connections.");
             return 0;
         }
 
         // Switch to webview
         const webviewFound = await findAndSwitchToWebview(driver);
         if (!webviewFound) {
-            console.log("[Cleanup] Webview not found. Cannot delete connections.");
+            logger.trace("Cleanup", "Webview not found. Cannot delete connections.");
             return 0;
         }
 
@@ -1330,7 +1334,7 @@ export async function deleteAllConnections(driver: WebDriver): Promise<number> {
 
         return deletedCount;
     } catch (error) {
-        console.log(`[Cleanup] Error during connection cleanup: ${error}`);
+        logger.error("Cleanup", "Error during connection cleanup", error);
         try {
             await driver.switchTo().defaultContent();
         } catch {
@@ -1359,7 +1363,7 @@ export async function handleConfirmationDialog(
         // Ensure we're in default content (not in webview)
         await driver.switchTo().defaultContent();
 
-        console.log(`[Dialog] Looking for confirmation dialog with button: "${buttonText}"`);
+        logger.trace("Dialog", `Looking for confirmation dialog with button: "${buttonText}"`);
 
         // First, wait for the dialog modal to appear (monaco-dialog-modal-block or monaco-dialog)
         let dialogElement: WebElement | null = null;
@@ -1369,7 +1373,7 @@ export async function handleConfirmationDialog(
                 timeout,
                 "Waiting for dialog modal to appear"
             );
-            console.log("[Dialog] Dialog modal appeared");
+            logger.trace("Dialog", "Dialog modal appeared");
 
             // Wait for dialog to fully render and for dialog content to be visible
             await driver.wait(
@@ -1399,7 +1403,7 @@ export async function handleConfirmationDialog(
             for (const selector of dialogSelectors) {
                 try {
                     dialogElement = await driver.findElement(By.css(selector));
-                    console.log(`[Dialog] Found dialog element with selector: ${selector}`);
+                    logger.trace("Dialog", `Found dialog element with selector: ${selector}`);
                     break;
                 } catch {
                     // Try next selector
@@ -1407,10 +1411,10 @@ export async function handleConfirmationDialog(
             }
 
             if (!dialogElement) {
-                console.log("[Dialog] Dialog element not found with standard selectors, searching in document");
+                logger.trace("Dialog", "Dialog element not found with standard selectors, searching in document");
             }
         } catch {
-            console.log("[Dialog] Dialog modal not found, but continuing to search for button");
+            logger.trace("Dialog", "Dialog modal not found, but continuing to search for button");
         }
 
         // Try multiple strategies to find the button
@@ -1491,7 +1495,7 @@ export async function handleConfirmationDialog(
         if (confirmButton) {
             const buttonTextFound = await confirmButton.getText();
             const tagName = await confirmButton.getTagName();
-            console.log(`[Dialog] Found ${tagName} element with text: "${buttonTextFound}", clicking...`);
+            logger.trace("Dialog", `Found ${tagName} element with text: "${buttonTextFound}", clicking...`);
 
             // Scroll button into view if needed
             await driver.executeScript("arguments[0].scrollIntoView({ block: 'center' });", confirmButton);
@@ -1516,7 +1520,7 @@ export async function handleConfirmationDialog(
                 await applySlowMotion(driver); // Visible: clicking confirmation dialog button
             } catch (clickError) {
                 // If click fails, try JavaScript click
-                console.log(`[Dialog] Regular click failed, trying JavaScript click: ${clickError}`);
+                logger.warn("Dialog", "Regular click failed, trying JavaScript click", clickError);
                 await driver.executeScript("arguments[0].click();", confirmButton);
                 await applySlowMotion(driver);
             }
@@ -1531,9 +1535,9 @@ export async function handleConfirmationDialog(
                     UITimeouts.MEDIUM,
                     "Waiting for dialog to close"
                 );
-                console.log("[Dialog] Dialog closed successfully");
+                logger.trace("Dialog", "Dialog closed successfully");
             } catch {
-                console.log("[Dialog] Dialog may have closed, but modal-block still present");
+                logger.trace("Dialog", "Dialog may have closed, but modal-block still present");
             }
 
             // Additional wait to ensure dialog is fully gone and verify no dialog elements remain
@@ -1549,7 +1553,7 @@ export async function handleConfirmationDialog(
         }
 
         // If button not found, try JavaScript-based search (buttons might be in shadow DOM)
-        console.log(`[Dialog] Button "${buttonText}" not found with XPath, trying JavaScript search...`);
+        logger.trace("Dialog", `Button "${buttonText}" not found with XPath, trying JavaScript search...`);
         try {
             const buttonFound = (await driver.executeScript(`
                 function findButtonInDialog(buttonText) {
@@ -1582,7 +1586,7 @@ export async function handleConfirmationDialog(
             `)) as WebElement | null;
 
             if (buttonFound) {
-                console.log(`[Dialog] Found button using JavaScript, clicking...`);
+                logger.trace("Dialog", "Found button using JavaScript, clicking...");
                 await driver.executeScript("arguments[0].click();", buttonFound);
                 await applySlowMotion(driver);
 
@@ -1599,16 +1603,16 @@ export async function handleConfirmationDialog(
                 // Verify dialog is fully gone
                 const modalBlocks = await driver.findElements(By.css(".monaco-dialog-modal-block"));
                 if (modalBlocks.length === 0) {
-                    console.log("[Dialog] Dialog closed successfully using JavaScript click");
+                    logger.trace("Dialog", "Dialog closed successfully using JavaScript click");
                     return true;
                 }
             }
         } catch (jsError) {
-            console.log(`[Dialog] JavaScript search failed: ${jsError}`);
+            logger.warn("Dialog", "JavaScript search failed", jsError);
         }
 
         // If button still not found, try keyboard navigation (Enter key for primary button)
-        console.log(`[Dialog] Button "${buttonText}" not found, trying keyboard navigation (Enter key)...`);
+        logger.trace("Dialog", `Button "${buttonText}" not found, trying keyboard navigation (Enter key)...`);
         try {
             // Focus the dialog first
             const dialogModal = await driver.findElement(By.css(".monaco-dialog-modal-block"));
@@ -1639,17 +1643,17 @@ export async function handleConfirmationDialog(
             // Check if dialog closed
             const modalBlocks = await driver.findElements(By.css(".monaco-dialog-modal-block"));
             if (modalBlocks.length === 0) {
-                console.log("[Dialog] Dialog closed using Enter key");
+                logger.trace("Dialog", "Dialog closed using Enter key");
                 return true;
             }
         } catch (keyboardError) {
-            console.log(`[Dialog] Keyboard navigation failed: ${keyboardError}`);
+            logger.warn("Dialog", "Keyboard navigation failed", keyboardError);
         }
 
-        console.log(`[Dialog] Button "${buttonText}" not found with any strategy`);
+        logger.trace("Dialog", `Button "${buttonText}" not found with any strategy`);
         return false;
     } catch (error) {
-        console.log(`[Dialog] Error finding button with primary strategy: ${error}`);
+        logger.error("Dialog", "Error finding button with primary strategy", error);
         // Dialog might have different structure, try alternative approach
         try {
             // Wait for dialog to appear first
@@ -1664,7 +1668,7 @@ export async function handleConfirmationDialog(
             }
 
             // Use JavaScript to find all buttons/links (can access shadow DOM and any structure)
-            console.log("[Dialog] Using JavaScript to search for buttons in fallback strategy...");
+            logger.trace("Dialog", "Using JavaScript to search for buttons in fallback strategy...");
             const buttonInfo = (await driver.executeScript(`
                 function findAllButtons() {
                     const buttons = [];
@@ -1691,10 +1695,11 @@ export async function handleConfirmationDialog(
                 return findAllButtons();
             `)) as Array<{ text: string; ariaLabel: string; tagName: string; className: string }>;
 
-            console.log(`[Dialog] JavaScript found ${buttonInfo.length} button/link element(s):`);
+            logger.trace("Dialog", `JavaScript found ${buttonInfo.length} button/link element(s):`);
             for (const btn of buttonInfo) {
-                console.log(
-                    `[Dialog]   - ${btn.tagName} (class: ${btn.className}): text="${btn.text}", aria-label="${btn.ariaLabel}"`
+                logger.trace(
+                    "Dialog",
+                    `  - ${btn.tagName} (class: ${btn.className}): text="${btn.text}", aria-label="${btn.ariaLabel}"`
                 );
             }
 
@@ -1724,7 +1729,7 @@ export async function handleConfirmationDialog(
             `)) as boolean;
 
             if (buttonClicked) {
-                console.log(`[Dialog] Successfully clicked button using JavaScript in fallback`);
+                logger.trace("Dialog", "Successfully clicked button using JavaScript in fallback");
                 await applySlowMotion(driver);
 
                 // Wait for dialog to close
@@ -1737,9 +1742,9 @@ export async function handleConfirmationDialog(
                         UITimeouts.MEDIUM,
                         "Waiting for dialog to close"
                     );
-                    console.log("[Dialog] Dialog closed successfully");
+                    logger.trace("Dialog", "Dialog closed successfully");
                 } catch {
-                    console.log("[Dialog] Dialog may have closed");
+                    logger.trace("Dialog", "Dialog may have closed");
                 }
 
                 // Verify dialog is fully gone
@@ -1754,9 +1759,9 @@ export async function handleConfirmationDialog(
                 return true;
             }
 
-            console.log(`[Dialog] Could not find button "${buttonText}" using JavaScript in fallback`);
+            logger.trace("Dialog", `Could not find button "${buttonText}" using JavaScript in fallback`);
         } catch (fallbackError) {
-            console.log(`[Dialog] Fallback strategy also failed: ${fallbackError}`);
+            logger.error("Dialog", "Fallback strategy also failed", fallbackError);
         }
         return false;
     }
@@ -1859,7 +1864,7 @@ export async function findNotificationButton(
 
         return button;
     } catch (error) {
-        console.log(`[Notification] Error finding notification button: ${error}`);
+        logger.error("Notification", "Error finding notification button", error);
         return null;
     }
 }
@@ -1883,11 +1888,11 @@ export async function clickNotificationButton(
         const button = await findNotificationButton(driver, buttonText, notificationText, timeout);
 
         if (!button) {
-            console.log(`[Notification] Button "${buttonText}" not found in notification`);
+            logger.trace("Notification", `Button "${buttonText}" not found in notification`);
             return false;
         }
 
-        console.log(`[Notification] Found notification button "${buttonText}", clicking...`);
+        logger.trace("Notification", `Found notification button "${buttonText}", clicking...`);
         await button.click();
         await applySlowMotion(driver);
 
@@ -1903,7 +1908,7 @@ export async function clickNotificationButton(
 
         return true;
     } catch (error) {
-        console.log(`[Notification] Error clicking notification button: ${error}`);
+        logger.error("Notification", "Error clicking notification button", error);
         return false;
     }
 }
@@ -1930,14 +1935,14 @@ export async function ensureLoggedIn(
     try {
         const webviewAvailable = await isWebviewAvailable(driver);
         if (!webviewAvailable) {
-            console.log("[Login] User is already logged in");
+            logger.trace("Login", "User is already logged in");
             return true;
         }
 
-        console.log("[Login] User is not logged in. Performing login...");
+        logger.trace("Login", "User is not logged in. Performing login...");
 
         if (!hasTestCredentials() && !credentials) {
-            console.log("[Login] Test credentials not available");
+            logger.warn("Login", "Test credentials not available");
             return false;
         }
 
@@ -1947,7 +1952,7 @@ export async function ensureLoggedIn(
 
         const webviewFound = await findAndSwitchToWebview(driver);
         if (!webviewFound) {
-            console.log("[Login] Webview not found");
+            logger.warn("Login", "Webview not found");
             return false;
         }
 
@@ -1959,7 +1964,7 @@ export async function ensureLoggedIn(
             );
         } catch {
             // Connections list might not exist yet, continue anyway
-            console.log("[Login] Connections list not found, will create new connection");
+            logger.trace("Login", "Connections list not found, will create new connection");
         }
 
         const { ConnectionPage } = await import("./pages/ConnectionPage");
@@ -1970,7 +1975,7 @@ export async function ensureLoggedIn(
         );
 
         if (!connectionExists || !existingConnection) {
-            console.log("[Login] Creating new connection...");
+            logger.trace("Login", "Creating new connection...");
             await connectionPage.resetForm();
 
             const formData: import("./pages/ConnectionPage").ConnectionFormData = {
@@ -1992,14 +1997,14 @@ export async function ensureLoggedIn(
             // This dialog may appear when saving a connection
             try {
                 await handleConfirmationDialog(driver, "Save Changes", UITimeouts.SHORT);
-                console.log("[Login] Handled 'Save Changes' dialog");
+                logger.trace("Login", "Handled 'Save Changes' dialog");
             } catch {
-                console.log("[Login] No 'Save Changes' dialog appeared");
+                logger.trace("Login", "No 'Save Changes' dialog appeared");
             }
 
             const webviewFoundAgain = await findAndSwitchToWebview(driver);
             if (!webviewFoundAgain) {
-                console.log("[Login] Could not switch back to webview after handling dialog");
+                logger.warn("Login", "Could not switch back to webview after handling dialog");
                 return false;
             }
 
@@ -2025,7 +2030,7 @@ export async function ensureLoggedIn(
             if (connectionByString) {
                 await connectionPageFinal.clickLogin(connectionByString);
             } else {
-                console.log("[Login] Connection not found in list");
+                logger.warn("Login", "Connection not found in list");
                 return false;
             }
         } else {
@@ -2044,10 +2049,10 @@ export async function ensureLoggedIn(
             "Waiting for login to complete (Projects view to appear)"
         );
 
-        console.log("[Login] Login successful");
+        logger.info("Login", "Login successful");
         return true;
     } catch (error) {
-        console.log(`[Login] Error during login: ${error}`);
+        logger.error("Login", "Error during login", error);
         try {
             await driver.switchTo().defaultContent();
         } catch {
@@ -2075,7 +2080,7 @@ export async function findSidebarSection(content: any, sectionTitle: string): Pr
         }
         return null;
     } catch (error) {
-        console.log(`[Sidebar] Error finding section "${sectionTitle}": ${error}`);
+        logger.error("Sidebar", `Error finding section "${sectionTitle}"`, error);
         return null;
     }
 }
@@ -2090,7 +2095,7 @@ export async function getSectionTitle(section: any): Promise<string | null> {
     try {
         return await section.getTitle();
     } catch (error) {
-        console.log(`[Sidebar] Error getting section title: ${error}`);
+        logger.error("Sidebar", "Error getting section title", error);
         return null;
     }
 }
@@ -2114,10 +2119,10 @@ export async function clickToolbarButton(section: any, buttonTitle: string, driv
                 return true;
             }
         }
-        console.log(`[Toolbar] Button "${buttonTitle}" not found in toolbar`);
+        logger.trace("Toolbar", `Button "${buttonTitle}" not found in toolbar`);
         return false;
     } catch (error) {
-        console.log(`[Toolbar] Error clicking toolbar button "${buttonTitle}": ${error}`);
+        logger.error("Toolbar", `Error clicking toolbar button "${buttonTitle}"`, error);
         return false;
     }
 }
@@ -2136,14 +2141,14 @@ export async function doubleClickTreeItem(item: TreeItem, driver: WebDriver): Pr
         await applySlowMotion(driver);
     } catch (error) {
         // Fallback: try clicking twice
-        console.log(`[TreeItem] Double-click failed, trying alternative method: ${error}`);
+        logger.warn("TreeItem", "Double-click failed, trying alternative method", error);
         try {
             await item.click();
             await driver.sleep(100);
             await item.click();
             await applySlowMotion(driver);
         } catch (fallbackError) {
-            console.log(`[TreeItem] Alternative double-click also failed: ${fallbackError}`);
+            logger.error("TreeItem", "Alternative double-click also failed", fallbackError);
             throw fallbackError;
         }
     }
@@ -2165,7 +2170,7 @@ export async function clickCodeLens(
     timeout: number = UITimeouts.LONG
 ): Promise<boolean> {
     await driver.switchTo().defaultContent();
-    console.log(`[CodeLens] Starting exact DOM search and click for: "${codeLensText}"`);
+    logger.trace("CodeLens", `Starting exact DOM search and click for: "${codeLensText}"`);
 
     try {
         await driver.wait(
@@ -2182,7 +2187,7 @@ export async function clickCodeLens(
 
                         // Verify visibility to ensure we aren't clicking a hidden/stale one
                         if (await link.isDisplayed()) {
-                            console.log(`[CodeLens] Found visible link for "${codeLensText}"`);
+                            logger.trace("CodeLens", `Found visible link for "${codeLensText}"`);
 
                             // Scroll into view (Center)
                             await driver.executeScript(
@@ -2193,7 +2198,7 @@ export async function clickCodeLens(
 
                             // Dispatch Full Mouse Event Chain
                             // VS Code often listens for 'mousedown' or 'mouseup' on these widgets, not just 'click'
-                            console.log(`[CodeLens] Dispatching MouseEvents (mousedown + click)...`);
+                            logger.trace("CodeLens", "Dispatching MouseEvents (mousedown + click)...");
                             await driver.executeScript(
                                 `
                                 var element = arguments[0];
@@ -2234,7 +2239,7 @@ export async function clickCodeLens(
 
         return true;
     } catch (e) {
-        console.log(`[CodeLens] FINAL FAILURE: ${e}`);
+        logger.error("CodeLens", "FINAL FAILURE", e);
         return false;
     }
 }
@@ -2281,16 +2286,16 @@ export async function clickRefactorPreviewApply(
         );
 
         if (applyButton) {
-            console.log("[RefactorPreview] Found Apply button, clicking...");
+            logger.trace("RefactorPreview", "Found Apply button, clicking...");
             await applyButton.click();
             await applySlowMotion(driver);
             return true;
         }
 
-        console.log("[RefactorPreview] Apply button not found using specific selector");
+        logger.warn("RefactorPreview", "Apply button not found using specific selector");
         return false;
     } catch (error) {
-        console.log(`[RefactorPreview] Error clicking Apply button: ${error}`);
+        logger.error("RefactorPreview", "Error clicking Apply button", error);
         return false;
     }
 }
@@ -2346,7 +2351,7 @@ export async function verifyRefactorPreviewCheckbox(
         // If the wait returns a boolean, that's our result. If it times out/returns null, default to false.
         return !!isChecked;
     } catch (error) {
-        console.log(`[RefactorPreview] Error verifying checkbox: ${error}`);
+        logger.error("RefactorPreview", "Error verifying checkbox", error);
         return false;
     }
 }
@@ -2362,11 +2367,11 @@ export async function ensureRefactorPreviewItemChecked(driver: WebDriver, fileNa
     try {
         const isChecked = await verifyRefactorPreviewCheckbox(driver, fileName, UITimeouts.SHORT);
         if (isChecked) {
-            console.log(`[RefactorPreview] Item "${fileName}" is already checked.`);
+            logger.trace("RefactorPreview", `Item "${fileName}" is already checked.`);
             return true;
         }
 
-        console.log(`[RefactorPreview] Item "${fileName}" is unchecked. Clicking to select...`);
+        logger.trace("RefactorPreview", `Item "${fileName}" is unchecked. Clicking to select...`);
 
         // Find and click the checkbox
         const rows = await driver.findElements(By.css(".monaco-list-row"));
@@ -2383,7 +2388,7 @@ export async function ensureRefactorPreviewItemChecked(driver: WebDriver, fileNa
         }
         return false;
     } catch (error) {
-        console.log(`[RefactorPreview] Error ensuring item checked: ${error}`);
+        logger.error("RefactorPreview", "Error ensuring item checked", error);
         return false;
     }
 }
@@ -2402,7 +2407,7 @@ export async function clickCreateResourceButton(item: TreeItem, driver: WebDrive
 
         // Get the tree item label for matching
         const itemLabel = await item.getLabel();
-        console.log(`[TreeItem] Looking for Create Resource button near item: "${itemLabel}"`);
+        logger.trace("TreeItem", `Looking for Create Resource button near item: "${itemLabel}"`);
 
         // Find the button in the same row as the tree item
         const button = await driver.wait(
@@ -2462,7 +2467,7 @@ export async function clickCreateResourceButton(item: TreeItem, driver: WebDrive
                                     // Check by icon class (codicon-new-file)
                                     const className = await btn.getAttribute("class");
                                     if (className && className.includes("codicon-new-file")) {
-                                        console.log(`[TreeItem] Found button by codicon-new-file class`);
+                                        logger.trace("TreeItem", "Found button by codicon-new-file class");
                                         return clickableElement;
                                     }
 
@@ -2475,8 +2480,9 @@ export async function clickCreateResourceButton(item: TreeItem, driver: WebDrive
                                             (ariaLabel.includes("Create Resource") || ariaLabel.includes("Create"))) ||
                                         (title && (title.includes("Create Resource") || title.includes("Create")))
                                     ) {
-                                        console.log(
-                                            `[TreeItem] Found button by aria-label/title: "${ariaLabel || title}"`
+                                        logger.trace(
+                                            "TreeItem",
+                                            `Found button by aria-label/title: "${ariaLabel || title}"`
                                         );
                                         return clickableElement;
                                     }
@@ -2487,7 +2493,7 @@ export async function clickCreateResourceButton(item: TreeItem, driver: WebDrive
                                             By.css(".codicon-new-file, span.codicon-new-file")
                                         );
                                         if (codiconChild) {
-                                            console.log(`[TreeItem] Found button containing codicon-new-file icon`);
+                                            logger.trace("TreeItem", "Found button containing codicon-new-file icon");
                                             return clickableElement;
                                         }
                                     } catch {
@@ -2512,14 +2518,14 @@ export async function clickCreateResourceButton(item: TreeItem, driver: WebDrive
                                         By.css(".codicon-new-file, span.codicon-new-file")
                                     );
                                     if (hasCodicon.length > 0) {
-                                        console.log(`[TreeItem] Found button with codicon-new-file child`);
+                                        logger.trace("TreeItem", "Found button with codicon-new-file child");
                                         return btn;
                                     }
 
                                     // Check aria-label
                                     const ariaLabel = await btn.getAttribute("aria-label");
                                     if (ariaLabel && ariaLabel.toLowerCase().includes("create resource")) {
-                                        console.log(`[TreeItem] Found button by aria-label: "${ariaLabel}"`);
+                                        logger.trace("TreeItem", `Found button by aria-label: "${ariaLabel}"`);
                                         return btn;
                                     }
                                 } catch {
@@ -2533,7 +2539,7 @@ export async function clickCreateResourceButton(item: TreeItem, driver: WebDrive
                     }
 
                     // Strategy 3: Use JavaScript to find the button
-                    console.log("[TreeItem] Trying JavaScript-based search...");
+                    logger.trace("TreeItem", "Trying JavaScript-based search...");
                     const buttonFound = (await driver.executeScript(`
                         function findCreateResourceButton(itemLabel) {
                             const rows = document.querySelectorAll('.monaco-list-row');
@@ -2579,13 +2585,13 @@ export async function clickCreateResourceButton(item: TreeItem, driver: WebDrive
                     `)) as WebElement | null;
 
                     if (buttonFound) {
-                        console.log("[TreeItem] Found button using JavaScript");
+                        logger.trace("TreeItem", "Found button using JavaScript");
                         return buttonFound;
                     }
 
                     return null;
                 } catch (error) {
-                    console.log(`[TreeItem] Error in button search: ${error}`);
+                    logger.error("TreeItem", "Error in button search", error);
                     return null;
                 }
             },
@@ -2594,7 +2600,7 @@ export async function clickCreateResourceButton(item: TreeItem, driver: WebDrive
         );
 
         if (button) {
-            console.log("[TreeItem] Found Create Resource button, clicking...");
+            logger.trace("TreeItem", "Found Create Resource button, clicking...");
             // Scroll button into view if not already done
             try {
                 await driver.executeScript("arguments[0].scrollIntoView({ block: 'center' });", button);
@@ -2607,7 +2613,7 @@ export async function clickCreateResourceButton(item: TreeItem, driver: WebDrive
                 await button.click();
             } catch (clickError) {
                 // Fallback to JavaScript click
-                console.log(`[TreeItem] Regular click failed, trying JavaScript click: ${clickError}`);
+                logger.warn("TreeItem", "Regular click failed, trying JavaScript click", clickError);
                 await driver.executeScript("arguments[0].click();", button);
             }
 
@@ -2615,10 +2621,10 @@ export async function clickCreateResourceButton(item: TreeItem, driver: WebDrive
             return true;
         }
 
-        console.log("[TreeItem] Create Resource button not found");
+        logger.warn("TreeItem", "Create Resource button not found");
         return false;
     } catch (error) {
-        console.log(`[TreeItem] Error clicking Create Resource button: ${error}`);
+        logger.error("TreeItem", "Error clicking Create Resource button", error);
         return false;
     }
 }
@@ -2646,7 +2652,7 @@ export async function waitForConfigurationApplied(
     timeout: number = UITimeouts.LONG
 ): Promise<boolean> {
     try {
-        console.log("[Configuration] Waiting for configuration to be applied (checking for pin emojis)...");
+        logger.trace("Configuration", "Waiting for configuration to be applied (checking for pin emojis)...");
 
         const pinsAppeared = await driver.wait(
             async () => {
@@ -2660,7 +2666,7 @@ export async function waitForConfigurationApplied(
                             (projectDescription.includes("📌") || projectDescription.includes("pin"))
                         ) {
                             projectHasPin = true;
-                            console.log(`[Configuration] Found pin on project "${projectName}"`);
+                            logger.trace("Configuration", `Found pin on project "${projectName}"`);
                         }
                     } catch {
                         // Project description might not be accessible yet
@@ -2672,7 +2678,7 @@ export async function waitForConfigurationApplied(
                         const tovDescription = await targetVersion.getDescription();
                         if (tovDescription && (tovDescription.includes("📌") || tovDescription.includes("pin"))) {
                             tovHasPin = true;
-                            console.log(`[Configuration] Found pin on TOV "${tovName}"`);
+                            logger.trace("Configuration", `Found pin on TOV "${tovName}"`);
                         }
                     } catch {
                         // TOV description might not be accessible yet
@@ -2695,20 +2701,21 @@ export async function waitForConfigurationApplied(
         );
 
         if (pinsAppeared) {
-            console.log("[Configuration] Configuration applied successfully - pins detected");
+            logger.info("Configuration", "Configuration applied successfully - pins detected");
             // Wait a bit more for tree to fully stabilize after reordering
             await driver.sleep(1000);
             return true;
         }
 
         // If pins didn't appear within timeout, configuration might already exist (no reordering needed)
-        console.log(
-            "[Configuration] Pins not detected within timeout - configuration may already exist or tree may not have updated"
+        logger.trace(
+            "Configuration",
+            "Pins not detected within timeout - configuration may already exist or tree may not have updated"
         );
         await driver.sleep(500);
         return true;
     } catch (error) {
-        console.log(`[Configuration] Error waiting for configuration to be applied: ${error}`);
+        logger.error("Configuration", "Error waiting for configuration to be applied", error);
         // If timeout, assume configuration already exists and continue
         await driver.sleep(2000);
         return true;
@@ -2739,7 +2746,7 @@ export async function handleCycleConfigurationPrompt(
     targetVersion: TreeItem
 ): Promise<boolean> {
     try {
-        console.log("[Configuration] Clicking cycle to check for configuration prompt...");
+        logger.trace("Configuration", "Clicking cycle to check for configuration prompt...");
 
         // Click the cycle once (single click) - this may trigger the configuration prompt
         await cycleItem.click();
@@ -2751,7 +2758,7 @@ export async function handleCycleConfigurationPrompt(
         const notificationClicked = await clickNotificationButton(driver, "Create", notificationText);
 
         if (notificationClicked) {
-            console.log("[Configuration] Configuration prompt appeared and Create button was clicked");
+            logger.info("Configuration", "Configuration prompt appeared and Create button was clicked");
 
             // Wait for configuration to be applied (tree reordering, pin emojis)
             const configApplied = await waitForConfigurationApplied(
@@ -2764,19 +2771,20 @@ export async function handleCycleConfigurationPrompt(
             );
 
             if (!configApplied) {
-                console.log(
-                    "[Configuration] Warning: Configuration may not have been fully applied, continuing anyway"
+                logger.warn(
+                    "Configuration",
+                    "Warning: Configuration may not have been fully applied, continuing anyway"
                 );
             }
 
             return true;
         } else {
-            console.log("[Configuration] No configuration prompt appeared (configuration may already exist)");
+            logger.trace("Configuration", "No configuration prompt appeared (configuration may already exist)");
             // Configuration prompt didn't appear, which is fine - configuration may already exist
             return true;
         }
     } catch (error) {
-        console.log(`[Configuration] Error handling configuration prompt: ${error}`);
+        logger.error("Configuration", "Error handling configuration prompt", error);
         // If there's an error, assume configuration already exists and continue
         return true;
     }
@@ -2895,7 +2903,7 @@ export async function closeQuickInputDialog(driver: WebDriver): Promise<boolean>
         // Check if quick input dialog is open
         const quickInputElements = await driver.findElements(By.css(".quick-input-widget, .monaco-quick-open-widget"));
         if (quickInputElements.length > 0) {
-            console.log("[Editor] Quick input dialog detected, closing...");
+            logger.trace("Editor", "Quick input dialog detected, closing...");
             // Press Escape to close the dialog
             await driver.actions().sendKeys(Key.ESCAPE).perform();
             await driver.sleep(300);
@@ -2926,7 +2934,7 @@ export async function setCursorPosition(
     column: number = 0
 ): Promise<boolean> {
     try {
-        console.log(`[Editor] Setting cursor to line ${lineNumber}, column ${column}...`);
+        logger.trace("Editor", `Setting cursor to line ${lineNumber}, column ${column}...`);
 
         // First, close any open quick input dialogs
         await closeQuickInputDialog(driver);
@@ -2967,10 +2975,10 @@ export async function setCursorPosition(
         }
 
         await applySlowMotion(driver);
-        console.log(`[Editor] Cursor set to line ${lineNumber}, column ${column}`);
+        logger.trace("Editor", `Cursor set to line ${lineNumber}, column ${column}`);
         return true;
     } catch (error) {
-        console.log(`[Editor] Error setting cursor position: ${error}`);
+        logger.error("Editor", "Error setting cursor position", error);
         // Fallback: try clicking at the beginning of the editor
         try {
             await editor.click();
@@ -2985,10 +2993,10 @@ export async function setCursorPosition(
                 .click()
                 .perform();
             await driver.sleep(200);
-            console.log(`[Editor] Cursor set using click fallback`);
+            logger.trace("Editor", "Cursor set using click fallback");
             return true;
         } catch (fallbackError) {
-            console.log(`[Editor] Fallback cursor positioning also failed: ${fallbackError}`);
+            logger.error("Editor", "Fallback cursor positioning also failed", fallbackError);
             return false;
         }
     }
@@ -3005,7 +3013,7 @@ export async function setCursorPosition(
  * @returns Promise<boolean> - True if deletion was successful, false otherwise
  */
 export async function deleteFromLineOnwards(editor: TextEditor, driver: WebDriver, fromLine: number): Promise<boolean> {
-    console.log(`[Editor] Deleting content from line ${fromLine} onwards...`);
+    logger.trace("Editor", `Deleting content from line ${fromLine} onwards...`);
 
     // Helper function to verify deletion succeeded
     const verifyDeletion = async (): Promise<boolean> => {
@@ -3019,25 +3027,27 @@ export async function deleteFromLineOnwards(editor: TextEditor, driver: WebDrive
             const isCorrect = actualLineCount <= expectedLineCount;
 
             if (!isCorrect) {
-                console.log(
-                    `[Editor] Verification failed: Expected ≤${expectedLineCount} lines, got ${actualLineCount} lines`
+                logger.trace(
+                    "Editor",
+                    `Verification failed: Expected ≤${expectedLineCount} lines, got ${actualLineCount} lines`
                 );
                 return false;
             }
 
-            console.log(
-                `[Editor] ✓ Verification passed: File has ${actualLineCount} line(s) (expected ≤${expectedLineCount})`
+            logger.trace(
+                "Editor",
+                `✓ Verification passed: File has ${actualLineCount} line(s) (expected ≤${expectedLineCount})`
             );
             return true;
         } catch (error) {
-            console.log(`[Editor] Error during verification: ${error}`);
+            logger.error("Editor", "Error during verification", error);
             return false;
         }
     };
 
     // Strategy 1: Use TextEditor API directly (most reliable)
     try {
-        console.log(`[Editor] Strategy 1: Using TextEditor API...`);
+        logger.trace("Editor", "Strategy 1: Using TextEditor API...");
         await closeQuickInputDialog(driver);
         await editor.click();
         await driver.sleep(200);
@@ -3078,21 +3088,21 @@ export async function deleteFromLineOnwards(editor: TextEditor, driver: WebDrive
 
                 const verified = await verifyDeletion();
                 if (verified) {
-                    console.log(`[Editor] ✓ Content deleted successfully using TextEditor API`);
+                    logger.info("Editor", "✓ Content deleted successfully using TextEditor API");
                     await applySlowMotion(driver);
                     return true;
                 }
             } catch (apiError) {
-                console.log(`[Editor] TextEditor API method failed, trying alternative: ${apiError}`);
+                logger.warn("Editor", "TextEditor API method failed, trying alternative", apiError);
             }
         }
     } catch (error) {
-        console.log(`[Editor] Strategy 1 failed: ${error}`);
+        logger.error("Editor", "Strategy 1 failed", error);
     }
 
     // Strategy 2: Keyboard navigation with selection (original method, improved)
     try {
-        console.log(`[Editor] Strategy 2: Using keyboard navigation...`);
+        logger.trace("Editor", "Strategy 2: Using keyboard navigation...");
         await closeQuickInputDialog(driver);
         await editor.click();
         await driver.sleep(200);
@@ -3139,17 +3149,17 @@ export async function deleteFromLineOnwards(editor: TextEditor, driver: WebDrive
         );
 
         if (verified) {
-            console.log(`[Editor] ✓ Content deleted successfully using keyboard navigation`);
+            logger.info("Editor", "✓ Content deleted successfully using keyboard navigation");
             await applySlowMotion(driver);
             return true;
         }
     } catch (error) {
-        console.log(`[Editor] Strategy 2 failed: ${error}`);
+        logger.error("Editor", "Strategy 2 failed", error);
     }
 
     // Strategy 3: JavaScript-based text replacement (most reliable fallback)
     try {
-        console.log(`[Editor] Strategy 3: Using JavaScript text replacement...`);
+        logger.trace("Editor", "Strategy 3: Using JavaScript text replacement...");
         await closeQuickInputDialog(driver);
         await editor.click();
         await driver.sleep(200);
@@ -3195,24 +3205,24 @@ export async function deleteFromLineOnwards(editor: TextEditor, driver: WebDrive
             );
 
             if (verified) {
-                console.log(`[Editor] ✓ Content deleted successfully using JavaScript replacement`);
+                logger.info("Editor", "✓ Content deleted successfully using JavaScript replacement");
                 await applySlowMotion(driver);
                 return true;
             }
         }
     } catch (error) {
-        console.log(`[Editor] Strategy 3 failed: ${error}`);
+        logger.error("Editor", "Strategy 3 failed", error);
     }
 
     // Final verification attempt
-    console.log(`[Editor] All strategies failed, attempting final verification...`);
+    logger.trace("Editor", "All strategies failed, attempting final verification...");
     const finalCheck = await verifyDeletion();
     if (finalCheck) {
-        console.log(`[Editor] ✓ Deletion verified on final check`);
+        logger.info("Editor", "✓ Deletion verified on final check");
         return true;
     }
 
-    console.log(`[Editor] ✗ Failed to delete content from line ${fromLine} onwards after all strategies`);
+    logger.error("Editor", `✗ Failed to delete content from line ${fromLine} onwards after all strategies`);
     return false;
 }
 

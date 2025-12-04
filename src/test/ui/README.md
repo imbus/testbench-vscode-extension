@@ -44,6 +44,7 @@ src/test/ui/
 ├── testUtils.ts                       # Reusable helper functions
 ├── testConfig.ts                      # Test credentials and configuration management
 ├── testHooks.ts                       # Shared test hooks and setup utilities
+├── testLogger.ts                      # Persistent file logging utility
 ├── .vscode-test.settings.json         # VS Code settings for test environment
 ├── fixtures/                          # Static test files (copied to workspace)
 │   ├── resources/                     # .resource files for Robot Framework
@@ -68,6 +69,8 @@ The `fixtures/` folder contains static files that are copied to the test workspa
 - **`testConfig.ts`** - Manages test credentials and configuration
 
 - **`testHooks.ts`** - Shared before/after hooks for test suites
+
+- **`testLogger.ts`** - Centralized logging utility with file persistence and log rotation
 
 - **`.vscode-test.settings.json`** - VS Code settings applied during test execution
 
@@ -284,6 +287,43 @@ export UI_TEST_SLOW_MOTION="true"
 export UI_TEST_SLOW_MOTION_DELAY="2000"
 npm run test:ui
 ```
+
+## Logging
+
+UI tests include a logging system that writes persistent logs to files while also outputting to the console. Logs are stored in `.test-resources/logs/` with automatic rotation.
+
+### Log Files
+
+Log files are created with a session-based naming convention:
+
+- Format: `ui-tests-YYYY-MM-DD_HH-MM-SS.log`
+- Location: `.test-resources/logs/`
+- Maximum files: 5 (older files are automatically deleted)
+- Maximum file size: 5 MB per file
+
+### Log Levels
+
+The logger supports the following log levels (in order of verbosity):
+
+| Level   | Description                                     |
+| ------- | ----------------------------------------------- |
+| `trace` | Most verbose, detailed debugging info (default) |
+| `debug` | Debugging information, less verbose than trace  |
+| `info`  | General information                             |
+| `warn`  | Warnings that don't prevent test execution      |
+| `error` | Errors and failures                             |
+| `none`  | Disable logging                                 |
+
+### Configuration
+
+**Environment Variables:**
+
+- `UI_TEST_LOG_LEVEL` - Set the minimum log level (default: `trace`)
+    - Values: `trace`, `debug`, `info`, `warn`, `error`, `none`
+- `UI_TEST_LOG_TO_FILE` - Enable/disable file logging (default: `true`)
+    - Set to `"false"` or `"0"` to disable
+- `UI_TEST_LOG_TO_CONSOLE` - Enable/disable console output (default: `true`)
+    - Set to `"false"` or `"0"` to disable
 
 ## Test Utilities
 
