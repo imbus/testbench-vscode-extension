@@ -43,17 +43,31 @@ src/test/ui/
 ├── runUITests.ts                      # Custom test runner using ExTester
 ├── testUtils.ts                       # Reusable helper functions
 ├── testConfig.ts                      # Test credentials and configuration management
+├── testHooks.ts                       # Shared test hooks and setup utilities
 ├── .vscode-test.settings.json         # VS Code settings for test environment
-├── loginFlow.ui.test.ts               # End-to-end login flow tests
+├── fixtures/                          # Static test files (copied to workspace)
+│   ├── resources/                     # .resource files for Robot Framework
+│   ├── tests/                         # Test file templates
+│   └── results/                       # Results directory placeholder
+├── pages/
+│   └── ConnectionPage.ts              # Page Object Model for connection webview
 ├── loginWebview.ui.test.ts            # Login webview UI tests
-└── connectionManagement.ui.test.ts    # Connection management UI tests
+├── projectsView.ui.test.ts            # Projects tree view UI tests
+├── testThemesView.ui.test.ts          # Test Themes view UI tests (test generation/upload)
+└── resourceCreationFlow.ui.test.ts    # End-to-end resource creation flow tests
 ```
+
+## Test Fixtures
+
+The `fixtures/` folder contains static files that are copied to the test workspace (`.test-resources/workspace/`) before each test run. This allows you to include pre-configured `.resource` files, test templates, or other files needed during testing.
 
 ### Key Files
 
 - **`testUtils.ts`** - Provides reusable helper functions for common test operations
 
 - **`testConfig.ts`** - Manages test credentials and configuration
+
+- **`testHooks.ts`** - Shared before/after hooks for test suites
 
 - **`.vscode-test.settings.json`** - VS Code settings applied during test execution
 
@@ -81,6 +95,7 @@ To execute a specific test file instead of the entire suite, use the `test:ui-si
 ```bash
 npm run test:ui-single -- loginWebview.ui.test.ts
 npm run test:ui-single -- projectsView.ui.test.ts
+npm run test:ui-single -- testThemesView.ui.test.ts
 npm run test:ui-single -- resourceCreationFlow.ui.test.ts
 ```
 
@@ -126,6 +141,15 @@ UI tests require test credentials to connect to a TestBench server. Set these en
 
 - `TESTBENCH_TEST_PORT_NUMBER` - Server port (default: "9445")
 - `TESTBENCH_TEST_CONNECTION_LABEL` - Connection label (default: "TestLabel")
+
+**Test Data Configuration (for navigation tests):**
+
+- `TEST_PROJECT_NAME` - Project name to navigate to (default: "TestBench Demo Agil 1")
+- `TEST_VERSION_NAME` - Version/TOV name (default: "Version 3.0")
+- `TEST_CYCLE_NAME` - Cycle name (default: "3.0.2")
+- `TEST_SUBDIVISION_NAME` - Subdivision name for resource tests (default: "Resource Subdivision 1")
+- `TEST_RESOURCE_FILE_NAME` - Expected resource file name (default: "Resource Subdivision 1.resource")
+- `TEST_THEME_NAME` - Test theme name for test generation tests (default: "Reihenfolge")
 
 **UI Test Configuration:**
 

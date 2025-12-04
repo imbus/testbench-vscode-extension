@@ -132,7 +132,8 @@ const ENV_VARS = {
     TEST_VERSION_NAME: "TEST_VERSION_NAME",
     TEST_CYCLE_NAME: "TEST_CYCLE_NAME",
     TEST_SUBDIVISION_NAME: "TEST_SUBDIVISION_NAME",
-    TEST_RESOURCE_FILE_NAME: "TEST_RESOURCE_FILE_NAME"
+    TEST_RESOURCE_FILE_NAME: "TEST_RESOURCE_FILE_NAME",
+    TEST_THEME_NAME: "TEST_THEME_NAME"
 } as const;
 
 /**
@@ -300,6 +301,8 @@ export interface TestDataConfig {
     subdivisionName: string;
     /** Expected resource file name (e.g., "Resource Subdivision.resource") */
     resourceFileName: string;
+    /** Test theme name for test generation tests (e.g., "Reihenfolge") */
+    testThemeName: string;
 }
 
 /**
@@ -311,7 +314,8 @@ const DEFAULT_TEST_DATA: TestDataConfig = {
     versionName: "Version 3.0",
     cycleName: "3.0.2",
     subdivisionName: "Resource Subdivision 1",
-    resourceFileName: "Resource Subdivision 1.resource"
+    resourceFileName: "Resource Subdivision 1.resource",
+    testThemeName: "Reihenfolge"
 };
 
 /**
@@ -324,6 +328,7 @@ const DEFAULT_TEST_DATA: TestDataConfig = {
  * - TEST_CYCLE_NAME: Cycle name to use in tests
  * - TEST_SUBDIVISION_NAME: Subdivision name for resource tests
  * - TEST_RESOURCE_FILE_NAME: Expected resource file name
+ * - TEST_THEME_NAME: Test theme name for test generation tests
  *
  * @returns TestDataConfig object with test data values
  */
@@ -341,7 +346,8 @@ export function getTestData(): TestDataConfig {
         versionName: getEnvVar(ENV_VARS.TEST_VERSION_NAME, DEFAULT_TEST_DATA.versionName),
         cycleName: getEnvVar(ENV_VARS.TEST_CYCLE_NAME, DEFAULT_TEST_DATA.cycleName),
         subdivisionName: getEnvVar(ENV_VARS.TEST_SUBDIVISION_NAME, DEFAULT_TEST_DATA.subdivisionName),
-        resourceFileName: getEnvVar(ENV_VARS.TEST_RESOURCE_FILE_NAME, DEFAULT_TEST_DATA.resourceFileName)
+        resourceFileName: getEnvVar(ENV_VARS.TEST_RESOURCE_FILE_NAME, DEFAULT_TEST_DATA.resourceFileName),
+        testThemeName: getEnvVar(ENV_VARS.TEST_THEME_NAME, DEFAULT_TEST_DATA.testThemeName)
     };
 
     return testData;
@@ -358,7 +364,8 @@ export function logTestDataConfig(): void {
         versionName: !process.env[ENV_VARS.TEST_VERSION_NAME]?.trim(),
         cycleName: !process.env[ENV_VARS.TEST_CYCLE_NAME]?.trim(),
         subdivisionName: !process.env[ENV_VARS.TEST_SUBDIVISION_NAME]?.trim(),
-        resourceFileName: !process.env[ENV_VARS.TEST_RESOURCE_FILE_NAME]?.trim()
+        resourceFileName: !process.env[ENV_VARS.TEST_RESOURCE_FILE_NAME]?.trim(),
+        testThemeName: !process.env[ENV_VARS.TEST_THEME_NAME]?.trim()
     };
 
     console.log("[TestData] Current test data configuration:");
@@ -370,5 +377,8 @@ export function logTestDataConfig(): void {
     );
     console.log(
         `[TestData]   Resource File: "${testData.resourceFileName}"${usingDefaults.resourceFileName ? " (default)" : ""}`
+    );
+    console.log(
+        `[TestData]   Test Theme: "${testData.testThemeName}"${usingDefaults.testThemeName ? " (default)" : ""}`
     );
 }
