@@ -608,7 +608,19 @@ export async function isWebviewAvailable(_driver: WebDriver): Promise<boolean> {
         return true;
     } catch (error) {
         // If we can't determine, assume webview might be available
-        logger.debug("Webview", "Could not determine webview availability:", error);
+        // StaleElementReferenceError is expected during state transitions (login/logout)
+        // and doesn't indicate a real problem, so log at trace level instead of debug
+        const isStaleElementError =
+            error instanceof Error && (error.name === "StaleElementReferenceError" || error.message.includes("stale"));
+
+        if (isStaleElementError) {
+            logger.trace(
+                "Webview",
+                "Element became stale while checking availability (expected during state transitions)"
+            );
+        } else {
+            logger.debug("Webview", "Could not determine webview availability:", error);
+        }
         return true;
     }
 }
@@ -1365,7 +1377,29 @@ export async function handleConfirmationDialog(
 
         logger.trace("Dialog", `Looking for confirmation dialog with button: "${buttonText}"`);
 
-        // First, wait for the dialog modal to appear (monaco-dialog-modal-block or monaco-dialog)
+        // First, quickly check if dialog exists (without waiting)
+        const existingDialogs = await driver.findElements(
+            By.css(".monaco-dialog-modal-block, .monaco-dialog, .monaco-dialog-box")
+        );
+
+        // If no dialog exists, return early without trying strategies
+        if (existingDialogs.length === 0) {
+            // Wait briefly for dialog to appear (in case it's still animating)
+            try {
+                await driver.wait(
+                    until.elementLocated(By.css(".monaco-dialog-modal-block, .monaco-dialog, .monaco-dialog-box")),
+                    UITimeouts.SHORT,
+                    "Waiting briefly for dialog to appear"
+                );
+            } catch {
+                // Dialog doesn't exist, return early
+                logger.trace("Dialog", "No dialog found, skipping button search");
+                return false;
+            }
+        }
+
+        // Dialog exists, proceed with finding the button
+        // Wait for the dialog modal to be fully rendered
         let dialogElement: WebElement | null = null;
         try {
             await driver.wait(
@@ -1653,18 +1687,36 @@ export async function handleConfirmationDialog(
         logger.trace("Dialog", `Button "${buttonText}" not found with any strategy`);
         return false;
     } catch (error) {
+        const isTimeoutError =
+            error instanceof Error &&
+            (error.message.includes("Timeout") || error.message.includes("timeout") || error.name === "TimeoutError");
+
+        // Check if dialog exists before trying fallback strategies
+        const dialogs = await driver.findElements(
+            By.css(".monaco-dialog-modal-block, .monaco-dialog, .monaco-dialog-box")
+        );
+
+        if (dialogs.length === 0) {
+            if (isTimeoutError) {
+                logger.trace("Dialog", "No dialog found (timeout), skipping fallback strategies");
+            } else {
+                logger.trace("Dialog", "No dialog found, skipping fallback strategies");
+            }
+            return false;
+        }
+
         logger.error("Dialog", "Error finding button with primary strategy", error);
-        // Dialog might have different structure, try alternative approach
+        // Dialog exists but button finding failed, try alternative approach
         try {
-            // Wait for dialog to appear first
+            // Wait for dialog to be fully rendered
             try {
                 await driver.wait(
                     until.elementLocated(By.css(".monaco-dialog, .monaco-dialog-modal-block")),
-                    2000,
-                    "Waiting for dialog"
+                    UITimeouts.SHORT,
+                    "Waiting for dialog to be ready"
                 );
             } catch {
-                // Dialog might already be there or not appear
+                // Dialog might already be there, continue with fallback
             }
 
             // Use JavaScript to find all buttons/links (can access shadow DOM and any structure)
@@ -1996,8 +2048,12 @@ export async function ensureLoggedIn(
             // Handle "Save Changes" confirmation dialog if it appears
             // This dialog may appear when saving a connection
             try {
-                await handleConfirmationDialog(driver, "Save Changes", UITimeouts.SHORT);
-                logger.trace("Login", "Handled 'Save Changes' dialog");
+                const dialogHandled = await handleConfirmationDialog(driver, "Save Changes", UITimeouts.SHORT);
+                if (dialogHandled) {
+                    logger.trace("Login", "Handled 'Save Changes' dialog");
+                } else {
+                    logger.trace("Login", "No 'Save Changes' dialog appeared");
+                }
             } catch {
                 logger.trace("Login", "No 'Save Changes' dialog appeared");
             }

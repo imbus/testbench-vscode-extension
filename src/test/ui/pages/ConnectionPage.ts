@@ -108,13 +108,20 @@ export class ConnectionPage {
 
             // Check if dialog appeared (with short timeout since it may not appear)
             try {
-                await this.driver.wait(
+                const dialogElement = await this.driver.wait(
                     until.elementLocated(By.css(".monaco-dialog-modal-block, .monaco-dialog, .monaco-dialog-box")),
                     UITimeouts.SHORT,
                     "Checking for Save Changes dialog"
                 );
 
-                // Dialog appeared, handle it using dynamic import to avoid circular dependency
+                // Verify dialog is actually visible
+                const isVisible = await dialogElement.isDisplayed();
+                if (!isVisible) {
+                    // Dialog element exists but is not visible, skip handling
+                    return;
+                }
+
+                // Dialog appeared and is visible, handle it using dynamic import to avoid circular dependency
                 const logger = getTestLogger();
                 const { handleConfirmationDialog } = await import("../testUtils");
                 const dialogHandled = await handleConfirmationDialog(this.driver, "Save Changes", UITimeouts.SHORT);
