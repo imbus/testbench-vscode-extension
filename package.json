@@ -967,7 +967,6 @@
         "flatted": "^3.3.3",
         "https-proxy-agent": "^7.0.6",
         "jszip": "^3.10.1",
-        "regex-translator": "^0.2.8",
         "uuid": "^9.0.1",
         "vscode-languageclient": "^9.0.1"
     },
