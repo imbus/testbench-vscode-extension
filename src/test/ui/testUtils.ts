@@ -2771,8 +2771,22 @@ export async function waitForConfigurationApplied(
         await driver.sleep(500);
         return true;
     } catch (error) {
-        logger.error("Configuration", "Error waiting for configuration to be applied", error);
-        // If timeout, assume configuration already exists and continue
+        // Timeout is expected if configuration already exists (pins won't appear again)
+        // or if tree items become stale during the wait
+        const isTimeoutError =
+            error instanceof Error &&
+            (error.name === "TimeoutError" || error.message.includes("Timeout") || error.message.includes("timeout"));
+
+        if (isTimeoutError) {
+            logger.debug(
+                "Configuration",
+                "Timeout waiting for pins - configuration may already exist (this is expected and not an error)"
+            );
+        } else {
+            // For non-timeout errors, log as warning since they're unexpected but not critical
+            logger.warn("Configuration", "Error waiting for configuration to be applied", error);
+        }
+        // If timeout or other error, assume configuration already exists and continue
         await driver.sleep(2000);
         return true;
     }
