@@ -228,32 +228,133 @@ async function getTreeItemTooltip(item: TreeItem, driver: WebDriver): Promise<st
         await driver.switchTo().defaultContent();
         console.log("[Tooltip] Hovering over tree item to get tooltip...");
 
-        const itemElement = item;
+        const itemLabel = await item.getLabel();
+        console.log(`[Tooltip] Tree item label: "${itemLabel}"`);
 
-        // Move mouse to the element to trigger tooltip
+        let labelElement = null;
+
+        try {
+            // Try to find the label element within the tree item
+            // VS Code tree items typically have a .monaco-icon-label or similar for the text
+            const labelSelectors = [
+                ".monaco-icon-label",
+                ".label-name",
+                ".monaco-highlighted-label",
+                "[class*='label']"
+            ];
+
+            for (const selector of labelSelectors) {
+                try {
+                    const elements = await item.findElements(By.css(selector));
+                    for (const el of elements) {
+                        if (await el.isDisplayed()) {
+                            const text = await el.getText();
+                            if (text && text.includes(itemLabel)) {
+                                labelElement = el;
+                                console.log(`[Tooltip] Found label element with selector: ${selector}`);
+                                break;
+                            }
+                        }
+                    }
+                    if (labelElement) {
+                        break;
+                    }
+                } catch {
+                    // Continue trying other selectors
+                }
+            }
+        } catch {
+            // Fall back to using the item itself
+        }
+
+        // Use JavaScript to find the tree row and hover over the label area
+        // This is more reliable than using the TreeItem element directly
+        const treeRowElement = await driver.executeScript(`
+            const rows = document.querySelectorAll('.monaco-list-row');
+            for (const row of rows) {
+                const label = row.querySelector('.monaco-icon-label, .label-name, [class*="label"]');
+                if (label) {
+                    const text = label.textContent || label.innerText || '';
+                    if (text.includes('${itemLabel.replace(/'/g, "\\'")}')) {
+                        // Return the label element, not the whole row
+                        return label;
+                    }
+                }
+            }
+            return null;
+        `);
+
+        const elementToHover = labelElement || treeRowElement || item;
+
+        // Move mouse to the label element to trigger the correct tooltip
         const actions = driver.actions({ async: true });
-        await actions.move({ origin: itemElement }).perform();
+        await actions.move({ origin: elementToHover as any }).perform();
 
         const tooltipText = await waitForTooltip(driver, UITimeouts.MEDIUM);
         if (tooltipText) {
-            console.log(`[Tooltip] Found tooltip text: ${tooltipText.substring(0, 100)}...`);
-            return tooltipText;
+            // Verify this is the item tooltip, not an action button tooltip
+            if (
+                tooltipText.includes("Execution Status") ||
+                tooltipText.includes(itemLabel) ||
+                (!tooltipText.includes("Upload") &&
+                    !tooltipText.includes("Generate") &&
+                    !tooltipText.includes("Delete"))
+            ) {
+                console.log(`[Tooltip] Found tooltip text: ${tooltipText.substring(0, 100)}...`);
+                return tooltipText;
+            } else {
+                console.log(`[Tooltip] Found button tooltip instead: "${tooltipText}", retrying...`);
+
+                // Move mouse away and try hovering on a different part
+                await actions.move({ x: 0, y: 0 }).perform();
+                await driver.sleep(200);
+
+                // Try hovering on the left side of the label element
+                if (treeRowElement) {
+                    await actions.move({ origin: treeRowElement as any, x: -50, y: 0 }).perform();
+                    const retryTooltip = await waitForTooltip(driver, UITimeouts.SHORT);
+                    if (
+                        retryTooltip &&
+                        (retryTooltip.includes("Execution Status") || retryTooltip.includes(itemLabel))
+                    ) {
+                        console.log(`[Tooltip] Found tooltip on retry: ${retryTooltip.substring(0, 100)}...`);
+                        return retryTooltip;
+                    }
+                }
+            }
         }
 
-        // Try getting the title attribute directly from the tree item
+        // Try getting the title attribute directly from the tree row
         try {
-            const title = await itemElement.getAttribute("title");
-            if (title && title.trim().length > 0) {
-                console.log(`[Tooltip] Found title attribute: ${title.substring(0, 100)}...`);
-                return title;
+            const rowWithTitle = (await driver.executeScript(`
+                const rows = document.querySelectorAll('.monaco-list-row');
+                for (const row of rows) {
+                    const text = row.textContent || row.innerText || '';
+                    if (text.includes('${itemLabel.replace(/'/g, "\\'")}')) {
+                        // Look for title attribute on the row or its children
+                        if (row.title) return row.title;
+                        const labeled = row.querySelector('[title]');
+                        if (labeled && labeled.title) return labeled.title;
+                        // Also check for custom tooltip data attribute
+                        const customTooltip = row.getAttribute('data-tooltip') || 
+                                             row.querySelector('[data-tooltip]')?.getAttribute('data-tooltip');
+                        if (customTooltip) return customTooltip;
+                    }
+                }
+                return null;
+            `)) as string | null;
+
+            if (rowWithTitle && rowWithTitle.trim().length > 0) {
+                console.log(`[Tooltip] Found title from row: ${rowWithTitle.substring(0, 100)}...`);
+                return rowWithTitle;
             }
         } catch {
             // Continue
         }
 
-        // Try to get aria-label which sometimes contains tooltip info
+        // Try to get aria-label
         try {
-            const ariaLabel = await itemElement.getAttribute("aria-label");
+            const ariaLabel = await item.getAttribute("aria-label");
             if (ariaLabel && ariaLabel.trim().length > 0) {
                 console.log(`[Tooltip] Found aria-label: ${ariaLabel.substring(0, 100)}...`);
                 return ariaLabel;
