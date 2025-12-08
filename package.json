@@ -133,7 +133,7 @@
                     },
                     "testbenchExtension.logSuiteNumbering": {
                         "type": "boolean",
-                        "default": false,
+                        "default": true,
                         "description": "Enables logging of the test suite numbering.",
                         "order": 15,
                         "scope": "window"
