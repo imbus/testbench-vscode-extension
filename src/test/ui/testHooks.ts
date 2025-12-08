@@ -10,6 +10,8 @@ import { VSBrowser, WebDriver, EditorView, Workbench, By, until } from "vscode-e
 import { openTestBenchSidebar, ensureLoggedIn, UITimeouts } from "./testUtils";
 import { isSlowMotionEnabled, getSlowMotionDelay, hasTestCredentials, TEST_PATHS } from "./testConfig";
 import { getTestLogger } from "./testLogger";
+import { ProjectsViewPage } from "./pages/ProjectsViewPage";
+import { TestThemesPage } from "./pages/TestThemesPage";
 
 /**
  * Waits for VS Code workbench to be fully loaded and ready.
@@ -479,30 +481,34 @@ export async function resetToProjectsView(driver: WebDriver, suiteName: string =
         await driver.switchTo().defaultContent();
         await openTestBenchSidebar(driver);
 
-        const { SideBarView } = await import("vscode-extension-tester");
-        const { findSidebarSection, clickToolbarButton, waitForProjectsView } = await import("./testUtils");
-
-        const sideBar = new SideBarView();
-        const content = sideBar.getContent();
+        const projectsPage = new ProjectsViewPage(driver);
+        const themesPage = new TestThemesPage(driver);
 
         // Check if we're already in Projects view
-        const projectsSection = await findSidebarSection(content, "Projects");
-        if (projectsSection) {
+        if (await projectsPage.isProjectsViewVisible()) {
             logger.debug(suiteName, "Already in Projects view");
             return true;
         }
 
         // We might be in Test Themes/Elements view - try to navigate back
-        const testThemesSection = await findSidebarSection(content, "Test Themes");
-        if (testThemesSection) {
+        if (await themesPage.isTestThemesViewVisible()) {
             logger.info(suiteName, "In Test Themes view, navigating back to Projects...");
-            const clicked = await clickToolbarButton(testThemesSection, "Open Projects View", driver);
-            if (clicked) {
-                const appeared = await waitForProjectsView(driver);
-                if (appeared) {
-                    logger.info(suiteName, "Successfully returned to Projects view");
-                    return true;
-                }
+            await themesPage.clickOpenProjectsView();
+
+            // Wait for projects view to appear
+            try {
+                await driver.wait(
+                    async () => {
+                        return await projectsPage.isProjectsViewVisible();
+                    },
+                    5000,
+                    "Waiting for Projects view to appear"
+                );
+
+                logger.info(suiteName, "Successfully returned to Projects view");
+                return true;
+            } catch {
+                logger.warn(suiteName, "Timed out waiting for Projects view after clicking back");
             }
         }
 

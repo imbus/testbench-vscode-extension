@@ -967,6 +967,39 @@ export async function waitForTreeRefresh(
     );
 }
 
+async function findTreeItemByLabel(
+    items: TreeItem[],
+    targetLabel: string,
+    exactMatch: boolean = false
+): Promise<TreeItem | null> {
+    for (const item of items) {
+        try {
+            const label = await item.getLabel();
+            const matches = exactMatch ? label === targetLabel : label === targetLabel || label.includes(targetLabel);
+
+            if (matches) {
+                return item;
+            }
+
+            // If item has children, search recursively
+            if (await item.hasChildren()) {
+                const children = await item.getChildren();
+                if (children && children.length > 0) {
+                    const found = await findTreeItemByLabel(children, targetLabel, exactMatch);
+                    if (found) {
+                        return found;
+                    }
+                }
+            }
+        } catch (error) {
+            // Log error but continue searching
+            logger.debug("TreeItem", `Error checking tree item: ${error}`);
+        }
+    }
+
+    return null;
+}
+
 /**
  * Waits for a specific tree item to appear in a section, with automatic expansion.
  *
@@ -1104,79 +1137,6 @@ export async function waitForNotification(
         logger.debug("Notification", `Notification not found within timeout: ${error}`);
         return false;
     }
-}
-
-/**
- * Finds a tree item by its label name, searching only at the current level (non-recursive).
- * This is more efficient and avoids expanding unrelated items.
- *
- * @param items - Array of tree items to search
- * @param targetLabel - The label text to find (exact or partial match)
- * @param exactMatch - If true, requires exact match; if false, uses partial match (default: false)
- * @returns Promise<TreeItem | null> - The found tree item or null if not found
- */
-export async function findTreeItemByLabelAtLevel(
-    items: TreeItem[],
-    targetLabel: string,
-    exactMatch: boolean = false
-): Promise<TreeItem | null> {
-    for (const item of items) {
-        try {
-            const label = await item.getLabel();
-            const matches = exactMatch ? label === targetLabel : label === targetLabel || label.includes(targetLabel);
-
-            if (matches) {
-                return item;
-            }
-        } catch (error) {
-            // Log error but continue searching
-            logger.debug("TreeItem", `Error checking tree item: ${error}`);
-        }
-    }
-
-    return null;
-}
-
-/**
- * Finds a tree item by its label name, searching recursively through children.
- * Note: This may expand items while searching. Use findTreeItemByLabelAtLevel for non-recursive search.
- *
- * @param items - Array of tree items to search
- * @param targetLabel - The label text to find (exact or partial match)
- * @param exactMatch - If true, requires exact match; if false, uses partial match (default: false)
- * @returns Promise<TreeItem | null> - The found tree item or null if not found
- */
-export async function findTreeItemByLabel(
-    items: TreeItem[],
-    targetLabel: string,
-    exactMatch: boolean = false
-): Promise<TreeItem | null> {
-    for (const item of items) {
-        try {
-            const label = await item.getLabel();
-            const matches = exactMatch ? label === targetLabel : label === targetLabel || label.includes(targetLabel);
-
-            if (matches) {
-                return item;
-            }
-
-            // If item has children, search recursively
-            if (await item.hasChildren()) {
-                const children = await item.getChildren();
-                if (children && children.length > 0) {
-                    const found = await findTreeItemByLabel(children, targetLabel, exactMatch);
-                    if (found) {
-                        return found;
-                    }
-                }
-            }
-        } catch (error) {
-            // Log error but continue searching
-            logger.debug("TreeItem", `Error checking tree item: ${error}`);
-        }
-    }
-
-    return null;
 }
 
 /**
@@ -2119,71 +2079,6 @@ export async function ensureLoggedIn(
 }
 
 /**
- * Finds a specific section in the sidebar by title.
- *
- * @param content - The sidebar content
- * @param sectionTitle - The title of the section to find (can be partial match)
- * @returns Promise<any | null> - The section or null if not found
- */
-export async function findSidebarSection(content: any, sectionTitle: string): Promise<any | null> {
-    try {
-        const sections = await content.getSections();
-        for (const section of sections) {
-            const title = await section.getTitle();
-            if (title.includes(sectionTitle)) {
-                return section;
-            }
-        }
-        return null;
-    } catch (error) {
-        logger.error("Sidebar", `Error finding section "${sectionTitle}"`, error);
-        return null;
-    }
-}
-
-/**
- * Gets the title of a sidebar section.
- *
- * @param section - The sidebar section
- * @returns Promise<string | null> - The section title or null if not found
- */
-export async function getSectionTitle(section: any): Promise<string | null> {
-    try {
-        return await section.getTitle();
-    } catch (error) {
-        logger.error("Sidebar", "Error getting section title", error);
-        return null;
-    }
-}
-
-/**
- * Clicks a toolbar button in a sidebar section by title.
- *
- * @param section - The sidebar section
- * @param buttonTitle - The title/aria-label of the button to click
- * @param driver - The WebDriver instance
- * @returns Promise<boolean> - True if button was found and clicked, false otherwise
- */
-export async function clickToolbarButton(section: any, buttonTitle: string, driver: WebDriver): Promise<boolean> {
-    try {
-        const toolbarActions = await section.getActions();
-        for (const action of toolbarActions) {
-            const title = await action.getTitle();
-            if (title.includes(buttonTitle)) {
-                await action.click();
-                await applySlowMotion(driver);
-                return true;
-            }
-        }
-        logger.trace("Toolbar", `Button "${buttonTitle}" not found in toolbar`);
-        return false;
-    } catch (error) {
-        logger.error("Toolbar", `Error clicking toolbar button "${buttonTitle}"`, error);
-        return false;
-    }
-}
-
-/**
  * Double-clicks a tree item.
  *
  * @param item - The tree item to double-click
@@ -2887,8 +2782,14 @@ export async function waitForProjectsView(driver: WebDriver, timeout: number = U
                 try {
                     const sideBar = new SideBarView();
                     const content = sideBar.getContent();
-                    const projectsSection = await findSidebarSection(content, "Projects");
-                    return projectsSection !== null;
+                    const sections = await content.getSections();
+                    for (const section of sections) {
+                        const title = await section.getTitle();
+                        if (title.includes("Projects")) {
+                            return true;
+                        }
+                    }
+                    return false;
                 } catch {
                     return false;
                 }
@@ -2919,9 +2820,19 @@ export async function waitForTestThemesAndElementsViews(
                 try {
                     const sideBar = new SideBarView();
                     const content = sideBar.getContent();
-                    const testThemesSection = await findSidebarSection(content, "Test Themes");
-                    const testElementsSection = await findSidebarSection(content, "Test Elements");
-                    return testThemesSection !== null && testElementsSection !== null;
+                    const sections = await content.getSections();
+                    let themesFound = false;
+                    let elementsFound = false;
+
+                    for (const section of sections) {
+                        const title = await section.getTitle();
+                        if (title.includes("Test Themes")) {
+                            themesFound = true;
+                        } else if (title.includes("Test Elements")) {
+                            elementsFound = true;
+                        }
+                    }
+                    return themesFound && elementsFound;
                 } catch {
                     return false;
                 }

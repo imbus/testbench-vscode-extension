@@ -4,96 +4,12 @@
  */
 
 import { expect } from "chai";
-import { SideBarView, TreeItem, WebDriver } from "vscode-extension-tester";
-import {
-    applySlowMotion,
-    findTreeItemByLabel,
-    expandTreeItemIfNeeded,
-    waitForTreeItems,
-    waitForTreeItemChildren,
-    clickNotificationButton,
-    cleanupWorkspace
-} from "./testUtils";
+import { SideBarView, TreeItem } from "vscode-extension-tester";
+import { applySlowMotion, waitForTreeItems, clickNotificationButton, cleanupWorkspace } from "./testUtils";
 import { getTestData, logTestDataConfig } from "./testConfig";
 import { TestContext, setupTestHooks, collapseAllTreeItems } from "./testHooks";
 import { getTestLogger } from "./testLogger";
-
-/**
- * Recursively expands all collapsible tree items in a tree section.
- * Projects and Versions are collapsible, Cycles are not.
- *
- * @param items - Array of tree items to expand
- * @param driver - The WebDriver instance for slow motion
- * @returns Promise<number> - Total number of items expanded
- */
-async function expandAllTreeItems(items: TreeItem[], driver: WebDriver): Promise<number> {
-    let expandedCount = 0;
-
-    for (const item of items) {
-        try {
-            const hasChildren = await item.hasChildren();
-            const isExpanded = await item.isExpanded();
-
-            if (hasChildren && !isExpanded) {
-                await item.expand();
-                await applySlowMotion(driver); // Visible: expanding tree item
-
-                // Verify it's expanded
-                const expanded = await item.isExpanded();
-                // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-                expect(expanded, "Tree item should be expanded after calling expand()").to.be.true;
-
-                expandedCount++;
-
-                // Wait for children to actually load (smart wait instead of fixed delay)
-                const childrenLoaded = await waitForTreeItemChildren(item, driver);
-                if (!childrenLoaded) {
-                    const logger = getTestLogger();
-                    logger.warn("ProjectsView", "Warning: Children may not have loaded for tree item");
-                }
-
-                // Recursively expand children
-                const children = await item.getChildren();
-                if (children && children.length > 0) {
-                    const childExpandedCount = await expandAllTreeItems(children, driver);
-                    expandedCount += childExpandedCount;
-                }
-            } else if (hasChildren && isExpanded) {
-                // Item is already expanded, but we should still check children
-                const children = await item.getChildren();
-                if (children && children.length > 0) {
-                    const childExpandedCount = await expandAllTreeItems(children, driver);
-                    expandedCount += childExpandedCount;
-                }
-            }
-        } catch (error) {
-            // Log error but continue with other items
-            const logger = getTestLogger();
-            logger.error("ProjectsView", `Error expanding tree item: ${error}`);
-        }
-    }
-
-    return expandedCount;
-}
-
-/**
- * Finds the Projects section in the sidebar.
- *
- * @param content - The sidebar content
- * @returns Promise<any | null> - The Projects section or null if not found
- */
-async function findProjectsSection(content: any): Promise<any | null> {
-    const sections = await content.getSections();
-
-    for (const section of sections) {
-        const title = await section.getTitle();
-        if (title === "Projects" || title.includes("Projects")) {
-            return section;
-        }
-    }
-
-    return null;
-}
+import { ProjectsViewPage } from "./pages/ProjectsViewPage";
 
 describe("Projects View UI Tests", function () {
     const ctx: TestContext = {} as TestContext;
@@ -120,7 +36,8 @@ describe("Projects View UI Tests", function () {
         try {
             const sideBar = new SideBarView();
             const content = sideBar.getContent();
-            const projectsSection = await findProjectsSection(content);
+            const projectsPage = new ProjectsViewPage(driver);
+            const projectsSection = await projectsPage.getSection(content);
 
             if (projectsSection) {
                 const logger = getTestLogger();
@@ -140,9 +57,10 @@ describe("Projects View UI Tests", function () {
             const driver = getDriver();
             const sideBar = new SideBarView();
             const content = sideBar.getContent();
+            const projectsPage = new ProjectsViewPage(driver);
 
             // Find the Projects section
-            const projectsSection = await findProjectsSection(content);
+            const projectsSection = await projectsPage.getSection(content);
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
             expect(projectsSection, "Projects section should be present in the sidebar").to.not.be.null;
 
@@ -164,26 +82,26 @@ describe("Projects View UI Tests", function () {
             }
 
             // Get all visible tree items (Projects)
-            const projectItems = await projectsSection.getVisibleItems();
+            const projectItems = (await projectsSection.getVisibleItems()) as TreeItem[];
             expect(projectItems.length).to.be.greaterThan(0, "Expected at least one project in the tree");
 
             logger.info("ProjectsView", `Found ${projectItems.length} project(s)`);
 
             // Expand all collapsible tree items recursively
-            const expandedCount = await expandAllTreeItems(projectItems, driver);
+            const expandedCount = await projectsPage.expandAllTreeItems(projectItems);
 
             logger.info("ProjectsView", `Expanded ${expandedCount} tree item(s)`);
 
             // Verify that all expandable items are now expanded
             // Re-fetch items to get updated state
-            const allItems = await projectsSection.getVisibleItems();
+            const allItems = (await projectsSection.getVisibleItems()) as TreeItem[];
             for (const item of allItems) {
                 const hasChildren = await item.hasChildren();
                 if (hasChildren) {
                     const isExpanded = await item.isExpanded();
                     const label = await item.getLabel();
                     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-                    expect(isExpanded, `Tree item '${label}' with children should be expanded`).to.be.true;
+                    expect(isExpanded, `Tree item "${label}" with children should be expanded`).to.be.true;
                 }
             }
 
@@ -194,10 +112,11 @@ describe("Projects View UI Tests", function () {
             const driver = getDriver();
             const sideBar = new SideBarView();
             const content = sideBar.getContent();
+            const projectsPage = new ProjectsViewPage(driver);
 
             const logger = getTestLogger();
             // Find the Projects section
-            const projectsSection = await findProjectsSection(content);
+            const projectsSection = await projectsPage.getSection(content);
             if (!projectsSection) {
                 logger.warn("ProjectsView", "Projects section not found in sidebar");
                 this.skip();
@@ -212,7 +131,7 @@ describe("Projects View UI Tests", function () {
                 return;
             }
 
-            const projectItems = await projectsSection.getVisibleItems();
+            const projectItems = (await projectsSection.getVisibleItems()) as TreeItem[];
             expect(projectItems.length).to.be.greaterThan(0, "Expected at least one project");
 
             // Expand first project to check structure
@@ -222,7 +141,7 @@ describe("Projects View UI Tests", function () {
                 logger.info("ProjectsView", `Checking structure for project: ${projectLabel}`);
 
                 // Expand project if it has children
-                await expandTreeItemIfNeeded(firstProject, driver);
+                await projectsPage.expandItem(firstProject);
 
                 // Check for versions
                 const versions = await firstProject.getChildren();
@@ -234,7 +153,7 @@ describe("Projects View UI Tests", function () {
                     const versionLabel = await firstVersion.getLabel();
                     logger.info("ProjectsView", `Checking structure for version: ${versionLabel}`);
 
-                    await expandTreeItemIfNeeded(firstVersion, driver);
+                    await projectsPage.expandItem(firstVersion);
 
                     // Check for cycles
                     const cycles = await firstVersion.getChildren();
@@ -248,9 +167,9 @@ describe("Projects View UI Tests", function () {
                             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
                             expect(
                                 hasChildren,
-                                `Cycle '${cycleLabel}' should not have children (cycles are leaf nodes)`
+                                `Cycle "${cycleLabel}" should not have children (cycles are leaf nodes)`
                             ).to.be.false;
-                            logger.debug("ProjectsView", `Cycle '${cycleLabel}' is not collapsible (as expected)`);
+                            logger.debug("ProjectsView", `Cycle "${cycleLabel}" is not collapsible (as expected)`);
                         }
                     } else {
                         logger.debug("ProjectsView", "No cycles found under version (this is acceptable)");
@@ -267,6 +186,7 @@ describe("Projects View UI Tests", function () {
             const driver = getDriver();
             const testData = getTestData();
             logTestDataConfig();
+            const projectsPage = new ProjectsViewPage(driver);
 
             const logger = getTestLogger();
             // Clean up workspace, excluding .testbench folder
@@ -279,7 +199,7 @@ describe("Projects View UI Tests", function () {
             const content = sideBar.getContent();
 
             // Find the Projects section
-            const projectsSection = await findProjectsSection(content);
+            const projectsSection = await projectsPage.getSection(content);
             if (!projectsSection) {
                 logger.warn("ProjectsView", "Projects section not found in sidebar");
                 this.skip();
@@ -294,61 +214,35 @@ describe("Projects View UI Tests", function () {
                 return;
             }
 
-            // Get all visible tree items (Projects)
-            const projectItems = await projectsSection.getVisibleItems();
-            expect(projectItems.length).to.be.greaterThan(0, "Expected at least one project in the tree");
-
             // Find the target project
-            const targetProject = await findTreeItemByLabel(projectItems, testData.projectName);
+            const targetProject = await projectsPage.getProject(projectsSection, testData.projectName);
             if (!targetProject) {
-                logger.warn("ProjectsView", `Project '${testData.projectName}' not found`);
+                logger.warn("ProjectsView", `Project "${testData.projectName}" not found`);
                 this.skip();
                 return;
             }
 
-            logger.info("ProjectsView", `Found project '${testData.projectName}'`);
-
-            // Expand the project if it has children and is not expanded
-            await expandTreeItemIfNeeded(targetProject, driver);
-
-            // Get children (versions) of the project
-            const versions = await targetProject.getChildren();
-            if (!versions || versions.length === 0) {
-                logger.warn("ProjectsView", "No versions found under project");
-                this.skip();
-                return;
-            }
+            logger.info("ProjectsView", `Found project "${testData.projectName}"`);
 
             // Find the target version
-            const targetVersion = await findTreeItemByLabel(versions, testData.versionName);
+            const targetVersion = await projectsPage.getVersion(targetProject, testData.versionName);
             if (!targetVersion) {
-                logger.warn("ProjectsView", `Version '${testData.versionName}' not found`);
+                logger.warn("ProjectsView", `Version "${testData.versionName}" not found`);
                 this.skip();
                 return;
             }
 
-            logger.info("ProjectsView", `Found version '${testData.versionName}'`);
-
-            // Expand the version if it has children and is not expanded
-            await expandTreeItemIfNeeded(targetVersion, driver);
-
-            // Get children (cycles) of the version
-            const cycles = await targetVersion.getChildren();
-            if (!cycles || cycles.length === 0) {
-                logger.warn("ProjectsView", "No cycles found under version");
-                this.skip();
-                return;
-            }
+            logger.info("ProjectsView", `Found version "${testData.versionName}"`);
 
             // Find the target cycle
-            const targetCycle = await findTreeItemByLabel(cycles, testData.cycleName);
+            const targetCycle = await projectsPage.getCycle(targetVersion, testData.cycleName);
             if (!targetCycle) {
-                logger.warn("ProjectsView", `Cycle '${testData.cycleName}' not found`);
+                logger.warn("ProjectsView", `Cycle "${testData.cycleName}" not found`);
                 this.skip();
                 return;
             }
 
-            logger.info("ProjectsView", `Found cycle '${testData.cycleName}', clicking...`);
+            logger.info("ProjectsView", `Found cycle "${testData.cycleName}", clicking...`);
 
             // Click the cycle (single click) - this should trigger the notification
             await targetCycle.click();

@@ -15,13 +15,7 @@ import { logger } from "./testLogger";
 import {
     openTestBenchSidebar,
     applySlowMotion,
-    findTreeItemByLabel,
-    findTreeItemByLabelAtLevel,
-    expandTreeItemIfNeeded,
     waitForTreeItems,
-    findSidebarSection,
-    getSectionTitle,
-    clickToolbarButton,
     doubleClickTreeItem,
     waitForProjectsView,
     waitForTestThemesAndElementsViews,
@@ -32,191 +26,12 @@ import {
     waitForTestingViewReady,
     waitForTerminalOutput,
     waitForTreeRefresh,
-    waitForTreeItem,
     waitForNotification
 } from "./testUtils";
 import { getTestData, logTestDataConfig } from "./testConfig";
 import { TestContext, setupTestHooks } from "./testHooks";
-
-/**
- * Finds the Test Themes section in the sidebar.
- *
- * @param content - The sidebar content
- * @returns Promise<any | null> - The Test Themes section or null if not found
- */
-async function findTestThemesSection(content: any): Promise<any | null> {
-    return await findSidebarSection(content, "Test Themes");
-}
-
-/**
- * Finds the Projects section in the sidebar.
- *
- * @param content - The sidebar content
- * @returns Promise<any | null> - The Projects section or null if not found
- */
-async function findProjectsSection(content: any): Promise<any | null> {
-    return await findSidebarSection(content, "Projects");
-}
-
-/**
- * Clicks a tree item action button by its aria-label or title.
- * Used for clicking buttons like "Generate Robot Framework Test Suites" or "Upload Execution Results".
- *
- * @param item - The tree item containing the button
- * @param driver - The WebDriver instance
- * @param buttonLabel - Partial text of the button's aria-label or title
- * @returns Promise<boolean> - True if button was found and clicked, false otherwise
- */
-async function clickTreeItemActionButton(item: TreeItem, driver: WebDriver, buttonLabel: string): Promise<boolean> {
-    try {
-        await driver.switchTo().defaultContent();
-
-        const itemLabel = await item.getLabel();
-        logger.trace("TreeItem", `Looking for "${buttonLabel}" button on item: "${itemLabel}"`);
-
-        const button = await driver.wait(
-            async () => {
-                try {
-                    const allRowsInTree = await driver.findElements(By.css(".monaco-list-row"));
-
-                    for (const row of allRowsInTree) {
-                        try {
-                            const rowText = await row.getText();
-                            if (!rowText.includes(itemLabel)) {
-                                continue;
-                            }
-
-                            const actionButtons = await row.findElements(
-                                By.css("a.action-item, button.action-item, a[class*='action'], button[class*='action']")
-                            );
-
-                            for (const btn of actionButtons) {
-                                try {
-                                    const isDisplayed = await btn.isDisplayed();
-                                    if (!isDisplayed) {
-                                        continue;
-                                    }
-
-                                    // Check aria-label or title
-                                    const ariaLabel = await btn.getAttribute("aria-label");
-                                    const title = await btn.getAttribute("title");
-
-                                    if (
-                                        (ariaLabel && ariaLabel.toLowerCase().includes(buttonLabel.toLowerCase())) ||
-                                        (title && title.toLowerCase().includes(buttonLabel.toLowerCase()))
-                                    ) {
-                                        logger.trace(
-                                            "TreeItem",
-                                            `Found button by aria-label/title: "${ariaLabel || title}"`
-                                        );
-                                        return btn;
-                                    }
-                                } catch {
-                                    // Continue searching
-                                }
-                            }
-
-                            // Look for any links/buttons with codicons that might match
-                            const allButtons = await row.findElements(By.css("a, button"));
-                            for (const btn of allButtons) {
-                                try {
-                                    const isDisplayed = await btn.isDisplayed();
-                                    if (!isDisplayed) {
-                                        continue;
-                                    }
-
-                                    const ariaLabel = await btn.getAttribute("aria-label");
-                                    const title = await btn.getAttribute("title");
-
-                                    if (
-                                        (ariaLabel && ariaLabel.toLowerCase().includes(buttonLabel.toLowerCase())) ||
-                                        (title && title.toLowerCase().includes(buttonLabel.toLowerCase()))
-                                    ) {
-                                        logger.trace("TreeItem", `Found button: "${ariaLabel || title}"`);
-                                        return btn;
-                                    }
-                                } catch {
-                                    // Continue searching
-                                }
-                            }
-                        } catch {
-                            // Continue to next row
-                        }
-                    }
-
-                    // Strategy 2: JavaScript-based search
-                    const buttonFound = (await driver.executeScript(`
-                        function findActionButton(itemLabel, buttonLabel) {
-                            const rows = document.querySelectorAll('.monaco-list-row');
-                            for (const row of rows) {
-                                const rowText = row.textContent || row.innerText || '';
-                                if (!rowText.includes('${itemLabel.replace(/'/g, "\\'")}')) {
-                                    continue;
-                                }
-                                
-                                const buttons = row.querySelectorAll('a.action-item, button.action-item, a[class*="action"], button[class*="action"]');
-                                for (const btn of buttons) {
-                                    const ariaLabel = btn.getAttribute('aria-label') || '';
-                                    const title = btn.getAttribute('title') || '';
-                                    
-                                    if (ariaLabel.toLowerCase().includes('${buttonLabel.toLowerCase().replace(/'/g, "\\'")}') ||
-                                        title.toLowerCase().includes('${buttonLabel.toLowerCase().replace(/'/g, "\\'")}')) {
-                                        btn.scrollIntoView({ block: 'center' });
-                                        return btn;
-                                    }
-                                }
-                            }
-                            return null;
-                        }
-                        return findActionButton('${itemLabel.replace(/'/g, "\\'")}', '${buttonLabel.replace(/'/g, "\\'")}');
-                    `)) as any | null;
-
-                    if (buttonFound) {
-                        logger.trace("TreeItem", "Found button using JavaScript");
-                        return buttonFound;
-                    }
-
-                    return null;
-                } catch (error) {
-                    logger.error("TreeItem", "Error in button search", error);
-                    return null;
-                }
-            },
-            UITimeouts.LONG,
-            `Waiting for "${buttonLabel}" button near item "${itemLabel}"`
-        );
-
-        if (button) {
-            logger.trace("TreeItem", `Found "${buttonLabel}" button, clicking...`);
-
-            // Scroll into view
-            try {
-                await driver.executeScript("arguments[0].scrollIntoView({ block: 'center' });", button);
-                await driver.sleep(200);
-            } catch {
-                // Ignore scroll errors
-            }
-
-            // Try regular click first
-            try {
-                await button.click();
-            } catch (clickError) {
-                // Fallback to JavaScript click
-                logger.warn("TreeItem", "Regular click failed, trying JavaScript click", clickError);
-                await driver.executeScript("arguments[0].click();", button);
-            }
-
-            await applySlowMotion(driver);
-            return true;
-        }
-
-        logger.warn("TreeItem", `"${buttonLabel}" button not found`);
-        return false;
-    } catch (error) {
-        logger.error("TreeItem", `Error clicking "${buttonLabel}" button`, error);
-        return false;
-    }
-}
+import { TestThemesPage } from "./pages/TestThemesPage";
+import { ProjectsViewPage } from "./pages/ProjectsViewPage";
 
 /**
  * Hovers over a tree item and retrieves its tooltip text.
@@ -242,7 +57,7 @@ async function getTreeItemTooltip(item: TreeItem, driver: WebDriver): Promise<st
                 ".monaco-icon-label",
                 ".label-name",
                 ".monaco-highlighted-label",
-                "[class*='label']"
+                '[class*="label"]'
             ];
 
             for (const selector of labelSelectors) {
@@ -272,12 +87,12 @@ async function getTreeItemTooltip(item: TreeItem, driver: WebDriver): Promise<st
         // Use JavaScript to find the tree row and hover over the label area
         // This is more reliable than using the TreeItem element directly
         const treeRowElement = await driver.executeScript(`
-            const rows = document.querySelectorAll('.monaco-list-row');
+            const rows = document.querySelectorAll(".monaco-list-row");
             for (const row of rows) {
                 const label = row.querySelector('.monaco-icon-label, .label-name, [class*="label"]');
                 if (label) {
-                    const text = label.textContent || label.innerText || '';
-                    if (text.includes('${itemLabel.replace(/'/g, "\\'")}')) {
+                    const text = label.textContent || label.innerText || "";
+                    if (text.includes("${itemLabel.replace(/"/g, '\\"')}")) {
                         // Return the label element, not the whole row
                         return label;
                     }
@@ -329,17 +144,17 @@ async function getTreeItemTooltip(item: TreeItem, driver: WebDriver): Promise<st
         // Try getting the title attribute directly from the tree row
         try {
             const rowWithTitle = (await driver.executeScript(`
-                const rows = document.querySelectorAll('.monaco-list-row');
+                const rows = document.querySelectorAll(".monaco-list-row");
                 for (const row of rows) {
-                    const text = row.textContent || row.innerText || '';
-                    if (text.includes('${itemLabel.replace(/'/g, "\\'")}')) {
+                    const text = row.textContent || row.innerText || "";
+                    if (text.includes("${itemLabel.replace(/"/g, '\\"')}")) {
                         // Look for title attribute on the row or its children
                         if (row.title) return row.title;
-                        const labeled = row.querySelector('[title]');
+                        const labeled = row.querySelector("[title]");
                         if (labeled && labeled.title) return labeled.title;
                         // Also check for custom tooltip data attribute
-                        const customTooltip = row.getAttribute('data-tooltip') || 
-                                             row.querySelector('[data-tooltip]')?.getAttribute('data-tooltip');
+                        const customTooltip = row.getAttribute("data-tooltip") || 
+                                             row.querySelector("[data-tooltip]")?.getAttribute("data-tooltip");
                         if (customTooltip) return customTooltip;
                     }
                 }
@@ -374,7 +189,7 @@ async function getTreeItemTooltip(item: TreeItem, driver: WebDriver): Promise<st
 }
 
 /**
- * Verifies that a tree item's tooltip contains the expected text.
+ * Verifies that a tree item"s tooltip contains the expected text.
  *
  * @param item - The tree item to check
  * @param driver - The WebDriver instance
@@ -391,9 +206,9 @@ async function verifyTooltipContains(item: TreeItem, driver: WebDriver, expected
 
     const containsExpected = tooltipText.includes(expectedText);
     if (containsExpected) {
-        logger.info("Tooltip", `✓ Tooltip contains expected text: "${expectedText}"`);
+        logger.info("Tooltip", ` Tooltip contains expected text: "${expectedText}"`);
     } else {
-        logger.warn("Tooltip", `✗ Tooltip does not contain "${expectedText}"`);
+        logger.warn("Tooltip", ` Tooltip does not contain "${expectedText}"`);
         logger.debug("Tooltip", `Actual tooltip text: ${tooltipText}`);
     }
 
@@ -474,7 +289,7 @@ async function openTestingView(driver: WebDriver): Promise<boolean> {
                         "Testing View to become visible"
                     );
                     if (isVisible) {
-                        logger.info("TestingView", "✓ Testing View opened successfully");
+                        logger.info("TestingView", " Testing View opened successfully");
                         return true;
                     }
                 }
@@ -512,12 +327,12 @@ async function runTestsFromTestingView(driver: WebDriver): Promise<boolean> {
                     // Try multiple selectors for the run button
                     const selectors = [
                         // Run All Tests button
-                        "[aria-label*='Run All Tests']",
-                        "[aria-label*='Run Tests']",
-                        "[title*='Run All Tests']",
-                        "[title*='Run Tests']",
+                        '[aria-label*="Run All Tests"]',
+                        '[aria-label*="Run Tests"]',
+                        '[title*="Run All Tests"]',
+                        '[title*="Run Tests"]',
                         // Play icon button in testing view
-                        ".testing-explorer-view-content .action-item[aria-label*='Run']",
+                        '.testing-explorer-view-content .action-item[aria-label*="Run"]',
                         ".test-explorer .codicon-run-all",
                         ".codicon-testing-run-all-icon"
                     ];
@@ -533,9 +348,9 @@ async function runTestsFromTestingView(driver: WebDriver): Promise<boolean> {
 
                     // Try finding by XPath
                     const xpathSelectors = [
-                        "//a[contains(@aria-label, 'Run All Tests')]",
-                        "//a[contains(@aria-label, 'Run Tests')]",
-                        "//button[contains(@aria-label, 'Run')]"
+                        '//a[contains(@aria-label, "Run All Tests")]',
+                        '//a[contains(@aria-label, "Run Tests")]',
+                        '//button[contains(@aria-label, "Run")]'
                     ];
 
                     for (const xpath of xpathSelectors) {
@@ -592,7 +407,7 @@ async function waitForTestExecutionComplete(driver: WebDriver, timeout: number =
             driver,
             async () => {
                 const indicators = await driver.findElements(
-                    By.css(".codicon-loading, .codicon-sync, [class*='spinning'], .codicon-testing-run-icon")
+                    By.css('.codicon-loading, .codicon-sync, [class*="spinning"], .codicon-testing-run-icon')
                 );
                 return indicators.length > 0;
             },
@@ -607,7 +422,7 @@ async function waitForTestExecutionComplete(driver: WebDriver, timeout: number =
                 try {
                     // Check if there are any spinning/loading indicators
                     const spinners = await driver.findElements(
-                        By.css(".codicon-loading, .codicon-sync, [class*='spinning']")
+                        By.css('.codicon-loading, .codicon-sync, [class*="spinning"]')
                     );
 
                     let hasActiveSpinner = false;
@@ -648,7 +463,7 @@ async function waitForTestExecutionComplete(driver: WebDriver, timeout: number =
             "Waiting for test execution to complete"
         );
 
-        logger.info("TestingView", "✓ Test execution appears to be complete");
+        logger.info("TestingView", " Test execution appears to be complete");
         return true;
     } catch (error) {
         logger.warn("TestingView", `Timeout or error waiting for test completion: ${error}`);
@@ -689,7 +504,7 @@ async function executeRobotTestsViaTerminal(driver: WebDriver, _config: { testTh
         const terminalVisible = await driver.wait(
             async () => {
                 const terminals = await driver.findElements(
-                    By.css(".terminal-wrapper, .integrated-terminal, [class*='terminal']")
+                    By.css('.terminal-wrapper, .integrated-terminal, [class*="terminal"]')
                 );
                 for (const term of terminals) {
                     if (await term.isDisplayed()) {
@@ -752,7 +567,7 @@ async function executeRobotTestsViaTerminal(driver: WebDriver, _config: { testTh
             );
         }
 
-        logger.info("Terminal", "✓ Robot command executed (dry-run mode)");
+        logger.info("Terminal", " Robot command executed (dry-run mode)");
         return true;
     } catch (error) {
         logger.error("Terminal", `Error executing tests via terminal: ${error}`);
@@ -779,6 +594,8 @@ describe("Test Themes View UI Tests", function () {
             const driver = getDriver();
             const config = getTestData();
             logTestDataConfig();
+            const testThemesPage = new TestThemesPage(driver);
+            const projectsPage = new ProjectsViewPage(driver);
 
             // ============================================
             // Phase 1: Login and View Detection
@@ -789,8 +606,8 @@ describe("Test Themes View UI Tests", function () {
             const content = sideBar.getContent();
 
             // Determine initial view state
-            const projectsSection = await findProjectsSection(content);
-            const testThemesSection = await findTestThemesSection(content);
+            const projectsSection = await projectsPage.getSection(content);
+            const testThemesSection = await testThemesPage.getSection(content);
 
             let isInProjectsView = false;
             let needsNavigation = true;
@@ -802,7 +619,7 @@ describe("Test Themes View UI Tests", function () {
                 logger.info("Phase1", "Extension is in Test Themes View");
 
                 // Check if current context matches expected
-                const testThemesTitle = await getSectionTitle(testThemesSection);
+                const testThemesTitle = await testThemesPage.getTitle(testThemesSection);
                 logger.info("Phase1", `Test Themes view title: "${testThemesTitle}"`);
 
                 if (
@@ -814,9 +631,12 @@ describe("Test Themes View UI Tests", function () {
                     needsNavigation = false;
                 } else {
                     logger.info("Phase1", "Context does not match. Navigating to Projects View...");
-                    const buttonClicked = await clickToolbarButton(testThemesSection, "Open Projects View", driver);
+                    const buttonClicked = await testThemesPage.clickToolbarAction(
+                        testThemesSection,
+                        "Open Projects View"
+                    );
                     if (!buttonClicked) {
-                        logger.warn("Phase1", "Failed to click 'Open Projects View' button");
+                        logger.warn("Phase1", 'Failed to click "Open Projects View" button');
                         this.skip();
                     }
 
@@ -840,7 +660,7 @@ describe("Test Themes View UI Tests", function () {
 
                 // Re-fetch sections
                 const updatedContent = sideBar.getContent();
-                const projectsSectionUpdated = await findProjectsSection(updatedContent);
+                const projectsSectionUpdated = await projectsPage.getSection(updatedContent);
 
                 if (!projectsSectionUpdated) {
                     logger.warn("Phase2", "Projects section not found");
@@ -855,51 +675,71 @@ describe("Test Themes View UI Tests", function () {
                     return;
                 }
 
-                const allVisibleProjectItems = await projectsSectionUpdated.getVisibleItems();
-                expect(allVisibleProjectItems.length).to.be.greaterThan(0, "Expected at least one project in the tree");
+                // Log all visible projects
+                const allProjects = await projectsSectionUpdated.getVisibleItems();
+                logger.debug("Phase2", `All visible projects (${allProjects.length}):`);
+                for (let i = 0; i < allProjects.length; i++) {
+                    try {
+                        const projLabel = await (allProjects[i] as TreeItem).getLabel();
+                        logger.debug("Phase2", `  [${i}] "${projLabel}"`);
+                    } catch (e) {
+                        logger.debug("Phase2", `  [${i}] <error getting label: ${e}>`);
+                    }
+                }
 
-                const targetProject = await findTreeItemByLabelAtLevel(allVisibleProjectItems, config.projectName);
+                const targetProject = await projectsPage.getProject(projectsSectionUpdated, config.projectName);
                 if (!targetProject) {
-                    logger.warn("Phase2", `Project '${config.projectName}' not found`);
+                    logger.warn("Phase2", `Project "${config.projectName}" not found`);
                     this.skip();
                     return;
                 }
 
-                logger.info("Phase2", `Found project '${config.projectName}', expanding...`);
-                await expandTreeItemIfNeeded(targetProject, driver);
-
-                const versions = await targetProject.getChildren();
-                if (!versions || versions.length === 0) {
-                    logger.warn("Phase2", "No versions found under project");
+                const foundProjectLabel = await targetProject.getLabel();
+                logger.debug("Phase2", `Found project with label: "${foundProjectLabel}"`);
+                if (foundProjectLabel !== config.projectName) {
+                    logger.warn(
+                        "Phase2",
+                        `Project label mismatch: expected "${config.projectName}", but found "${foundProjectLabel}"`
+                    );
                     this.skip();
                     return;
                 }
 
-                const targetVersion = await findTreeItemByLabelAtLevel(versions, config.versionName);
+                logger.info("Phase2", `Found project "${config.projectName}", expanding...`);
+                const targetVersion = await projectsPage.getVersion(targetProject, config.versionName);
                 if (!targetVersion) {
-                    logger.warn("Phase2", `Version '${config.versionName}' not found`);
+                    logger.warn("Phase2", `Version "${config.versionName}" not found`);
                     this.skip();
                     return;
                 }
 
-                logger.info("Phase2", `Found version '${config.versionName}', expanding...`);
-                await expandTreeItemIfNeeded(targetVersion, driver);
+                const foundVersionLabel = await targetVersion.getLabel();
+                logger.debug("Phase2", `Found version with label: "${foundVersionLabel}"`);
+                logger.info("Phase2", `Found version "${config.versionName}", expanding...`);
 
-                const cycles = await targetVersion.getChildren();
-                if (!cycles || cycles.length === 0) {
-                    logger.warn("Phase2", "No cycles found under version");
-                    this.skip();
-                    return;
-                }
-
-                const targetCycle = await findTreeItemByLabelAtLevel(cycles, config.cycleName);
+                const targetCycle = await projectsPage.getCycle(targetVersion, config.cycleName);
                 if (!targetCycle) {
-                    logger.warn("Phase2", `Cycle '${config.cycleName}' not found`);
+                    logger.warn("Phase2", `Cycle "${config.cycleName}" not found`);
                     this.skip();
                     return;
                 }
 
-                logger.info("Phase2", `Found cycle '${config.cycleName}'`);
+                const foundCycleLabel = await targetCycle.getLabel();
+                logger.debug("Phase2", `Found cycle with label: "${foundCycleLabel}"`);
+
+                // Verify we're working with the correct project by checking the project label
+                const verifiedProjectLabel = await targetProject.getLabel();
+                if (verifiedProjectLabel !== config.projectName) {
+                    logger.error(
+                        "Phase2",
+                        `CRITICAL: Project label changed to "${verifiedProjectLabel}", expected "${config.projectName}"`
+                    );
+                    logger.error("Phase2", `This indicates we may be working with the wrong project!`);
+                    this.skip();
+                    return;
+                }
+
+                logger.info("Phase2", `Found cycle "${config.cycleName}"`);
 
                 await handleCycleConfigurationPrompt(
                     targetCycle,
@@ -911,22 +751,97 @@ describe("Test Themes View UI Tests", function () {
                     targetVersion
                 );
 
-                // Re-locate cycle after potential tree reordering
-                const cyclesAfterConfig = await targetVersion.getChildren();
-                let targetCycleAfterConfig = await findTreeItemByLabelAtLevel(cyclesAfterConfig, config.cycleName);
+                // Re-locate entire hierarchy after potential tree reordering to get fresh references
+                logger.debug("Phase2", "Re-locating project hierarchy after configuration...");
+                const refreshedContent = sideBar.getContent();
+                const refreshedProjectsSection = await projectsPage.getSection(refreshedContent);
 
-                if (!targetCycleAfterConfig) {
-                    const allItems = await projectsSectionUpdated.getVisibleItems();
-                    targetCycleAfterConfig = await findTreeItemByLabel(allItems, config.cycleName);
+                let cycleToClick: TreeItem;
+
+                if (!refreshedProjectsSection) {
+                    logger.warn("Phase2", "Projects section not found after configuration");
+                    // Fallback to original references
+                    cycleToClick = targetCycle;
+                } else {
+                    // Re-fetch project to ensure we have a fresh reference
+                    const refreshedProject = await projectsPage.getProject(
+                        refreshedProjectsSection,
+                        config.projectName
+                    );
+                    if (!refreshedProject) {
+                        logger.warn(
+                            "Phase2",
+                            `Project "${config.projectName}" not found after configuration, using original reference`
+                        );
+                        cycleToClick = targetCycle;
+                    } else {
+                        const refreshedProjectLabel = await refreshedProject.getLabel();
+                        logger.debug("Phase2", `Re-located project: "${refreshedProjectLabel}"`);
+
+                        if (refreshedProjectLabel !== config.projectName) {
+                            logger.error(
+                                "Phase2",
+                                `CRITICAL: After refresh, project label is "${refreshedProjectLabel}", expected "${config.projectName}"`
+                            );
+                            logger.error(
+                                "Phase2",
+                                `This indicates we're about to click a cycle from the wrong project!`
+                            );
+                            this.skip();
+                            return;
+                        }
+
+                        // Re-fetch version
+                        const refreshedVersion = await projectsPage.getVersion(refreshedProject, config.versionName);
+                        if (!refreshedVersion) {
+                            logger.warn(
+                                "Phase2",
+                                `Version "${config.versionName}" not found after configuration, using original reference`
+                            );
+                            cycleToClick = targetCycle;
+                        } else {
+                            const refreshedVersionLabel = await refreshedVersion.getLabel();
+                            logger.debug("Phase2", `Re-located version: "${refreshedVersionLabel}"`);
+
+                            // Re-fetch cycle
+                            const refreshedCycle = await projectsPage.getCycle(refreshedVersion, config.cycleName);
+                            if (!refreshedCycle) {
+                                logger.warn(
+                                    "Phase2",
+                                    `Cycle "${config.cycleName}" not found after configuration, using original reference`
+                                );
+                                cycleToClick = targetCycle;
+                            } else {
+                                const refreshedCycleLabel = await refreshedCycle.getLabel();
+                                logger.debug("Phase2", `Re-located cycle: "${refreshedCycleLabel}"`);
+                                cycleToClick = refreshedCycle;
+                            }
+                        }
+                    }
                 }
 
-                if (!targetCycleAfterConfig) {
-                    logger.warn("Phase2", `Cycle '${config.cycleName}' not found after configuration`);
-                    targetCycleAfterConfig = targetCycle;
+                const finalCycleLabel = await cycleToClick.getLabel();
+                logger.debug("Phase2", `About to double-click cycle with label: "${finalCycleLabel}"`);
+
+                // Verify the project by re-fetching it
+                const finalProjectsSection = sideBar.getContent();
+                const finalProjectsSectionObj = await projectsPage.getSection(finalProjectsSection);
+                if (finalProjectsSectionObj) {
+                    const finalProject = await projectsPage.getProject(finalProjectsSectionObj, config.projectName);
+                    if (finalProject) {
+                        const finalProjectLabel = await finalProject.getLabel();
+                        logger.debug("Phase2", `Final project verification: "${finalProjectLabel}"`);
+                        if (finalProjectLabel !== config.projectName) {
+                            logger.error(
+                                "Phase2",
+                                `CRITICAL: Final project check failed - found "${finalProjectLabel}" instead of "${config.projectName}"`
+                            );
+                        }
+                    }
                 }
 
-                logger.info("Phase2", `Double-clicking cycle '${config.cycleName}'...`);
-                await doubleClickTreeItem(targetCycleAfterConfig, driver);
+                logger.info("Phase2", `Double-clicking cycle "${config.cycleName}"...`);
+                await doubleClickTreeItem(cycleToClick, driver);
 
                 const viewsAppeared = await waitForTestThemesAndElementsViews(driver);
                 if (!viewsAppeared) {
@@ -943,7 +858,7 @@ describe("Test Themes View UI Tests", function () {
                 driver,
                 async () => {
                     const content = sideBar.getContent();
-                    const section = await findTestThemesSection(content);
+                    const section = await testThemesPage.getSection(content);
                     if (section) {
                         const items = await section.getVisibleItems();
                         return items.length >= 0; // Section exists and is queryable
@@ -961,7 +876,7 @@ describe("Test Themes View UI Tests", function () {
             logger.info("Phase3", "Verifying Test Themes View Title...");
 
             const updatedContent2 = sideBar.getContent();
-            const testThemesSectionVerify = await findTestThemesSection(updatedContent2);
+            const testThemesSectionVerify = await testThemesPage.getSection(updatedContent2);
 
             if (!testThemesSectionVerify) {
                 logger.warn("Phase3", "Test Themes section not found");
@@ -969,14 +884,14 @@ describe("Test Themes View UI Tests", function () {
                 return;
             }
 
-            const testThemesTitle = await getSectionTitle(testThemesSectionVerify);
+            const testThemesTitle = await testThemesPage.getTitle(testThemesSectionVerify);
             logger.info("Phase3", `Test Themes view title: "${testThemesTitle}"`);
 
             expect(testThemesTitle, "Test Themes title should contain project name").to.include(config.projectName);
             expect(testThemesTitle, "Test Themes title should contain version name").to.include(config.versionName);
             expect(testThemesTitle, "Test Themes title should contain cycle name").to.include(config.cycleName);
 
-            logger.info("Phase3", "✓ Test Themes View title verified successfully");
+            logger.info("Phase3", " Test Themes View title verified successfully");
 
             // ============================================
             // Phase 4: Find Test Theme and Generate Tests
@@ -990,16 +905,16 @@ describe("Test Themes View UI Tests", function () {
                 return;
             }
 
-            logger.info("Phase4", `Looking for test theme '${config.testThemeName}'...`);
-            const targetTestTheme = await waitForTreeItem(
-                driver,
-                findTestThemesSection,
-                config.testThemeName,
-                UITimeouts.LONG
-            );
+            logger.info("Phase4", `Looking for test theme "${config.testThemeName}"...`);
+            // Use a retry mechanism to find the item
+            let targetTestTheme = await testThemesPage.getItem(testThemesSectionVerify, config.testThemeName);
+            if (!targetTestTheme) {
+                await waitForTreeRefresh(driver, testThemesSectionVerify, UITimeouts.SHORT);
+                targetTestTheme = await testThemesPage.getItem(testThemesSectionVerify, config.testThemeName);
+            }
 
             if (!targetTestTheme) {
-                logger.warn("Phase4", `Test theme '${config.testThemeName}' not found`);
+                logger.warn("Phase4", `Test theme "${config.testThemeName}" not found`);
                 this.skip();
                 return;
             }
@@ -1010,8 +925,8 @@ describe("Test Themes View UI Tests", function () {
             await targetTestTheme.click();
             await applySlowMotion(driver);
 
-            logger.info("Phase4", "Clicking 'Generate Robot Framework Test Suites' button...");
-            const generateButtonClicked = await clickTreeItemActionButton(targetTestTheme, driver, "Generate");
+            logger.info("Phase4", 'Clicking "Generate Robot Framework Test Suites" button...');
+            const generateButtonClicked = await testThemesPage.clickItemAction(targetTestTheme, "Generate");
 
             if (!generateButtonClicked) {
                 logger.warn("Phase4", "Failed to click Generate button");
@@ -1030,7 +945,7 @@ describe("Test Themes View UI Tests", function () {
                 logger.warn("Phase4", "Test generation notification did not appear within timeout");
                 // Continue anyway, the notification might have been missed
             } else {
-                logger.info("Phase4", "✓ Test generation completed successfully");
+                logger.info("Phase4", " Test generation completed successfully");
             }
 
             await applySlowMotion(driver);
@@ -1093,7 +1008,7 @@ describe("Test Themes View UI Tests", function () {
                     // Wait for test execution to complete
                     logger.info("Phase5", "Waiting for test execution to complete...");
                     await waitForTestExecutionComplete(driver);
-                    logger.info("Phase5", "✓ Test execution completed");
+                    logger.info("Phase5", " Test execution completed");
                 }
             }
 
@@ -1104,7 +1019,7 @@ describe("Test Themes View UI Tests", function () {
             // ============================================
             logger.info("Phase6", "Returning to TestBench view...");
 
-            // Ensure we're back in TestBench sidebar for upload
+            // Ensure we"re back in TestBench sidebar for upload
             await openTestBenchSidebar(driver);
             await applySlowMotion(driver);
 
@@ -1113,7 +1028,7 @@ describe("Test Themes View UI Tests", function () {
                 driver,
                 async () => {
                     const content = sideBar.getContent();
-                    const section = await findTestThemesSection(content);
+                    const section = await testThemesPage.getSection(content);
                     return section !== null;
                 },
                 UITimeouts.MEDIUM,
@@ -1127,7 +1042,7 @@ describe("Test Themes View UI Tests", function () {
             logger.info("Phase7", "Re-locating Test Theme and Uploading Results...");
 
             const updatedContent3 = sideBar.getContent();
-            const testThemesSectionUpload = await findTestThemesSection(updatedContent3);
+            const testThemesSectionUpload = await testThemesPage.getSection(updatedContent3);
 
             if (!testThemesSectionUpload) {
                 logger.warn("Phase7", "Test Themes section not found after returning");
@@ -1142,16 +1057,15 @@ describe("Test Themes View UI Tests", function () {
                 return;
             }
 
-            logger.info("Phase7", `Looking for test theme '${config.testThemeName}'...`);
-            const targetTestThemeForUpload = await waitForTreeItem(
-                driver,
-                findTestThemesSection,
-                config.testThemeName,
-                UITimeouts.LONG
-            );
+            logger.info("Phase7", `Looking for test theme "${config.testThemeName}"...`);
+            let targetTestThemeForUpload = await testThemesPage.getItem(testThemesSectionUpload, config.testThemeName);
+            if (!targetTestThemeForUpload) {
+                await waitForTreeRefresh(driver, testThemesSectionUpload, UITimeouts.SHORT);
+                targetTestThemeForUpload = await testThemesPage.getItem(testThemesSectionUpload, config.testThemeName);
+            }
 
             if (!targetTestThemeForUpload) {
-                logger.warn("Phase7", `Test theme '${config.testThemeName}' not found for upload`);
+                logger.warn("Phase7", `Test theme "${config.testThemeName}" not found for upload`);
                 this.skip();
                 return;
             }
@@ -1159,8 +1073,8 @@ describe("Test Themes View UI Tests", function () {
             await targetTestThemeForUpload.click();
             await applySlowMotion(driver);
 
-            logger.info("Phase7", "Clicking 'Upload Execution Results To TestBench' button...");
-            const uploadButtonClicked = await clickTreeItemActionButton(targetTestThemeForUpload, driver, "Upload");
+            logger.info("Phase7", 'Clicking "Upload Execution Results To TestBench" button...');
+            const uploadButtonClicked = await testThemesPage.clickItemAction(targetTestThemeForUpload, "Upload");
 
             if (!uploadButtonClicked) {
                 logger.warn("Phase7", "Failed to click Upload button");
@@ -1179,7 +1093,7 @@ describe("Test Themes View UI Tests", function () {
                 logger.warn("Phase7", "Upload notification did not appear within timeout");
                 // Continue, notification might have been missed
             } else {
-                logger.info("Phase7", "✓ Results upload completed successfully");
+                logger.info("Phase7", " Results upload completed successfully");
             }
 
             // ============================================
@@ -1190,7 +1104,7 @@ describe("Test Themes View UI Tests", function () {
             await waitForTreeRefresh(driver, null, UITimeouts.MEDIUM);
 
             const updatedContent4 = sideBar.getContent();
-            const testThemesSectionTooltip = await findTestThemesSection(updatedContent4);
+            const testThemesSectionTooltip = await testThemesPage.getSection(updatedContent4);
 
             if (!testThemesSectionTooltip) {
                 throw new Error("[Phase 8] Test Themes section not found for tooltip verification");
@@ -1201,16 +1115,21 @@ describe("Test Themes View UI Tests", function () {
                 throw new Error("[Phase 8] Test Themes tree items did not load for tooltip verification");
             }
 
-            logger.info("Phase8", `Looking for test theme '${config.testThemeName}'...`);
-            const targetTestThemeForTooltip = await waitForTreeItem(
-                driver,
-                findTestThemesSection,
-                config.testThemeName,
-                UITimeouts.LONG
+            logger.info("Phase8", `Looking for test theme "${config.testThemeName}"...`);
+            let targetTestThemeForTooltip = await testThemesPage.getItem(
+                testThemesSectionTooltip,
+                config.testThemeName
             );
+            if (!targetTestThemeForTooltip) {
+                await waitForTreeRefresh(driver, testThemesSectionTooltip, UITimeouts.SHORT);
+                targetTestThemeForTooltip = await testThemesPage.getItem(
+                    testThemesSectionTooltip,
+                    config.testThemeName
+                );
+            }
 
             if (!targetTestThemeForTooltip) {
-                throw new Error(`[Phase 8] Test theme '${config.testThemeName}' not found for tooltip verification`);
+                throw new Error(`[Phase 8] Test theme "${config.testThemeName}" not found for tooltip verification`);
             }
 
             const expectedTooltipText = "Execution Status: Performed";
@@ -1218,7 +1137,7 @@ describe("Test Themes View UI Tests", function () {
 
             expect(tooltipVerified, `Tooltip should contain "${expectedTooltipText}"`).to.equal(true);
 
-            logger.info("Phase8", "✓ Execution status verified in tooltip");
+            logger.info("Phase8", " Execution status verified in tooltip");
 
             logger.info("TestThemesView", "\n========================================");
             logger.info("TestThemesView", "Test Themes View Test - COMPLETE");
@@ -1227,7 +1146,7 @@ describe("Test Themes View UI Tests", function () {
             logger.info("TestThemesView", `Version: ${config.versionName}`);
             logger.info("TestThemesView", `Cycle: ${config.cycleName}`);
             logger.info("TestThemesView", `Test Theme: ${config.testThemeName}`);
-            logger.info("TestThemesView", `Execution Status: Verified as 'Performed'`);
+            logger.info("TestThemesView", `Execution Status: Verified as "Performed"`);
             logger.info("TestThemesView", "========================================\n");
         });
     });

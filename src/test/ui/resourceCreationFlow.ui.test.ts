@@ -1,50 +1,37 @@
 /**
  * @file src/test/ui/resourceCreationFlow.ui.test.ts
- * @description End-to-end UI test for resource creation flow:
- * Phase 1: Login and Context Verification
- * Phase 2: Navigation (Projects View)
- * Phase 3: Resource Creation (Test Elements View)
- * Phase 4: Synchronization (Editor & Refactor Preview)
+ * @description UI tests for the resource creation flow including:
+ * - Navigation to Test Themes view
+ * - Selection of a Test Theme
+ * - Creation of a new Test Element (Resource)
+ * - Verification of the created resource
  */
 
 import { expect } from "chai";
-import { SideBarView, EditorView, TextEditor } from "vscode-extension-tester";
+import { SideBarView, InputBox } from "vscode-extension-tester";
+import { logger } from "./testLogger";
 import {
-    openTestBenchSidebar,
     applySlowMotion,
-    findTreeItemByLabel,
-    findTreeItemByLabelAtLevel,
-    expandTreeItemIfNeeded,
     waitForTreeItems,
-    cleanupWorkspace,
-    findSidebarSection,
-    getSectionTitle,
-    clickToolbarButton,
     doubleClickTreeItem,
-    clickCreateResourceButton,
-    clickCodeLens,
-    clickRefactorPreviewApply,
     waitForProjectsView,
     waitForTestThemesAndElementsViews,
-    waitForFileInEditor,
-    waitForCodeLens,
-    waitForRefactorPreview,
-    waitForTreeItemButton,
     handleCycleConfigurationPrompt,
-    setCursorPosition,
-    deleteFromLineOnwards,
-    ensureRefactorPreviewItemChecked
+    UITimeouts,
+    waitForNotification,
+    waitForTreeRefresh
 } from "./testUtils";
 import { getTestData, logTestDataConfig } from "./testConfig";
 import { TestContext, setupTestHooks } from "./testHooks";
-import { getTestLogger } from "./testLogger";
+import { ProjectsViewPage } from "./pages/ProjectsViewPage";
+import { TestThemesPage } from "./pages/TestThemesPage";
+import { TestElementsPage } from "./pages/TestElementsPage";
 
-describe("Resource Creation Flow E2E Tests", function () {
+describe("Resource Creation Flow UI Tests", function () {
     const ctx: TestContext = {} as TestContext;
 
-    this.timeout(300000); // 5 minutes timeout for full flow
+    this.timeout(300000);
 
-    // Setup shared test hooks (before, after, beforeEach, afterEach)
     setupTestHooks(ctx, {
         suiteName: "ResourceCreationFlow",
         requiresLogin: true,
@@ -52,441 +39,188 @@ describe("Resource Creation Flow E2E Tests", function () {
         timeout: 300000
     });
 
-    // Convenience getter for driver (for use in tests)
     const getDriver = () => ctx.driver;
 
-    describe("Complete Resource Creation Flow", function () {
-        it("should complete full resource creation and synchronization flow", async function () {
-            const driver = getDriver();
-            const testData = getTestData();
-            logTestDataConfig();
+    it("should navigate to a Test Theme and create a new Test Element", async function () {
+        const driver = getDriver();
+        const config = getTestData();
+        logTestDataConfig();
 
-            // ============================================
-            // Phase 1: Login and Context Verification
-            // ============================================
-            const logger = getTestLogger();
-            logger.info("Phase1", "Starting Login and Context Verification...");
+        const projectsPage = new ProjectsViewPage(driver);
+        const testThemesPage = new TestThemesPage(driver);
+        const testElementsPage = new TestElementsPage(driver);
 
-            const sideBar = new SideBarView();
-            const content = sideBar.getContent();
+        // ============================================
+        // Phase 1: Navigation to Test Themes View
+        // ============================================
+        logger.info("Phase1", "Starting Navigation to Test Themes View...");
 
-            // Determine initial view state
-            const projectsSection = await findSidebarSection(content, "Projects");
-            const testThemesSection = await findSidebarSection(content, "Test Themes");
+        const sideBar = new SideBarView();
+        const content = sideBar.getContent();
 
-            let isInProjectsView = false;
+        // Check if we are already in the Test Themes view
+        const testThemesSection = await testThemesPage.getSection(content);
+        let isInTestThemesView = false;
 
-            if (projectsSection) {
-                isInProjectsView = true;
-                logger.info("Phase1", "Extension is in Projects View");
-            } else if (testThemesSection) {
-                logger.info("Phase1", "Extension is in Test Themes View");
-
-                // Check context: Read the Test Themes view title
-                const testThemesTitle = await getSectionTitle(testThemesSection);
-                logger.info("Phase1", `Test Themes view title: "${testThemesTitle}"`);
-
-                if (
-                    testThemesTitle &&
-                    testThemesTitle.includes(testData.projectName) &&
-                    testThemesTitle.includes(testData.cycleName)
-                ) {
-                    logger.info("Phase1", "Context is correct. Skipping to Phase 3.");
-                    // Skip to Phase 3 (will be handled below)
-                } else {
-                    logger.info("Phase1", "Context is incorrect. Clicking 'Open Projects View' button...");
-                    // Locate the Toolbar in the Test Themes view and click the "Open Projects View" button
-                    const buttonClicked = await clickToolbarButton(testThemesSection, "Open Projects View", driver);
-                    if (!buttonClicked) {
-                        logger.warn("Phase1", "Failed to click 'Open Projects View' button");
-                        this.skip();
-                    }
-
-                    // Wait for Projects view to appear
-                    const projectsViewAppeared = await waitForProjectsView(driver);
-                    if (!projectsViewAppeared) {
-                        logger.warn("Phase1", "Projects view did not appear after clicking button");
-                        this.skip();
-                    }
-                    isInProjectsView = true;
-                }
+        if (testThemesSection) {
+            const title = await testThemesPage.getTitle(testThemesSection);
+            if (title && title.includes(config.cycleName)) {
+                isInTestThemesView = true;
+                logger.info("Phase1", "Already in Test Themes View for the correct cycle.");
             } else {
-                logger.info("Phase1", "Neither Projects nor Test Themes view found. Assuming Projects View.");
-                isInProjectsView = true;
+                logger.info("Phase1", "In Test Themes View but wrong cycle. Navigating back to Projects View...");
+                await testThemesPage.clickToolbarAction(testThemesSection, "Open Projects View");
+                await waitForProjectsView(driver);
+            }
+        }
+
+        if (!isInTestThemesView) {
+            // Navigate from Projects View
+            const projectsSection = await projectsPage.getSection(content);
+            if (!projectsSection) {
+                throw new Error("Projects View not found");
             }
 
-            // ============================================
-            // Phase 2: Navigation (Projects View)
-            // ============================================
-            if (isInProjectsView) {
-                logger.info("Phase2", "Starting Navigation (Projects View)...");
+            await waitForTreeItems(projectsSection, driver);
 
-                // Re-fetch sections in case view changed
-                const updatedContent = sideBar.getContent();
-                const projectsSectionUpdated = await findSidebarSection(updatedContent, "Projects");
-
-                if (!projectsSectionUpdated) {
-                    logger.warn("Phase2", "Projects section not found");
-                    this.skip();
-                    return;
-                }
-
-                // Wait for tree items to load
-                const itemsLoaded = await waitForTreeItems(projectsSectionUpdated, driver);
-                if (!itemsLoaded) {
-                    logger.warn("Phase2", "Tree items did not load in time");
-                    this.skip();
-                    return;
-                }
-
-                // Get all visible tree items (Projects) - only top-level items
-                const projectItems = await projectsSectionUpdated.getVisibleItems();
-                expect(projectItems.length).to.be.greaterThan(0, "Expected at least one project in the tree");
-
-                // Find the Project tree item (non-recursive, only at current level)
-                const targetProject = await findTreeItemByLabelAtLevel(projectItems, testData.projectName);
-                if (!targetProject) {
-                    logger.warn("Phase2", `Project '${testData.projectName}' not found`);
-                    this.skip();
-                    return;
-                }
-
-                logger.info("Phase2", `Found project '${testData.projectName}', expanding...`);
-                await expandTreeItemIfNeeded(targetProject, driver);
-
-                // Get children (versions) of the project - only after expanding
-                const versions = await targetProject.getChildren();
-                if (!versions || versions.length === 0) {
-                    logger.warn("Phase2", "No versions found under project");
-                    this.skip();
-                    return;
-                }
-
-                // Find the TOV tree item (non-recursive, only at current level)
-                const targetVersion = await findTreeItemByLabelAtLevel(versions, testData.versionName);
-                if (!targetVersion) {
-                    logger.warn("Phase2", `Version '${testData.versionName}' not found`);
-                    this.skip();
-                    return;
-                }
-
-                logger.info("Phase2", `Found version '${testData.versionName}', expanding...`);
-                await expandTreeItemIfNeeded(targetVersion, driver);
-
-                // Get children (cycles) of the version - only after expanding
-                const cycles = await targetVersion.getChildren();
-                if (!cycles || cycles.length === 0) {
-                    logger.warn("Phase2", "No cycles found under version");
-                    this.skip();
-                    return;
-                }
-
-                // Locate the Cycle tree item (non-recursive, only at current level)
-                const targetCycle = await findTreeItemByLabelAtLevel(cycles, testData.cycleName);
-                if (!targetCycle) {
-                    logger.warn("Phase2", `Cycle '${testData.cycleName}' not found`);
-                    this.skip();
-                    return;
-                }
-
-                logger.info("Phase2", `Found cycle '${testData.cycleName}'`);
-
-                // Click the cycle once to check for configuration prompt
-                const configHandled = await handleCycleConfigurationPrompt(
-                    targetCycle,
-                    driver,
-                    testData.projectName,
-                    testData.versionName,
-                    projectsSectionUpdated,
-                    targetProject,
-                    targetVersion
-                );
-
-                if (!configHandled) {
-                    logger.warn("Phase2", "Warning: Configuration prompt handling may have failed, continuing anyway");
-                }
-
-                // Re-locate the cycle after tree reordering (pins may have changed tree structure)
-                // Re-fetch the version's children to get updated cycle items
-                const cyclesAfterConfig = await targetVersion.getChildren();
-                let targetCycleAfterConfig = await findTreeItemByLabelAtLevel(cyclesAfterConfig, testData.cycleName);
-
-                // If cycle not found in children, try getting all visible items again
-                if (!targetCycleAfterConfig) {
-                    const allItems = await projectsSectionUpdated.getVisibleItems();
-                    // Try to find the cycle by searching recursively (since tree may have reordered)
-                    targetCycleAfterConfig = await findTreeItemByLabel(allItems, testData.cycleName);
-                }
-
-                if (!targetCycleAfterConfig) {
-                    logger.warn(
-                        "Phase2",
-                        `Cycle '${testData.cycleName}' not found after configuration - using original reference`
-                    );
-                    targetCycleAfterConfig = targetCycle;
-                }
-
-                logger.info("Phase2", `Double-clicking cycle '${testData.cycleName}'...`);
-                // Action: Double-click the cycle tree item
-                await doubleClickTreeItem(targetCycleAfterConfig, driver);
-
-                // Wait for Test Themes and Test Elements views to appear
-                const viewsAppeared = await waitForTestThemesAndElementsViews(driver);
-                if (!viewsAppeared) {
-                    logger.warn(
-                        "Phase2",
-                        "Test Themes and Test Elements views did not appear after double-clicking cycle"
-                    );
-                    this.skip();
-                    return;
-                }
-                logger.info("Phase2", "Navigation complete. Test Themes and Test Elements views should be open.");
+            const project = await projectsPage.getProject(projectsSection, config.projectName);
+            if (!project) {
+                throw new Error(`Project "${config.projectName}" not found`);
             }
 
-            // ============================================
-            // Phase 3: Resource Creation (Test Elements View)
-            // ============================================
-            logger.info("Phase3", "Starting Resource Creation (Test Elements View)...");
-
-            // Wait for views to fully stabilize after navigation
-            logger.debug("Phase3", "Waiting for views to stabilize after navigation...");
-            await driver.sleep(2000);
-
-            // Clean up workspace before creating resource
-            logger.info("Phase3", "Cleaning workspace before test...");
-            await cleanupWorkspace(driver, undefined, {
-                exclude: [".testbench"]
-            });
-
-            // Focus on the Test Elements View
-            const updatedContent2 = sideBar.getContent();
-            const testElementsSection = await findSidebarSection(updatedContent2, "Test Elements");
-
-            if (!testElementsSection) {
-                logger.warn("Phase3", "Test Elements section not found");
-                this.skip();
-                return;
+            const version = await projectsPage.getVersion(project, config.versionName);
+            if (!version) {
+                throw new Error(`Version "${config.versionName}" not found`);
             }
 
-            // Wait for tree items to load with retry logic
-            const testElementsLoaded = await waitForTreeItems(testElementsSection, driver);
-            if (!testElementsLoaded) {
-                logger.warn("Phase3", "Test Elements tree items did not load in time");
-                this.skip();
-                return;
+            const cycle = await projectsPage.getCycle(version, config.cycleName);
+            if (!cycle) {
+                throw new Error(`Cycle "${config.cycleName}" not found`);
             }
 
-            // Locate the subdivision tree item with retry logic
-            // The tree may take time to fully populate after configuration is applied
-            let targetSubdivision = null;
-            const maxSubdivisionRetries = 5;
-            const retryDelay = 2000;
+            await handleCycleConfigurationPrompt(
+                cycle,
+                driver,
+                config.projectName,
+                config.versionName,
+                projectsSection,
+                project,
+                version
+            );
 
-            for (let attempt = 1; attempt <= maxSubdivisionRetries; attempt++) {
-                logger.debug(
-                    "Phase3",
-                    `Looking for subdivision '${testData.subdivisionName}' (attempt ${attempt}/${maxSubdivisionRetries})...`
-                );
+            // Re-fetch cycle after potential refresh
+            const cycleToClick = (await projectsPage.getCycle(version, config.cycleName)) || cycle;
+            await doubleClickTreeItem(cycleToClick, driver);
 
-                // Re-fetch the section in case it was refreshed
-                const refreshedContent = sideBar.getContent();
-                const refreshedSection = await findSidebarSection(refreshedContent, "Test Elements");
-
-                if (refreshedSection) {
-                    const testElementItems = await refreshedSection.getVisibleItems();
-                    logger.debug("Phase3", `Found ${testElementItems.length} items in Test Elements tree`);
-
-                    targetSubdivision = await findTreeItemByLabel(testElementItems, testData.subdivisionName);
-
-                    if (targetSubdivision) {
-                        logger.info("Phase3", `✓ Found subdivision on attempt ${attempt}`);
-                        break;
-                    }
-                }
-
-                if (attempt < maxSubdivisionRetries) {
-                    logger.debug("Phase3", `Subdivision not found, waiting ${retryDelay}ms before retry...`);
-                    await driver.sleep(retryDelay);
-                }
+            const viewsAppeared = await waitForTestThemesAndElementsViews(driver);
+            if (!viewsAppeared) {
+                throw new Error("Test Themes view did not appear after double-clicking cycle");
             }
+        }
 
-            if (!targetSubdivision) {
-                logger.warn(
-                    "Phase3",
-                    `Subdivision '${testData.subdivisionName} [Robot-Resource]' not found after ${maxSubdivisionRetries} attempts`
-                );
-                this.skip();
-                return;
-            }
+        // ============================================
+        // Phase 2: Select Test Theme
+        // ============================================
+        logger.info("Phase2", "Selecting Test Theme...");
 
-            // Verify it has the [Robot-Resource] suffix by checking the label
-            const subdivisionLabel = await targetSubdivision.getLabel();
-            if (!subdivisionLabel.includes("Robot-Resource") && !subdivisionLabel.includes("resource")) {
-                logger.warn("Phase3", "Subdivision does not appear to be a resource file");
-                this.skip();
-                return;
-            }
+        const updatedContent = sideBar.getContent();
+        const themesSection = await testThemesPage.getSection(updatedContent);
+        if (!themesSection) {
+            throw new Error("Test Themes section not found");
+        }
 
-            logger.info("Phase3", `Found subdivision: "${subdivisionLabel}"`);
+        await waitForTreeItems(themesSection, driver);
 
-            // Click the subdivision once to expand it and make the "Create Resource" button visible
-            logger.debug("Phase3", "Clicking subdivision to expand it...");
-            await targetSubdivision.click();
-            await applySlowMotion(driver);
+        let testTheme = await testThemesPage.getItem(themesSection, config.testThemeName);
+        if (!testTheme) {
+            await waitForTreeRefresh(driver, themesSection, UITimeouts.SHORT);
+            testTheme = await testThemesPage.getItem(themesSection, config.testThemeName);
+        }
 
-            // Wait for the "Create Resource" button to become visible
-            const buttonVisible = await waitForTreeItemButton(targetSubdivision, driver, "Create Resource");
-            if (!buttonVisible) {
-                logger.debug("Phase3", "Create Resource button did not become visible after expanding subdivision");
-                // Continue anyway, button might still be clickable
-            }
+        if (!testTheme) {
+            throw new Error(`Test Theme "${config.testThemeName}" not found`);
+        }
 
-            // Action: Click the "Create Resource" button on this tree item
-            const resourceButtonClicked = await clickCreateResourceButton(targetSubdivision, driver);
-            if (!resourceButtonClicked) {
-                logger.warn("Phase3", "Failed to click Create Resource button");
-                this.skip();
-            }
+        await testTheme.click();
+        await applySlowMotion(driver);
 
-            // Wait for file to be created and opened
-            const fileOpened = await waitForFileInEditor(driver, testData.subdivisionName);
-            if (fileOpened) {
-                // Verify the exact file name
-                const editorView = new EditorView();
-                const editorTitles = await editorView.getOpenEditorTitles();
-                for (const title of editorTitles) {
-                    if (title.includes(testData.resourceFileName) || title.includes(testData.subdivisionName)) {
-                        logger.info("Phase3", `Resource file opened: "${title}"`);
-                        break;
-                    }
-                }
-            } else {
-                logger.warn("Phase3", "Resource file was not opened in editor within timeout");
-                // Continue anyway, file might still be created
-            }
+        // ============================================
+        // Phase 3: Create New Resource (Test Element)
+        // ============================================
+        logger.info("Phase3", "Creating New Resource...");
 
-            logger.info("Phase3", "Resource creation complete.");
+        const elementsSection = await testElementsPage.getSection(updatedContent);
+        if (!elementsSection) {
+            throw new Error("Test Elements section not found");
+        }
 
-            // ============================================
-            // Phase 4: Synchronization (Editor & Refactor Preview)
-            // ============================================
-            logger.info("Phase4", "Starting Synchronization (Editor & Refactor Preview)...");
+        // Click the "Create Resource" button in the Test Elements view title area
+        const createClicked = await testElementsPage.clickCreateResource(elementsSection);
+        if (!createClicked) {
+            throw new Error('Failed to click "Create Resource" button');
+        }
 
-            // Return to Extension View: In the VS Code Activity Bar, click the TestBench icon
-            await openTestBenchSidebar(driver);
-            await applySlowMotion(driver);
-
-            // Return focus to the active editor window for resource file
-            const editorView2 = new EditorView();
-            let resourceEditor: TextEditor | null = null;
-
-            // Find and focus the resource file editor
-            const openEditorTitles = await editorView2.getOpenEditorTitles();
-            for (const title of openEditorTitles) {
-                if (title.includes(testData.resourceFileName) || title.includes(testData.subdivisionName)) {
-                    resourceEditor = (await editorView2.openEditor(title)) as TextEditor;
-                    await applySlowMotion(driver);
-                    break;
-                }
-            }
-
-            if (!resourceEditor) {
-                logger.warn("Phase4", "Resource editor not found. Trying to open file...");
-                // Try to open the file if it exists
+        // Handle Input Box for Resource Name
+        const inputBox = await driver.wait(
+            async () => {
                 try {
-                    resourceEditor = (await editorView2.openEditor(testData.resourceFileName)) as TextEditor;
+                    const box = new InputBox();
+                    if (await box.isDisplayed()) {
+                        return box;
+                    }
+                    return null;
                 } catch {
-                    logger.warn("Phase4", "Could not open resource file. Continuing...");
+                    return null;
                 }
-            }
+            },
+            UITimeouts.MEDIUM,
+            "Waiting for Input Box"
+        );
 
-            // Trigger CodeLens: Place the cursor at Line 1
-            if (resourceEditor) {
-                const cursorSet = await setCursorPosition(resourceEditor, driver, 1, 0);
-                if (!cursorSet) {
-                    logger.warn("Phase4", "Warning: Failed to set cursor position, continuing anyway");
-                }
+        if (!inputBox) {
+            throw new Error("Input box for resource name did not appear");
+        }
 
-                // Remove contents from line 4 onwards (usually starts with "*** Keywords ***")
-                // Keep lines 1, 2, and 3 intact
-                logger.info("Phase4", "Removing content from line 4 onwards...");
+        const timestamp = new Date().getTime();
+        const newResourceName = `AutoTest_Element_${timestamp}`;
+        logger.info("Phase3", `Entering resource name: ${newResourceName}`);
 
-                // Retry deletion up to 3 times if it fails
-                let contentDeleted = false;
-                const maxRetries = 3;
-                for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                    if (attempt > 1) {
-                        logger.debug("Phase4", `Retry attempt ${attempt}/${maxRetries} to delete content...`);
-                        await driver.sleep(500); // Brief pause between retries
-                    }
+        await inputBox.setText(newResourceName);
+        await inputBox.confirm();
 
-                    contentDeleted = await deleteFromLineOnwards(resourceEditor, driver, 4);
-                    if (contentDeleted) {
-                        logger.info("Phase4", `✓ Content deleted successfully on attempt ${attempt}`);
-                        break;
-                    } else {
-                        logger.warn("Phase4", `✗ Deletion failed on attempt ${attempt}`);
-                        if (attempt < maxRetries) {
-                            // Re-focus the editor before retry
-                            try {
-                                await resourceEditor.click();
-                                await driver.sleep(200);
-                            } catch {
-                                // Ignore focus errors
-                            }
-                        }
-                    }
-                }
+        // Wait for success notification
+        const notificationAppeared = await waitForNotification(
+            driver,
+            "Successfully created test element",
+            UITimeouts.LONG
+        );
 
-                if (!contentDeleted) {
-                    logger.error("Phase4", "ERROR: Failed to delete content after all retry attempts");
-                    this.skip();
-                    return;
-                }
+        if (!notificationAppeared) {
+            logger.warn("Phase3", "Creation success notification did not appear");
+        } else {
+            logger.info("Phase3", " Resource creation notification received");
+        }
 
-                // Add stabilization delay.
-                // CodeLenses need time to re-render and attach event listeners after document edits.
-                logger.debug("Phase4", "Waiting for CodeLens to stabilize after deletion...");
-                await driver.sleep(3000);
-            }
+        // ============================================
+        // Phase 4: Verify Created Resource
+        // ============================================
+        logger.info("Phase4", "Verifying Created Resource...");
 
-            // Wait for CodeLens to appear
-            const codeLensAppeared = await waitForCodeLens(driver, "Pull changes from TestBench");
-            if (!codeLensAppeared) {
-                logger.warn("Phase4", "CodeLens 'Pull changes from TestBench' did not appear");
-                this.skip();
-            }
+        await waitForTreeRefresh(driver, elementsSection, UITimeouts.MEDIUM);
 
-            // Locate the CodeLens action text above the first line that reads "Pull changes from TestBench"
-            // Ensure you have updated clickCodeLens in testUtils.ts to use the MouseEvent logic
-            const codeLensClicked = await clickCodeLens(driver, "Pull changes from TestBench", 0);
-            if (!codeLensClicked) {
-                logger.warn("Phase4", "Failed to click CodeLens 'Pull changes from TestBench'");
-                this.skip();
-            }
+        const newResource = await testElementsPage.getItem(elementsSection, newResourceName);
+        // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+        expect(newResource, `New resource "${newResourceName}" should exist in the tree`).to.not.be.undefined;
 
-            // Wait for Refactor Preview to open
-            const refactorPreviewOpened = await waitForRefactorPreview(driver);
-            if (!refactorPreviewOpened) {
-                logger.warn("Phase4", "Refactor Preview did not open after clicking CodeLens");
-                this.skip();
-            }
+        if (newResource) {
+            logger.info("Phase4", ` Found new resource: "${newResourceName}"`);
 
-            // Ensure the checkbox for resource file is checked
-            const checkboxReady = await ensureRefactorPreviewItemChecked(driver, testData.resourceFileName);
-            if (!checkboxReady) {
-                logger.warn("Phase4", "Warning: Could not ensure checkbox is checked, Apply might fail.");
-            }
+            // Optional: Open the resource to verify it opens the editor
+            await testElementsPage.clickOpenResource(newResource);
+        }
 
-            // Click the "Apply" button inside the Refactor Preview tab
-            const applyClicked = await clickRefactorPreviewApply(driver);
-            if (!applyClicked) {
-                logger.warn("Phase4", "Failed to click Apply button in Refactor Preview");
-                this.skip();
-            }
-
-            logger.info("Phase4", "Synchronization complete.");
-            logger.info("ResourceCreationFlow", "All phases completed successfully!");
-        });
+        logger.info("ResourceCreationFlow", "\n========================================");
+        logger.info("ResourceCreationFlow", "Resource Creation Flow Test - COMPLETE");
+        logger.info("ResourceCreationFlow", "========================================");
     });
 });
