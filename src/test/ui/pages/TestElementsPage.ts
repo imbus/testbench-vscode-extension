@@ -42,11 +42,15 @@ export class TestElementsPage extends BasePage {
     }
 
     /**
-     * Clicks the "Create Resource" button in the section toolbar.
-     * @param section - The view section
+     * Clicks the "Create Resource" button on a subdivision tree item.
+     * Note: "Create Resource" is a tree item action button, not a toolbar action.
+     * @param item - The subdivision tree item that should have the "Create Resource" button
+     * @param itemLabel - Optional pre-fetched label to avoid stale element issues
      */
-    public async clickCreateResource(section: ViewSection): Promise<boolean> {
-        return await this.clickToolbarAction(section, "Create Resource");
+    public async clickCreateResource(item: TreeItem, itemLabel?: string): Promise<boolean> {
+        // Import the utility function to avoid circular dependencies
+        const { clickCreateResourceButton } = await import("../testUtils");
+        return await clickCreateResourceButton(item, this.driver, itemLabel);
     }
 
     /**

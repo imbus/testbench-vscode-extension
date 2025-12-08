@@ -2280,13 +2280,47 @@ export async function verifyRefactorPreviewCheckbox(
                         // Check if this row represents our file
                         const text = await row.getText();
                         if (text.includes(fileName)) {
-                            // Find the specific checkbox input within this row
-                            // Structure: row -> content -> input.edit-checkbox
-                            const checkbox = await row.findElement(By.css("input.edit-checkbox"));
-                            const selected = await checkbox.isSelected();
+                            // Try multiple selectors for the checkbox
+                            const selectors = [
+                                "input.edit-checkbox",
+                                ".monaco-checkbox",
+                                "input[type='checkbox']",
+                                ".codicon-check", // Checked state icon
+                                ".codicon-circle-large-outline" // Unchecked state icon
+                            ];
 
-                            // If we found the correct row, return its state
-                            return selected;
+                            for (const selector of selectors) {
+                                try {
+                                    const checkbox = await row.findElement(By.css(selector));
+
+                                    // If it's an input, check isSelected()
+                                    const tagName = await checkbox.getTagName();
+                                    if (tagName === "input") {
+                                        return await checkbox.isSelected();
+                                    }
+
+                                    // If it's a custom element (div/span), check class for checked state
+                                    const className = await checkbox.getAttribute("class");
+                                    if (className.includes("checked") || className.includes("codicon-check")) {
+                                        return true;
+                                    }
+                                    // If we found an unchecked icon, return false (found but unchecked)
+                                    if (className.includes("codicon-circle-large-outline")) {
+                                        return false;
+                                    }
+
+                                    // If it's .monaco-checkbox, check aria-checked or class
+                                    if (className.includes("monaco-checkbox")) {
+                                        const ariaChecked = await checkbox.getAttribute("aria-checked");
+                                        if (ariaChecked === "true") {return true;}
+                                        if (ariaChecked === "false") {return false;}
+                                        // Fallback to class check
+                                        return className.includes("checked");
+                                    }
+                                } catch {
+                                    // Continue to next selector
+                                }
+                            }
                         }
                     } catch {
                         // Stale element or other temporary error, continue to next row or retry
@@ -2342,12 +2376,28 @@ export async function ensureRefactorPreviewItemChecked(driver: WebDriver, fileNa
         for (const row of rows) {
             const text = await row.getText();
             if (text.includes(fileName)) {
-                const checkbox = await row.findElement(By.css("input.edit-checkbox"));
+                // Try multiple selectors for the checkbox
+                const selectors = [
+                    "input.edit-checkbox",
+                    ".monaco-checkbox",
+                    "input[type='checkbox']",
+                    ".codicon-circle-large-outline", // Unchecked icon
+                    ".codicon-check" // Checked icon (just in case)
+                ];
 
-                // Use JS click for reliability with Monaco checkboxes
-                await driver.executeScript("arguments[0].click();", checkbox);
-                await applySlowMotion(driver);
-                return true;
+                for (const selector of selectors) {
+                    try {
+                        const checkbox = await row.findElement(By.css(selector));
+                        // Use JS click for reliability with Monaco checkboxes
+                        await driver.executeScript("arguments[0].click();", checkbox);
+                        await applySlowMotion(driver);
+                        return true;
+                    } catch {
+                        // Continue to next selector
+                    }
+                }
+
+                logger.warn("RefactorPreview", `Could not find checkbox for "${fileName}" using any selector.`);
             }
         }
         return false;
@@ -2363,234 +2413,127 @@ export async function ensureRefactorPreviewItemChecked(driver: WebDriver, fileNa
  *
  * @param item - The tree item (subdivision) to click the button on
  * @param driver - The WebDriver instance
+ * @param itemLabel - Optional pre-fetched label to avoid stale element issues
  * @returns Promise<boolean> - True if button was found and clicked, false otherwise
  */
-export async function clickCreateResourceButton(item: TreeItem, driver: WebDriver): Promise<boolean> {
-    try {
-        await driver.switchTo().defaultContent();
+export async function clickCreateResourceButton(
+    item: TreeItem,
+    driver: WebDriver,
+    itemLabel?: string
+): Promise<boolean> {
+    const maxRetries = 3;
 
-        // Get the tree item label for matching
-        const itemLabel = await item.getLabel();
-        logger.trace("TreeItem", `Looking for Create Resource button near item: "${itemLabel}"`);
+    // Cache the label before the retry loop to avoid stale element errors
+    if (!itemLabel) {
+        try {
+            itemLabel = await item.getLabel();
+        } catch (error) {
+            logger.error("TreeItem", "Failed to get item label", error);
+            return false;
+        }
+    }
 
-        // Find the button in the same row as the tree item
-        const button = await driver.wait(
-            async () => {
-                try {
-                    // Strategy 1: Find the tree item row first, then look for inline action buttons
-                    const allRows = await driver.findElements(By.css(".monaco-list-row"));
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            await driver.switchTo().defaultContent();
+            logger.trace(
+                "TreeItem",
+                `Looking for Create Resource button near item: "${itemLabel}" (attempt ${attempt}/${maxRetries})`
+            );
 
-                    for (const row of allRows) {
-                        try {
-                            const rowText = await row.getText();
-                            // Check if this row contains our tree item
-                            if (!rowText.includes(itemLabel)) {
-                                continue;
-                            }
+            // First, ensure the tree item is clicked to make action buttons visible
+            try {
+                await item.click();
+                await driver.sleep(300); // Wait for action buttons to appear
+            } catch (itemClickError) {
+                logger.debug("TreeItem", "Could not click tree item, continuing anyway", itemClickError);
+            }
 
-                            // Look for inline action buttons in this row
-                            // Inline action buttons are typically <a> elements with action-item class
-                            // or buttons with codicon classes
-                            const actionButtons = await row.findElements(
-                                By.css("a.action-item, button.action-item, a[class*='action'], button[class*='action']")
-                            );
-
-                            // Also look for elements containing the codicon-new-file icon
-                            const codiconButtons = await row.findElements(
-                                By.css(".codicon-new-file, [class*='codicon-new-file'], span.codicon-new-file")
-                            );
-
-                            // Combine both sets
-                            const allButtons = [...actionButtons, ...codiconButtons];
-
-                            for (const btn of allButtons) {
-                                try {
-                                    // Get the actual clickable element (might be the button itself or its parent)
-                                    let clickableElement: WebElement = btn;
-
-                                    // If it's a span with codicon, find the parent action-item
-                                    const tagName = await btn.getTagName();
-                                    if (tagName === "span") {
-                                        try {
-                                            const parent = await btn.findElement(
-                                                By.xpath(
-                                                    "./ancestor::a[contains(@class, 'action-item')] | ./ancestor::button[contains(@class, 'action-item')]"
-                                                )
-                                            );
-                                            clickableElement = parent;
-                                        } catch {
-                                            // If no parent action-item found, try clicking the span itself
-                                        }
-                                    }
-
-                                    const isDisplayed = await clickableElement.isDisplayed();
-                                    if (!isDisplayed) {
-                                        continue;
-                                    }
-
-                                    // Check by icon class (codicon-new-file)
-                                    const className = await btn.getAttribute("class");
-                                    if (className && className.includes("codicon-new-file")) {
-                                        logger.trace("TreeItem", "Found button by codicon-new-file class");
-                                        return clickableElement;
-                                    }
-
-                                    // Check by aria-label or title
-                                    const ariaLabel = await clickableElement.getAttribute("aria-label");
-                                    const title = await clickableElement.getAttribute("title");
-
-                                    if (
-                                        (ariaLabel &&
-                                            (ariaLabel.includes("Create Resource") || ariaLabel.includes("Create"))) ||
-                                        (title && (title.includes("Create Resource") || title.includes("Create")))
-                                    ) {
-                                        logger.trace(
-                                            "TreeItem",
-                                            `Found button by aria-label/title: "${ariaLabel || title}"`
-                                        );
-                                        return clickableElement;
-                                    }
-
-                                    // Check if button contains codicon-new-file as a child
-                                    try {
-                                        const codiconChild = await clickableElement.findElement(
-                                            By.css(".codicon-new-file, span.codicon-new-file")
-                                        );
-                                        if (codiconChild) {
-                                            logger.trace("TreeItem", "Found button containing codicon-new-file icon");
-                                            return clickableElement;
-                                        }
-                                    } catch {
-                                        // No codicon child found
-                                    }
-                                } catch {
-                                    // Continue searching
-                                }
-                            }
-
-                            // Strategy 2: Look for any button/action in the row and check if it has the new-file icon
-                            const anyButtons = await row.findElements(By.css("a, button"));
-                            for (const btn of anyButtons) {
-                                try {
-                                    const isDisplayed = await btn.isDisplayed();
-                                    if (!isDisplayed) {
-                                        continue;
-                                    }
-
-                                    // Check if button contains codicon-new-file
-                                    const hasCodicon = await btn.findElements(
-                                        By.css(".codicon-new-file, span.codicon-new-file")
-                                    );
-                                    if (hasCodicon.length > 0) {
-                                        logger.trace("TreeItem", "Found button with codicon-new-file child");
-                                        return btn;
-                                    }
-
-                                    // Check aria-label
-                                    const ariaLabel = await btn.getAttribute("aria-label");
-                                    if (ariaLabel && ariaLabel.toLowerCase().includes("create resource")) {
-                                        logger.trace("TreeItem", `Found button by aria-label: "${ariaLabel}"`);
-                                        return btn;
-                                    }
-                                } catch {
-                                    // Continue searching
-                                }
-                            }
-                        } catch {
-                            // Continue to next row
+            // Use JavaScript to find and click the button in one atomic operation
+            // This reduces the chance of stale element errors
+            const clickSucceeded = (await driver.executeScript(`
+                function findAndClickCreateResourceButton(itemLabel) {
+                    const rows = document.querySelectorAll('.monaco-list-row');
+                    for (const row of rows) {
+                        const rowText = row.textContent || row.innerText || '';
+                        if (!rowText.includes(itemLabel)) {
                             continue;
                         }
-                    }
-
-                    // Strategy 3: Use JavaScript to find the button
-                    logger.trace("TreeItem", "Trying JavaScript-based search...");
-                    const buttonFound = (await driver.executeScript(`
-                        function findCreateResourceButton(itemLabel) {
-                            const rows = document.querySelectorAll('.monaco-list-row');
-                            for (const row of rows) {
-                                const rowText = row.textContent || row.innerText || '';
-                                if (!rowText.includes('${itemLabel}')) {
-                                    continue;
-                                }
-                                
-                                // Look for action buttons with codicon-new-file
-                                const actionButtons = row.querySelectorAll('a.action-item, button.action-item, a[class*="action"], button[class*="action"]');
-                                for (const btn of actionButtons) {
-                                    // Check if button contains codicon-new-file
-                                    const codicon = btn.querySelector('.codicon-new-file, span.codicon-new-file');
-                                    if (codicon) {
-                                        return btn;
-                                    }
-                                    
-                                    // Check aria-label
-                                    const ariaLabel = btn.getAttribute('aria-label') || '';
-                                    if (ariaLabel.toLowerCase().includes('create resource')) {
-                                        return btn;
-                                    }
-                                }
-                                
-                                // Also check for any element with codicon-new-file in this row
-                                const codiconElements = row.querySelectorAll('.codicon-new-file, [class*="codicon-new-file"]');
-                                for (const codicon of codiconElements) {
-                                    const actionItem = codicon.closest('a.action-item, button.action-item, a[class*="action"], button[class*="action"]');
-                                    if (actionItem) {
-                                        return actionItem;
-                                    }
-                                }
+                        
+                        // Look for action buttons with codicon-new-file
+                        const actionButtons = row.querySelectorAll('a.action-item, button.action-item, a[class*="action"], button[class*="action"]');
+                        for (const btn of actionButtons) {
+                            // Check if button contains codicon-new-file
+                            const codicon = btn.querySelector('.codicon-new-file, span.codicon-new-file');
+                            if (codicon) {
+                                btn.scrollIntoView({ block: 'center' });
+                                btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                                btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                                btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                                return true;
                             }
-                            return null;
+                            
+                            // Check aria-label
+                            const ariaLabel = btn.getAttribute('aria-label') || '';
+                            if (ariaLabel.toLowerCase().includes('create resource')) {
+                                btn.scrollIntoView({ block: 'center' });
+                                btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                                btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                                btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                                return true;
+                            }
                         }
-                        const btn = findCreateResourceButton('${itemLabel}');
-                        if (btn) {
-                            btn.scrollIntoView({ block: 'center' });
-                            return btn;
+                        
+                        // Also check for any element with codicon-new-file in this row
+                        const codiconElements = row.querySelectorAll('.codicon-new-file, [class*="codicon-new-file"]');
+                        for (const codicon of codiconElements) {
+                            const actionItem = codicon.closest('a.action-item, button.action-item, a[class*="action"], button[class*="action"]');
+                            if (actionItem) {
+                                actionItem.scrollIntoView({ block: 'center' });
+                                actionItem.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                                actionItem.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                                actionItem.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                                return true;
+                            }
                         }
-                        return null;
-                    `)) as WebElement | null;
-
-                    if (buttonFound) {
-                        logger.trace("TreeItem", "Found button using JavaScript");
-                        return buttonFound;
                     }
-
-                    return null;
-                } catch (error) {
-                    logger.error("TreeItem", "Error in button search", error);
-                    return null;
+                    return false;
                 }
-            },
-            UITimeouts.LONG,
-            `Waiting for Create Resource button near item "${itemLabel}"`
-        );
+                return findAndClickCreateResourceButton('${itemLabel.replace(/'/g, "\\'")}');
+            `)) as boolean;
 
-        if (button) {
-            logger.trace("TreeItem", "Found Create Resource button, clicking...");
-            // Scroll button into view if not already done
-            try {
-                await driver.executeScript("arguments[0].scrollIntoView({ block: 'center' });", button);
-            } catch {
-                // Ignore scroll errors
+            if (clickSucceeded) {
+                logger.trace("TreeItem", "Successfully clicked Create Resource button");
+                await applySlowMotion(driver);
+                return true;
             }
 
-            // Try regular click first
-            try {
-                await button.click();
-            } catch (clickError) {
-                // Fallback to JavaScript click
-                logger.warn("TreeItem", "Regular click failed, trying JavaScript click", clickError);
-                await driver.executeScript("arguments[0].click();", button);
+            logger.debug("TreeItem", `Button not found or click failed on attempt ${attempt}`);
+
+            if (attempt < maxRetries) {
+                // Wait before retrying
+                await driver.sleep(500);
+            }
+        } catch (error: any) {
+            const isStaleError =
+                error.name === "StaleElementReferenceError" || error.message?.includes("stale element");
+
+            if (isStaleError && attempt < maxRetries) {
+                logger.debug("TreeItem", `Stale element error on attempt ${attempt}, retrying...`);
+                await driver.sleep(500);
+                continue;
             }
 
-            await applySlowMotion(driver);
-            return true;
+            logger.error("TreeItem", `Error on attempt ${attempt}`, error);
+
+            if (attempt === maxRetries) {
+                return false;
+            }
         }
-
-        logger.warn("TreeItem", "Create Resource button not found");
-        return false;
-    } catch (error) {
-        logger.error("TreeItem", "Error clicking Create Resource button", error);
-        return false;
     }
+
+    logger.warn("TreeItem", "Failed to click Create Resource button after all retries");
+    return false;
 }
 
 /**
@@ -2881,6 +2824,45 @@ export async function waitForFileInEditor(
         return true;
     } catch {
         return false;
+    }
+}
+
+/**
+ * Waits for VS Code quick input widget to appear and returns its input element.
+ * This is useful for flows where an action may prompt for a name but might also
+ * complete silently depending on context. Returning null keeps the caller free
+ * to proceed with alternative handling.
+ */
+export async function waitForQuickInput(
+    driver: WebDriver,
+    timeout: number = UITimeouts.MEDIUM
+): Promise<WebElement | null> {
+    const selectors = [
+        ".quick-input-widget input.input",
+        ".quick-input-widget input",
+        ".monaco-quick-open-widget input.quick-input-input",
+        ".quick-input-box input"
+    ];
+
+    try {
+        const input = await driver.wait(
+            async () => {
+                await driver.switchTo().defaultContent();
+                for (const selector of selectors) {
+                    const elements = await driver.findElements(By.css(selector));
+                    if (elements.length > 0) {
+                        return elements[0];
+                    }
+                }
+                return null;
+            },
+            timeout,
+            "Waiting for quick input to appear"
+        );
+
+        return input ?? null;
+    } catch {
+        return null;
     }
 }
 

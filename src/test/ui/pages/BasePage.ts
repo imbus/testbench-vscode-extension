@@ -56,15 +56,49 @@ export abstract class BasePage {
     public async clickToolbarAction(section: ViewSection, title: string): Promise<boolean> {
         try {
             const actions = await section.getActions();
-            for (const action of actions) {
-                // Cast to any to avoid type issues if definition is missing getTitle
-                const actionTitle = await (action as any).getTitle();
-                if (actionTitle.includes(title)) {
-                    await action.click();
-                    await applySlowMotion(this.driver);
-                    return true;
+            logger.debug("BasePage", `Found ${actions.length} toolbar actions`);
+
+            for (let i = 0; i < actions.length; i++) {
+                const action = actions[i];
+                let actionTitle: string | null = null;
+
+                try {
+                    // Try getTitle() first (most common method)
+                    if (typeof (action as any).getTitle === "function") {
+                        actionTitle = await (action as any).getTitle();
+                    }
+                    // Try getLabel() as fallback
+                    else if (typeof (action as any).getLabel === "function") {
+                        actionTitle = await (action as any).getLabel();
+                    }
+                    // Try getText() as another fallback
+                    else if (typeof (action as any).getText === "function") {
+                        actionTitle = await (action as any).getText();
+                    }
+                    // Try getting title attribute
+                    else if (typeof (action as any).getAttribute === "function") {
+                        actionTitle = await (action as any).getAttribute("title");
+                        if (!actionTitle) {
+                            actionTitle = await (action as any).getAttribute("aria-label");
+                        }
+                    }
+
+                    logger.debug("BasePage", `Action [${i}] title: "${actionTitle}"`);
+
+                    if (actionTitle && actionTitle.includes(title)) {
+                        logger.debug("BasePage", `Found matching action: "${actionTitle}", clicking...`);
+                        await action.click();
+                        await applySlowMotion(this.driver);
+                        return true;
+                    }
+                } catch (actionError) {
+                    // Log but continue to next action
+                    logger.debug("BasePage", `Error getting title for action [${i}]: ${actionError}`);
+                    continue;
                 }
             }
+
+            logger.warn("BasePage", `Toolbar action "${title}" not found among ${actions.length} actions`);
             return false;
         } catch (error) {
             logger.error("BasePage", `Error clicking toolbar action "${title}"`, error);

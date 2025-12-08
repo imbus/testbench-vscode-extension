@@ -42,7 +42,7 @@
     "testbenchExtension.fullyQualifiedKeywords": false,
     "testbenchExtension.outputDirectory": "tests",
     "testbenchExtension.compoundKeywordLogging": "GROUP",
-    "testbenchExtension.logSuiteNumbering": false,
+    "testbenchExtension.logSuiteNumbering": true,
     "testbenchExtension.resourceDirectoryPath": "resources",
     "testbenchExtension.libraryMarker": ["[Robot-Library]"],
     "testbenchExtension.libraryRoot": ["RF", "RF-Library"],
