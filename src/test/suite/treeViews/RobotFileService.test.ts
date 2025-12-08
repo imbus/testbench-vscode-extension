@@ -5,17 +5,27 @@
 
 import assert from "assert";
 import * as fs from "fs";
+import * as vscode from "vscode";
+import * as sinon from "sinon";
 import * as utils from "../../../utils";
 import * as configuration from "../../../configuration";
 import { RobotFileService } from "../../../treeViews/implementations/testThemes/RobotFileService";
 import { TestBenchLogger } from "../../../testBenchLogger";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
 import { TestThemesTreeItem, TestThemeData } from "../../../treeViews/implementations/testThemes/TestThemesTreeItem";
+import { GeneratedFileMapper } from "../../../treeViews/implementations/testThemes/GeneratedFileMapper";
 
 /**
  * Creates a mock TestThemesTreeItem for testing
+ * @param name The name of the test theme/item
+ * @param numbering The numbering string
+ * @param context Optional extension context (uses minimal mock if not provided)
  */
-function createMockTestThemesTreeItem(name: string, numbering: string): TestThemesTreeItem {
+function createMockTestThemesTreeItem(
+    name: string,
+    numbering: string,
+    context?: vscode.ExtensionContext
+): TestThemesTreeItem {
     const mockData: TestThemeData = {
         type: "TestThemeNode",
         base: {
@@ -41,17 +51,21 @@ function createMockTestThemesTreeItem(name: string, numbering: string): TestThem
         hasChildren: false
     };
 
-    const mockContext = {
-        subscriptions: [],
-        workspaceState: {
-            get: () => undefined,
-            update: () => Promise.resolve()
-        },
-        globalState: {
-            get: () => undefined,
-            update: () => Promise.resolve()
-        }
-    } as any;
+    const mockContext =
+        context ||
+        ({
+            subscriptions: [],
+            workspaceState: {
+                get: () => undefined,
+                update: () => Promise.resolve(),
+                keys: () => []
+            },
+            globalState: {
+                get: () => undefined,
+                update: () => Promise.resolve(),
+                keys: () => []
+            }
+        } as any);
 
     return new TestThemesTreeItem(mockData, mockContext);
 }
@@ -61,10 +75,18 @@ suite("RobotFileService", function () {
     let robotFileService: RobotFileService;
     let mockLogger: sinon.SinonStubbedInstance<TestBenchLogger>;
 
-    this.beforeEach(function () {
+    this.beforeEach(async function () {
         testEnv = setupTestEnvironment();
         mockLogger = testEnv.sandbox.createStubInstance(TestBenchLogger);
-        robotFileService = new RobotFileService(mockLogger);
+
+        testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").callsFake(async () => "/workspace");
+        (testEnv.mockContext.workspaceState.get as sinon.SinonStub).callsFake(
+            (key: string, defaultValue?: any) => defaultValue
+        );
+
+        robotFileService = new RobotFileService(mockLogger, testEnv.mockContext);
+        const metadataService = robotFileService.getMetadataService();
+        await metadataService.initialize();
     });
 
     this.afterEach(function () {
@@ -73,7 +95,7 @@ suite("RobotFileService", function () {
 
     suite("checkRobotFileExists", function () {
         test("should return false when workspace location is not available", async function () {
-            testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves(undefined);
+            (utils.validateAndReturnWorkspaceLocation as sinon.SinonStub).resolves(undefined);
 
             const mockItem = createMockTestThemesTreeItem("Test Theme", "1");
             const result = await robotFileService.checkRobotFileExists(mockItem);
@@ -82,7 +104,7 @@ suite("RobotFileService", function () {
         });
 
         test("should return false when output directory is not configured in extension settings", async function () {
-            testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+            (utils.validateAndReturnWorkspaceLocation as sinon.SinonStub).resolves("/test/workspace");
             testEnv.sandbox.stub(configuration, "getExtensionSetting").returns(undefined);
 
             const mockItem = createMockTestThemesTreeItem("Test Theme", "1");
@@ -92,7 +114,7 @@ suite("RobotFileService", function () {
         });
 
         test("should return false when robot file does not exist", async function () {
-            testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+            (utils.validateAndReturnWorkspaceLocation as sinon.SinonStub).resolves("/test/workspace");
             testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");
             testEnv.sandbox.stub(fs.promises, "access").rejects(new Error("File not found"));
 
@@ -104,10 +126,8 @@ suite("RobotFileService", function () {
         });
 
         test("should return true when robot file exists", async function () {
-            testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+            (utils.validateAndReturnWorkspaceLocation as sinon.SinonStub).resolves("/test/workspace");
             testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");
-
-            // Mock recursive file search to return no files
             testEnv.sandbox.stub(fs.promises, "readdir").resolves([]);
 
             const mockItem = createMockTestThemesTreeItem("Test Theme", "1");
@@ -176,7 +196,7 @@ suite("RobotFileService", function () {
         });
 
         test("should build hierarchical path correctly for test themes", async function () {
-            testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+            (utils.validateAndReturnWorkspaceLocation as sinon.SinonStub).resolves("/test/workspace");
             testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");
             testEnv.sandbox.stub(fs.promises, "readdir").resolves([]);
 
@@ -191,7 +211,7 @@ suite("RobotFileService", function () {
         });
 
         test("should build hierarchical path correctly for test case sets", async function () {
-            testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+            (utils.validateAndReturnWorkspaceLocation as sinon.SinonStub).resolves("/test/workspace");
             testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");
             testEnv.sandbox.stub(fs.promises, "readdir").resolves([]);
 
@@ -212,7 +232,7 @@ suite("RobotFileService", function () {
         });
 
         test("should handle file system errors gracefully", async function () {
-            testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+            (utils.validateAndReturnWorkspaceLocation as sinon.SinonStub).resolves("/test/workspace");
             testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");
             testEnv.sandbox.stub(fs.promises, "access").rejects(new Error("File system error"));
 
@@ -223,21 +243,18 @@ suite("RobotFileService", function () {
         });
 
         test("should build hierarchical path correctly for test case sets with hierarchical context", async function () {
-            testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+            (utils.validateAndReturnWorkspaceLocation as sinon.SinonStub).resolves("/test/workspace");
             testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");
             testEnv.sandbox.stub(fs.promises, "access").resolves();
             testEnv.sandbox.stub(fs.promises, "readdir").resolves([]);
 
-            // Mock test case set item with hierarchical context
             const mockTestCaseSetItem = createMockTestThemesTreeItem("permanente Preisanzeige", "2.1.1");
             mockTestCaseSetItem.data.elementType = "TestCaseSetNode";
 
-            // Mock parent hierarchy: TestTheme > TestCaseSet
             const mockParentTestTheme = createMockTestThemesTreeItem("Anzeigen", "2.1");
             mockParentTestTheme.data.elementType = "TestThemeNode";
             mockParentTestTheme.data.base.uniqueID = "parent_theme_uid";
 
-            // Mock grandparent hierarchy: TestTheme > TestTheme > TestCaseSet
             const mockGrandParentTestTheme = createMockTestThemesTreeItem("Regression", "2");
             mockGrandParentTestTheme.data.elementType = "TestThemeNode";
             mockGrandParentTestTheme.data.base.uniqueID = "grandparent_theme_uid";
@@ -252,12 +269,11 @@ suite("RobotFileService", function () {
         });
 
         test("should handle deep hierarchies with simple recursive search", async function () {
-            testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+            (utils.validateAndReturnWorkspaceLocation as sinon.SinonStub).resolves("/test/workspace");
             testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");
             testEnv.sandbox.stub(fs.promises, "access").resolves();
             testEnv.sandbox.stub(fs.promises, "readdir").resolves([]);
 
-            // Hierarchy: Root > Project > Module > SubModule > Feature > TestCaseSet
             const mockTestCaseSetItem = createMockTestThemesTreeItem("Test Case Set", "1.2.3.4.5");
             mockTestCaseSetItem.data.elementType = "TestCaseSetNode";
             mockTestCaseSetItem.data.base.uniqueID = "test_case_uid";
@@ -287,6 +303,118 @@ suite("RobotFileService", function () {
 
             assert.strictEqual(result.exists, false);
             assert.strictEqual(result.filePath, undefined);
+        });
+    });
+
+    suite("metadata-based file lookup", function () {
+        test("should fallback to pattern search when metadata not available", async function () {
+            const mockItem = createMockTestThemesTreeItem("Test Case Set", "1.1");
+            mockItem.data.elementType = "TestCaseSetNode";
+            mockItem.data.base.uniqueID = "test-uid-1";
+
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");
+
+            const robotFileContent = `Metadata UniqueID test-uid-1
+Metadata Name Test Case Set
+*** Test Cases ***`;
+
+            const mockDirents: fs.Dirent[] = [
+                {
+                    name: "1_Test_Case_Set.robot",
+                    isFile: () => true,
+                    isDirectory: () => false,
+                    isBlockDevice: () => false,
+                    isCharacterDevice: () => false,
+                    isSymbolicLink: () => false,
+                    isFIFO: () => false,
+                    isSocket: () => false
+                } as fs.Dirent
+            ];
+
+            testEnv.sandbox.stub(fs.promises, "readdir").resolves(mockDirents as any);
+            testEnv.sandbox.stub(fs.promises, "readFile").resolves(robotFileContent);
+
+            const result = await robotFileService.checkRobotFileExists(mockItem);
+
+            assert.strictEqual(result.exists, true);
+        });
+
+        test("should validate robot file against tree item uniqueID", async function () {
+            const mockItem = createMockTestThemesTreeItem("Test Case Set", "1.1");
+            mockItem.data.elementType = "TestCaseSetNode";
+            mockItem.data.base.uniqueID = "test-uid-1";
+
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");
+
+            const robotFileContent = `Metadata UniqueID different-uid
+Metadata Name Test Case Set
+*** Test Cases ***`;
+
+            const mockDirents: fs.Dirent[] = [
+                {
+                    name: "1_Test_Case_Set.robot",
+                    isFile: () => true,
+                    isDirectory: () => false,
+                    isBlockDevice: () => false,
+                    isCharacterDevice: () => false,
+                    isSymbolicLink: () => false,
+                    isFIFO: () => false,
+                    isSocket: () => false
+                } as fs.Dirent
+            ];
+
+            testEnv.sandbox.stub(fs.promises, "readdir").resolves(mockDirents as any);
+            testEnv.sandbox.stub(fs.promises, "readFile").resolves(robotFileContent);
+
+            const result = await robotFileService.checkRobotFileExists(mockItem);
+
+            assert.strictEqual(result.exists, false);
+        });
+    });
+
+    suite("getMetadataService", function () {
+        test("should return metadata service instance", function () {
+            const metadataService = robotFileService.getMetadataService();
+            assert.ok(metadataService);
+            assert.ok(metadataService instanceof GeneratedFileMapper);
+        });
+    });
+
+    suite("checkFolderExists", function () {
+        test("should return false when workspace location is not available", async function () {
+            (utils.validateAndReturnWorkspaceLocation as sinon.SinonStub).resolves(undefined);
+
+            const mockItem = createMockTestThemesTreeItem("Test Theme", "1");
+            mockItem.data.elementType = "TestThemeNode";
+
+            const result = await robotFileService.checkFolderExists(mockItem);
+
+            assert.strictEqual(result.exists, false);
+        });
+
+        test("should return false when output directory is not configured", async function () {
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns(undefined);
+
+            const mockItem = createMockTestThemesTreeItem("Test Theme", "1");
+            mockItem.data.elementType = "TestThemeNode";
+
+            const result = await robotFileService.checkFolderExists(mockItem);
+
+            assert.strictEqual(result.exists, false);
+        });
+    });
+
+    suite("getFolderPath", function () {
+        test("should return undefined when folder does not exist", async function () {
+            const mockItem = createMockTestThemesTreeItem("Test Theme", "1");
+            mockItem.data.elementType = "TestThemeNode";
+
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");
+            testEnv.sandbox.stub(fs.promises, "readdir").resolves([]);
+
+            const folderPath = await robotFileService.getFolderPath(mockItem);
+
+            assert.strictEqual(folderPath, undefined);
         });
     });
 });

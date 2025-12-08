@@ -18,6 +18,8 @@ import "./ProjectsTreeView.test";
 import "./TestThemesTreeItem.test";
 import "./TestThemesTreeView.test";
 import "./RobotFileService.test";
+import "./GeneratedFileMapper.test";
+import "./RobotFileMetadataScanner.test";
 import "./ResourceFileService.test";
 
 // Export test suite names for reference
@@ -36,6 +38,8 @@ export const treeViewsTestSuites = [
     "TestThemesTreeItem",
     "TestThemesTreeView",
     "RobotFileService",
+    "GeneratedFileMapper",
+    "RobotFileMetadataScanner",
     "ResourceFileService"
 ];
 
@@ -59,7 +63,11 @@ export const treeViewsTestDescriptions = {
     TestThemesTreeView:
         "Tests for the test themes tree view including title update functionality for cycle and TOV contexts and state management",
     RobotFileService:
-        "Tests for the robot file service including file existence checking and path generation for test themes and test case sets",
+        "Tests for the robot file service including file existence checking, path generation, and metadata-based file lookup for test themes and test case sets",
+    GeneratedFileMapper:
+        "Tests for the generated file mapper including metadata storage, retrieval, validation, and cleanup for test generation tracking",
+    RobotFileMetadataScanner:
+        "Tests for the robot file metadata scanner including directory scanning, metadata extraction from robot files, and folder metadata collection",
     ResourceFileService:
         "Tests for the resource file service including special character handling and path construction for test elements"
 };
