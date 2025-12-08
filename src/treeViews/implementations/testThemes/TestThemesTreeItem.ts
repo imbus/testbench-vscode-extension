@@ -85,7 +85,7 @@ export class TestThemesTreeItem extends TreeItemBase {
         );
 
         this.data = data;
-        this.robotFileService = new RobotFileService(this.logger);
+        this.robotFileService = new RobotFileService(this.logger, extensionContext);
         this.tooltip = this.generateTooltip();
         this.description = data.base.uniqueID;
         this.updateContextValue();

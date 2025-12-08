@@ -100,7 +100,7 @@ suite("RobotFileService", function () {
             const result = await robotFileService.checkRobotFileExists(mockItem);
 
             assert.strictEqual(result.exists, false);
-            assert.strictEqual(result.fileName, "1_Test_Theme.robot");
+            assert.strictEqual(result.filePath, undefined);
         });
 
         test("should return true when robot file exists", async function () {
@@ -117,7 +117,7 @@ suite("RobotFileService", function () {
             const result = await robotFileService.checkRobotFileExists(mockItem);
 
             assert.strictEqual(result.exists, false);
-            assert.strictEqual(result.fileName, "1_Test_Theme.robot");
+            assert.strictEqual(result.filePath, undefined);
         });
 
         test("should generate robot file name correctly with numbering", async function () {
@@ -130,11 +130,11 @@ suite("RobotFileService", function () {
 
             for (const testCase of testCases) {
                 const mockItem = createMockTestThemesTreeItem(testCase.name, testCase.numbering);
-                const result = robotFileService["generateRobotFileName"](
+                const results = robotFileService["generatePossibleRobotFileNames"](
                     mockItem.data.base.name,
                     mockItem.data.base.numbering
                 );
-                assert.strictEqual(result, testCase.expected);
+                assert.ok(results.includes(testCase.expected), `Expected ${testCase.expected} to be in ${results}`);
             }
         });
 
@@ -167,11 +167,11 @@ suite("RobotFileService", function () {
 
             for (const testCase of testCases) {
                 const mockItem = createMockTestThemesTreeItem(testCase.name, testCase.numbering);
-                const result = robotFileService["generateRobotFileName"](
+                const results = robotFileService["generatePossibleRobotFileNames"](
                     mockItem.data.base.name,
                     mockItem.data.base.numbering
                 );
-                assert.strictEqual(result, testCase.expected);
+                assert.ok(results.includes(testCase.expected), `Expected ${testCase.expected} to be in ${results}`);
             }
         });
 
@@ -187,7 +187,7 @@ suite("RobotFileService", function () {
             const result = await robotFileService.checkRobotFileExists(testThemeItem);
 
             assert.strictEqual(result.exists, false);
-            assert.strictEqual(result.fileName, "1_Test_Theme.robot");
+            assert.strictEqual(result.filePath, undefined);
         });
 
         test("should build hierarchical path correctly for test case sets", async function () {
@@ -208,7 +208,7 @@ suite("RobotFileService", function () {
             const result = await robotFileService.checkRobotFileExists(mockTestCaseSetItem);
 
             assert.strictEqual(result.exists, false);
-            assert.strictEqual(result.fileName, "1_Test_Case_Set.robot");
+            assert.strictEqual(result.filePath, undefined);
         });
 
         test("should handle file system errors gracefully", async function () {
@@ -248,7 +248,7 @@ suite("RobotFileService", function () {
             const result = await robotFileService.checkRobotFileExists(mockTestCaseSetItem);
 
             assert.strictEqual(result.exists, false);
-            assert.strictEqual(result.fileName, "1_permanente_Preisanzeige.robot");
+            assert.strictEqual(result.filePath, undefined);
         });
 
         test("should handle deep hierarchies with simple recursive search", async function () {
@@ -286,7 +286,7 @@ suite("RobotFileService", function () {
             const result = await robotFileService.checkRobotFileExists(mockTestCaseSetItem);
 
             assert.strictEqual(result.exists, false);
-            assert.strictEqual(result.fileName, "5_Test_Case_Set.robot");
+            assert.strictEqual(result.filePath, undefined);
         });
     });
 });

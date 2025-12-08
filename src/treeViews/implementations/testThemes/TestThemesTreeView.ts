@@ -26,6 +26,8 @@ import { TreeViewEventTypes } from "../../utils/EventBus";
 import { PersistenceModule } from "../../features/PersistenceModule";
 import { ClickHandler } from "../../core/ClickHandler";
 import { ProjectsTreeItem } from "../projects/ProjectsTreeItem";
+import { RobotFileMetadataScanner } from "./RobotFileMetadataScanner";
+import { TreeViewModule } from "../../core/TreeViewModule";
 
 /**
  * Interface for filter storage
@@ -1178,14 +1180,47 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Handles post-generation tasks: marking items and updating UI.
+     * Handles post-generation tasks: capturing metadata, marking items and updating UI.
      * @param item The test theme tree item that was generated
      * @param context The generation context
      */
     private async handleSuccessfulGeneration(item: TestThemesTreeItem, context: GenerationContext): Promise<void> {
+        await this.captureGenerationMetadata();
         await this.applyPostGenerationMarking(item, context);
         await this.updateRobotFileAvailabilityForAllTreeItems();
         this._onDidChangeTreeData.fire(undefined);
+    }
+
+    /**
+     * Captures generation metadata after successful test generation to be able to track generated items.
+     */
+    public async captureGenerationMetadata(): Promise<void> {
+        try {
+            const robotFileService: TreeViewModule | undefined = this.getModule("robotFileService");
+            if (!robotFileService) {
+                this.logger.warn("[TestThemesTreeView] RobotFileService not available for metadata capture");
+                return;
+            }
+
+            const metadataService = robotFileService.getMetadataService();
+            const metadataCapture: RobotFileMetadataScanner = new RobotFileMetadataScanner(
+                this.logger,
+                metadataService
+            );
+
+            const testGenerationOutputPath: string =
+                getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR) || "output";
+            const isLogSuiteNumberingEnabled: boolean =
+                getExtensionSetting<boolean>(ConfigKeys.TB2ROBOT_LOG_SUITE_NUMBERING) ?? false;
+
+            const capturedItemCount: number = await metadataCapture.captureGenerationMetadata(
+                testGenerationOutputPath,
+                isLogSuiteNumberingEnabled
+            );
+            this.logger.info(`[TestThemesTreeView] Captured metadata for ${capturedItemCount} generated items`);
+        } catch (error) {
+            this.logger.error("[TestThemesTreeView] Error capturing generation metadata:", error);
+        }
     }
 
     /**
@@ -1227,6 +1262,9 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * @param cycleItem The projects tree cycle item used for generation.
      */
     public async markCycleGenerationFromProjectsView(cycleItem: ProjectsTreeItem): Promise<void> {
+        // Always capture metadata, regardless of marking settings
+        await this.captureGenerationMetadata();
+
         if (!ENABLE_ICON_MARKING_ON_TEST_GENERATION) {
             this.logger.trace(
                 "[TestThemesTreeView] Skipping cycle generation marking because icon marking is disabled."

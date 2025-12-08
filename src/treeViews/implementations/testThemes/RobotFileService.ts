@@ -13,129 +13,95 @@ import { ConfigKeys } from "../../../constants";
 import { TestThemesTreeItem } from "./TestThemesTreeItem";
 import { treeViews } from "../../../extension";
 import { MarkingModule } from "../../features/MarkingModule";
+import { GeneratedFileMapper } from "./GeneratedFileMapper";
 
 export interface RobotFileInfo {
     exists: boolean;
     filePath?: string;
-    fileName?: string;
-    hierarchicalPath?: string;
-    duplicateFiles?: string[];
 }
 
 export interface FolderInfo {
     exists: boolean;
     folderPath?: string;
-    folderName?: string;
-    duplicateFolders?: string[];
 }
 
 export class RobotFileService {
-    constructor(private readonly logger: TestBenchLogger) {}
+    private generationMetadataService: GeneratedFileMapper;
+
+    constructor(
+        private readonly logger: TestBenchLogger,
+        private readonly context?: vscode.ExtensionContext
+    ) {
+        this.generationMetadataService = new GeneratedFileMapper(logger, context);
+        this.generationMetadataService.initialize().catch((error) => {
+            this.logger.error("[RobotFileService] Failed to initialize metadata service:", error);
+        });
+    }
 
     /**
-     * Checks if a robot file exists locally for a given test theme or test case set
+     * Gets the metadata service instance
+     * @returns The generation metadata service
+     */
+    public getMetadataService(): GeneratedFileMapper {
+        return this.generationMetadataService;
+    }
+
+    /**
+     * Checks if a robot file exists locally for a given test theme or test case set.
+     * Checks metadata first and falls back to pattern-based search.
      * @param item The test theme or test case set tree item
      * @returns Promise resolving to RobotFileInfo with existence status and file path
      */
     public async checkRobotFileExists(item: TestThemesTreeItem): Promise<RobotFileInfo> {
         try {
-            const workspaceLocation = await validateAndReturnWorkspaceLocation();
-            if (!workspaceLocation) {
-                this.logger.error(
-                    "[RobotFileService] Workspace location is not available while checking robot file existence"
+            const metadataFilePath = await this.generationMetadataService.getGeneratedFilePath(item.data.base.uniqueID);
+            if (metadataFilePath && fs.existsSync(metadataFilePath)) {
+                this.logger.trace(
+                    `[RobotFileService] Found robot file via metadata for "${item.data.base.name}": ${metadataFilePath}`
                 );
-                return { exists: false };
-            }
-
-            const generatedRobotFilesOutputDirectory = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
-            if (!generatedRobotFilesOutputDirectory) {
-                this.logger.warn(
-                    "[RobotFileService] Output directory is not configured while checking robot file existence"
-                );
-                return { exists: false };
-            }
-
-            const robotFileName = this.generateRobotFileName(item.data.base.name, item.data.base.numbering);
-            const outputPath = path.join(workspaceLocation, generatedRobotFilesOutputDirectory);
-
-            // this.logger.trace(`[RobotFileService] Searching for robot file "${robotFileName}" in output directory: ${outputPath}`);
-
-            // Recursively search for robot files
-            const foundRobotFiles = await this.findAllRobotFiles(outputPath, robotFileName);
-
-            if (foundRobotFiles.length === 0) {
-                // this.logger.trace(`[RobotFileService] No robot files found for item "${item.data.base.name}"`);
                 return {
-                    exists: false,
-                    fileName: robotFileName
+                    exists: true,
+                    filePath: metadataFilePath
                 };
             }
 
-            if (foundRobotFiles.length === 1) {
-                const robotFilePath = foundRobotFiles[0];
-                if (await this.validateRobotFileForTreeItem(robotFilePath, item)) {
-                    this.logger.trace(
-                        `[RobotFileService] Found single valid robot file for item "${item.data.base.name}": ${robotFilePath}`
-                    );
-                    return {
-                        exists: true,
-                        filePath: robotFilePath,
-                        fileName: robotFileName
-                    };
-                } else {
-                    this.logger.trace(
-                        `[RobotFileService] Found robot file but validation failed for item "${item.data.base.name}": ${robotFilePath}`
-                    );
-                    return {
-                        exists: false,
-                        fileName: robotFileName
-                    };
-                }
-            }
-
-            // Multiple .robot files found, determine correct / best one based on metadata validation
+            // Fallback to pattern-based search
             this.logger.trace(
-                `[RobotFileService] Found ${foundRobotFiles.length} robot files for item "${item.data.base.name}", validating to find correct match`
+                `[RobotFileService] No metadata found for "${item.data.base.name}", trying pattern-based search`
             );
 
-            const validFiles: string[] = [];
-            for (const filePath of foundRobotFiles) {
-                if (await this.validateRobotFileForTreeItem(filePath, item)) {
-                    validFiles.push(filePath);
+            const workspaceLocation = await validateAndReturnWorkspaceLocation();
+            if (!workspaceLocation) {
+                return { exists: false };
+            }
+
+            const outputDirectory = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
+            if (!outputDirectory) {
+                return { exists: false };
+            }
+
+            const possibleRobotFileNames = this.generatePossibleRobotFileNames(
+                item.data.base.name,
+                item.data.base.numbering
+            );
+            const outputPath = path.join(workspaceLocation, outputDirectory);
+
+            for (const fileName of possibleRobotFileNames) {
+                const foundFiles = await this.findAllRobotFiles(outputPath, fileName);
+
+                // Validate each found file against the tree item's UniqueID
+                for (const filePath of foundFiles) {
+                    if (await this.validateRobotFileForTreeItem(filePath, item)) {
+                        this.logger.trace(`[RobotFileService] Found valid file via pattern search: ${filePath}`);
+                        return {
+                            exists: true,
+                            filePath
+                        };
+                    }
                 }
             }
 
-            if (validFiles.length === 1) {
-                this.logger.trace(
-                    `[RobotFileService] Found single valid robot file among multiple candidates for item "${item.data.base.name}": ${validFiles[0]}`
-                );
-                return {
-                    exists: true,
-                    filePath: validFiles[0],
-                    fileName: robotFileName,
-                    duplicateFiles: foundRobotFiles
-                };
-            } else if (validFiles.length > 1) {
-                this.logger.warn(
-                    `[RobotFileService] Multiple valid robot files found for item "${item.data.base.name}": ${validFiles.join(", ")}`
-                );
-                // Fallback: Return the first valid file
-                return {
-                    exists: true,
-                    filePath: validFiles[0],
-                    fileName: robotFileName,
-                    duplicateFiles: foundRobotFiles
-                };
-            } else {
-                this.logger.warn(
-                    `[RobotFileService] Found ${foundRobotFiles.length} robot files but none are valid for item "${item.data.base.name}"`
-                );
-                return {
-                    exists: false,
-                    fileName: robotFileName,
-                    duplicateFiles: foundRobotFiles
-                };
-            }
+            return { exists: false };
         } catch (error) {
             this.logger.error(`[RobotFileService] Error checking robot file existence:`, error);
             return { exists: false };
@@ -242,22 +208,47 @@ export class RobotFileService {
     }
 
     /**
-     * Generates a robot file name based on the item name and numbering to generate the correct file suffix.
-     * Replaces invalid file path characters with underscores because
-     * testbench2robotframework replaces following special characters of a test theme / test case set name:
+     * Generates possible name patterns based on the item name and numbering.
+     * Returns an array of possible names to account for different logSuiteNumbering settings:
+     * - When logSuiteNumbering is true: "1_Name" (single underscore)
+     * - When logSuiteNumbering is false: "1__Name" (double underscore)
+     * testbench2robotframework replaces invalid file path characters with underscores:
      * < > : " / \ | ? * and spaces.
      * @param treeItemName The name of the test theme or test case set
      * @param treeItemNumbering The numbering prefix for the tree item
-     * @returns The generated robot file name
+     * @param suffix Optional suffix to append (e.g., ".robot" for files)
+     * @returns Array of possible names
      */
-    private generateRobotFileName(treeItemName: string, treeItemNumbering: string): string {
-        const lastNumberingPart = treeItemNumbering ? treeItemNumbering.split(".")?.pop() || treeItemNumbering : "";
-        const prefixOfFileName = lastNumberingPart ? `${lastNumberingPart}_` : "";
+    private generatePossibleNames(treeItemName: string, treeItemNumbering: string, suffix: string = ""): string[] {
+        // Find the last part of the numbering after the last dot. ("1.2.3" -> "3")
+        const lastNumberOfItemNumbering = treeItemNumbering
+            ? treeItemNumbering.split(".")?.pop() || treeItemNumbering
+            : "";
         // Characters to replace with underscore:
         // ["<", ">", ":", "\"", "/", "\\", "|", "?", "*", " "]
-        const normalizedName = treeItemName.replace(/[<>:"/\\|?*\s]/g, "_");
+        const safeFileName = treeItemName.replace(/[<>:"/\\|?*\s]/g, "_");
 
-        return `${prefixOfFileName}${normalizedName}.robot`;
+        if (!lastNumberOfItemNumbering) {
+            return [`${safeFileName}${suffix}`];
+        }
+
+        // Generate both possible patterns:
+        // - Single underscore (logSuiteNumbering = true): "1_Name"
+        // - Double underscore (logSuiteNumbering = false): "1__Name"
+        return [
+            `${lastNumberOfItemNumbering}_${safeFileName}${suffix}`,
+            `${lastNumberOfItemNumbering}__${safeFileName}${suffix}`
+        ];
+    }
+
+    /**
+     * Generates possible robot file name patterns based on the item name and numbering.
+     * @param treeItemName The name of the test theme or test case set
+     * @param treeItemNumbering The numbering prefix for the tree item
+     * @returns Array of possible robot file names
+     */
+    private generatePossibleRobotFileNames(treeItemName: string, treeItemNumbering: string): string[] {
+        return this.generatePossibleNames(treeItemName, treeItemNumbering, ".robot");
     }
 
     /**
@@ -311,102 +302,57 @@ export class RobotFileService {
     }
 
     /**
-     * Shows a warning dialog if duplicate robot files are found.
-     * This can happen when the test generation path is not cleared before generating new tests.
-     * @param duplicateFiles Array of duplicate file paths
-     * @param targetFilePath The target file path that was requested to be opened
-     * @returns Promise that resolves when the user makes a selection
-     */
-    public async showDuplicateFileWarning(
-        duplicateFiles: string[],
-        targetFilePath: string
-    ): Promise<string | undefined> {
-        try {
-            const workspaceLocation = await validateAndReturnWorkspaceLocation();
-            if (!workspaceLocation) {
-                this.logger.error(
-                    "[RobotFileService] Workspace location is not available. Cannot show duplicate file warning."
-                );
-                return undefined;
-            }
-
-            const relativePaths = duplicateFiles.map((filePath) => {
-                return path.relative(workspaceLocation, filePath);
-            });
-
-            const options = relativePaths.map((relativePath, index) => ({
-                label: relativePath,
-                description: duplicateFiles[index] === targetFilePath ? "(Expected location)" : "",
-                detail: duplicateFiles[index]
-            }));
-
-            const selected = await vscode.window.showQuickPick(options, {
-                placeHolder: "Select a file to open",
-                ignoreFocusOut: true
-            });
-
-            return selected?.detail;
-        } catch (error) {
-            this.logger.error("[RobotFileService] Error showing duplicate file warning:", error);
-            return undefined;
-        }
-    }
-
-    /**
-     * Checks if a folder exists locally for a given test theme
+     * Checks if a folder exists locally for a given test theme.
+     * First uses metadata approach and fallsback to pattern-based search.
      * @param item The test theme tree item
      * @returns Promise resolving to FolderInfo with existence status and folder path
      */
     public async checkFolderExists(item: TestThemesTreeItem): Promise<FolderInfo> {
         try {
-            const workspaceLocation = await validateAndReturnWorkspaceLocation();
-            if (!workspaceLocation) {
-                this.logger.error(
-                    "[RobotFileService] Workspace location is not available while checking folder existence"
-                );
-                return { exists: false };
-            }
-
-            const generatedRobotFilesOutputDirectory = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
-            if (!generatedRobotFilesOutputDirectory) {
-                this.logger.warn(
-                    "[RobotFileService] Output directory is not configured while checking folder existence"
-                );
-                return { exists: false };
-            }
-
-            const folderName = this.generateFolderName(item.data.base.name, item.data.base.numbering);
-            const generationOutputPath = path.join(workspaceLocation, generatedRobotFilesOutputDirectory);
-            const foundFoldersInOutputPath = await this.findAllFolders(generationOutputPath, folderName);
-
-            if (foundFoldersInOutputPath.length === 0) {
-                return {
-                    exists: false,
-                    folderName: folderName
-                };
-            }
-
-            if (foundFoldersInOutputPath.length === 1) {
+            const metadataFolderPath = await this.generationMetadataService.getGeneratedFolderPath(
+                item.data.base.uniqueID
+            );
+            if (metadataFolderPath && fs.existsSync(metadataFolderPath)) {
                 this.logger.trace(
-                    `[RobotFileService] Found folder for test theme "${item.data.base.name}": ${foundFoldersInOutputPath[0]}`
+                    `[RobotFileService] Found folder via metadata for "${item.data.base.name}": ${metadataFolderPath}`
                 );
                 return {
                     exists: true,
-                    folderPath: foundFoldersInOutputPath[0],
-                    folderName: folderName
+                    folderPath: metadataFolderPath
                 };
             }
 
-            // Multiple folders found, nested folder structure, use the first one found
             this.logger.trace(
-                `[RobotFileService] Found ${foundFoldersInOutputPath.length} folders for test theme "${item.data.base.name}", using first match`
+                `[RobotFileService] No metadata found for "${item.data.base.name}", trying pattern-based search`
             );
-            return {
-                exists: true,
-                folderPath: foundFoldersInOutputPath[0],
-                folderName: folderName,
-                duplicateFolders: foundFoldersInOutputPath.slice(1)
-            };
+
+            const workspaceLocation = await validateAndReturnWorkspaceLocation();
+            if (!workspaceLocation) {
+                return { exists: false };
+            }
+
+            const outputDirectory = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
+            if (!outputDirectory) {
+                return { exists: false };
+            }
+
+            const possibleFolderNames = this.generatePossibleFolderNames(item.data.base.name, item.data.base.numbering);
+            const outputPath = path.join(workspaceLocation, outputDirectory);
+
+            // Try to find folder matching any pattern
+            for (const folderName of possibleFolderNames) {
+                const foundFolders = await this.findAllFolders(outputPath, folderName);
+                if (foundFolders.length > 0) {
+                    const folderPath = foundFolders[0]; // Use first match
+                    this.logger.trace(`[RobotFileService] Found folder via pattern search: ${folderPath}`);
+                    return {
+                        exists: true,
+                        folderPath
+                    };
+                }
+            }
+
+            return { exists: false };
         } catch (error) {
             this.logger.error(`[RobotFileService] Error checking folder existence:`, error);
             return { exists: false };
@@ -450,22 +396,13 @@ export class RobotFileService {
     }
 
     /**
-     * Generates a folder name based on the test theme name and numbering.
-     * Uses the same naming convention as testbench2robotframework:
-     * - Takes the last part of the numbering (after last dot) as prefix
-     * - Replaces invalid file path characters with underscores
+     * Generates possible folder name patterns based on the test theme name and numbering.
      * @param treeItemName The name of the test theme
      * @param treeItemNumbering The numbering prefix for the tree item
-     * @returns The generated folder name
+     * @returns Array of possible folder names
      */
-    private generateFolderName(treeItemName: string, treeItemNumbering: string): string {
-        const lastNumberingPart = treeItemNumbering ? treeItemNumbering.split(".")?.pop() || treeItemNumbering : "";
-        const prefixOfFolderName = lastNumberingPart ? `${lastNumberingPart}_` : "";
-        // Characters to replace with underscore (same as for robot files):
-        // ["<", ">", ":", "\"", "/", "\\", "|", "?", "*", " "]
-        const normalizedName = treeItemName.replace(/[<>:"/\\|?*\s]/g, "_");
-
-        return `${prefixOfFolderName}${normalizedName}`;
+    private generatePossibleFolderNames(treeItemName: string, treeItemNumbering: string): string[] {
+        return this.generatePossibleNames(treeItemName, treeItemNumbering);
     }
 
     /**

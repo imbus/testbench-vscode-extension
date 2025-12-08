@@ -1454,6 +1454,15 @@ export async function startTestGenerationUsingTOV(
                 }
 
                 progress.report({ increment: 30, message: "Test generation completed" });
+
+                if (treeViews?.testThemesTree) {
+                    await treeViews.testThemesTree.captureGenerationMetadata();
+                } else {
+                    logger.warn(
+                        "[reportHandler] Test themes tree view is not available, cannot capture generation metadata after TOV generation."
+                    );
+                }
+
                 const tovTestGenerationSuccessMessage = generateTestForSpecificTestThemeTreeItem
                     ? `Successfully generated Robot Framework test suites from ${rootUIDToUse} ('${treeItem.label}').`
                     : `Successfully generated Robot Framework test suites from Test Object Version '${treeItem.label}'.`;
