@@ -93,12 +93,42 @@ export class RobotFileService {
                 for (const filePath of foundFiles) {
                     if (await this.validateRobotFileForTreeItem(filePath, item)) {
                         this.logger.trace(`[RobotFileService] Found valid file via pattern search: ${filePath}`);
+
+                        // Update metadata with new path if file was renamed
+                        if (metadataFilePath && metadataFilePath !== filePath) {
+                            this.logger.info(
+                                `[RobotFileService] Detected renamed file for "${item.data.base.name}": ${path.basename(metadataFilePath)} → ${path.basename(filePath)}`
+                            );
+                            const relativePath = path.relative(workspaceLocation, filePath);
+                            await this.generationMetadataService.updateMetadataFilePath(
+                                item.data.base.uniqueID,
+                                relativePath
+                            );
+                        }
+
                         return {
                             exists: true,
                             filePath
                         };
                     }
                 }
+            }
+
+            // Fallback: Search by UniqueID to handle arbitrary renames
+            this.logger.trace(
+                `[RobotFileService] Pattern search failed for "${item.data.base.name}", trying deep UniqueID search`
+            );
+            const foundByUniqueID = await this.findRobotFileByUniqueID(outputPath, item.data.base.uniqueID);
+            if (foundByUniqueID) {
+                this.logger.info(
+                    `[RobotFileService] Found renamed file via UniqueID search for "${item.data.base.name}": ${path.basename(foundByUniqueID)}`
+                );
+                const relativePath = path.relative(workspaceLocation, foundByUniqueID);
+                await this.generationMetadataService.updateMetadataFilePath(item.data.base.uniqueID, relativePath);
+                return {
+                    exists: true,
+                    filePath: foundByUniqueID
+                };
             }
 
             return { exists: false };
@@ -109,7 +139,47 @@ export class RobotFileService {
     }
 
     /**
-     * Recursively finds all robot files with the given name in the output directory
+     * Searches for a robot file by its UniqueID metadata recursively
+     * @param searchPath The path to search in
+     * @param uniqueID The UniqueID to search for
+     * @returns Path to the file if found, undefined otherwise
+     */
+    private async findRobotFileByUniqueID(searchPath: string, uniqueID: string): Promise<string | undefined> {
+        try {
+            const directoryContents = await fs.promises.readdir(searchPath, { withFileTypes: true });
+
+            for (const item of directoryContents) {
+                const itemPath = path.join(searchPath, item.name);
+
+                if (item.isDirectory()) {
+                    const foundRobotFile = await this.findRobotFileByUniqueID(itemPath, uniqueID);
+                    if (foundRobotFile) {
+                        return foundRobotFile;
+                    }
+                } else if (item.isFile() && item.name.endsWith(".robot")) {
+                    try {
+                        const contentOfRobotFile = await fs.promises.readFile(itemPath, "utf-8");
+                        const uniqueIdMatch = contentOfRobotFile.match(/Metadata\s+UniqueID\s+(.+)/);
+                        if (uniqueIdMatch && uniqueIdMatch[1].trim() === uniqueID) {
+                            return itemPath;
+                        }
+                    } catch (readError) {
+                        // Skip files that can't be read
+                        this.logger.trace(`[RobotFileService] Could not read ${itemPath}: ${readError}`);
+                    }
+                }
+            }
+        } catch (error: any) {
+            if (error.code !== "ENOENT") {
+                this.logger.error(`[RobotFileService] Error in UniqueID search at ${searchPath}:`, error);
+            }
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Recursively finds all robot files with the given filename in the output directory
      * @param searchPath The path to search in
      * @param fileName The file name to search for
      * @returns Array of found file paths
@@ -345,6 +415,16 @@ export class RobotFileService {
                 if (foundFolders.length > 0) {
                     const folderPath = foundFolders[0]; // Use first match
                     this.logger.trace(`[RobotFileService] Found folder via pattern search: ${folderPath}`);
+
+                    // Update metadata with new path if folder was renamed
+                    if (metadataFolderPath && metadataFolderPath !== folderPath) {
+                        this.logger.info(
+                            `[RobotFileService] Detected renamed folder for "${item.data.base.name}": ${path.basename(metadataFolderPath)} → ${path.basename(folderPath)}`
+                        );
+                        const relativePath = path.relative(workspaceLocation, folderPath);
+                        await this.generationMetadataService.updateFolderPath(item.data.base.uniqueID, relativePath);
+                    }
+
                     return {
                         exists: true,
                         folderPath

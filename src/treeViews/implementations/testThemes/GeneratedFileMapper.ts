@@ -221,6 +221,62 @@ export class GeneratedFileMapper {
     }
 
     /**
+     * Updates the file path in metadata for a test case set (e.g., after rename detection)
+     * @param uniqueID The unique ID of the test case set
+     * @param newFilePath The new relative file path
+     * @returns Promise that resolves when update is complete
+     */
+    public async updateMetadataFilePath(uniqueID: string, newFilePath: string): Promise<void> {
+        if (!this.metadata) {
+            this.logger.warn("[GeneratedFileMapper] Cannot update file path - no metadata initialized");
+            return;
+        }
+
+        const item = this.metadata.items[uniqueID];
+        if (!item || item.type !== "TestCaseSet") {
+            this.logger.warn(
+                `[GeneratedFileMapper] Cannot update file path - item ${uniqueID} not found or not a TestCaseSet`
+            );
+            return;
+        }
+
+        const oldPath = item.generatedFile;
+        item.generatedFile = newFilePath;
+        item.generationTimestamp = new Date().toISOString();
+
+        await this.saveMetadata(this.metadata);
+        this.logger.debug(`[GeneratedFileMapper] Updated file path for ${uniqueID}: ${oldPath} → ${newFilePath}`);
+    }
+
+    /**
+     * Updates the folder path in metadata for a test theme (e.g., after rename detection)
+     * @param uniqueID The unique ID of the test theme
+     * @param newFolderPath The new relative folder path
+     * @returns Promise that resolves when update is complete
+     */
+    public async updateFolderPath(uniqueID: string, newFolderPath: string): Promise<void> {
+        if (!this.metadata) {
+            this.logger.warn("[GeneratedFileMapper] Cannot update folder path - no metadata initialized");
+            return;
+        }
+
+        const item = this.metadata.items[uniqueID];
+        if (!item || item.type !== "TestTheme") {
+            this.logger.warn(
+                `[GeneratedFileMapper] Cannot update folder path - item ${uniqueID} not found or not a TestTheme`
+            );
+            return;
+        }
+
+        const oldPath = item.generatedFolder;
+        item.generatedFolder = newFolderPath;
+        item.generationTimestamp = new Date().toISOString();
+
+        await this.saveMetadata(this.metadata);
+        this.logger.debug(`[GeneratedFileMapper] Updated folder path for ${uniqueID}: ${oldPath} → ${newFolderPath}`);
+    }
+
+    /**
      * Gets the generated file path for a test case set
      * @param uniqueID The unique ID of the test case set
      * @returns The absolute file path if found and exists, undefined otherwise
