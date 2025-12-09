@@ -27,8 +27,36 @@ export const TEST_PATHS = {
     /** Package.json file name */
     PACKAGE_JSON: "package.json",
     /** VS Code test settings file (relative to project root) */
-    VSCODE_TEST_SETTINGS: "./src/test/ui/.vscode-test.settings.json"
+    VSCODE_TEST_SETTINGS: "./src/test/ui/.vscode-test.settings.json",
+    /** Output directory for generated Robot Framework test files (relative to workspace) */
+    ROBOT_OUTPUT_DIR: "tests",
+    /** Output XML file path for Robot Framework results (relative to workspace) */
+    ROBOT_OUTPUT_XML: "results/output.xml"
 } as const;
+
+/**
+ * Gets the absolute path to the Robot Framework output directory.
+ * This is where generated .robot files are placed.
+ *
+ * @param workspaceRoot - Optional workspace root path. If not provided, uses TEST_PATHS.WORKSPACE
+ * @returns Absolute path to the output directory
+ */
+export function getRobotOutputDirectory(workspaceRoot?: string): string {
+    const root = workspaceRoot || path.resolve(__dirname, "../../../", TEST_PATHS.BASE_STORAGE, TEST_PATHS.WORKSPACE);
+    return path.join(root, TEST_PATHS.ROBOT_OUTPUT_DIR);
+}
+
+/**
+ * Gets the absolute path to the Robot Framework output XML file.
+ * This is where test execution results are stored.
+ *
+ * @param workspaceRoot - Optional workspace root path. If not provided, uses TEST_PATHS.WORKSPACE
+ * @returns Absolute path to the output XML file
+ */
+export function getRobotOutputXmlPath(workspaceRoot?: string): string {
+    const root = workspaceRoot || path.resolve(__dirname, "../../../", TEST_PATHS.BASE_STORAGE, TEST_PATHS.WORKSPACE);
+    return path.join(root, TEST_PATHS.ROBOT_OUTPUT_XML);
+}
 
 /**
  * Flag to ensure environment loading only happens once (singleton pattern).

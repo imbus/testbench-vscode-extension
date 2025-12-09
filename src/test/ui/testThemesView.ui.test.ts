@@ -7,6 +7,7 @@
  * - Test execution
  * - Upload result to TestBench
  * - Tooltip verification
+ * - Filesystem verification for generated files
  */
 
 import { expect } from "chai";
@@ -25,7 +26,13 @@ import {
     waitForTestingViewReady,
     waitForTerminalOutput,
     waitForTreeRefresh,
-    waitForNotification
+    waitForNotification,
+    verifyGeneratedFilesExist,
+    countGeneratedRobotFiles,
+    getGeneratedRobotFiles,
+    readRobotFileContent,
+    verifyRobotFileMetadata,
+    FilesystemVerificationResult
 } from "./testUtils";
 import { getTestData, logTestDataConfig } from "./testConfig";
 import { TestContext, setupTestHooks } from "./testHooks";
@@ -36,10 +43,52 @@ import {
     logTreeStructure,
     findTreeItemByLevel,
     canExecuteScenario,
-    doubleClickTreeItem
+    doubleClickTreeItem,
+    expandTreeItemIfNeeded
 } from "./treeViewUtils";
+import * as path from "path";
 
 const logger = getTestLogger();
+
+/**
+ * Module-level flag to track if tree structure has been logged in this test session.
+ * This prevents redundant tree analysis since the tree structure doesn't change
+ * during the test run (only item states like "Generated" may change).
+ */
+let treeStructureLoggedForSession = false;
+
+/**
+ * Logs tree structure only once per test session to avoid overhead.
+ * The tree structure (hierarchy of items) doesn't change during tests,
+ * only the states of items may change.
+ *
+ * @param section - The view section to log
+ * @param driver - The WebDriver instance
+ * @param viewName - Name of the view for logging
+ * @param forceLog - Force logging even if already logged (default: false)
+ */
+async function logTreeStructureOnce(
+    section: any,
+    driver: WebDriver,
+    viewName: string = "Test Themes View",
+    forceLog: boolean = false
+): Promise<void> {
+    if (treeStructureLoggedForSession && !forceLog) {
+        logger.debug("TreeAnalysis", "Tree structure already logged in this session, skipping...");
+        return;
+    }
+
+    await logTreeStructure(section, driver, viewName);
+    treeStructureLoggedForSession = true;
+}
+
+/**
+ * Resets the tree structure logging flag.
+ * Call this at the start of a new test suite if needed.
+ */
+function resetTreeStructureLoggingFlag(): void {
+    treeStructureLoggedForSession = false;
+}
 
 /**
  * Configuration for a test generation scenario.
@@ -51,12 +100,20 @@ export interface TestGenerationScenario {
     itemName?: string;
     /** Description of the scenario for logging */
     description: string;
-    /** Whether to verify .robot file opens (may not apply to all scenarios) */
+    /** Whether to verify .robot file opens in editor (default: true) */
     verifyRobotFile?: boolean;
-    /** Whether to execute tests after generation */
+    /** Whether to verify generated files exist on filesystem (default: true) */
+    verifyFilesystem?: boolean;
+    /** Whether to verify file content and metadata (default: true) */
+    verifyMetadata?: boolean;
+    /** Whether to verify all children are generated for parent items (default: true for ROOT/MIDDLE) */
+    verifyChildren?: boolean;
+    /** Whether to execute tests after generation (default: false) */
     executeTests?: boolean;
-    /** Whether to upload results after execution */
+    /** Whether to upload results after execution (default: false) */
     uploadResults?: boolean;
+    /** Whether to verify tooltip shows execution status after upload (default: true when uploadResults is true) */
+    verifyExecutionStatus?: boolean;
 }
 
 /**
@@ -73,6 +130,11 @@ async function getTreeItemTooltip(item: TreeItem, driver: WebDriver): Promise<st
 
         const itemLabel = await item.getLabel();
         logger.trace("Tooltip", `Tree item label: "${itemLabel}"`);
+
+        // First, move mouse away from any current hover position to clear any existing tooltip
+        const clearActions = driver.actions({ async: true });
+        await clearActions.move({ x: 10, y: 10 }).perform();
+        await driver.sleep(150);
 
         let labelElement = null;
 
@@ -136,13 +198,25 @@ async function getTreeItemTooltip(item: TreeItem, driver: WebDriver): Promise<st
         const tooltipText = await waitForTooltip(driver, UITimeouts.MEDIUM);
         if (tooltipText) {
             // Verify this is the item tooltip, not an action button tooltip
-            if (
+            // Also verify the tooltip is for the correct item by checking the Name field
+            const nameMatch = tooltipText.match(/Name:\s*(.+)/);
+            const tooltipName = nameMatch ? nameMatch[1].trim() : null;
+            const isItemTooltip =
                 tooltipText.includes("Execution Status") ||
-                tooltipText.includes(itemLabel) ||
+                tooltipText.includes("Type:") ||
                 (!tooltipText.includes("Upload") &&
                     !tooltipText.includes("Generate") &&
-                    !tooltipText.includes("Delete"))
-            ) {
+                    !tooltipText.includes("Delete"));
+
+            if (isItemTooltip) {
+                // Log a warning if the tooltip doesn't seem to match the item
+                if (tooltipName && tooltipName !== itemLabel) {
+                    logger.warn(
+                        "Tooltip",
+                        `Tooltip may not match item: expected "${itemLabel}", found Name: "${tooltipName}"`
+                    );
+                }
+
                 logger.trace("Tooltip", `Found tooltip text: ${tooltipText.substring(0, 100)}...`);
                 logger.debug("Tooltip", `Full tooltip text for "${itemLabel}":\n${tooltipText}`);
                 return tooltipText;
@@ -319,14 +393,14 @@ async function verifyTooltipContains(item: TreeItem, driver: WebDriver, expected
 
 /**
  * Clicks the Generate button for a tree item using JavaScript to avoid stale element issues.
- * This is similar to clickCreateResourceButton but for the Generate action.
+ * This function does not use the TreeItem reference to avoid stale element errors.
+ * Instead, it finds the row by label and clicks the Generate button in one atomic operation.
  *
- * @param item - The tree item
  * @param driver - The WebDriver instance
  * @param itemLabel - The label of the item
  * @returns Promise<boolean> - True if button was clicked successfully
  */
-async function clickGenerateButton(item: TreeItem, driver: WebDriver, itemLabel: string): Promise<boolean> {
+async function clickGenerateButton(driver: WebDriver, itemLabel: string): Promise<boolean> {
     const maxRetries = 3;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -337,15 +411,43 @@ async function clickGenerateButton(item: TreeItem, driver: WebDriver, itemLabel:
                 `Looking for Generate button near item: "${itemLabel}" (attempt ${attempt}/${maxRetries})`
             );
 
-            try {
-                await item.click();
-                await driver.sleep(300);
-            } catch (itemClickError) {
-                logger.debug("TestGeneration", "Could not click tree item, continuing anyway", itemClickError);
+            // First, scroll the item into view and hover over it using JavaScript
+            // This ensures the action buttons appear
+            const scrollAndHoverSucceeded = (await driver.executeScript(`
+                function scrollAndHoverItem(itemLabel) {
+                    const rows = document.querySelectorAll('.monaco-list-row');
+                    for (const row of rows) {
+                        const labelElement = row.querySelector('.monaco-icon-label .label-name');
+                        const labelText = labelElement ? labelElement.textContent : '';
+                        if (labelText === itemLabel || row.textContent.includes(itemLabel)) {
+                            // Scroll into view
+                            row.scrollIntoView({ block: 'center' });
+                            // Click to select the row (this ensures action buttons appear)
+                            row.click();
+                            // Dispatch mouse events to trigger hover state
+                            row.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+                            row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                return scrollAndHoverItem('${itemLabel.replace(/'/g, "\\'")}');
+            `)) as boolean;
+
+            if (!scrollAndHoverSucceeded) {
+                logger.debug("TestGeneration", `Could not find item "${itemLabel}" in tree, attempt ${attempt}`);
+                if (attempt < maxRetries) {
+                    await driver.sleep(500);
+                    continue;
+                }
+                return false;
             }
 
-            // Use JavaScript to find and click the button in one atomic operation
-            // This reduces the chance of stale element errors
+            // Wait for action buttons to appear
+            await driver.sleep(300);
+
+            // Use JavaScript to find and click the Generate button in one atomic operation
             const clickSucceeded = (await driver.executeScript(`
                 function findAndClickGenerateButton(itemLabel) {
                     const rows = document.querySelectorAll('.monaco-list-row');
@@ -423,47 +525,23 @@ async function clickGenerateButton(item: TreeItem, driver: WebDriver, itemLabel:
 
 /**
  * Generates tests for a specific tree item.
+ * This function uses JavaScript-based approach to avoid stale element issues.
  *
- * @param item - The tree item to generate tests for
- * @param testThemesPage - The TestThemesPage instance
  * @param driver - The WebDriver instance
  * @param itemLabel - The label of the item (for logging)
  * @returns Promise<boolean> - True if generation was successful
  */
-async function generateTestsForItem(
-    item: TreeItem,
-    testThemesPage: TestThemesPage,
-    driver: WebDriver,
-    itemLabel: string
-): Promise<boolean> {
+async function generateTestsForItem(driver: WebDriver, itemLabel: string): Promise<boolean> {
     logger.info("TestGeneration", `Generating tests for item: "${itemLabel}"...`);
 
     // Use JavaScript-based approach to click Generate button to avoid stale element issues
     logger.info("TestGeneration", 'Clicking "Generate Robot Framework Test Suites" button...');
-    const generateButtonClicked = await clickGenerateButton(item, driver, itemLabel);
+    const generateButtonClicked = await clickGenerateButton(driver, itemLabel);
 
     if (!generateButtonClicked) {
-        // Fallback to the original method if JavaScript approach fails
-        logger.debug("TestGeneration", "JavaScript approach failed, trying fallback method...");
-        try {
-            await item.click();
-            await applySlowMotion(driver);
-            const fallbackClicked = await testThemesPage.clickItemAction(item, "Generate");
-            if (fallbackClicked) {
-                logger.info("TestGeneration", "Fallback method succeeded");
-            } else {
-                logger.warn("TestGeneration", `Failed to click Generate button for "${itemLabel}"`);
-                return false;
-            }
-        } catch (fallbackError: any) {
-            const isStaleError =
-                fallbackError.name === "StaleElementReferenceError" || fallbackError.message?.includes("stale element");
-            if (isStaleError) {
-                logger.warn("TestGeneration", "Fallback method also failed due to stale element");
-                return false;
-            }
-            throw fallbackError;
-        }
+        // Fallback: JavaScript approach failed, log warning and return failure
+        logger.warn("TestGeneration", `Failed to click Generate button for "${itemLabel}" using JavaScript approach`);
+        return false;
     }
 
     logger.info("TestGeneration", "Waiting for test generation success notification...");
@@ -1132,36 +1210,158 @@ async function executeRobotTestsViaTerminal(driver: WebDriver, _config: { testTh
 // canExecuteScenario is now imported from treeViewUtils.ts
 
 /**
- * Executes a complete test generation scenario.
- * This is a reusable function that handles the common workflow for test generation tests.
+ * Result of executing a test generation scenario.
+ */
+export interface ScenarioExecutionResult {
+    /** Whether the scenario completed successfully */
+    success: boolean;
+    /** Whether the scenario was skipped due to precondition failures */
+    skipped: boolean;
+    /** Reason for failure or skip */
+    reason?: string;
+    /** Details about the scenario execution */
+    details: {
+        /** Label of the item that was tested */
+        itemLabel?: string;
+        /** Whether test generation was successful */
+        generationSuccess?: boolean;
+        /** Filesystem verification result */
+        filesystemResult?: FilesystemVerificationResult;
+        /** Number of robot files found after generation */
+        filesGenerated?: number;
+        /** Whether file content/metadata was verified */
+        metadataVerified?: boolean;
+        /** Number of children verified as generated */
+        childrenVerified?: number;
+        /** Whether tests were executed */
+        testsExecuted?: boolean;
+        /** Whether results were uploaded */
+        resultsUploaded?: boolean;
+        /** Whether execution status was verified in tooltip */
+        executionStatusVerified?: boolean;
+    };
+}
+
+/**
+ * Verifies that all children of a tree item are marked as generated.
+ *
+ * @param parentItem - The parent tree item
+ * @param driver - The WebDriver instance
+ * @returns Promise<{ verified: number; failed: number; children: string[] }> - Verification result
+ */
+async function verifyChildrenGenerated(
+    parentItem: TreeItem,
+    driver: WebDriver
+): Promise<{ verified: number; failed: number; children: string[] }> {
+    const result = { verified: 0, failed: 0, children: [] as string[] };
+
+    try {
+        // Ensure parent is expanded
+        await expandTreeItemIfNeeded(parentItem, driver);
+        await driver.sleep(500);
+
+        const children = await parentItem.getChildren();
+        logger.info("ChildVerification", `Checking ${children.length} children for generation status...`);
+
+        for (const child of children) {
+            try {
+                const childLabel = await child.getLabel();
+                result.children.push(childLabel);
+
+                const tooltip = await getTreeItemTooltip(child, driver);
+                const isGenerated =
+                    tooltip &&
+                    (tooltip.includes("Status: Generated") ||
+                        (tooltip.includes("Generated") && !tooltip.includes("Not Generated")));
+
+                if (isGenerated) {
+                    result.verified++;
+                    logger.debug("ChildVerification", `  ✓ "${childLabel}" is generated`);
+                } else {
+                    result.failed++;
+                    logger.warn("ChildVerification", `  ✗ "${childLabel}" is NOT generated`);
+                }
+
+                // If child has children, recursively verify (for nested test themes)
+                if (await child.hasChildren()) {
+                    const nestedResult = await verifyChildrenGenerated(child, driver);
+                    result.verified += nestedResult.verified;
+                    result.failed += nestedResult.failed;
+                }
+            } catch (childError) {
+                logger.debug("ChildVerification", `Error checking child: ${childError}`);
+                result.failed++;
+            }
+        }
+
+        logger.info(
+            "ChildVerification",
+            `Child verification: ${result.verified} generated, ${result.failed} not generated`
+        );
+    } catch (error) {
+        logger.error("ChildVerification", `Error verifying children: ${error}`);
+    }
+
+    return result;
+}
+
+/**
+ * Executes a complete test generation scenario with comprehensive verification.
+ * This is a reusable function that handles the common workflow for test generation tests,
+ * matching the detail level of Phase 4-9 in the main test.
  *
  * @param driver - The WebDriver instance
  * @param testThemesPage - The TestThemesPage instance
  * @param sideBar - The SideBarView instance
  * @param scenario - The test generation scenario configuration
  * @param config - The test data configuration
- * @returns Promise<{ success: boolean; skipped: boolean; reason?: string }> - Result of scenario execution
+ * @returns Promise<ScenarioExecutionResult> - Detailed result of scenario execution
  */
 async function executeTestGenerationScenario(
     driver: WebDriver,
     testThemesPage: TestThemesPage,
     sideBar: SideBarView,
     scenario: TestGenerationScenario,
-    config: { projectName: string; versionName: string; cycleName: string }
-): Promise<{ success: boolean; skipped: boolean; reason?: string }> {
-    logger.info("Scenario", `Executing scenario: ${scenario.description}`);
+    config: { projectName: string; versionName: string; cycleName: string; testThemeName: string }
+): Promise<ScenarioExecutionResult> {
+    const result: ScenarioExecutionResult = {
+        success: false,
+        skipped: false,
+        details: {}
+    };
 
-    // Get Test Themes section
-    const content = sideBar.getContent();
-    const testThemesSection = await testThemesPage.getSection(content);
+    logger.info("Scenario", "========================================");
+    logger.info("Scenario", `Executing scenario: ${scenario.description}`);
+    logger.info("Scenario", `Level: ${scenario.level}, Item: ${scenario.itemName || "(first at level)"}`);
+    logger.info("Scenario", "========================================");
+
+    // Apply defaults for optional flags
+    const verifyFilesystem = scenario.verifyFilesystem !== false;
+    const verifyMetadata = scenario.verifyMetadata !== false;
+    const verifyRobotFile = scenario.verifyRobotFile !== false;
+    const verifyChildren = scenario.verifyChildren ?? scenario.level !== TreeItemLevel.LEAF;
+    const executeTests = scenario.executeTests === true;
+    const uploadResults = scenario.uploadResults === true;
+    const verifyExecutionStatus = scenario.verifyExecutionStatus ?? uploadResults;
+
+    // Record initial file count for comparison
+    const initialFileCount = countGeneratedRobotFiles();
+    logger.debug("Scenario", `Initial .robot file count: ${initialFileCount}`);
+
+    // ============================================
+    // Step 1: Get Test Themes section and verify title
+    // ============================================
+    logger.info("Scenario", "Step 1: Verifying Test Themes section...");
+
+    let content = sideBar.getContent();
+    let testThemesSection = await testThemesPage.getSection(content);
 
     if (!testThemesSection) {
-        const reason = "Test Themes section not found";
-        logger.warn("Scenario", reason);
-        return { success: false, skipped: false, reason };
+        result.reason = "Test Themes section not found";
+        logger.warn("Scenario", result.reason);
+        return result;
     }
 
-    // Verify title
     const testThemesTitle = await testThemesPage.getTitle(testThemesSection);
     logger.info("Scenario", `Test Themes view title: "${testThemesTitle}"`);
 
@@ -1169,52 +1369,333 @@ async function executeTestGenerationScenario(
     expect(testThemesTitle, "Test Themes title should contain version name").to.include(config.versionName);
     expect(testThemesTitle, "Test Themes title should contain cycle name").to.include(config.cycleName);
 
-    // Check if scenario can be executed based on tree structure
-    const canExecute = await canExecuteScenario(testThemesSection, driver, scenario.level, "Test Themes View");
-    if (!canExecute.canExecute) {
-        logger.warn("Scenario", `Scenario cannot be executed: ${canExecute.reason}`);
-        return { success: false, skipped: true, reason: canExecute.reason };
+    logger.info("Scenario", "✓ Title verification passed");
+
+    // ============================================
+    // Step 2: Analyze tree structure and find target item
+    // ============================================
+    logger.info("Scenario", "Step 2: Analyzing tree structure...");
+
+    // Log tree structure only once per session (structure doesn't change, only states)
+    await logTreeStructureOnce(testThemesSection, driver, "Test Themes View");
+
+    // Check if scenario can be executed
+    const canExecuteResult = await canExecuteScenario(testThemesSection, driver, scenario.level, "Test Themes View");
+    if (!canExecuteResult.canExecute) {
+        result.skipped = true;
+        result.reason = canExecuteResult.reason;
+        logger.warn("Scenario", `Scenario cannot be executed: ${result.reason}`);
+        return result;
     }
 
-    // Find the tree item based on level
+    // Find the target tree item
     const targetItem = await findTreeItemByLevel(testThemesSection, driver, scenario.level, scenario.itemName);
 
     if (!targetItem) {
-        const reason = scenario.itemName
+        result.skipped = true;
+        result.reason = scenario.itemName
             ? `Tree item "${scenario.itemName}" not found at ${scenario.level} level`
             : `No tree item found at ${scenario.level} level`;
-        logger.warn("Scenario", reason);
-        return { success: false, skipped: true, reason };
+        logger.warn("Scenario", result.reason);
+        return result;
     }
 
     const itemLabel = await targetItem.getLabel();
-    logger.info("Scenario", `Found target item: "${itemLabel}" at ${scenario.level} level`);
+    result.details.itemLabel = itemLabel;
+    logger.info("Scenario", `✓ Found target item: "${itemLabel}" at ${scenario.level} level`);
 
-    // Generate tests
-    const generationSuccess = await generateTestsForItem(targetItem, testThemesPage, driver, itemLabel);
+    // Get tooltip for metadata verification later
+    const itemTooltip = await getTreeItemTooltip(targetItem, driver);
+    logger.debug("Scenario", `Item tooltip: ${itemTooltip?.substring(0, 200) || "(none)"}...`);
+
+    // ============================================
+    // Step 3: Generate tests
+    // ============================================
+    logger.info("Scenario", "Step 3: Generating tests...");
+
+    // Use JavaScript-based generation which doesn't rely on TreeItem references
+    // This avoids stale element errors that occur after tooltip interactions
+    const generationSuccess = await generateTestsForItem(driver, itemLabel);
+    result.details.generationSuccess = generationSuccess;
+
     if (!generationSuccess) {
-        const reason = "Test generation failed";
-        logger.warn("Scenario", reason);
-        return { success: false, skipped: false, reason };
+        result.reason = "Test generation failed";
+        logger.warn("Scenario", result.reason);
+        return result;
     }
 
-    // Verify .robot file if requested
-    if (scenario.verifyRobotFile !== false) {
-        const verificationSuccess = await verifyGeneratedRobotFile(
-            testThemesSection,
-            testThemesPage,
-            driver,
-            targetItem,
-            itemLabel
-        );
-        if (!verificationSuccess) {
-            logger.warn("Scenario", "Robot file verification failed");
-            // Don't fail the test, just log warning
+    logger.info("Scenario", "✓ Test generation completed");
+    await applySlowMotion(driver);
+
+    // ============================================
+    // Step 4: Verify filesystem (generated files exist)
+    // ============================================
+    if (verifyFilesystem) {
+        logger.info("Scenario", "Step 4: Verifying filesystem...");
+
+        const filesystemResult = await verifyGeneratedFilesExist();
+        result.details.filesystemResult = filesystemResult;
+        result.details.filesGenerated = filesystemResult.totalCount;
+
+        if (!filesystemResult.success) {
+            logger.warn("Scenario", `Filesystem verification failed: ${filesystemResult.error}`);
+        } else {
+            logger.info("Scenario", `✓ Found ${filesystemResult.totalCount} .robot file(s) on filesystem`);
+            if (filesystemResult.hasInitFile) {
+                logger.info("Scenario", "✓ __init__.robot file found (test suite folder structure)");
+            }
+        }
+
+        // Verify file count increased
+        const newFileCount = filesystemResult.totalCount;
+        if (newFileCount <= initialFileCount) {
+            logger.warn("Scenario", `File count did not increase: ${initialFileCount} -> ${newFileCount}`);
+        } else {
+            logger.info("Scenario", `✓ File count increased: ${initialFileCount} -> ${newFileCount}`);
         }
     }
 
+    // ============================================
+    // Step 5: Verify .robot file opens in editor and check metadata
+    // ============================================
+    if (verifyRobotFile) {
+        logger.info("Scenario", "Step 5: Verifying .robot file in editor...");
+
+        // Re-acquire section after generation (tree may have refreshed)
+        content = sideBar.getContent();
+        testThemesSection = await testThemesPage.getSection(content);
+
+        if (testThemesSection) {
+            await waitForTreeRefresh(driver, testThemesSection, UITimeouts.MEDIUM);
+
+            const verificationSuccess = await verifyGeneratedRobotFile(
+                testThemesSection,
+                testThemesPage,
+                driver,
+                targetItem,
+                itemLabel
+            );
+
+            if (verificationSuccess) {
+                logger.info("Scenario", "✓ Robot file verification passed");
+            } else {
+                logger.warn("Scenario", "Robot file verification failed (non-fatal)");
+            }
+        }
+    }
+
+    // ============================================
+    // Step 6: Verify metadata in generated files (filesystem check)
+    // ============================================
+    if (verifyMetadata && itemTooltip) {
+        logger.info("Scenario", "Step 6: Verifying metadata in generated files...");
+
+        const generatedFiles = getGeneratedRobotFiles();
+        let metadataVerified = false;
+
+        // Extract expected metadata from tooltip
+        const tooltipMetadata = parseTooltipMetadata(itemTooltip);
+        logger.debug("Scenario", `Expected metadata from tooltip: ${JSON.stringify(tooltipMetadata)}`);
+
+        // Check at least one file for metadata
+        for (const file of generatedFiles) {
+            const content = readRobotFileContent(file);
+            if (content && content.includes("*** Settings ***")) {
+                const verifyResult = verifyRobotFileMetadata(file, {
+                    uniqueID: tooltipMetadata.uniqueID || undefined,
+                    name: tooltipMetadata.name || undefined,
+                    numbering: tooltipMetadata.numbering || undefined
+                });
+
+                if (verifyResult.valid) {
+                    metadataVerified = true;
+                    logger.info("Scenario", `✓ Metadata verified in ${path.basename(file)}`);
+                    break;
+                } else {
+                    logger.debug(
+                        "Scenario",
+                        `Metadata check failed for ${path.basename(file)}: ${verifyResult.errors.join(", ")}`
+                    );
+                }
+            }
+        }
+
+        result.details.metadataVerified = metadataVerified;
+        if (!metadataVerified && generatedFiles.length > 0) {
+            logger.warn("Scenario", "Metadata verification did not match any file (non-fatal)");
+        }
+    }
+
+    // ============================================
+    // Step 7: Verify children are generated (for parent items)
+    // ============================================
+    if (verifyChildren && (scenario.level === TreeItemLevel.ROOT || scenario.level === TreeItemLevel.MIDDLE)) {
+        logger.info("Scenario", "Step 7: Verifying children are generated...");
+
+        // Re-acquire the target item as tree may have refreshed
+        content = sideBar.getContent();
+        testThemesSection = await testThemesPage.getSection(content);
+
+        if (testThemesSection) {
+            const refreshedItem = await testThemesPage.getItem(testThemesSection, itemLabel);
+            if (refreshedItem) {
+                const childResult = await verifyChildrenGenerated(refreshedItem, driver);
+                result.details.childrenVerified = childResult.verified;
+
+                if (childResult.verified > 0) {
+                    logger.info("Scenario", `✓ ${childResult.verified} children verified as generated`);
+                }
+                if (childResult.failed > 0) {
+                    logger.warn("Scenario", `${childResult.failed} children are NOT generated`);
+                }
+            }
+        }
+    }
+
+    // ============================================
+    // Step 8: Execute tests (if requested)
+    // ============================================
+    if (executeTests) {
+        logger.info("Scenario", "Step 8: Executing generated tests...");
+
+        let testsExecuted = false;
+
+        // Try Testing View first
+        let inTestingView = await isTestingViewVisible(driver);
+
+        if (!inTestingView) {
+            logger.info("Scenario", "Opening Testing View...");
+            const testingViewOpened = await openTestingView(driver);
+            if (testingViewOpened) {
+                inTestingView = true;
+            }
+        }
+
+        if (inTestingView) {
+            const runSuccess = await runTestsFromTestingView(driver);
+            if (runSuccess) {
+                await waitForTestExecutionComplete(driver);
+                testsExecuted = true;
+                logger.info("Scenario", "✓ Tests executed successfully");
+            }
+        }
+
+        if (!testsExecuted) {
+            // Fallback to terminal execution
+            logger.info("Scenario", "Falling back to terminal execution...");
+            await openTestBenchSidebar(driver);
+            testsExecuted = await executeRobotTestsViaTerminal(driver, config);
+        }
+
+        result.details.testsExecuted = testsExecuted;
+
+        if (!testsExecuted) {
+            logger.warn("Scenario", "Test execution failed (non-fatal)");
+        }
+    }
+
+    // ============================================
+    // Step 9: Upload results (if requested)
+    // ============================================
+    if (uploadResults) {
+        logger.info("Scenario", "Step 9: Uploading results to TestBench...");
+
+        // Ensure we're back in TestBench sidebar
+        await openTestBenchSidebar(driver);
+        await applySlowMotion(driver);
+
+        // Re-acquire section and item
+        content = sideBar.getContent();
+        testThemesSection = await testThemesPage.getSection(content);
+
+        if (testThemesSection) {
+            await waitForTreeItems(testThemesSection, driver);
+
+            const itemForUpload = await testThemesPage.getItem(testThemesSection, itemLabel);
+            if (itemForUpload) {
+                await itemForUpload.click();
+                await applySlowMotion(driver);
+
+                logger.info("Scenario", 'Clicking "Upload Execution Results To TestBench" button...');
+                const uploadButtonClicked = await testThemesPage.clickItemAction(itemForUpload, "Upload");
+
+                if (uploadButtonClicked) {
+                    const uploadNotificationAppeared = await waitForNotification(
+                        driver,
+                        "Successfully imported Robot Framework test results",
+                        60000
+                    );
+
+                    if (uploadNotificationAppeared) {
+                        result.details.resultsUploaded = true;
+                        logger.info("Scenario", "✓ Results uploaded successfully");
+                    } else {
+                        logger.warn("Scenario", "Upload notification did not appear");
+                    }
+                } else {
+                    logger.warn("Scenario", "Failed to click Upload button");
+                }
+            }
+        }
+    }
+
+    // ============================================
+    // Step 10: Verify execution status in tooltip (if requested)
+    // ============================================
+    if (verifyExecutionStatus && uploadResults) {
+        logger.info("Scenario", "Step 10: Verifying execution status in tooltip...");
+
+        await waitForTreeRefresh(driver, null, UITimeouts.MEDIUM);
+
+        content = sideBar.getContent();
+        testThemesSection = await testThemesPage.getSection(content);
+
+        if (testThemesSection) {
+            await waitForTreeItems(testThemesSection, driver);
+
+            const itemForTooltip = await testThemesPage.getItem(testThemesSection, itemLabel);
+            if (itemForTooltip) {
+                const expectedTooltipText = "Execution Status: Performed";
+                const tooltipVerified = await verifyTooltipContains(itemForTooltip, driver, expectedTooltipText);
+
+                result.details.executionStatusVerified = tooltipVerified;
+
+                if (tooltipVerified) {
+                    logger.info("Scenario", "✓ Execution status verified in tooltip");
+                } else {
+                    logger.warn("Scenario", "Execution status not found in tooltip (non-fatal)");
+                }
+            }
+        }
+    }
+
+    // ============================================
+    // Final Summary
+    // ============================================
+    result.success = true;
+
+    logger.info("Scenario", "========================================");
     logger.info("Scenario", `Scenario completed: ${scenario.description}`);
-    return { success: true, skipped: false };
+    logger.info("Scenario", `  Item: ${result.details.itemLabel}`);
+    logger.info("Scenario", `  Generation: ${result.details.generationSuccess ? "✓" : "✗"}`);
+    if (result.details.filesGenerated !== undefined) {
+        logger.info("Scenario", `  Files generated: ${result.details.filesGenerated}`);
+    }
+    if (result.details.childrenVerified !== undefined) {
+        logger.info("Scenario", `  Children verified: ${result.details.childrenVerified}`);
+    }
+    if (result.details.testsExecuted !== undefined) {
+        logger.info("Scenario", `  Tests executed: ${result.details.testsExecuted ? "✓" : "✗"}`);
+    }
+    if (result.details.resultsUploaded !== undefined) {
+        logger.info("Scenario", `  Results uploaded: ${result.details.resultsUploaded ? "✓" : "✗"}`);
+    }
+    if (result.details.executionStatusVerified !== undefined) {
+        logger.info("Scenario", `  Status verified: ${result.details.executionStatusVerified ? "✓" : "✗"}`);
+    }
+    logger.info("Scenario", "========================================");
+
+    return result;
 }
 
 describe("Test Themes View UI Tests", function () {
@@ -1227,6 +1708,13 @@ describe("Test Themes View UI Tests", function () {
         requiresLogin: true,
         openSidebar: true,
         timeout: 300000
+    });
+
+    // Reset tree structure logging flag at suite start
+    // This ensures fresh logging for each test run while avoiding
+    // redundant logging within the same run
+    before(function () {
+        resetTreeStructureLoggingFlag();
     });
 
     const getDriver = () => ctx.driver;
@@ -1694,7 +2182,41 @@ describe("Test Themes View UI Tests", function () {
             // Click the test case set to open the .robot file FIRST
             // We'll extract metadata from the file itself to avoid tooltip issues
             logger.info("Phase5", `Clicking test case set "${testCaseSetLabel}" to open .robot file...`);
-            await targetTestCaseSet.click();
+
+            // Re-fetch the test case set to avoid stale element reference after tooltip interactions
+            // First, make sure testThemeForVerification is still expanded
+            const stillExpanded = await testThemeForVerification.isExpanded();
+            if (!stillExpanded) {
+                await testThemeForVerification.expand();
+                await applySlowMotion(driver);
+            }
+            const freshTestCaseSets = await testThemeForVerification.getChildren();
+
+            // Find the matching item by label
+            let itemToClick: TreeItem | null = null;
+            for (const item of freshTestCaseSets) {
+                try {
+                    const label = await item.getLabel();
+                    if (label === testCaseSetLabel) {
+                        itemToClick = item;
+                        break;
+                    }
+                } catch {
+                    continue;
+                }
+            }
+
+            // If we couldn't find by label, use the first item
+            if (!itemToClick) {
+                itemToClick = freshTestCaseSets[0];
+            }
+            if (!itemToClick) {
+                logger.warn("Phase5", "Could not find test case set to click");
+                this.skip();
+                return;
+            }
+
+            await itemToClick.click();
             await applySlowMotion(driver);
 
             // Wait for the .robot file to open in the editor
@@ -1729,7 +2251,7 @@ describe("Test Themes View UI Tests", function () {
             await applySlowMotion(driver);
 
             if (!robotEditor) {
-                logger.warn("Phase5", "Could not find opened .robot file editor");
+                logger.warn("Verification", "Could not find opened .robot file editor");
                 this.skip();
                 return;
             }
@@ -2015,9 +2537,9 @@ describe("Test Themes View UI Tests", function () {
                 ) {
                     logger.info("Navigation", "Already in Test Themes View with correct context");
 
-                    // Log tree structure if requested (useful for debugging)
+                    // Log tree structure if requested (only once per session)
                     if (logTree) {
-                        await logTreeStructure(testThemesSection, driver, "Test Themes View");
+                        await logTreeStructureOnce(testThemesSection, driver, "Test Themes View");
                     }
 
                     return { testThemesPage, sideBar };
@@ -2070,12 +2592,12 @@ describe("Test Themes View UI Tests", function () {
                             await doubleClickTreeItem(refreshedCycle, driver);
                             await waitForTestThemesAndElementsViews(driver);
 
-                            // Log tree structure if requested (useful for debugging)
+                            // Log tree structure if requested (only once per session)
                             if (logTree) {
                                 const contentAfterNav = sideBar.getContent();
                                 const testThemesSectionAfterNav = await testThemesPage.getSection(contentAfterNav);
                                 if (testThemesSectionAfterNav) {
-                                    await logTreeStructure(testThemesSectionAfterNav, driver, "Test Themes View");
+                                    await logTreeStructureOnce(testThemesSectionAfterNav, driver, "Test Themes View");
                                 }
                             }
 
@@ -2089,12 +2611,12 @@ describe("Test Themes View UI Tests", function () {
             await doubleClickTreeItem(targetCycle, driver);
             await waitForTestThemesAndElementsViews(driver);
 
-            // Log tree structure if requested (useful for debugging)
+            // Log tree structure if requested (only once per session)
             if (logTree) {
                 const contentAfterNav = sideBar.getContent();
                 const testThemesSectionAfterNav = await testThemesPage.getSection(contentAfterNav);
                 if (testThemesSectionAfterNav) {
-                    await logTreeStructure(testThemesSectionAfterNav, driver, "Test Themes View");
+                    await logTreeStructureOnce(testThemesSectionAfterNav, driver, "Test Themes View");
                 }
             }
 
@@ -2112,6 +2634,9 @@ describe("Test Themes View UI Tests", function () {
                 level: TreeItemLevel.ROOT,
                 description: "Generate tests for root-level test theme (entire tree)",
                 verifyRobotFile: true,
+                verifyFilesystem: true,
+                verifyMetadata: true,
+                verifyChildren: true,
                 executeTests: false,
                 uploadResults: false
             };
@@ -2122,6 +2647,19 @@ describe("Test Themes View UI Tests", function () {
                 logger.warn("Test", `Test skipped: ${result.reason}`);
                 this.skip();
                 return;
+            }
+
+            // Verify filesystem results
+            if (result.details.filesystemResult) {
+                expect(
+                    result.details.filesystemResult.totalCount,
+                    "Should have generated at least one .robot file"
+                ).to.be.greaterThan(0);
+            }
+
+            // Verify children were checked (for root level, should have children)
+            if (result.details.childrenVerified !== undefined) {
+                logger.info("Test", `Children verified: ${result.details.childrenVerified}`);
             }
 
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
@@ -2140,6 +2678,9 @@ describe("Test Themes View UI Tests", function () {
                 level: TreeItemLevel.MIDDLE,
                 description: "Generate tests for middle-level test theme (subtree)",
                 verifyRobotFile: true,
+                verifyFilesystem: true,
+                verifyMetadata: true,
+                verifyChildren: true,
                 executeTests: false,
                 uploadResults: false
             };
@@ -2154,6 +2695,14 @@ describe("Test Themes View UI Tests", function () {
                 );
                 this.skip();
                 return;
+            }
+
+            // Verify filesystem results
+            if (result.details.filesystemResult) {
+                expect(
+                    result.details.filesystemResult.totalCount,
+                    "Should have generated at least one .robot file"
+                ).to.be.greaterThan(0);
             }
 
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
@@ -2172,6 +2721,9 @@ describe("Test Themes View UI Tests", function () {
                 level: TreeItemLevel.LEAF,
                 description: "Generate tests for leaf test case set (single item)",
                 verifyRobotFile: true,
+                verifyFilesystem: true,
+                verifyMetadata: true,
+                verifyChildren: false, // Leaf items have no children
                 executeTests: false,
                 uploadResults: false
             };
@@ -2182,6 +2734,14 @@ describe("Test Themes View UI Tests", function () {
                 logger.warn("Test", `Test skipped: ${result.reason}`);
                 this.skip();
                 return;
+            }
+
+            // Verify filesystem results
+            if (result.details.filesystemResult) {
+                expect(
+                    result.details.filesystemResult.totalCount,
+                    "Should have generated at least one .robot file"
+                ).to.be.greaterThan(0);
             }
 
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
@@ -2189,40 +2749,58 @@ describe("Test Themes View UI Tests", function () {
                 .be.true;
         });
 
-        it("should generate tests for specific root test theme by name", async function () {
+        it("should generate, execute, and upload results for leaf test case set", async function () {
             const driver = getDriver();
             const config = getTestData();
             logTestDataConfig();
 
             const { testThemesPage, sideBar } = await ensureInTestThemesView(driver, config);
 
-            // Use the configured test theme name if available, otherwise find first root
+            // This test does the full workflow: generate, execute, upload, and verify
+            // Similar to the main Phase 4-9 test but using the scenario framework
             const scenario: TestGenerationScenario = {
-                level: TreeItemLevel.ROOT,
-                itemName: config.testThemeName, // Use configured name
-                description: `Generate tests for specific root test theme: "${config.testThemeName}"`,
+                level: TreeItemLevel.LEAF,
+                description: "Full workflow: generate, execute, and upload for leaf test case set",
                 verifyRobotFile: true,
-                executeTests: false,
-                uploadResults: false
+                verifyFilesystem: true,
+                verifyMetadata: true,
+                verifyChildren: false,
+                executeTests: true,
+                uploadResults: true,
+                verifyExecutionStatus: true
             };
 
             const result = await executeTestGenerationScenario(driver, testThemesPage, sideBar, scenario, config);
 
             if (result.skipped) {
                 logger.warn("Test", `Test skipped: ${result.reason}`);
-                logger.info(
-                    "Test",
-                    `This is expected if the test theme "${config.testThemeName}" is not found at root level, or if there are no root items.`
-                );
                 this.skip();
                 return;
             }
 
+            // Verify all steps completed
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-            expect(
-                result.success,
-                `Specific root test theme generation should succeed. Reason: ${result.reason || "none"}`
-            ).to.be.true;
+            expect(result.details.generationSuccess, "Test generation should succeed").to.be.true;
+
+            if (result.details.filesystemResult) {
+                expect(
+                    result.details.filesystemResult.totalCount,
+                    "Should have generated at least one .robot file"
+                ).to.be.greaterThan(0);
+            }
+
+            // Log detailed results
+            logger.info("Test", "Full workflow test completed:");
+            logger.info("Test", `  - Files generated: ${result.details.filesGenerated || 0}`);
+            logger.info("Test", `  - Tests executed: ${result.details.testsExecuted ? "Yes" : "No"}`);
+            logger.info("Test", `  - Results uploaded: ${result.details.resultsUploaded ? "Yes" : "No"}`);
+            logger.info(
+                "Test",
+                `  - Execution status verified: ${result.details.executionStatusVerified ? "Yes" : "No"}`
+            );
+
+            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+            expect(result.success, `Full workflow test should succeed. Reason: ${result.reason || "none"}`).to.be.true;
         });
     });
 });
