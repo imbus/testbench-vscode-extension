@@ -106,6 +106,38 @@ const DEFAULT_OPTIONS: Required<TestHooksOptions> = {
 };
 
 /**
+ * Safely executes an async operation with error handling.
+ * Logs errors but doesn't throw. Used for cleanup operations
+ * that should not fail the test.
+ *
+ * @param operation - The async operation to execute
+ * @param operationName - Name of the operation for logging
+ * @param suiteName - Name of the test suite for logging context
+ * @returns Promise<boolean> - True if operation succeeded, false otherwise
+ */
+async function safeExecute<T = void>(
+    operation: () => Promise<T>,
+    operationName: string,
+    suiteName: string = "UITest"
+): Promise<boolean> {
+    const logger = getTestLogger();
+    try {
+        await operation();
+        return true;
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const isStaleElement = errorMessage.includes("stale element") || errorMessage.includes("StaleElementReference");
+
+        if (isStaleElement) {
+            logger.debug(suiteName, `${operationName}: stale element (expected during cleanup)`);
+        } else {
+            logger.warn(suiteName, `${operationName} failed: ${errorMessage}`);
+        }
+        return false;
+    }
+}
+
+/**
  * Logs slow motion configuration status.
  * Called at the start of each test when logSlowMotion is enabled.
  */
@@ -307,12 +339,11 @@ export function createBeforeHook(context: TestContext, options: TestHooksOptions
         }
 
         if (opts.closeEditors) {
-            try {
-                await new EditorView().closeAllEditors();
-            } catch (error) {
-                logger.warn(opts.suiteName, `Could not close editors: ${error}`);
-                // Don't fail the hook, editors might already be closed
-            }
+            await safeExecute(
+                async () => new EditorView().closeAllEditors(),
+                "Close all editors in before hook",
+                opts.suiteName
+            );
         }
     };
 }
@@ -329,14 +360,15 @@ export function createAfterHook(options: TestHooksOptions = {}): () => Promise<v
 
     return async function (): Promise<void> {
         const logger = getTestLogger();
+
         if (opts.closeEditors) {
-            try {
-                await new EditorView().closeAllEditors();
-            } catch (error) {
-                logger.warn(opts.suiteName, `Could not close editors in after hook: ${error}`);
-                // Don't fail the hook
-            }
+            await safeExecute(
+                async () => new EditorView().closeAllEditors(),
+                "Close all editors in after hook",
+                opts.suiteName
+            );
         }
+
         logger.suiteEnd(opts.suiteName);
     };
 }
@@ -414,9 +446,13 @@ export function createAfterEachHook(
         if (testState === "failed") {
             logger.testFail(testTitle, this.currentTest?.err, testDuration);
 
-            // Capture screenshot on failure
+            // Capture screenshot on failure - use safe execution to prevent blocking other cleanup
             if (opts.captureScreenshotOnFailure) {
-                await captureScreenshot(driver, testTitle, opts.suiteName);
+                await safeExecute(
+                    async () => captureScreenshot(driver, testTitle, opts.suiteName),
+                    "Capture failure screenshot",
+                    opts.suiteName
+                );
             }
         } else if (testState === "passed") {
             logger.testPass(testTitle, testDuration);
@@ -426,23 +462,27 @@ export function createAfterEachHook(
 
         // Clear notifications to ensure clean state for next test
         if (opts.clearNotifications) {
-            await clearAllNotifications(driver);
+            await safeExecute(async () => clearAllNotifications(driver), "Clear notifications", opts.suiteName);
         }
 
         // Ensure we're back to default content (not stuck in a webview)
-        try {
-            await driver.switchTo().defaultContent();
-        } catch {
-            // Ignore errors when switching to default content
-        }
+        await safeExecute(
+            async () => {
+                await driver.switchTo().defaultContent();
+            },
+            "Switch to default content",
+            opts.suiteName
+        );
 
         // Close any open dialogs by pressing Escape
-        try {
-            const { Key } = await import("vscode-extension-tester");
-            await driver.actions().sendKeys(Key.ESCAPE).perform();
-        } catch {
-            // Ignore errors when sending Escape key
-        }
+        await safeExecute(
+            async () => {
+                const { Key } = await import("vscode-extension-tester");
+                await driver.actions().sendKeys(Key.ESCAPE).perform();
+            },
+            "Close dialogs with Escape key",
+            opts.suiteName
+        );
     };
 }
 
@@ -573,12 +613,14 @@ export interface LoginWebviewHooksOptions extends TestHooksOptions {
 async function closeStuckDialogs(driver: WebDriver, maxAttempts: number = 3): Promise<void> {
     const { Key } = await import("vscode-extension-tester");
     for (let i = 0; i < maxAttempts; i++) {
-        try {
-            await driver.actions().sendKeys(Key.ESCAPE).perform();
-            await driver.sleep(200);
-        } catch {
-            // Ignore escape key errors
-        }
+        await safeExecute(
+            async () => {
+                await driver.actions().sendKeys(Key.ESCAPE).perform();
+                await driver.sleep(200);
+            },
+            `Send Escape key (attempt ${i + 1}/${maxAttempts})`,
+            "Cleanup"
+        );
     }
 }
 
@@ -644,7 +686,11 @@ export function createLoginWebviewBeforeEachHook(
 
         // Clear any leftover notifications from previous tests
         if (opts.clearNotifications) {
-            await clearAllNotifications(driver);
+            await safeExecute(
+                async () => clearAllNotifications(driver),
+                "Clear notifications in login webview beforeEach",
+                opts.suiteName
+            );
         }
 
         // Close any stuck dialogs before starting cleanup
