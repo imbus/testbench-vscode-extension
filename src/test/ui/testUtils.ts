@@ -967,101 +967,6 @@ export async function waitForTreeRefresh(
     );
 }
 
-async function findTreeItemByLabel(
-    items: TreeItem[],
-    targetLabel: string,
-    exactMatch: boolean = false
-): Promise<TreeItem | null> {
-    for (const item of items) {
-        try {
-            const label = await item.getLabel();
-            const matches = exactMatch ? label === targetLabel : label === targetLabel || label.includes(targetLabel);
-
-            if (matches) {
-                return item;
-            }
-
-            // If item has children, search recursively
-            if (await item.hasChildren()) {
-                const children = await item.getChildren();
-                if (children && children.length > 0) {
-                    const found = await findTreeItemByLabel(children, targetLabel, exactMatch);
-                    if (found) {
-                        return found;
-                    }
-                }
-            }
-        } catch (error) {
-            // Log error but continue searching
-            logger.debug("TreeItem", `Error checking tree item: ${error}`);
-        }
-    }
-
-    return null;
-}
-
-/**
- * Waits for a specific tree item to appear in a section, with automatic expansion.
- *
- * @param driver - The WebDriver instance
- * @param sectionFinder - Function to find the target section from sidebar content
- * @param itemLabel - Label of the item to find
- * @param timeout - Maximum time to wait
- * @returns Promise<TreeItem | null> - The found item or null if not found
- */
-export async function waitForTreeItem(
-    driver: WebDriver,
-    sectionFinder: (content: any) => Promise<any | null>,
-    itemLabel: string,
-    timeout: number = UITimeouts.LONG
-): Promise<TreeItem | null> {
-    let foundItem: TreeItem | null = null;
-
-    await waitForCondition(
-        driver,
-        async () => {
-            try {
-                const sideBar = new SideBarView();
-                const content = sideBar.getContent();
-                const section = await sectionFinder(content);
-
-                if (!section) {
-                    return false;
-                }
-
-                const items = await section.getVisibleItems();
-
-                foundItem = await findTreeItemByLabel(items, itemLabel);
-                if (foundItem) {
-                    return true;
-                }
-
-                // If not found, expand items that have children
-                for (const item of items) {
-                    try {
-                        if (await item.hasChildren()) {
-                            await expandTreeItemIfNeeded(item, driver);
-                        }
-                    } catch {
-                        // Continue expanding other items
-                    }
-                }
-
-                const expandedItems = await section.getVisibleItems();
-                foundItem = await findTreeItemByLabel(expandedItems, itemLabel);
-                return foundItem !== null;
-            } catch {
-                return false;
-            }
-        },
-        timeout,
-        500,
-        `tree item '${itemLabel}' to appear`
-    );
-
-    return foundItem;
-}
-
 /**
  * Waits for a VS Code notification containing specific text.
  *
@@ -1135,85 +1040,6 @@ export async function waitForNotification(
         return true;
     } catch (error) {
         logger.debug("Notification", `Notification not found within timeout: ${error}`);
-        return false;
-    }
-}
-
-/**
- * Waits for tree item children to be loaded after expansion.
- * Checks that the item is expanded and children are available.
- *
- * @param item - The tree item to wait for
- * @param driver - The WebDriver instance
- * @param timeout - Maximum time to wait (default: UITimeouts.MEDIUM)
- * @returns Promise<boolean> - True if children are loaded, false if timeout
- */
-export async function waitForTreeItemChildren(
-    item: TreeItem,
-    driver: WebDriver,
-    timeout: number = UITimeouts.MEDIUM
-): Promise<boolean> {
-    try {
-        await driver.wait(
-            async () => {
-                try {
-                    // Check that item is expanded
-                    const isExpanded = await item.isExpanded();
-                    if (!isExpanded) {
-                        return false;
-                    }
-
-                    // Check that children are available
-                    const children = await item.getChildren();
-                    return children !== null && children.length >= 0; // Allow empty children array (item might have no children)
-                } catch {
-                    return false;
-                }
-            },
-            timeout,
-            "Waiting for tree item children to load"
-        );
-        return true;
-    } catch (error) {
-        logger.debug("TreeItem", `Timeout waiting for children to load: ${error}`);
-        return false;
-    }
-}
-
-/**
- * Safely expands a tree item if it has children and is not already expanded.
- * Waits for children to load after expansion using smart wait.
- *
- * @param item - The tree item to expand
- * @param driver - The WebDriver instance for slow motion
- * @returns Promise<boolean> - True if item was expanded or already expanded, false otherwise
- */
-export async function expandTreeItemIfNeeded(item: TreeItem, driver: WebDriver): Promise<boolean> {
-    try {
-        const hasChildren = await item.hasChildren();
-        if (!hasChildren) {
-            return false;
-        }
-
-        const isExpanded = await item.isExpanded();
-        if (isExpanded) {
-            return true; // Already expanded
-        }
-
-        await item.expand();
-        await applySlowMotion(driver);
-
-        // Wait for children to actually load (smart wait instead of fixed delay)
-        const childrenLoaded = await waitForTreeItemChildren(item, driver);
-        if (!childrenLoaded) {
-            logger.warn("TreeItem", "Children may not have loaded for tree item");
-        }
-
-        // Verify it's expanded
-        const expanded = await item.isExpanded();
-        return expanded;
-    } catch (error) {
-        logger.error("TreeItem", `Error expanding tree item: ${error}`);
         return false;
     }
 }
@@ -2079,33 +1905,6 @@ export async function ensureLoggedIn(
 }
 
 /**
- * Double-clicks a tree item.
- *
- * @param item - The tree item to double-click
- * @param driver - The WebDriver instance
- * @returns Promise<void>
- */
-export async function doubleClickTreeItem(item: TreeItem, driver: WebDriver): Promise<void> {
-    try {
-        const element = await item.findElement(By.css(".monaco-icon-name-container"));
-        await driver.actions().doubleClick(element).perform();
-        await applySlowMotion(driver);
-    } catch (error) {
-        // Fallback: try clicking twice
-        logger.warn("TreeItem", "Double-click failed, trying alternative method", error);
-        try {
-            await item.click();
-            await driver.sleep(100);
-            await item.click();
-            await applySlowMotion(driver);
-        } catch (fallbackError) {
-            logger.error("TreeItem", "Alternative double-click also failed", fallbackError);
-            throw fallbackError;
-        }
-    }
-}
-
-/**
  * Finds and clicks a CodeLens action in the editor.
  *
  * @param driver - The WebDriver instance
@@ -2312,8 +2111,12 @@ export async function verifyRefactorPreviewCheckbox(
                                     // If it's .monaco-checkbox, check aria-checked or class
                                     if (className.includes("monaco-checkbox")) {
                                         const ariaChecked = await checkbox.getAttribute("aria-checked");
-                                        if (ariaChecked === "true") {return true;}
-                                        if (ariaChecked === "false") {return false;}
+                                        if (ariaChecked === "true") {
+                                            return true;
+                                        }
+                                        if (ariaChecked === "false") {
+                                            return false;
+                                        }
                                         // Fallback to class check
                                         return className.includes("checked");
                                     }
@@ -3292,69 +3095,6 @@ export async function waitForRefactorPreview(
             },
             timeout,
             "Waiting for Refactor Preview tab to appear"
-        );
-        return true;
-    } catch {
-        return false;
-    }
-}
-
-/**
- * Waits for a tree item's action button to become visible.
- * This is useful when a button only appears after expanding or interacting with a tree item.
- *
- * @param item - The tree item
- * @param driver - The WebDriver instance
- * @param buttonText - The text/aria-label of the button to wait for (optional)
- * @param timeout - Maximum time to wait (default: UITimeouts.MEDIUM)
- * @returns Promise<boolean> - True if button became visible, false if timeout
- */
-export async function waitForTreeItemButton(
-    item: TreeItem,
-    driver: WebDriver,
-    buttonText?: string,
-    timeout: number = UITimeouts.MEDIUM
-): Promise<boolean> {
-    try {
-        await driver.switchTo().defaultContent();
-
-        const itemLabel = await item.getLabel();
-
-        await driver.wait(
-            async () => {
-                try {
-                    // Try to find buttons near the tree item
-                    const buttons = await driver.findElements(
-                        By.xpath(
-                            `//div[contains(@class, 'monaco-list-row')]//button[contains(@aria-label, '${buttonText || "Create"}') or contains(@title, '${buttonText || "Create"}')]`
-                        )
-                    );
-
-                    // Filter buttons to find the one near our tree item
-                    for (const btn of buttons) {
-                        try {
-                            const row = await btn.findElement(
-                                By.xpath("./ancestor::div[contains(@class, 'monaco-list-row')]")
-                            );
-                            const rowText = await row.getText();
-                            if (rowText.includes(itemLabel)) {
-                                const isDisplayed = await btn.isDisplayed();
-                                if (isDisplayed) {
-                                    return true;
-                                }
-                            }
-                        } catch {
-                            // Continue searching
-                        }
-                    }
-
-                    return false;
-                } catch {
-                    return false;
-                }
-            },
-            timeout,
-            `Waiting for button to become visible for tree item "${itemLabel}"`
         );
         return true;
     } catch {

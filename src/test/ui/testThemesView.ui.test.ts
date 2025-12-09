@@ -16,7 +16,6 @@ import {
     openTestBenchSidebar,
     applySlowMotion,
     waitForTreeItems,
-    doubleClickTreeItem,
     waitForProjectsView,
     waitForTestThemesAndElementsViews,
     handleCycleConfigurationPrompt,
@@ -32,7 +31,13 @@ import { getTestData, logTestDataConfig } from "./testConfig";
 import { TestContext, setupTestHooks } from "./testHooks";
 import { TestThemesPage } from "./pages/TestThemesPage";
 import { ProjectsViewPage } from "./pages/ProjectsViewPage";
-import { TreeItemLevel, logTreeStructure, findTreeItemByLevel, canExecuteScenario } from "./treeViewUtils";
+import {
+    TreeItemLevel,
+    logTreeStructure,
+    findTreeItemByLevel,
+    canExecuteScenario,
+    doubleClickTreeItem
+} from "./treeViewUtils";
 
 /**
  * Configuration for a test generation scenario.

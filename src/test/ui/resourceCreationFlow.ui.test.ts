@@ -13,7 +13,6 @@ import { logger } from "./testLogger";
 import {
     applySlowMotion,
     waitForTreeItems,
-    doubleClickTreeItem,
     waitForProjectsView,
     waitForTestThemesAndElementsViews,
     handleCycleConfigurationPrompt,
@@ -29,6 +28,7 @@ import {
     ensureRefactorPreviewItemChecked,
     clickRefactorPreviewApply
 } from "./testUtils";
+import { doubleClickTreeItem, waitForTreeItemButton } from "./treeViewUtils";
 import { getTestData, logTestDataConfig } from "./testConfig";
 import { TestContext, setupTestHooks } from "./testHooks";
 import { ProjectsViewPage } from "./pages/ProjectsViewPage";
@@ -309,7 +309,6 @@ describe("Resource Creation Flow UI Tests", function () {
         await applySlowMotion(driver);
 
         // Wait for the "Create Resource" button to become visible
-        const { waitForTreeItemButton } = await import("./testUtils");
         const buttonVisible = await waitForTreeItemButton(subdivision, driver, "Create Resource", UITimeouts.MEDIUM);
         if (!buttonVisible) {
             logger.warn("Phase3", "Create Resource button did not become visible");
