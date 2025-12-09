@@ -1008,16 +1008,16 @@ describe("Test Themes View UI Tests", function () {
             await applySlowMotion(driver);
 
             // ============================================
-            // Phase 4.5: Verify Generated Test Case Set Opens .robot File
+            // Phase 5: Verify Generated Test Case Set Opens .robot File
             // ============================================
-            logger.info("Phase4.5", "Verifying generated test case set opens .robot file...");
+            logger.info("Phase5", "Verifying generated test case set opens .robot file...");
 
             // Re-acquire Test Themes section after generation (tree may have refreshed)
             const updatedContentAfterGen = sideBar.getContent();
             const testThemesSectionAfterGen = await testThemesPage.getSection(updatedContentAfterGen);
 
             if (!testThemesSectionAfterGen) {
-                logger.warn("Phase4.5", "Test Themes section not found after generation");
+                logger.warn("Phase5", "Test Themes section not found after generation");
                 this.skip();
                 return;
             }
@@ -1039,16 +1039,16 @@ describe("Test Themes View UI Tests", function () {
             }
 
             if (!testThemeForVerification) {
-                logger.warn("Phase4.5", `Test theme "${config.testThemeName}" not found for verification`);
+                logger.warn("Phase5", `Test theme "${config.testThemeName}" not found for verification`);
                 this.skip();
                 return;
             }
 
             // Expand the test theme to see its children (test case sets)
-            logger.info("Phase4.5", "Expanding test theme to find generated test case sets...");
+            logger.info("Phase5", "Expanding test theme to find generated test case sets...");
             const hasChildren = await testThemeForVerification.hasChildren();
             if (!hasChildren) {
-                logger.warn("Phase4.5", "Test theme has no children, cannot verify test case set");
+                logger.warn("Phase5", "Test theme has no children, cannot verify test case set");
                 this.skip();
                 return;
             }
@@ -1064,7 +1064,7 @@ describe("Test Themes View UI Tests", function () {
             // Get children (test case sets)
             const testCaseSets = await testThemeForVerification.getChildren();
             if (testCaseSets.length === 0) {
-                logger.warn("Phase4.5", "No test case sets found under test theme");
+                logger.warn("Phase5", "No test case sets found under test theme");
                 this.skip();
                 return;
             }
@@ -1077,18 +1077,18 @@ describe("Test Themes View UI Tests", function () {
             for (const testCaseSet of testCaseSets) {
                 try {
                     const label = await testCaseSet.getLabel();
-                    logger.debug("Phase4.5", `Found test case set: "${label}"`);
+                    logger.debug("Phase5", `Found test case set: "${label}"`);
 
                     // Get tooltip to check if it's generated
                     const tooltip = await getTreeItemTooltip(testCaseSet, driver);
                     if (tooltip && (tooltip.includes("Status: Generated") || tooltip.includes("Generated"))) {
                         targetTestCaseSet = testCaseSet;
                         testCaseSetLabel = label;
-                        logger.info("Phase4.5", `Found generated test case set: "${testCaseSetLabel}"`);
+                        logger.info("Phase5", `Found generated test case set: "${testCaseSetLabel}"`);
                         break;
                     }
                 } catch (error) {
-                    logger.debug("Phase4.5", `Error checking test case set: ${error}`);
+                    logger.debug("Phase5", `Error checking test case set: ${error}`);
                     continue;
                 }
             }
@@ -1098,51 +1098,51 @@ describe("Test Themes View UI Tests", function () {
                 // (it might be generated but tooltip might not show it yet)
                 targetTestCaseSet = testCaseSets[0];
                 testCaseSetLabel = await targetTestCaseSet.getLabel();
-                logger.info("Phase4.5", `Using first test case set for verification: "${testCaseSetLabel}"`);
+                logger.info("Phase5", `Using first test case set for verification: "${testCaseSetLabel}"`);
             }
 
             // Get tooltip to extract metadata (UniqueID, Name, Numbering)
-            logger.info("Phase4.5", "Extracting metadata from tooltip...");
+            logger.info("Phase5", "Extracting metadata from tooltip...");
             const tooltipText = await getTreeItemTooltip(targetTestCaseSet, driver);
             if (!tooltipText) {
-                logger.warn("Phase4.5", "Could not retrieve tooltip for test case set");
+                logger.warn("Phase5", "Could not retrieve tooltip for test case set");
                 this.skip();
                 return;
             }
 
             // Display full tooltip text for debugging
-            logger.info("Phase4.5", `Full tooltip text for test case set "${testCaseSetLabel}":`);
-            logger.info("Phase4.5", "--- Tooltip Start ---");
-            logger.info("Phase4.5", tooltipText);
-            logger.info("Phase4.5", "--- Tooltip End ---");
+            logger.info("Phase5", `Full tooltip text for test case set "${testCaseSetLabel}":`);
+            logger.info("Phase5", "--- Tooltip Start ---");
+            logger.info("Phase5", tooltipText);
+            logger.info("Phase5", "--- Tooltip End ---");
 
             // Parse metadata from tooltip
             const metadata = parseTooltipMetadata(tooltipText);
             logger.info(
-                "Phase4.5",
+                "Phase5",
                 `Extracted metadata - UniqueID: "${metadata.uniqueID}", Name: "${metadata.name}", Numbering: "${metadata.numbering}"`
             );
 
             // Click the test case set to open the .robot file
-            logger.info("Phase4.5", `Clicking test case set "${testCaseSetLabel}" to open .robot file...`);
+            logger.info("Phase5", `Clicking test case set "${testCaseSetLabel}" to open .robot file...`);
             await targetTestCaseSet.click();
             await applySlowMotion(driver);
 
             // Wait for the .robot file to open in the editor
             // The file name should contain the test case set label or be a .robot file
             const expectedFileName = testCaseSetLabel ? `${testCaseSetLabel}.robot` : ".robot";
-            logger.info("Phase4.5", `Waiting for file containing "${expectedFileName}" to open in editor...`);
+            logger.info("Phase5", `Waiting for file containing "${expectedFileName}" to open in editor...`);
 
             const { waitForFileInEditor } = await import("./testUtils");
             const fileOpened = await waitForFileInEditor(driver, ".robot", UITimeouts.LONG);
 
             if (!fileOpened) {
-                logger.warn("Phase4.5", ".robot file did not open in editor within timeout");
+                logger.warn("Phase5", ".robot file did not open in editor within timeout");
                 this.skip();
                 return;
             }
 
-            logger.info("Phase4.5", ".robot file opened in editor");
+            logger.info("Phase5", ".robot file opened in editor");
 
             // Get the opened editor and verify the file title
             const editorView = new EditorView();
@@ -1160,20 +1160,20 @@ describe("Test Themes View UI Tests", function () {
             }
 
             if (!robotEditor) {
-                logger.warn("Phase4.5", "Could not find opened .robot file editor");
+                logger.warn("Phase5", "Could not find opened .robot file editor");
                 this.skip();
                 return;
             }
 
-            logger.info("Phase4.5", `Opened file: "${openedFileName}"`);
+            logger.info("Phase5", `Opened file: "${openedFileName}"`);
 
             // Verify the file title contains .robot extension
             expect(openedFileName, "Opened file should be a .robot file").to.include(".robot");
 
             // Read the file content
-            logger.info("Phase4.5", "Reading .robot file content to verify metadata...");
+            logger.info("Phase5", "Reading .robot file content to verify metadata...");
             const fileContent = await robotEditor.getText();
-            logger.debug("Phase4.5", `File content (first 500 chars):\n${fileContent.substring(0, 500)}`);
+            logger.debug("Phase5", `File content (first 500 chars):\n${fileContent.substring(0, 500)}`);
 
             // Verify the file structure matches expected format
             expect(fileContent, "File should contain *** Settings *** section").to.include("*** Settings ***");
@@ -1185,9 +1185,9 @@ describe("Test Themes View UI Tests", function () {
                     fileContent,
                     `File should contain Metadata UniqueID matching tooltip: "${metadata.uniqueID}"`
                 ).to.match(uniqueIDPattern);
-                logger.info("Phase4.5", `✓ Verified UniqueID: "${metadata.uniqueID}"`);
+                logger.info("Phase5", `✓ Verified UniqueID: "${metadata.uniqueID}"`);
             } else {
-                logger.warn("Phase4.5", "UniqueID not found in tooltip, skipping UniqueID verification");
+                logger.warn("Phase5", "UniqueID not found in tooltip, skipping UniqueID verification");
             }
 
             if (metadata.name) {
@@ -1195,9 +1195,9 @@ describe("Test Themes View UI Tests", function () {
                 expect(fileContent, `File should contain Metadata Name matching tooltip: "${metadata.name}"`).to.match(
                     namePattern
                 );
-                logger.info("Phase4.5", `✓ Verified Name: "${metadata.name}"`);
+                logger.info("Phase5", `✓ Verified Name: "${metadata.name}"`);
             } else {
-                logger.warn("Phase4.5", "Name not found in tooltip, skipping Name verification");
+                logger.warn("Phase5", "Name not found in tooltip, skipping Name verification");
             }
 
             if (metadata.numbering) {
@@ -1206,17 +1206,17 @@ describe("Test Themes View UI Tests", function () {
                     fileContent,
                     `File should contain Metadata Numbering matching tooltip: "${metadata.numbering}"`
                 ).to.match(numberingPattern);
-                logger.info("Phase4.5", `✓ Verified Numbering: "${metadata.numbering}"`);
+                logger.info("Phase5", `✓ Verified Numbering: "${metadata.numbering}"`);
             } else {
-                logger.warn("Phase4.5", "Numbering not found in tooltip, skipping Numbering verification");
+                logger.warn("Phase5", "Numbering not found in tooltip, skipping Numbering verification");
             }
 
-            logger.info("Phase4.5", " Generated test case set .robot file verification complete");
+            logger.info("Phase5", " Generated test case set .robot file verification complete");
 
             // ============================================
-            // Phase 5: Execute Generated Tests
+            // Phase 6: Execute Generated Tests
             // ============================================
-            logger.info("Phase5", "Executing Generated Robot Framework Tests...");
+            logger.info("Phase6", "Executing Generated Robot Framework Tests...");
 
             // The generated .robot files are placed in the "tests" directory (testbenchExtension.outputDirectory)
             // The output XML will be written to "results/output.xml" (testbenchExtension.outputXmlFilePath)
@@ -1242,45 +1242,45 @@ describe("Test Themes View UI Tests", function () {
             let inTestingView = await isTestingViewVisible(driver);
 
             if (!inTestingView) {
-                logger.info("Phase5", "Opening Testing View...");
+                logger.info("Phase6", "Opening Testing View...");
                 const testingViewOpened = await openTestingView(driver);
                 if (!testingViewOpened) {
-                    logger.warn("Phase5", "Failed to open Testing View, trying terminal execution...");
+                    logger.warn("Phase6", "Failed to open Testing View, trying terminal execution...");
                     // Fallback: Execute tests via terminal with dry-run
                     const terminalExecutionSuccess = await executeRobotTestsViaTerminal(driver, config);
                     if (!terminalExecutionSuccess) {
-                        logger.warn("Phase5", "Warning: Test execution via terminal also failed");
+                        logger.warn("Phase6", "Warning: Test execution via terminal also failed");
                     }
                 } else {
                     inTestingView = true;
                 }
             } else {
-                logger.info("Phase5", "Already in Testing View");
+                logger.info("Phase6", "Already in Testing View");
             }
 
             if (inTestingView) {
                 // Run tests from Testing View
-                logger.info("Phase5", "Running tests from Testing View...");
+                logger.info("Phase6", "Running tests from Testing View...");
                 const testsExecuted = await runTestsFromTestingView(driver);
                 if (!testsExecuted) {
-                    logger.warn("Phase5", "Warning: Could not trigger test execution from Testing View");
+                    logger.warn("Phase6", "Warning: Could not trigger test execution from Testing View");
                     // Fallback to terminal execution
                     await openTestBenchSidebar(driver);
                     await executeRobotTestsViaTerminal(driver, config);
                 } else {
                     // Wait for test execution to complete
-                    logger.info("Phase5", "Waiting for test execution to complete...");
+                    logger.info("Phase6", "Waiting for test execution to complete...");
                     await waitForTestExecutionComplete(driver);
-                    logger.info("Phase5", " Test execution completed");
+                    logger.info("Phase6", " Test execution completed");
                 }
             }
 
             await applySlowMotion(driver);
 
             // ============================================
-            // Phase 6: Handle Testing View Switch
+            // Phase 7: Handle Testing View Switch
             // ============================================
-            logger.info("Phase6", "Returning to TestBench view...");
+            logger.info("Phase7", "Returning to TestBench view...");
 
             // Ensure we"re back in TestBench sidebar for upload
             await openTestBenchSidebar(driver);
@@ -1300,27 +1300,27 @@ describe("Test Themes View UI Tests", function () {
             );
 
             // ============================================
-            // Phase 7: Re-locate Test Theme and Upload Results
+            // Phase 8: Re-locate Test Theme and Upload Results
             // ============================================
-            logger.info("Phase7", "Re-locating Test Theme and Uploading Results...");
+            logger.info("Phase8", "Re-locating Test Theme and Uploading Results...");
 
             const updatedContent3 = sideBar.getContent();
             const testThemesSectionUpload = await testThemesPage.getSection(updatedContent3);
 
             if (!testThemesSectionUpload) {
-                logger.warn("Phase7", "Test Themes section not found after returning");
+                logger.warn("Phase8", "Test Themes section not found after returning");
                 this.skip();
                 return;
             }
 
             const uploadTreeLoaded = await waitForTreeItems(testThemesSectionUpload, driver);
             if (!uploadTreeLoaded) {
-                logger.warn("Phase7", "Test Themes tree items did not load");
+                logger.warn("Phase8", "Test Themes tree items did not load");
                 this.skip();
                 return;
             }
 
-            logger.info("Phase7", `Looking for test theme "${config.testThemeName}"...`);
+            logger.info("Phase8", `Looking for test theme "${config.testThemeName}"...`);
             let targetTestThemeForUpload = await testThemesPage.getItem(testThemesSectionUpload, config.testThemeName);
             if (!targetTestThemeForUpload) {
                 await waitForTreeRefresh(driver, testThemesSectionUpload, UITimeouts.SHORT);
@@ -1328,7 +1328,7 @@ describe("Test Themes View UI Tests", function () {
             }
 
             if (!targetTestThemeForUpload) {
-                logger.warn("Phase7", `Test theme "${config.testThemeName}" not found for upload`);
+                logger.warn("Phase8", `Test theme "${config.testThemeName}" not found for upload`);
                 this.skip();
                 return;
             }
@@ -1336,16 +1336,16 @@ describe("Test Themes View UI Tests", function () {
             await targetTestThemeForUpload.click();
             await applySlowMotion(driver);
 
-            logger.info("Phase7", 'Clicking "Upload Execution Results To TestBench" button...');
+            logger.info("Phase8", 'Clicking "Upload Execution Results To TestBench" button...');
             const uploadButtonClicked = await testThemesPage.clickItemAction(targetTestThemeForUpload, "Upload");
 
             if (!uploadButtonClicked) {
-                logger.warn("Phase7", "Failed to click Upload button");
+                logger.warn("Phase8", "Failed to click Upload button");
                 this.skip();
                 return;
             }
 
-            logger.info("Phase7", "Waiting for upload success notification...");
+            logger.info("Phase8", "Waiting for upload success notification...");
             const uploadNotificationAppeared = await waitForNotification(
                 driver,
                 "Successfully imported Robot Framework test results",
@@ -1353,16 +1353,16 @@ describe("Test Themes View UI Tests", function () {
             );
 
             if (!uploadNotificationAppeared) {
-                logger.warn("Phase7", "Upload notification did not appear within timeout");
+                logger.warn("Phase8", "Upload notification did not appear within timeout");
                 // Continue, notification might have been missed
             } else {
-                logger.info("Phase7", " Results upload completed successfully");
+                logger.info("Phase8", " Results upload completed successfully");
             }
 
             // ============================================
-            // PHASE 8: Verify Execution Status in Tooltip
+            // Phase 9: Verify Execution Status in Tooltip
             // ============================================
-            logger.info("Phase8", "Verifying execution status in tooltip...");
+            logger.info("Phase9", "Verifying execution status in tooltip...");
 
             await waitForTreeRefresh(driver, null, UITimeouts.MEDIUM);
 
@@ -1370,15 +1370,15 @@ describe("Test Themes View UI Tests", function () {
             const testThemesSectionTooltip = await testThemesPage.getSection(updatedContent4);
 
             if (!testThemesSectionTooltip) {
-                throw new Error("[Phase 8] Test Themes section not found for tooltip verification");
+                throw new Error("[Phase 9] Test Themes section not found for tooltip verification");
             }
 
             const tooltipTreeLoaded = await waitForTreeItems(testThemesSectionTooltip, driver);
             if (!tooltipTreeLoaded) {
-                throw new Error("[Phase 8] Test Themes tree items did not load for tooltip verification");
+                throw new Error("[Phase 9] Test Themes tree items did not load for tooltip verification");
             }
 
-            logger.info("Phase8", `Looking for test theme "${config.testThemeName}"...`);
+            logger.info("Phase9", `Looking for test theme "${config.testThemeName}"...`);
             let targetTestThemeForTooltip = await testThemesPage.getItem(
                 testThemesSectionTooltip,
                 config.testThemeName
@@ -1392,7 +1392,7 @@ describe("Test Themes View UI Tests", function () {
             }
 
             if (!targetTestThemeForTooltip) {
-                throw new Error(`[Phase 8] Test theme "${config.testThemeName}" not found for tooltip verification`);
+                throw new Error(`[Phase 9] Test theme "${config.testThemeName}" not found for tooltip verification`);
             }
 
             const expectedTooltipText = "Execution Status: Performed";
@@ -1400,7 +1400,7 @@ describe("Test Themes View UI Tests", function () {
 
             expect(tooltipVerified, `Tooltip should contain "${expectedTooltipText}"`).to.equal(true);
 
-            logger.info("Phase8", " Execution status verified in tooltip");
+            logger.info("Phase9", " Execution status verified in tooltip");
 
             logger.info("TestThemesView", "\n========================================");
             logger.info("TestThemesView", "Test Themes View Test - COMPLETE");
