@@ -6,7 +6,9 @@
 
 import * as path from "path";
 import * as fs from "fs";
-import { logger } from "./testLogger";
+import { getTestLogger } from "./testLogger";
+
+const logger = getTestLogger();
 
 /**
  * Test folder and file names for UI test setup.

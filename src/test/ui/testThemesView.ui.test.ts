@@ -11,7 +11,7 @@
 
 import { expect } from "chai";
 import { SideBarView, TreeItem, WebDriver, By, EditorView, TextEditor, ViewSection } from "vscode-extension-tester";
-import { logger } from "./testLogger";
+import { getTestLogger } from "./testLogger";
 import {
     openTestBenchSidebar,
     applySlowMotion,
@@ -38,6 +38,8 @@ import {
     canExecuteScenario,
     doubleClickTreeItem
 } from "./treeViewUtils";
+
+const logger = getTestLogger();
 
 /**
  * Configuration for a test generation scenario.

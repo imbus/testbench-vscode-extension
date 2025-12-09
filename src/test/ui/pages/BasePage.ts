@@ -4,8 +4,11 @@
  */
 
 import { WebDriver, ViewSection, TreeItem, By } from "vscode-extension-tester";
-import { logger } from "../testLogger";
+import { getTestLogger } from "../testLogger";
 import { applySlowMotion } from "../testUtils";
+
+// Get logger instance for this module
+const logger = getTestLogger();
 
 export abstract class BasePage {
     protected driver: WebDriver;

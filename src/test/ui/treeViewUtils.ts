@@ -5,8 +5,10 @@
  */
 
 import { TreeItem, WebDriver, ViewSection, By, SideBarView } from "vscode-extension-tester";
-import { logger } from "./testLogger";
+import { getTestLogger } from "./testLogger";
 import { applySlowMotion, waitForTreeItems, UITimeouts, waitForCondition } from "./testUtils";
+
+const logger = getTestLogger();
 
 /**
  * Represents the hierarchy level of a tree item.

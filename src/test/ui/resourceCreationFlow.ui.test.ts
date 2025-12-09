@@ -9,7 +9,7 @@
 
 import { expect } from "chai";
 import { SideBarView, TreeItem, Key, EditorView, TextEditor } from "vscode-extension-tester";
-import { logger } from "./testLogger";
+import { getTestLogger } from "./testLogger";
 import {
     applySlowMotion,
     waitForTreeItems,
@@ -34,6 +34,8 @@ import { TestContext, setupTestHooks } from "./testHooks";
 import { ProjectsViewPage } from "./pages/ProjectsViewPage";
 import { TestThemesPage } from "./pages/TestThemesPage";
 import { TestElementsPage } from "./pages/TestElementsPage";
+
+const logger = getTestLogger();
 
 describe("Resource Creation Flow UI Tests", function () {
     const ctx: TestContext = {} as TestContext;

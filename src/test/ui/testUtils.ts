@@ -4,7 +4,7 @@
  */
 
 import { getSlowMotionDelay, getTestCredentials, hasTestCredentials, TEST_PATHS } from "./testConfig";
-import { logger } from "./testLogger";
+import { getTestLogger } from "./testLogger";
 import * as path from "path";
 import * as fs from "fs";
 import {
@@ -21,6 +21,8 @@ import {
     EditorView,
     TextEditor
 } from "vscode-extension-tester";
+
+const logger = getTestLogger();
 
 /**
  * Button text constants used in VS Code modals and dialogs.

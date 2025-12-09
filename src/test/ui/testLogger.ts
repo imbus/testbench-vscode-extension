@@ -560,15 +560,3 @@ export function logError(prefix: string, message: string, ...args: unknown[]): v
 export function logTrace(prefix: string, message: string, ...args: unknown[]): void {
     getTestLogger().trace(prefix, message, ...args);
 }
-
-/**
- * Convenience export for getting the logger instance.
- * This provides a simple way to access the logger in test files.
- */
-export const logger = {
-    trace: (prefix: string, message: string, ...args: unknown[]) => getTestLogger().trace(prefix, message, ...args),
-    debug: (prefix: string, message: string, ...args: unknown[]) => getTestLogger().debug(prefix, message, ...args),
-    info: (prefix: string, message: string, ...args: unknown[]) => getTestLogger().info(prefix, message, ...args),
-    warn: (prefix: string, message: string, ...args: unknown[]) => getTestLogger().warn(prefix, message, ...args),
-    error: (prefix: string, message: string, ...args: unknown[]) => getTestLogger().error(prefix, message, ...args)
-};
