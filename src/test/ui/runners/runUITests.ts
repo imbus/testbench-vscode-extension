@@ -8,12 +8,12 @@ import * as path from "path";
 import * as fs from "fs";
 import * as cp from "child_process";
 import { ExTester, ReleaseQuality } from "vscode-extension-tester";
-import { loadEnv, TEST_PATHS, getLoggerConfig } from "./testConfig";
-import { initializeTestLogger, getTestLogger } from "./testLogger";
+import { loadEnv, TEST_PATHS, getLoggerConfig } from "../config/testConfig";
+import { initializeTestLogger, getTestLogger } from "../utils/testLogger";
 
 async function main(): Promise<void> {
     try {
-        const projectRoot = path.resolve(__dirname, "../../../");
+        const projectRoot = path.resolve(__dirname, "../../../../");
         loadEnv(projectRoot);
 
         // Initialize the test logger early
@@ -139,7 +139,7 @@ async function main(): Promise<void> {
         if (specificFile) {
             logger.info("TestRunner", `Targeting specific file: ${specificFile}`);
             const fileName = specificFile.replace(".ts", ".js");
-            const compiledTestPath = path.join(__dirname, fileName);
+            const compiledTestPath = path.join(__dirname, "..", fileName);
             testFilesPattern = compiledTestPath.replace(/\\/g, "/");
 
             // Validate that the test file exists
@@ -186,7 +186,7 @@ async function main(): Promise<void> {
             logger.info("TestRunner", `✓ Test file found: ${compiledTestPath}`);
         } else {
             logger.info("TestRunner", "No specific file provided. Running all UI tests.");
-            testFilesPattern = path.join(__dirname, "**/*.ui.test.js").replace(/\\/g, "/");
+            testFilesPattern = path.join(__dirname, "..", "**/*.ui.test.js").replace(/\\/g, "/");
         }
 
         logger.info("TestRunner", `Test Pattern: ${testFilesPattern}`);

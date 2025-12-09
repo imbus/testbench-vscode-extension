@@ -5,8 +5,8 @@
  */
 
 import { WebDriver, By, WebElement, until } from "vscode-extension-tester";
-import { ConnectionFormElements, UITimeouts, applySlowMotion } from "../testUtils";
-import { getTestLogger } from "../testLogger";
+import { ConnectionFormElements, UITimeouts, applySlowMotion } from "../utils/testUtils";
+import { getTestLogger } from "../utils/testLogger";
 
 /**
  * Interface for connection form data.
@@ -123,7 +123,7 @@ export class ConnectionPage {
 
                 // Dialog appeared and is visible, handle it using dynamic import to avoid circular dependency
                 const logger = getTestLogger();
-                const { handleConfirmationDialog } = await import("../testUtils");
+                const { handleConfirmationDialog } = await import("../utils/testUtils");
                 const dialogHandled = await handleConfirmationDialog(this.driver, "Save Changes", UITimeouts.SHORT);
                 if (dialogHandled) {
                     logger.info("ConnectionPage", "Handled 'Save Changes' overwrite dialog");
@@ -145,14 +145,14 @@ export class ConnectionPage {
             }
 
             // Switch back to webview to continue
-            const { findAndSwitchToWebview } = await import("../testUtils");
+            const { findAndSwitchToWebview } = await import("../utils/testUtils");
             await findAndSwitchToWebview(this.driver);
         } catch (error) {
             // If dialog handling fails, try to switch back to webview and continue
             const logger = getTestLogger();
             logger.warn("ConnectionPage", "Error handling Save Changes dialog, continuing anyway:", error);
             try {
-                const { findAndSwitchToWebview } = await import("../testUtils");
+                const { findAndSwitchToWebview } = await import("../utils/testUtils");
                 await findAndSwitchToWebview(this.driver);
             } catch {
                 // If we can't switch back, the waitForUpdate check below will likely fail
@@ -391,7 +391,7 @@ export class ConnectionPage {
             );
 
             // Handle confirmation dialog using dynamic import to avoid circular dependency
-            const { handleConfirmationDialog } = await import("../testUtils");
+            const { handleConfirmationDialog } = await import("../utils/testUtils");
             const dialogHandled = await handleConfirmationDialog(this.driver, "Delete");
 
             if (!dialogHandled) {
@@ -410,7 +410,7 @@ export class ConnectionPage {
             );
 
             // Switch back to webview
-            const { findAndSwitchToWebview } = await import("../testUtils");
+            const { findAndSwitchToWebview } = await import("../utils/testUtils");
             const webviewFound = await findAndSwitchToWebview(this.driver);
             if (!webviewFound) {
                 logger.warn("ConnectionPage", "Could not switch back to webview after delete");
@@ -422,7 +422,7 @@ export class ConnectionPage {
             logger.error("ConnectionPage", `Error deleting connection: ${error}`);
             // Try to switch back to webview
             try {
-                const { findAndSwitchToWebview } = await import("../testUtils");
+                const { findAndSwitchToWebview } = await import("../utils/testUtils");
                 await findAndSwitchToWebview(this.driver);
             } catch {
                 // Ignore errors when switching back
@@ -503,7 +503,7 @@ export class ConnectionPage {
                     );
 
                     // Handle confirmation dialog using dynamic import to avoid circular dependency
-                    const { handleConfirmationDialog } = await import("../testUtils");
+                    const { handleConfirmationDialog } = await import("../utils/testUtils");
                     const dialogHandled = await handleConfirmationDialog(this.driver, "Delete");
 
                     if (!dialogHandled) {
@@ -547,7 +547,7 @@ export class ConnectionPage {
 
                     // Switch back to webview to continue deleting connections
                     try {
-                        const { findAndSwitchToWebview } = await import("../testUtils");
+                        const { findAndSwitchToWebview } = await import("../utils/testUtils");
                         const webviewFound = await findAndSwitchToWebview(this.driver);
                         if (!webviewFound) {
                             logger.warn("ConnectionPage", "Could not switch back to webview after dialog");
@@ -563,7 +563,7 @@ export class ConnectionPage {
                     logger.error("ConnectionPage", `Error deleting connection: ${error}`);
                     // Try to switch back to webview and continue
                     try {
-                        const { findAndSwitchToWebview } = await import("../testUtils");
+                        const { findAndSwitchToWebview } = await import("../utils/testUtils");
                         await findAndSwitchToWebview(this.driver);
                     } catch {
                         // If we can't switch back, break the loop

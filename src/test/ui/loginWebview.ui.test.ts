@@ -15,10 +15,10 @@ import {
     ConnectionFormData,
     ConnectionFormElements,
     UITimeouts
-} from "./testUtils";
-import { getTestCredentials, hasTestCredentials } from "./testConfig";
-import { TestContext, setupLoginWebviewTestHooks } from "./testHooks";
-import { getTestLogger } from "./testLogger";
+} from "./utils/testUtils";
+import { getTestCredentials, hasTestCredentials } from "./config/testConfig";
+import { TestContext, setupLoginWebviewTestHooks } from "./utils/testHooks";
+import { getTestLogger } from "./utils/testLogger";
 
 /**
  * Wrapper function to execute test code within webview context with proper cleanup.

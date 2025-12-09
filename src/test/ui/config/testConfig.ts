@@ -6,7 +6,7 @@
 
 import * as path from "path";
 import * as fs from "fs";
-import { getTestLogger } from "./testLogger";
+import { getTestLogger } from "../utils/testLogger";
 
 const logger = getTestLogger();
 
@@ -27,7 +27,7 @@ export const TEST_PATHS = {
     /** Package.json file name */
     PACKAGE_JSON: "package.json",
     /** VS Code test settings file (relative to project root) */
-    VSCODE_TEST_SETTINGS: "./src/test/ui/.vscode-test.settings.json",
+    VSCODE_TEST_SETTINGS: "./src/test/ui/config/.vscode-test.settings.json",
     /** Output directory for generated Robot Framework test files (relative to workspace) */
     ROBOT_OUTPUT_DIR: "tests",
     /** Output XML file path for Robot Framework results (relative to workspace) */
@@ -42,7 +42,8 @@ export const TEST_PATHS = {
  * @returns Absolute path to the output directory
  */
 export function getRobotOutputDirectory(workspaceRoot?: string): string {
-    const root = workspaceRoot || path.resolve(__dirname, "../../../", TEST_PATHS.BASE_STORAGE, TEST_PATHS.WORKSPACE);
+    const root =
+        workspaceRoot || path.resolve(__dirname, "../../../../", TEST_PATHS.BASE_STORAGE, TEST_PATHS.WORKSPACE);
     return path.join(root, TEST_PATHS.ROBOT_OUTPUT_DIR);
 }
 
@@ -54,7 +55,8 @@ export function getRobotOutputDirectory(workspaceRoot?: string): string {
  * @returns Absolute path to the output XML file
  */
 export function getRobotOutputXmlPath(workspaceRoot?: string): string {
-    const root = workspaceRoot || path.resolve(__dirname, "../../../", TEST_PATHS.BASE_STORAGE, TEST_PATHS.WORKSPACE);
+    const root =
+        workspaceRoot || path.resolve(__dirname, "../../../../", TEST_PATHS.BASE_STORAGE, TEST_PATHS.WORKSPACE);
     return path.join(root, TEST_PATHS.ROBOT_OUTPUT_XML);
 }
 
@@ -433,7 +435,7 @@ export function logTestDataConfig(): void {
 // Logger Configuration
 // ============================================
 
-import { LogLevel, TestLoggerConfig } from "./testLogger";
+import { LogLevel, TestLoggerConfig } from "../utils/testLogger";
 
 /**
  * Log level string to enum mapping.

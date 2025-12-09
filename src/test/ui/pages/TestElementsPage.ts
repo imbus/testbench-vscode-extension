@@ -49,7 +49,7 @@ export class TestElementsPage extends BasePage {
      */
     public async clickCreateResource(item: TreeItem, itemLabel?: string): Promise<boolean> {
         // Import the utility function to avoid circular dependencies
-        const { clickCreateResourceButton } = await import("../testUtils");
+        const { clickCreateResourceButton } = await import("../utils/testUtils");
         return await clickCreateResourceButton(item, this.driver, itemLabel);
     }
 

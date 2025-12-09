@@ -37,24 +37,40 @@ The UI tests use the following packages:
 
 ```
 src/test/ui/
-├── README.md                          # This file - documentation
-├── USAGE_EXAMPLES.md                  # Detailed examples for environment variables
+├── README.md                          # This file - main documentation
 ├── index.ts                           # Test loader for Mocha
-├── runUITests.ts                      # Custom test runner using ExTester
-├── testUtils.ts                       # Reusable helper functions
-├── testConfig.ts                      # Test credentials and configuration management
-├── testHooks.ts                       # Shared test hooks and setup utilities
-├── testLogger.ts                      # Persistent file logging utility
-├── .vscode-test.settings.json         # VS Code settings for test environment
+│
+├── config/                            # Configuration files
+│   ├── .vscode-test.settings.json     # VS Code settings for test environment
+│   ├── testConfig.ts                  # Test credentials and configuration management
+│   ├── testConfigurations.ts          # Multi-configuration test profiles
+│   └── listProfiles.js                # Profile listing utility
+│
+├── runners/                           # Test runner scripts
+│   ├── runUITests.ts                  # Standard single-configuration runner
+│   └── runUITestsWithProfiles.ts      # Multi-configuration runner
+│
+├── utils/                             # Utility functions
+│   ├── testUtils.ts                   # Reusable helper functions
+│   ├── testHooks.ts                   # Shared test hooks and setup utilities
+│   ├── testLogger.ts                  # Persistent file logging utility
+│   └── treeViewUtils.ts               # Tree view specific utilities
+│
+├── pages/                             # Page Object Models
+│   ├── BasePage.ts                    # Base page with common methods
+│   ├── ConnectionPage.ts              # Connection webview page object
+│   ├── ProjectsViewPage.ts            # Projects view page object
+│   └── TestThemesViewPage.ts          # Test Themes view page object
+│
+
 ├── fixtures/                          # Static test files (copied to workspace)
 │   ├── resources/                     # .resource files for Robot Framework
 │   ├── tests/                         # Test file templates
 │   └── results/                       # Results directory placeholder
-├── pages/
-│   └── ConnectionPage.ts              # Page Object Model for connection webview
+│
 ├── loginWebview.ui.test.ts            # Login webview UI tests
 ├── projectsView.ui.test.ts            # Projects tree view UI tests
-├── testThemesView.ui.test.ts          # Test Themes view UI tests (test generation/upload)
+├── testThemesView.ui.test.ts          # Test Themes view UI tests
 └── resourceCreationFlow.ui.test.ts    # End-to-end resource creation flow tests
 ```
 
@@ -64,15 +80,30 @@ The `fixtures/` folder contains static files that are copied to the test workspa
 
 ### Key Files
 
-- **`testUtils.ts`** - Provides reusable helper functions for common test operations
+**Configuration (`config/` folder):**
 
 - **`testConfig.ts`** - Manages test credentials and configuration
-
-- **`testHooks.ts`** - Shared before/after hooks for test suites
-
-- **`testLogger.ts`** - Centralized logging utility with file persistence and log rotation
-
+- **`testConfigurations.ts`** - Defines test profiles for multi-configuration testing
 - **`.vscode-test.settings.json`** - VS Code settings applied during test execution
+- **`listProfiles.js`** - Lists available test profiles
+
+**Test Runners (`runners/` folder):**
+
+- **`runUITests.ts`** - Standard single-configuration test runner
+- **`runUITestsWithProfiles.ts`** - Multi-configuration test runner
+
+**Utilities (`utils/` folder):**
+
+- **`testUtils.ts`** - Reusable helper functions for common test operations
+- **`testHooks.ts`** - Shared before/after hooks for test suites
+- **`testLogger.ts`** - Centralized logging utility with file persistence and log rotation
+- **`treeViewUtils.ts`** - Tree view specific navigation and manipulation utilities
+
+**Page Objects (`pages/` folder):**
+
+- Page Object Models for different views (Connection, Projects, Test Themes, etc.)
+
+**Other:**
 
 - **`.mocharc.ui.json`** - Mocha test runner configuration (in project root)
 
@@ -101,6 +132,63 @@ npm run test:ui-single -- projectsView.ui.test.ts
 npm run test:ui-single -- testThemesView.ui.test.ts
 npm run test:ui-single -- resourceCreationFlow.ui.test.ts
 ```
+
+### Run Tests with Multiple Configuration Profiles
+
+The test system supports running tests with different extension setting combinations:
+
+```bash
+# Interactive mode
+npm run test:ui-interactive
+
+# List available profiles
+npm run test:ui-list-profiles
+
+# Run with a specific profile
+npm run test:ui-profile -- --profile=fully-qualified-keywords
+
+# Run all tests with all configuration profiles
+npm run test:ui-all-profiles
+
+# Run specific test with a profile
+npm run test:ui-profile -- --profile=default --test=loginWebview.ui.test.ts
+
+# Skip VS Code download for faster re-runs (extension still reinstalled)
+npm run test:ui-profile -- --profile=default --skip-setup
+```
+
+**Available Configuration Profiles:**
+
+| Profile                    | Description                                       |
+| -------------------------- | ------------------------------------------------- |
+| `default`                  | Baseline configuration with default settings      |
+| `fully-qualified-keywords` | Tests with fully qualified keywords enabled       |
+| `clean-files-disabled`     | Tests without cleaning files before generation    |
+| `custom-output-path`       | Tests with custom output directories              |
+| `suite-logging`            | Tests with COMMENT-level compound keyword logging |
+| `config-file-mode`         | Tests using configuration file mode               |
+| `open-testing-view`        | Tests with automatic testing view opening         |
+| `clear-internal-directory` | Tests with internal directory clearing            |
+
+**Creating Custom Profiles:**
+
+Edit `src/test/ui/config/testConfigurations.ts` and add to `TEST_PROFILES` array:
+
+```typescript
+{
+    name: "my-profile",
+    description: "What this profile tests",
+    settings: {
+        ...DEFAULT_EXTENSION_SETTINGS,
+        "testbenchExtension.someSetting": true
+        // Override any extension settings
+    }
+}
+```
+
+**Profile Settings Files:**
+
+Generated settings files are stored in `src/test/ui/config/profiles/` (auto-created, can be deleted).
 
 ### Setup Test Environment (One-Time)
 
@@ -350,7 +438,7 @@ const wasLoggedOut = await attemptLogout(driver);
 ### Using Test Credentials
 
 ```typescript
-import { getTestCredentials, hasTestCredentials } from "./testConfig";
+import { getTestCredentials, hasTestCredentials } from "./config/testConfig";
 
 // Check if credentials are available
 if (hasTestCredentials()) {
@@ -358,3 +446,16 @@ if (hasTestCredentials()) {
     // Use credentials.serverName, credentials.username, etc.
 }
 ```
+
+## Folder Organization
+
+The UI test folder is organized into subdirectories by purpose:
+
+- **`config/`** - All configuration files (settings, profiles, test credentials)
+- **`runners/`** - Test execution scripts (single-config and multi-config runners)
+- **`utils/`** - Shared utility functions and test helpers
+- **`pages/`** - Page Object Models for different UI views
+- **`fixtures/`** - Static test files copied to workspace before tests
+- **Test files** - Remain at root level (`*.ui.test.ts`)
+
+This structure keeps related files together and makes the codebase easier to navigate and maintain.

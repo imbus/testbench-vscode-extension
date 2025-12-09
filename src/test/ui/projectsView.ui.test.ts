@@ -5,10 +5,10 @@
 
 import { expect } from "chai";
 import { SideBarView, TreeItem } from "vscode-extension-tester";
-import { applySlowMotion, waitForTreeItems, clickNotificationButton, cleanupWorkspace } from "./testUtils";
-import { getTestData, logTestDataConfig } from "./testConfig";
-import { TestContext, setupTestHooks, collapseAllTreeItems } from "./testHooks";
-import { getTestLogger } from "./testLogger";
+import { applySlowMotion, waitForTreeItems, clickNotificationButton, cleanupWorkspace } from "./utils/testUtils";
+import { getTestData, logTestDataConfig } from "./config/testConfig";
+import { TestContext, setupTestHooks, collapseAllTreeItems } from "./utils/testHooks";
+import { getTestLogger } from "./utils/testLogger";
 import { ProjectsViewPage } from "./pages/ProjectsViewPage";
 
 describe("Projects View UI Tests", function () {

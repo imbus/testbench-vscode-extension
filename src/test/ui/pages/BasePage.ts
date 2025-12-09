@@ -4,8 +4,8 @@
  */
 
 import { WebDriver, ViewSection, TreeItem, By } from "vscode-extension-tester";
-import { getTestLogger } from "../testLogger";
-import { applySlowMotion } from "../testUtils";
+import { getTestLogger } from "../utils/testLogger";
+import { applySlowMotion } from "../utils/testUtils";
 
 // Get logger instance for this module
 const logger = getTestLogger();

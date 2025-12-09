@@ -8,10 +8,10 @@ import * as fs from "fs";
 import * as path from "path";
 import { VSBrowser, WebDriver, EditorView, Workbench, By, until } from "vscode-extension-tester";
 import { openTestBenchSidebar, ensureLoggedIn, UITimeouts } from "./testUtils";
-import { isSlowMotionEnabled, getSlowMotionDelay, hasTestCredentials, TEST_PATHS } from "./testConfig";
+import { isSlowMotionEnabled, getSlowMotionDelay, hasTestCredentials, TEST_PATHS } from "../config/testConfig";
 import { getTestLogger } from "./testLogger";
-import { ProjectsViewPage } from "./pages/ProjectsViewPage";
-import { TestThemesPage } from "./pages/TestThemesPage";
+import { ProjectsViewPage } from "../pages/ProjectsViewPage";
+import { TestThemesPage } from "../pages/TestThemesPage";
 
 /**
  * Waits for VS Code workbench to be fully loaded and ready.
@@ -639,7 +639,7 @@ async function verifyCleanWebviewState(driver: WebDriver): Promise<boolean> {
         }
 
         // Check if connections list is empty
-        const { ConnectionPage } = await import("./pages/ConnectionPage");
+        const { ConnectionPage } = await import("../pages/ConnectionPage");
         const connectionPage = new ConnectionPage(driver);
         const connectionCount = await connectionPage.getConnectionCount();
 

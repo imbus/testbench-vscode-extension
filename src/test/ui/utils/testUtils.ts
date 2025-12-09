@@ -3,7 +3,7 @@
  * @description Utility functions and constants for UI tests
  */
 
-import { getSlowMotionDelay, getTestCredentials, hasTestCredentials, TEST_PATHS } from "./testConfig";
+import { getSlowMotionDelay, getTestCredentials, hasTestCredentials, TEST_PATHS } from "../config/testConfig";
 import { getTestLogger } from "./testLogger";
 import * as path from "path";
 import * as fs from "fs";
@@ -1097,8 +1097,8 @@ export async function applySlowMotion(driver: WebDriver, customDelay?: number): 
 /**
  * Export ConnectionPage for POM pattern.
  */
-export { ConnectionPage } from "./pages/ConnectionPage";
-export type { ConnectionFormData, ConnectionSearchResult } from "./pages/ConnectionPage";
+export { ConnectionPage } from "../pages/ConnectionPage";
+export type { ConnectionFormData, ConnectionSearchResult } from "../pages/ConnectionPage";
 
 /**
  * Deletes all existing TestBench connections.
@@ -1125,7 +1125,7 @@ export async function deleteAllConnections(driver: WebDriver): Promise<number> {
             return 0;
         }
 
-        const { ConnectionPage } = await import("./pages/ConnectionPage");
+        const { ConnectionPage } = await import("../pages/ConnectionPage");
         const page = new ConnectionPage(driver);
         const deletedCount = await page.deleteAllConnections();
 
@@ -1807,7 +1807,7 @@ export async function ensureLoggedIn(
             logger.trace("Login", "Connections list not found, will create new connection");
         }
 
-        const { ConnectionPage } = await import("./pages/ConnectionPage");
+        const { ConnectionPage } = await import("../pages/ConnectionPage");
         const connectionPage = new ConnectionPage(driver);
 
         const { element: existingConnection, found: connectionExists } = await connectionPage.findConnection(
@@ -1818,7 +1818,7 @@ export async function ensureLoggedIn(
             logger.trace("Login", "Creating new connection...");
             await connectionPage.resetForm();
 
-            const formData: import("./pages/ConnectionPage").ConnectionFormData = {
+            const formData: import("../pages/ConnectionPage").ConnectionFormData = {
                 connectionLabel: creds.connectionLabel,
                 serverName: creds.serverName,
                 portNumber: creds.portNumber,
@@ -3108,7 +3108,7 @@ export async function waitForRefactorPreview(
 // Filesystem Verification Utilities
 // ============================================
 
-import { getRobotOutputDirectory } from "./testConfig";
+import { getRobotOutputDirectory } from "../config/testConfig";
 
 /**
  * Result of filesystem verification for generated Robot Framework files.

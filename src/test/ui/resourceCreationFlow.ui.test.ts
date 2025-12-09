@@ -9,7 +9,7 @@
 
 import { expect } from "chai";
 import { SideBarView, TreeItem, Key, EditorView, TextEditor } from "vscode-extension-tester";
-import { getTestLogger } from "./testLogger";
+import { getTestLogger } from "./utils/testLogger";
 import {
     applySlowMotion,
     waitForTreeItems,
@@ -27,10 +27,10 @@ import {
     waitForRefactorPreview,
     ensureRefactorPreviewItemChecked,
     clickRefactorPreviewApply
-} from "./testUtils";
-import { doubleClickTreeItem, waitForTreeItemButton } from "./treeViewUtils";
-import { getTestData, logTestDataConfig } from "./testConfig";
-import { TestContext, setupTestHooks } from "./testHooks";
+} from "./utils/testUtils";
+import { doubleClickTreeItem, waitForTreeItemButton } from "./utils/treeViewUtils";
+import { getTestData, logTestDataConfig } from "./config/testConfig";
+import { TestContext, setupTestHooks } from "./utils/testHooks";
 import { ProjectsViewPage } from "./pages/ProjectsViewPage";
 import { TestThemesPage } from "./pages/TestThemesPage";
 import { TestElementsPage } from "./pages/TestElementsPage";
@@ -351,7 +351,7 @@ describe("Resource Creation Flow UI Tests", function () {
         }
 
         // Wait for the resource file to be opened in the editor
-        const { waitForFileInEditor } = await import("./testUtils");
+        const { waitForFileInEditor } = await import("./utils/testUtils");
         const fileOpened = await waitForFileInEditor(driver, expectedResourceFileName, UITimeouts.LONG);
 
         if (!fileOpened) {

@@ -12,7 +12,7 @@
 
 import { expect } from "chai";
 import { SideBarView, TreeItem, WebDriver, By, EditorView, TextEditor, ViewSection } from "vscode-extension-tester";
-import { getTestLogger } from "./testLogger";
+import { getTestLogger } from "./utils/testLogger";
 import {
     openTestBenchSidebar,
     applySlowMotion,
@@ -33,9 +33,9 @@ import {
     readRobotFileContent,
     verifyRobotFileMetadata,
     FilesystemVerificationResult
-} from "./testUtils";
-import { getTestData, logTestDataConfig } from "./testConfig";
-import { TestContext, setupTestHooks } from "./testHooks";
+} from "./utils/testUtils";
+import { getTestData, logTestDataConfig } from "./config/testConfig";
+import { TestContext, setupTestHooks } from "./utils/testHooks";
 import { TestThemesPage } from "./pages/TestThemesPage";
 import { ProjectsViewPage } from "./pages/ProjectsViewPage";
 import {
@@ -45,7 +45,7 @@ import {
     canExecuteScenario,
     doubleClickTreeItem,
     expandTreeItemIfNeeded
-} from "./treeViewUtils";
+} from "./utils/treeViewUtils";
 import * as path from "path";
 
 const logger = getTestLogger();
@@ -779,7 +779,7 @@ async function verifyRobotFileOpensAndMetadata(
     itemLabel: string,
     tooltip: string | null
 ): Promise<boolean> {
-    const { waitForFileInEditor } = await import("./testUtils");
+    const { waitForFileInEditor } = await import("./utils/testUtils");
 
     // Wait for a new .robot file to open (not a stale one)
     // We closed all .robot editors earlier, so any new one should be the correct one
@@ -2220,7 +2220,7 @@ describe("Test Themes View UI Tests", function () {
             await applySlowMotion(driver);
 
             // Wait for the .robot file to open in the editor
-            const { waitForFileInEditor } = await import("./testUtils");
+            const { waitForFileInEditor } = await import("./utils/testUtils");
             const fileOpened = await waitForFileInEditor(driver, ".robot", UITimeouts.LONG);
 
             if (!fileOpened) {

@@ -7,7 +7,7 @@ import * as path from "path";
 import Mocha from "mocha";
 import { glob } from "glob";
 // The loadEnv() function in testConfig.ts is called automatically on import
-import "./testConfig";
+import "./config/testConfig";
 
 export async function run(): Promise<void> {
     // Create the mocha test
