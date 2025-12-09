@@ -10,7 +10,7 @@
  */
 
 import { expect } from "chai";
-import { SideBarView, TreeItem, WebDriver, By } from "vscode-extension-tester";
+import { SideBarView, TreeItem, WebDriver, By, EditorView, TextEditor } from "vscode-extension-tester";
 import { logger } from "./testLogger";
 import {
     openTestBenchSidebar,
@@ -118,6 +118,7 @@ async function getTreeItemTooltip(item: TreeItem, driver: WebDriver): Promise<st
                     !tooltipText.includes("Delete"))
             ) {
                 logger.trace("Tooltip", `Found tooltip text: ${tooltipText.substring(0, 100)}...`);
+                logger.debug("Tooltip", `Full tooltip text for "${itemLabel}":\n${tooltipText}`);
                 return tooltipText;
             } else {
                 logger.trace("Tooltip", `Found button tooltip instead: "${tooltipText}", retrying...`);
@@ -186,6 +187,62 @@ async function getTreeItemTooltip(item: TreeItem, driver: WebDriver): Promise<st
         logger.error("Tooltip", `Error getting tooltip: ${error}`);
         return null;
     }
+}
+
+/**
+ * Parses metadata (UniqueID, Name, Numbering) from tooltip text.
+ *
+ * @param tooltipText - The tooltip text to parse
+ * @returns Object containing parsed metadata fields
+ */
+function parseTooltipMetadata(tooltipText: string): {
+    uniqueID: string | null;
+    name: string | null;
+    numbering: string | null;
+} {
+    const metadata = {
+        uniqueID: null as string | null,
+        name: null as string | null,
+        numbering: null as string | null
+    };
+
+    if (!tooltipText) {
+        return metadata;
+    }
+
+    // Check for format: "UniqueID: iTB-TC-325" or "ID: iTB-TC-325" or "UniqueID: iTB-TC-325\n")
+    let uniqueIDMatch = tooltipText.match(/UniqueID:\s*([^\n\r]+)/i);
+    if (!uniqueIDMatch || !uniqueIDMatch[1]) {
+        // Check "ID: ..." format
+        uniqueIDMatch = tooltipText.match(/ID:\s*([^\n\r]+)/i);
+    }
+    if (uniqueIDMatch && uniqueIDMatch[1]) {
+        metadata.uniqueID = uniqueIDMatch[1].trim();
+    }
+
+    // Parse Name (format: "Name: FSZ" or "Name: FSZ\n")
+    const nameMatch = tooltipText.match(/Name:\s*([^\n\r]+)/i);
+    if (nameMatch && nameMatch[1]) {
+        metadata.name = nameMatch[1].trim();
+    }
+
+    // Parse Numbering (format: "Numbering: 1.2.2.1.1" or "Numbering: 1.2.2.1.1\n")
+    const numberingMatch = tooltipText.match(/Numbering:\s*([^\n\r]+)/i);
+    if (numberingMatch && numberingMatch[1]) {
+        metadata.numbering = numberingMatch[1].trim();
+    }
+
+    return metadata;
+}
+
+/**
+ * Escapes special regex characters in a string.
+ *
+ * @param str - The string to escape
+ * @returns Escaped string safe for use in regex
+ */
+function escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**
@@ -949,6 +1006,212 @@ describe("Test Themes View UI Tests", function () {
             }
 
             await applySlowMotion(driver);
+
+            // ============================================
+            // Phase 4.5: Verify Generated Test Case Set Opens .robot File
+            // ============================================
+            logger.info("Phase4.5", "Verifying generated test case set opens .robot file...");
+
+            // Re-acquire Test Themes section after generation (tree may have refreshed)
+            const updatedContentAfterGen = sideBar.getContent();
+            const testThemesSectionAfterGen = await testThemesPage.getSection(updatedContentAfterGen);
+
+            if (!testThemesSectionAfterGen) {
+                logger.warn("Phase4.5", "Test Themes section not found after generation");
+                this.skip();
+                return;
+            }
+
+            // Wait for tree to refresh and show generated items
+            await waitForTreeRefresh(driver, testThemesSectionAfterGen, UITimeouts.MEDIUM);
+
+            // Re-find the test theme
+            let testThemeForVerification = await testThemesPage.getItem(
+                testThemesSectionAfterGen,
+                config.testThemeName
+            );
+            if (!testThemeForVerification) {
+                await waitForTreeRefresh(driver, testThemesSectionAfterGen, UITimeouts.SHORT);
+                testThemeForVerification = await testThemesPage.getItem(
+                    testThemesSectionAfterGen,
+                    config.testThemeName
+                );
+            }
+
+            if (!testThemeForVerification) {
+                logger.warn("Phase4.5", `Test theme "${config.testThemeName}" not found for verification`);
+                this.skip();
+                return;
+            }
+
+            // Expand the test theme to see its children (test case sets)
+            logger.info("Phase4.5", "Expanding test theme to find generated test case sets...");
+            const hasChildren = await testThemeForVerification.hasChildren();
+            if (!hasChildren) {
+                logger.warn("Phase4.5", "Test theme has no children, cannot verify test case set");
+                this.skip();
+                return;
+            }
+
+            const isExpanded = await testThemeForVerification.isExpanded();
+            if (!isExpanded) {
+                await testThemeForVerification.expand();
+                await applySlowMotion(driver);
+                // Wait for children to load
+                await waitForTreeItems(testThemesSectionAfterGen, driver);
+            }
+
+            // Get children (test case sets)
+            const testCaseSets = await testThemeForVerification.getChildren();
+            if (testCaseSets.length === 0) {
+                logger.warn("Phase4.5", "No test case sets found under test theme");
+                this.skip();
+                return;
+            }
+
+            // Find a generated test case set (one that should have a .robot file)
+            // Test case sets are typically the direct children of test themes
+            let targetTestCaseSet: TreeItem | null = null;
+            let testCaseSetLabel = "";
+
+            for (const testCaseSet of testCaseSets) {
+                try {
+                    const label = await testCaseSet.getLabel();
+                    logger.debug("Phase4.5", `Found test case set: "${label}"`);
+
+                    // Get tooltip to check if it's generated
+                    const tooltip = await getTreeItemTooltip(testCaseSet, driver);
+                    if (tooltip && (tooltip.includes("Status: Generated") || tooltip.includes("Generated"))) {
+                        targetTestCaseSet = testCaseSet;
+                        testCaseSetLabel = label;
+                        logger.info("Phase4.5", `Found generated test case set: "${testCaseSetLabel}"`);
+                        break;
+                    }
+                } catch (error) {
+                    logger.debug("Phase4.5", `Error checking test case set: ${error}`);
+                    continue;
+                }
+            }
+
+            if (!targetTestCaseSet) {
+                // If no explicitly marked as "Generated", use the first one
+                // (it might be generated but tooltip might not show it yet)
+                targetTestCaseSet = testCaseSets[0];
+                testCaseSetLabel = await targetTestCaseSet.getLabel();
+                logger.info("Phase4.5", `Using first test case set for verification: "${testCaseSetLabel}"`);
+            }
+
+            // Get tooltip to extract metadata (UniqueID, Name, Numbering)
+            logger.info("Phase4.5", "Extracting metadata from tooltip...");
+            const tooltipText = await getTreeItemTooltip(targetTestCaseSet, driver);
+            if (!tooltipText) {
+                logger.warn("Phase4.5", "Could not retrieve tooltip for test case set");
+                this.skip();
+                return;
+            }
+
+            // Display full tooltip text for debugging
+            logger.info("Phase4.5", `Full tooltip text for test case set "${testCaseSetLabel}":`);
+            logger.info("Phase4.5", "--- Tooltip Start ---");
+            logger.info("Phase4.5", tooltipText);
+            logger.info("Phase4.5", "--- Tooltip End ---");
+
+            // Parse metadata from tooltip
+            const metadata = parseTooltipMetadata(tooltipText);
+            logger.info(
+                "Phase4.5",
+                `Extracted metadata - UniqueID: "${metadata.uniqueID}", Name: "${metadata.name}", Numbering: "${metadata.numbering}"`
+            );
+
+            // Click the test case set to open the .robot file
+            logger.info("Phase4.5", `Clicking test case set "${testCaseSetLabel}" to open .robot file...`);
+            await targetTestCaseSet.click();
+            await applySlowMotion(driver);
+
+            // Wait for the .robot file to open in the editor
+            // The file name should contain the test case set label or be a .robot file
+            const expectedFileName = testCaseSetLabel ? `${testCaseSetLabel}.robot` : ".robot";
+            logger.info("Phase4.5", `Waiting for file containing "${expectedFileName}" to open in editor...`);
+
+            const { waitForFileInEditor } = await import("./testUtils");
+            const fileOpened = await waitForFileInEditor(driver, ".robot", UITimeouts.LONG);
+
+            if (!fileOpened) {
+                logger.warn("Phase4.5", ".robot file did not open in editor within timeout");
+                this.skip();
+                return;
+            }
+
+            logger.info("Phase4.5", ".robot file opened in editor");
+
+            // Get the opened editor and verify the file title
+            const editorView = new EditorView();
+            const openEditorTitles = await editorView.getOpenEditorTitles();
+            let robotEditor: TextEditor | null = null;
+            let openedFileName = "";
+
+            for (const title of openEditorTitles) {
+                if (title.includes(".robot")) {
+                    openedFileName = title;
+                    robotEditor = (await editorView.openEditor(title)) as TextEditor;
+                    await applySlowMotion(driver);
+                    break;
+                }
+            }
+
+            if (!robotEditor) {
+                logger.warn("Phase4.5", "Could not find opened .robot file editor");
+                this.skip();
+                return;
+            }
+
+            logger.info("Phase4.5", `Opened file: "${openedFileName}"`);
+
+            // Verify the file title contains .robot extension
+            expect(openedFileName, "Opened file should be a .robot file").to.include(".robot");
+
+            // Read the file content
+            logger.info("Phase4.5", "Reading .robot file content to verify metadata...");
+            const fileContent = await robotEditor.getText();
+            logger.debug("Phase4.5", `File content (first 500 chars):\n${fileContent.substring(0, 500)}`);
+
+            // Verify the file structure matches expected format
+            expect(fileContent, "File should contain *** Settings *** section").to.include("*** Settings ***");
+
+            // Verify metadata matches tooltip
+            if (metadata.uniqueID) {
+                const uniqueIDPattern = new RegExp(`Metadata\\s+UniqueID\\s+${escapeRegex(metadata.uniqueID)}`, "i");
+                expect(
+                    fileContent,
+                    `File should contain Metadata UniqueID matching tooltip: "${metadata.uniqueID}"`
+                ).to.match(uniqueIDPattern);
+                logger.info("Phase4.5", `✓ Verified UniqueID: "${metadata.uniqueID}"`);
+            } else {
+                logger.warn("Phase4.5", "UniqueID not found in tooltip, skipping UniqueID verification");
+            }
+
+            if (metadata.name) {
+                const namePattern = new RegExp(`Metadata\\s+Name\\s+${escapeRegex(metadata.name)}`, "i");
+                expect(fileContent, `File should contain Metadata Name matching tooltip: "${metadata.name}"`).to.match(
+                    namePattern
+                );
+                logger.info("Phase4.5", `✓ Verified Name: "${metadata.name}"`);
+            } else {
+                logger.warn("Phase4.5", "Name not found in tooltip, skipping Name verification");
+            }
+
+            if (metadata.numbering) {
+                const numberingPattern = new RegExp(`Metadata\\s+Numbering\\s+${escapeRegex(metadata.numbering)}`, "i");
+                expect(
+                    fileContent,
+                    `File should contain Metadata Numbering matching tooltip: "${metadata.numbering}"`
+                ).to.match(numberingPattern);
+                logger.info("Phase4.5", `✓ Verified Numbering: "${metadata.numbering}"`);
+            } else {
+                logger.warn("Phase4.5", "Numbering not found in tooltip, skipping Numbering verification");
+            }
+
+            logger.info("Phase4.5", " Generated test case set .robot file verification complete");
 
             // ============================================
             // Phase 5: Execute Generated Tests
