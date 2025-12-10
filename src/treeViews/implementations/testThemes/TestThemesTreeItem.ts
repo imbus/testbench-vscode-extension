@@ -109,6 +109,18 @@ export class TestThemesTreeItem extends TreeItemBase {
     }
 
     /**
+     * Override setMetadata to generate tooltip when marking info changes
+     * @param key The metadata key
+     * @param value The metadata value
+     */
+    public override setMetadata(key: string, value: any): void {
+        super.setMetadata(key, value);
+        if (key === "markingInfo" || key === "marked") {
+            this.tooltip = this.generateTooltip();
+        }
+    }
+
+    /**
      * Generates a unique identifier for the tree item.
      * @return Unique identifier string combining context, type, parent path, and key
      */
@@ -177,7 +189,8 @@ export class TestThemesTreeItem extends TreeItemBase {
 
         const markingInfo = this.getMetadata("markingInfo") as MarkingInfo | undefined;
         if (markingInfo) {
-            if (markingInfo.type === "import") {
+            if (markingInfo.type === "import" || markingInfo.type === "imported") {
+                // Allow items to be re-imported
                 contextValue = `MarkedForImport.${contextValue}`;
             } else if (markingInfo.type === "generation") {
                 contextValue = `MarkedForGeneration.${contextValue}`;
@@ -210,8 +223,19 @@ export class TestThemesTreeItem extends TreeItemBase {
             tooltipContextLines.push(`Name: ${this.data.base.name}`);
         }
 
-        const status = this.data.isGenerated ? "Generated" : this.data.isImported ? "Imported" : "Not Generated";
-        tooltipContextLines.push(`Status: ${status}`);
+        let statusTooltipText = "Not Generated";
+        const isMarked = this.getMetadata("marked") === true;
+        const markingInfo = this.getMetadata("markingInfo") as MarkingInfo | undefined;
+
+        if (isMarked && markingInfo) {
+            if (markingInfo.type === "imported") {
+                statusTooltipText = "Imported";
+                // "import" means ready for import and not yet imported.
+            } else if (markingInfo.type === "import" || markingInfo.type === "generation") {
+                statusTooltipText = "Generated";
+            }
+        }
+        tooltipContextLines.push(`Status: ${statusTooltipText}`);
 
         if (this.data.exec) {
             if (this.data.exec.status) {

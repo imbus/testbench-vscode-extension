@@ -246,13 +246,18 @@ export class RobotFileService {
      * Replaces invalid file path characters with underscores because
      * testbench2robotframework replaces following special characters of a test theme / test case set name:
      * < > : " / \ | ? * and spaces.
+     * When logSuiteNumbering is disabled, testbench2robotframework adds an extra underscore between
+     * the numbering and the name (e.g., "1__Name.robot" instead of "1_Name.robot").
      * @param treeItemName The name of the test theme or test case set
      * @param treeItemNumbering The numbering prefix for the tree item
      * @returns The generated robot file name
      */
     private generateRobotFileName(treeItemName: string, treeItemNumbering: string): string {
         const lastNumberingPart = treeItemNumbering ? treeItemNumbering.split(".")?.pop() || treeItemNumbering : "";
-        const prefixOfFileName = lastNumberingPart ? `${lastNumberingPart}_` : "";
+        const logSuiteNumbering = getExtensionSetting<boolean>(ConfigKeys.TB2ROBOT_LOG_SUITE_NUMBERING) ?? true;
+        // When logSuiteNumbering is disabled, an extra underscore is added
+        const separator = logSuiteNumbering ? "_" : "__";
+        const prefixOfFileName = lastNumberingPart ? `${lastNumberingPart}${separator}` : "";
         // Characters to replace with underscore:
         // ["<", ">", ":", "\"", "/", "\\", "|", "?", "*", " "]
         const normalizedName = treeItemName.replace(/[<>:"/\\|?*\s]/g, "_");
@@ -454,13 +459,17 @@ export class RobotFileService {
      * Uses the same naming convention as testbench2robotframework:
      * - Takes the last part of the numbering (after last dot) as prefix
      * - Replaces invalid file path characters with underscores
+     * - When logSuiteNumbering is disabled, adds an extra underscore between numbering and name
      * @param treeItemName The name of the test theme
      * @param treeItemNumbering The numbering prefix for the tree item
      * @returns The generated folder name
      */
     private generateFolderName(treeItemName: string, treeItemNumbering: string): string {
         const lastNumberingPart = treeItemNumbering ? treeItemNumbering.split(".")?.pop() || treeItemNumbering : "";
-        const prefixOfFolderName = lastNumberingPart ? `${lastNumberingPart}_` : "";
+        const logSuiteNumbering = getExtensionSetting<boolean>(ConfigKeys.TB2ROBOT_LOG_SUITE_NUMBERING) ?? true;
+        // When logSuiteNumbering is disabled, an extra underscore is added
+        const separator = logSuiteNumbering ? "_" : "__";
+        const prefixOfFolderName = lastNumberingPart ? `${lastNumberingPart}${separator}` : "";
         // Characters to replace with underscore (same as for robot files):
         // ["<", ">", ":", "\"", "/", "\\", "|", "?", "*", " "]
         const normalizedName = treeItemName.replace(/[<>:"/\\|?*\s]/g, "_");

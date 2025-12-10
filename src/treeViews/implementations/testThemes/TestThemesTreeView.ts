@@ -692,9 +692,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 throw new Error("Marking module not available");
             }
 
-            // Verify the item is marked for import
             const markingInfo = markingModule.getMarkingInfo(item.id!);
-            if (!markingInfo || markingInfo.type !== "import") {
+            if (!markingInfo || (markingInfo.type !== "import" && markingInfo.type !== "imported")) {
                 const itemNotMarkedForImportErrorMessageForUser = `Item ${itemLabel} is not marked for import. Only items that have been generated can be imported.`;
                 vscode.window.showErrorMessage(itemNotMarkedForImportErrorMessageForUser);
                 const itemNotMarkedForImportErrorMessage =
@@ -741,6 +740,9 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                     } else {
                         markingModule.unmarkItemByID(item.id!);
                     }
+                } else {
+                    const markingContext = this.getCurrentMarkingContext();
+                    markingModule.markItemWithDescendants(item, markingContext, "imported");
                 }
 
                 // Clear cache before refresh to get updated lock status from server
