@@ -4,7 +4,7 @@ This guide explains how to use the TestBench VS Code Extension to navigate insid
 
 ## Requirements
 
-- **Visual Studio Code** version 1.95.0 or higher
+- **Visual Studio Code** version 1.101.0 or higher
 - **Python** 3.10 or newer installed on your system
 - An open VS Code workspace. Without a workspace, the extension runs in read-only mode and features like test generation and importing results are disabled
 

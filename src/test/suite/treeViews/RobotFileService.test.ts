@@ -91,16 +91,32 @@ suite("RobotFileService", function () {
             assert.strictEqual(result.exists, false);
         });
 
-        test("should return false when robot file does not exist", async function () {
+        test("should return false when robot file does not exist (logSuiteNumbering enabled)", async function () {
             testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
-            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");
-            testEnv.sandbox.stub(fs.promises, "access").rejects(new Error("File not found"));
+            const getSettingStub = testEnv.sandbox.stub(configuration, "getExtensionSetting");
+            getSettingStub.withArgs("outputDirectory").returns("tests");
+            getSettingStub.withArgs("logSuiteNumbering").returns(true);
+            testEnv.sandbox.stub(fs.promises, "readdir").resolves([]);
 
             const mockItem = createMockTestThemesTreeItem("Test Theme", "1");
             const result = await robotFileService.checkRobotFileExists(mockItem);
 
             assert.strictEqual(result.exists, false);
             assert.strictEqual(result.fileName, "1_Test_Theme.robot");
+        });
+
+        test("should return false when robot file does not exist (logSuiteNumbering disabled)", async function () {
+            testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+            const getSettingStub = testEnv.sandbox.stub(configuration, "getExtensionSetting");
+            getSettingStub.withArgs("outputDirectory").returns("tests");
+            getSettingStub.withArgs("logSuiteNumbering").returns(false);
+            testEnv.sandbox.stub(fs.promises, "readdir").resolves([]);
+
+            const mockItem = createMockTestThemesTreeItem("Test Theme", "1");
+            const result = await robotFileService.checkRobotFileExists(mockItem);
+
+            assert.strictEqual(result.exists, false);
+            assert.strictEqual(result.fileName, "1__Test_Theme.robot");
         });
 
         test("should return true when robot file exists", async function () {
@@ -120,7 +136,10 @@ suite("RobotFileService", function () {
             assert.strictEqual(result.fileName, "1_Test_Theme.robot");
         });
 
-        test("should generate robot file name correctly with numbering", async function () {
+        test("should generate robot file name correctly with numbering (logSuiteNumbering enabled)", async function () {
+            const getSettingStub = testEnv.sandbox.stub(configuration, "getExtensionSetting");
+            getSettingStub.withArgs("logSuiteNumbering").returns(true);
+
             const testCases = [
                 { name: "Simple Test Theme", numbering: "1", expected: "1_Simple_Test_Theme.robot" },
                 { name: "Complex Test Theme", numbering: "2", expected: "2_Complex_Test_Theme.robot" },
@@ -138,7 +157,31 @@ suite("RobotFileService", function () {
             }
         });
 
-        test("should handle special characters in robot file names correctly", async function () {
+        test("should generate robot file name correctly with numbering (logSuiteNumbering disabled)", async function () {
+            const getSettingStub = testEnv.sandbox.stub(configuration, "getExtensionSetting");
+            getSettingStub.withArgs("logSuiteNumbering").returns(false);
+
+            const testCases = [
+                { name: "Simple Test Theme", numbering: "1", expected: "1__Simple_Test_Theme.robot" },
+                { name: "Complex Test Theme", numbering: "2", expected: "2__Complex_Test_Theme.robot" },
+                { name: "Test Theme", numbering: "", expected: "Test_Theme.robot" },
+                { name: "Test Theme with Spaces", numbering: "3", expected: "3__Test_Theme_with_Spaces.robot" }
+            ];
+
+            for (const testCase of testCases) {
+                const mockItem = createMockTestThemesTreeItem(testCase.name, testCase.numbering);
+                const result = robotFileService["generateRobotFileName"](
+                    mockItem.data.base.name,
+                    mockItem.data.base.numbering
+                );
+                assert.strictEqual(result, testCase.expected);
+            }
+        });
+
+        test("should handle special characters in robot file names correctly (logSuiteNumbering enabled)", async function () {
+            const getSettingStub = testEnv.sandbox.stub(configuration, "getExtensionSetting");
+            getSettingStub.withArgs("logSuiteNumbering").returns(true);
+
             const testCases = [
                 { name: "Test:Theme", numbering: "1", expected: "1_Test_Theme.robot" },
                 { name: "Test/Theme", numbering: "2", expected: "2_Test_Theme.robot" },
@@ -175,9 +218,51 @@ suite("RobotFileService", function () {
             }
         });
 
+        test("should handle special characters in robot file names correctly (logSuiteNumbering disabled)", async function () {
+            const getSettingStub = testEnv.sandbox.stub(configuration, "getExtensionSetting");
+            getSettingStub.withArgs("logSuiteNumbering").returns(false);
+
+            const testCases = [
+                { name: "Test:Theme", numbering: "1", expected: "1__Test_Theme.robot" },
+                { name: "Test/Theme", numbering: "2", expected: "2__Test_Theme.robot" },
+                { name: "Test\\Theme", numbering: "3", expected: "3__Test_Theme.robot" },
+                { name: "Test*Theme", numbering: "4", expected: "4__Test_Theme.robot" },
+                { name: "Test?Theme", numbering: "5", expected: "5__Test_Theme.robot" },
+                { name: 'Test"Theme', numbering: "6", expected: "6__Test_Theme.robot" },
+                { name: "Test<Theme", numbering: "7", expected: "7__Test_Theme.robot" },
+                { name: "Test>Theme", numbering: "8", expected: "8__Test_Theme.robot" },
+                { name: "Test|Theme", numbering: "9", expected: "9__Test_Theme.robot" },
+                {
+                    name: "Test:Theme/With\\Special*Chars?",
+                    numbering: "10",
+                    expected: "10__Test_Theme_With_Special_Chars_.robot"
+                },
+                {
+                    name: "Test Theme with Multiple   Spaces",
+                    numbering: "11",
+                    expected: "11__Test_Theme_with_Multiple___Spaces.robot"
+                },
+                { name: "_Leading_Underscore_", numbering: "12", expected: "12___Leading_Underscore_.robot" },
+                { name: "Trailing_Underscore_", numbering: "13", expected: "13__Trailing_Underscore_.robot" },
+                { name: "Test_With_Underscores", numbering: "14", expected: "14__Test_With_Underscores.robot" },
+                { name: "Multiple___Underscores", numbering: "15", expected: "15__Multiple___Underscores.robot" }
+            ];
+
+            for (const testCase of testCases) {
+                const mockItem = createMockTestThemesTreeItem(testCase.name, testCase.numbering);
+                const result = robotFileService["generateRobotFileName"](
+                    mockItem.data.base.name,
+                    mockItem.data.base.numbering
+                );
+                assert.strictEqual(result, testCase.expected);
+            }
+        });
+
         test("should build hierarchical path correctly for test themes", async function () {
             testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
-            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");
+            const getSettingStub = testEnv.sandbox.stub(configuration, "getExtensionSetting");
+            getSettingStub.withArgs("outputDirectory").returns("tests");
+            getSettingStub.withArgs("logSuiteNumbering").returns(true);
             testEnv.sandbox.stub(fs.promises, "readdir").resolves([]);
 
             const testThemeItem = createMockTestThemesTreeItem("Test Theme", "1");
@@ -192,7 +277,9 @@ suite("RobotFileService", function () {
 
         test("should build hierarchical path correctly for test case sets", async function () {
             testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
-            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");
+            const getSettingStub = testEnv.sandbox.stub(configuration, "getExtensionSetting");
+            getSettingStub.withArgs("outputDirectory").returns("tests");
+            getSettingStub.withArgs("logSuiteNumbering").returns(true);
             testEnv.sandbox.stub(fs.promises, "readdir").resolves([]);
 
             const mockTestCaseSetItem = createMockTestThemesTreeItem("Test Case Set", "1.1");
@@ -224,7 +311,9 @@ suite("RobotFileService", function () {
 
         test("should build hierarchical path correctly for test case sets with hierarchical context", async function () {
             testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
-            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");
+            const getSettingStub = testEnv.sandbox.stub(configuration, "getExtensionSetting");
+            getSettingStub.withArgs("outputDirectory").returns("tests");
+            getSettingStub.withArgs("logSuiteNumbering").returns(true);
             testEnv.sandbox.stub(fs.promises, "access").resolves();
             testEnv.sandbox.stub(fs.promises, "readdir").resolves([]);
 
@@ -253,7 +342,9 @@ suite("RobotFileService", function () {
 
         test("should handle deep hierarchies with simple recursive search", async function () {
             testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
-            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");
+            const getSettingStub = testEnv.sandbox.stub(configuration, "getExtensionSetting");
+            getSettingStub.withArgs("outputDirectory").returns("tests");
+            getSettingStub.withArgs("logSuiteNumbering").returns(true);
             testEnv.sandbox.stub(fs.promises, "access").resolves();
             testEnv.sandbox.stub(fs.promises, "readdir").resolves([]);
 
