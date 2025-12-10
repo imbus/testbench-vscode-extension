@@ -13,6 +13,7 @@ The **TestBench Extension** enables seamless synchronization between [TestBench]
 
 - **Visual Studio Code** version 1.101.0 or higher
 - **Python** 3.10 or higher
+- **TestBench** 4.0 or higher
 
 ### Required Extensions
 
@@ -33,7 +34,7 @@ The following extensions are automatically installed as dependencies when you in
 
 ### Link a TestBench Project to the Workspace/Folder Opened in VS Code
 
-A workspace or folder in VS Code must always be linked to a specific Test Object Version in TestBench. Only after creating such a link will you be able to use all features of the extension, including the synchronization of Robot Framework keywords.
+A workspace or folder in VS Code must always be linked to a specific Test Object Version in TestBench. Only after creating such a link you will be able to use all features of the extension, including the synchronization of Robot Framework keywords.
 To link a TestBench Project to the opened workspace/folder, simply right-click on the desired Test Object Version in the Projects view and select "Set as Active TOV".
 
 ![Link VS Code Workspace to Test Object Version](userGuideImages/link_tov.gif)

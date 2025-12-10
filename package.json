@@ -2,7 +2,7 @@
     "name": "testbench-extension",
     "publisher": "imbus",
     "displayName": "TestBench Extension",
-    "description": "A Visual Studio Code extension for TestBench.",
+    "description": "A Visual Studio Code extension for imbus TestBench.",
     "icon": "resources/icons/testbench-logo.png",
     "version": "0.5.0",
     "repository": {
@@ -24,8 +24,7 @@
         "test automation",
         "robot framework"
     ],
-    "pricing": "Free",
-    "license": "SEE LICENSE IN LICENSE.md",
+    "license": "Apache-2.0",
     "categories": [
         "Testing"
     ],
