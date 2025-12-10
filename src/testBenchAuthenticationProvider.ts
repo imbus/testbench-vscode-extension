@@ -539,7 +539,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             return undefined;
         }
         const portStr: string | undefined = await vscode.window.showInputBox({
-            prompt: "Enter Port Number (e.g., 9445)",
+            prompt: "Enter Port Number (e.g., 9443)",
             ignoreFocusOut: true,
             validateInput: (val) => (/^\d+$/.test(val) ? null : "Must be a number")
         });
