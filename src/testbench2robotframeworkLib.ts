@@ -21,7 +21,8 @@ export class tb2robotLib {
      */
     public static async startTb2robotframeworkTestGeneration(reportPath: string): Promise<boolean> {
         let isGenerateTestsCommandSuccessful: boolean = false;
-        const use_config_file: boolean | undefined = getExtensionSetting<boolean>(ConfigKeys.USE_CONFIG_FILE_SETTING);
+        // use_config_file temporarily disabled (tbe-162)
+        const use_config_file: boolean | undefined = false; // getExtensionSetting<boolean>(ConfigKeys.USE_CONFIG_FILE_SETTING);
         const clean: boolean | undefined = getExtensionSetting<boolean>(ConfigKeys.TB2ROBOT_CLEAN);
         const compound_keyword_logging: string | undefined = getExtensionSetting<string>(
             ConfigKeys.TB2ROBOT_COMPOUND_LOGGING
