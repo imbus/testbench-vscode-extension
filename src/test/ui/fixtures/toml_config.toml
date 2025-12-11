@@ -1,0 +1,37 @@
+[tool.testbench2robotframework]
+library-regex = ['(?:.*\.)?(?P<resourceName>[^.]+?)\s*\[Robot-Library\].*']
+resource-regex = ['(?:.*\.)?(?P<resourceName>[^.]+?)\s*\[Robot-Resource\].*']
+library-root = ["RF", "RF-Library"]
+resource-root = ["RF-Resource"]
+fully-qualified = false
+output-directory = "{root}/Generated"
+log-suite-numbering = false
+clean = true
+compound-interaction-logging = true
+resource-directory = "{root}/Resources"
+testcase-split-regex = ".*StopWithRestart.*"
+phase-pattern = "{testcase} : Phase {index}/{length}"
+reference-behaviour = "ATTACHMENT"
+attachment-conflict-behaviour = "USE_EXISTING"
+
+[tool.testbench2robotframework.library-mapping]
+SeleniumLibrary = "SeleniumLibrary    timeout=10    implicit_wait=1    run_on_failure=Capture Page Screenshot"
+SuperRemoteLibrary = "Remote    http://127.0.0.1:8270       WITH NAME    SuperRemoteLibrary"
+
+[tool.testbench2robotframework.resource-mapping]
+MyKeywords = "{root}/../MyKeywords.resource"
+MyOtherKeywords = "{resourceDirectory}/subdir/MyOtherKeywords.resource"
+
+[tool.testbench2robotframework.forced-import]
+libraries = ["test.py"]
+resources = []
+variables = []
+
+[tool.testbench2robotframework.console-logging]
+logLevel = "INFO"
+logFormat = "%(levelname)s: %(message)s"
+
+[tool.testbench2robotframework.file-logging]
+logLevel = "DEBUG"
+logFormat = "%(asctime)s - %(filename)s:%(lineno)d - %(levelname)8s - %(message)s"
+fileName = "testbench2robotframework.log"

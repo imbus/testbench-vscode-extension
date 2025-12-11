@@ -1,0 +1,21 @@
+# pyproject.toml for UI test fixtures
+
+[tool.testbench2robotframework]
+# Output directory where generated Robot Framework test files will be placed
+# This setting is REQUIRED when using the configuration file mode
+output-directory = "tests"
+
+# Resource directory for Robot Framework resource files
+resource-directory = "resources"
+
+# Clean mode - removes existing generated files before generating new ones
+clean = true
+
+# Fully-qualified keyword names - use full module paths in generated keywords
+fully-qualified = false
+
+# Compound keyword logging - enable logging for compound keywords
+compound-keyword-logging = false
+
+# Log suite numbering - include test suite numbering in logs
+log-suite-numbering = false
