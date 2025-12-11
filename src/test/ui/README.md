@@ -155,7 +155,15 @@ npm run test:ui-profile -- --profile=default --test=loginWebview.ui.test.ts
 
 # Skip VS Code download for faster re-runs (extension still reinstalled)
 npm run test:ui-profile -- --profile=default --skip-setup
+
+# Run in granular mode (each test file separately - slower but gives per-file results)
+npm run test:ui-profile -- --granular
 ```
+
+**Execution Modes:**
+
+**Fast (default)**: Runs all test files per profile in a single VS Code session | For normal testing, CI pipelines
+**Granular**: Runs each test file separately, providing per-file pass/fail results | For debugging specific test failures
 
 **Available Configuration Profiles:**
 

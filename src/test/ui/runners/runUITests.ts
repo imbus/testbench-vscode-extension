@@ -8,7 +8,7 @@ import * as path from "path";
 import * as fs from "fs";
 import * as cp from "child_process";
 import { ExTester, ReleaseQuality } from "vscode-extension-tester";
-import { loadEnv, TEST_PATHS, getLoggerConfig } from "../config/testConfig";
+import { loadEnv, TEST_PATHS, getLoggerConfig, setActiveProfile, clearSettingsCache } from "../config/testConfig";
 import { initializeTestLogger, getTestLogger } from "../utils/testLogger";
 
 async function main(): Promise<void> {
@@ -22,6 +22,20 @@ async function main(): Promise<void> {
         logger.info("Setup", "Loading environment variables...");
         logger.info("Setup", "UI Test Runner starting...");
         logger.info("Setup", `Project Root: ${projectRoot}`);
+
+        // Check if a profile was specified via environment variable (from runUITestsWithProfiles.ts)
+        const profileName = process.env.TESTBENCH_TEST_PROFILE;
+        const profileSettingsPath = process.env.TESTBENCH_PROFILE_SETTINGS_PATH;
+
+        if (profileName && profileSettingsPath) {
+            logger.info("Setup", `Running with profile: ${profileName}`);
+            logger.info("Setup", `Settings file: ${profileSettingsPath}`);
+            setActiveProfile(profileName);
+        } else {
+            setActiveProfile(null);
+            logger.info("Setup", "Using default settings (no profile specified)");
+        }
+        clearSettingsCache();
 
         // Centralize storage for all transient test artifacts under .test-resources
         const baseStoragePath = path.resolve(projectRoot, TEST_PATHS.BASE_STORAGE);
@@ -192,8 +206,12 @@ async function main(): Promise<void> {
         logger.info("TestRunner", `Test Pattern: ${testFilesPattern}`);
         logger.info("TestRunner", `Workspace: ${runtimeWorkspacePath}`);
 
+        // Use profile-specific settings file if available, otherwise use default
+        const settingsPath = profileSettingsPath || TEST_PATHS.VSCODE_TEST_SETTINGS;
+        logger.info("TestRunner", `Settings: ${settingsPath}`);
+
         await exTester.runTests(testFilesPattern, {
-            settings: TEST_PATHS.VSCODE_TEST_SETTINGS,
+            settings: settingsPath,
             resources: [runtimeWorkspacePath], // Opens the prepared runtime workspace
             cleanup: true // Set to true to keep the instance open after tests for debugging
         });

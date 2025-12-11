@@ -3112,10 +3112,12 @@ import {
     getRobotOutputDirectory,
     getResourceDirectoryPath,
     getExtensionSetting,
-    clearSettingsCache
+    clearSettingsCache,
+    setActiveProfile,
+    getActiveProfile
 } from "../config/testConfig";
 
-export { getExtensionSetting, getResourceDirectoryPath, clearSettingsCache };
+export { getExtensionSetting, getResourceDirectoryPath, clearSettingsCache, setActiveProfile, getActiveProfile };
 
 /**
  * Result of filesystem verification for generated Robot Framework files.

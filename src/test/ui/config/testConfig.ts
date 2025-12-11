@@ -522,8 +522,42 @@ let settingsCache: Record<string, any> | null = null;
 let lastSettingsPath: string | null = null;
 
 /**
+ * Active profile name set by the profile runner.
+ * When null, default settings are used instead of profile-specific settings.
+ */
+let activeProfileName: string | null = null;
+
+/**
+ * Sets the active profile name for settings loading.
+ * Call this before running tests with a specific profile.
+ *
+ * @param profileName - The name of the active profile, or null to use defaults
+ */
+export function setActiveProfile(profileName: string | null): void {
+    activeProfileName = profileName;
+    // Clear cache when profile changes
+    settingsCache = null;
+    lastSettingsPath = null;
+    if (profileName) {
+        logger.debug("Settings", `Active profile set to: ${profileName}`);
+    } else {
+        logger.debug("Settings", "Active profile cleared, using default settings");
+    }
+}
+
+/**
+ * Gets the currently active profile name.
+ *
+ * @returns The active profile name or null if using defaults
+ */
+export function getActiveProfile(): string | null {
+    return activeProfileName;
+}
+
+/**
  * Loads settings from the current VS Code test settings file.
- * Checks multiple possible locations for settings files including profile-specific ones.
+ * Only uses profile-specific settings if a profile is actively set via setActiveProfile().
+ * Otherwise, uses the default settings file or built-in defaults.
  *
  * @returns Settings object or null if not found
  */
@@ -531,43 +565,28 @@ function loadTestSettings(): Record<string, any> | null {
     try {
         const projectRoot = path.resolve(__dirname, "../../../..");
 
-        // Possible settings file locations (in priority order)
-        const possiblePaths = [
-            // Profile-specific settings in profiles directory
-            path.join(projectRoot, "src/test/ui/config/profiles"),
-            // Default settings file
-            path.join(projectRoot, "src/test/ui/config/.vscode-test.settings.json")
-        ];
+        // If an active profile is set, look for its specific settings file
+        if (activeProfileName) {
+            const profilesDir = path.join(projectRoot, "src/test/ui/config/profiles");
+            const profileSettingsPath = path.join(profilesDir, `.vscode-test.settings.${activeProfileName}.json`);
 
-        // Check profile-specific settings first
-        const profilesDir = possiblePaths[0];
-        if (fs.existsSync(profilesDir)) {
-            const profileFiles = fs
-                .readdirSync(profilesDir)
-                .filter((f) => f.startsWith(".vscode-test.settings.") && f.endsWith(".json"))
-                .sort((a, b) => {
-                    // Sort by modification time, newest first
-                    const statA = fs.statSync(path.join(profilesDir, a));
-                    const statB = fs.statSync(path.join(profilesDir, b));
-                    return statB.mtimeMs - statA.mtimeMs;
-                });
-
-            if (profileFiles.length > 0) {
-                const settingsPath = path.join(profilesDir, profileFiles[0]);
-                if (lastSettingsPath === settingsPath && settingsCache) {
+            if (fs.existsSync(profileSettingsPath)) {
+                if (lastSettingsPath === profileSettingsPath && settingsCache) {
                     return settingsCache;
                 }
 
-                const content = fs.readFileSync(settingsPath, "utf-8");
+                const content = fs.readFileSync(profileSettingsPath, "utf-8");
                 settingsCache = JSON.parse(content);
-                lastSettingsPath = settingsPath;
-                logger.debug("Settings", `Loaded settings from profile: ${profileFiles[0]}`);
+                lastSettingsPath = profileSettingsPath;
+                logger.debug("Settings", `Loaded settings from active profile: ${activeProfileName}`);
                 return settingsCache;
+            } else {
+                logger.warn("Settings", `Profile settings file not found for: ${activeProfileName}`);
             }
         }
 
-        // Fall back to default settings
-        const defaultSettingsPath = possiblePaths[1];
+        // Fall back to default settings file (not profile-specific)
+        const defaultSettingsPath = path.join(projectRoot, "src/test/ui/config/.vscode-test.settings.json");
         if (fs.existsSync(defaultSettingsPath)) {
             if (lastSettingsPath === defaultSettingsPath && settingsCache) {
                 return settingsCache;
@@ -576,11 +595,12 @@ function loadTestSettings(): Record<string, any> | null {
             const content = fs.readFileSync(defaultSettingsPath, "utf-8");
             settingsCache = JSON.parse(content);
             lastSettingsPath = defaultSettingsPath;
-            logger.debug("Settings", "Loaded default settings");
+            logger.debug("Settings", "Loaded default settings file");
             return settingsCache;
         }
 
-        logger.warn("Settings", "No settings file found, using defaults");
+        // No settings file found - return null to use hard-coded defaults
+        logger.debug("Settings", "No settings file found, using built-in defaults");
         return null;
     } catch (error) {
         logger.error("Settings", `Error loading test settings: ${error}`);

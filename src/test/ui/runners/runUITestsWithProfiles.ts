@@ -2,6 +2,7 @@
  * @file src/test/ui/runUITestsWithProfiles.ts
  * @description Enhanced test runner that supports running UI tests with multiple configuration profiles.
  * Can run tests with a specific profile or iterate through all profiles.
+ * Tracks each test file separately per profile and generates a comprehensive summary matrix.
  */
 
 import * as path from "path";
@@ -22,6 +23,49 @@ interface TestRunOptions {
     profile?: string; // Specific profile name to use, or undefined to run with all profiles
     testFile?: string; // Specific test file to run, or undefined to run all tests
     skipSetup?: boolean; // Skip VS Code download/setup if already done
+    granular?: boolean; // Run each test file separately (slower but gives per-file results)
+}
+
+/**
+ * Result of a single test file execution.
+ */
+interface TestFileResult {
+    testFile: string;
+    profile: string;
+    passed: boolean;
+    duration: number; // in milliseconds
+    error?: string;
+}
+
+/**
+ * Available UI test files.
+ */
+const UI_TEST_FILES = [
+    "loginWebview.ui.test.ts",
+    "projectsView.ui.test.ts",
+    "testThemesView.ui.test.ts",
+    "resourceCreationFlow.ui.test.ts"
+];
+
+/**
+ * Short names for test files (used in summary table).
+ */
+const TEST_FILE_SHORT_NAMES: Record<string, string> = {
+    "loginWebview.ui.test.ts": "login",
+    "projectsView.ui.test.ts": "projects",
+    "testThemesView.ui.test.ts": "themes",
+    "resourceCreationFlow.ui.test.ts": "resource"
+};
+
+/**
+ * Result of running all tests with a single profile.
+ */
+interface ProfileResult {
+    profile: string;
+    passed: boolean;
+    duration: number;
+    error?: string;
+    testFiles: string[];
 }
 
 /**
@@ -45,53 +89,43 @@ function createSettingsFile(profile: any, projectRoot: string): string {
 }
 
 /**
- * Runs tests with a specific configuration profile.
+ * Runs a single test file with a specific configuration profile.
  *
  * @param profile - The test profile to use
- * @param options - Test run options
+ * @param testFile - The test file to run
  * @param exTester - The ExTester instance
  * @param projectRoot - The project root directory
  * @param runtimeWorkspacePath - The workspace path for tests
- * @returns Promise<boolean> - True if tests passed, false otherwise
+ * @param settingsPath - Path to the settings file
+ * @returns Promise<TestFileResult> - Result of the test execution
  */
-async function runTestsWithProfile(
+async function runSingleTestFile(
     profile: any,
-    options: TestRunOptions,
+    testFile: string,
     exTester: ExTester,
     projectRoot: string,
-    runtimeWorkspacePath: string
-): Promise<boolean> {
+    runtimeWorkspacePath: string,
+    settingsPath: string
+): Promise<TestFileResult> {
     const logger = getTestLogger();
-    logger.info("ProfileRunner", `\n${"=".repeat(80)}`);
-    logger.info("ProfileRunner", `Running tests with profile: ${profile.name}`);
-    logger.info("ProfileRunner", `Description: ${profile.description}`);
-    logger.info("ProfileRunner", `${"=".repeat(80)}\n`);
+    const startTime = Date.now();
 
-    // Create settings file for this profile
-    const settingsPath = createSettingsFile(profile, projectRoot);
-    logger.info("ProfileRunner", `Settings file: ${settingsPath}`);
+    const fileName = testFile.replace(".ts", ".js");
+    const compiledTestPath = path.join(__dirname, "..", fileName);
 
-    // Clear settings cache to ensure fresh settings are loaded for this profile
-    const { clearSettingsCache } = await import("../config/testConfig");
-    clearSettingsCache();
-
-    // Determine test pattern
-    let testFilesPattern: string;
-    if (options.testFile) {
-        const fileName = options.testFile.replace(".ts", ".js");
-        const compiledTestPath = path.join(__dirname, "..", fileName);
-
-        if (!fs.existsSync(compiledTestPath)) {
-            logger.error("ProfileRunner", `Test file not found: ${compiledTestPath}`);
-            return false;
-        }
-
-        testFilesPattern = compiledTestPath.replace(/\\/g, "/");
-        logger.info("ProfileRunner", `Running specific test: ${options.testFile}`);
-    } else {
-        testFilesPattern = path.join(__dirname, "..", "**/*.ui.test.js").replace(/\\/g, "/");
-        logger.info("ProfileRunner", "Running all UI tests");
+    if (!fs.existsSync(compiledTestPath)) {
+        logger.error("TestRunner", `Test file not found: ${compiledTestPath}`);
+        return {
+            testFile,
+            profile: profile.name,
+            passed: false,
+            duration: Date.now() - startTime,
+            error: `Test file not found: ${compiledTestPath}`
+        };
     }
+
+    const testFilesPattern = compiledTestPath.replace(/\\/g, "/");
+    logger.info("TestRunner", `  Running: ${testFile}`);
 
     try {
         await exTester.runTests(testFilesPattern, {
@@ -100,13 +134,360 @@ async function runTestsWithProfile(
             cleanup: true
         });
 
-        logger.info("ProfileRunner", `✓ Tests passed with profile: ${profile.name}\n`);
-        return true;
+        const duration = Date.now() - startTime;
+        logger.info("TestRunner", `  ✓ ${testFile} passed (${formatDuration(duration)})`);
+        return {
+            testFile,
+            profile: profile.name,
+            passed: true,
+            duration
+        };
     } catch (error) {
-        logger.error("ProfileRunner", `✗ Tests failed with profile: ${profile.name}`);
-        logger.error("ProfileRunner", `Error: ${error}\n`);
-        return false;
+        const duration = Date.now() - startTime;
+        logger.error("TestRunner", `  ✗ ${testFile} failed (${formatDuration(duration)})`);
+        return {
+            testFile,
+            profile: profile.name,
+            passed: false,
+            duration,
+            error: String(error)
+        };
     }
+}
+
+/**
+ * Runs all specified test files with a specific configuration profile.
+ *
+ * @param profile - The test profile to use
+ * @param testFiles - Array of test files to run
+ * @param exTester - The ExTester instance
+ * @param projectRoot - The project root directory
+ * @param runtimeWorkspacePath - The workspace path for tests
+ * @returns Promise<TestFileResult[]> - Results of all test executions
+ */
+async function runTestsWithProfile(
+    profile: any,
+    testFiles: string[],
+    exTester: ExTester,
+    projectRoot: string,
+    runtimeWorkspacePath: string
+): Promise<TestFileResult[]> {
+    const logger = getTestLogger();
+    logger.info("ProfileRunner", `\n${"=".repeat(80)}`);
+    logger.info("ProfileRunner", `Running tests with profile: ${profile.name}`);
+    logger.info("ProfileRunner", `Description: ${profile.description}`);
+    logger.info("ProfileRunner", `Test files: ${testFiles.length}`);
+    logger.info("ProfileRunner", `${"=".repeat(80)}\n`);
+
+    // Create settings file for this profile
+    const settingsPath = createSettingsFile(profile, projectRoot);
+    logger.info("ProfileRunner", `Settings file: ${settingsPath}`);
+
+    // Set the active profile and clear settings cache to ensure fresh settings are loaded
+    const { clearSettingsCache, setActiveProfile } = await import("../config/testConfig");
+    setActiveProfile(profile.name);
+    clearSettingsCache();
+
+    const results: TestFileResult[] = [];
+
+    for (const testFile of testFiles) {
+        const result = await runSingleTestFile(
+            profile,
+            testFile,
+            exTester,
+            projectRoot,
+            runtimeWorkspacePath,
+            settingsPath
+        );
+        results.push(result);
+    }
+
+    // Profile summary
+    const passed = results.filter((r) => r.passed).length;
+    const totalDuration = results.reduce((sum, r) => sum + r.duration, 0);
+
+    logger.info("ProfileRunner", `\nProfile "${profile.name}" completed: ${passed}/${results.length} passed`);
+    logger.info("ProfileRunner", `Total duration: ${formatDuration(totalDuration)}\n`);
+
+    return results;
+}
+
+/**
+ * Runs all test files for a profile in a SINGLE VS Code session using a SUBPROCESS.
+ * This ensures complete isolation between profile runs by spawning a new Node.js process
+ * for each profile. This is essential because:
+ * 1. Mocha maintains internal state that can cause tests to be skipped on subsequent runs
+ * 2. VS Code/ChromeDriver state can leak between runs in the same process
+ * 3. The vscode-extension-tester ExTester.runTests() is not designed for multiple invocations
+ *    in the same process
+ *
+ * @param profile - The test profile to use
+ * @param testFiles - Array of test files to run
+ * @param projectRoot - The project root directory
+ * @returns Promise<ProfileResult> - Result of the profile execution
+ */
+async function runAllTestsForProfile(profile: any, testFiles: string[], projectRoot: string): Promise<ProfileResult> {
+    const logger = getTestLogger();
+    const startTime = Date.now();
+
+    logger.info("ProfileRunner", `\n${"=".repeat(80)}`);
+    logger.info("ProfileRunner", `Running tests with profile: ${profile.name}`);
+    logger.info("ProfileRunner", `Description: ${profile.description}`);
+    logger.info("ProfileRunner", `Test files: ${testFiles.length} (running in isolated subprocess)`);
+    logger.info("ProfileRunner", `${"=".repeat(80)}\n`);
+
+    // Create settings file for this profile
+    const settingsPath = createSettingsFile(profile, projectRoot);
+    logger.info("ProfileRunner", `Settings file: ${settingsPath}`);
+
+    // Run tests in a subprocess to ensure complete isolation
+    // This is critical because Mocha and VS Code state doesn't reset properly
+    // when ExTester.runTests() is called multiple times in the same process
+    return new Promise<ProfileResult>((resolve) => {
+        const runUITestsScript = path.join(__dirname, "runUITests.js");
+
+        // Pass the profile name via environment variable so runUITests.ts can use it
+        const env = {
+            ...process.env,
+            TESTBENCH_TEST_PROFILE: profile.name,
+            TESTBENCH_PROFILE_SETTINGS_PATH: settingsPath
+        };
+
+        logger.info("ProfileRunner", `Spawning subprocess for profile: ${profile.name}`);
+        logger.info("ProfileRunner", `Script: ${runUITestsScript}`);
+
+        const child = cp.spawn("node", [runUITestsScript], {
+            cwd: projectRoot,
+            env,
+            stdio: ["inherit", "pipe", "pipe"],
+            shell: true
+        });
+
+        let stderr = "";
+
+        child.stdout?.on("data", (data) => {
+            const text = data.toString();
+            // Forward output to console for real-time visibility
+            process.stdout.write(text);
+        });
+
+        child.stderr?.on("data", (data) => {
+            const text = data.toString();
+            stderr += text;
+            // Forward stderr to console
+            process.stderr.write(text);
+        });
+
+        child.on("close", (code) => {
+            const duration = Date.now() - startTime;
+            const passed = code === 0;
+
+            if (passed) {
+                logger.info(
+                    "ProfileRunner",
+                    `\n✓ Profile "${profile.name}" completed successfully (${formatDuration(duration)})\n`
+                );
+            } else {
+                logger.error(
+                    "ProfileRunner",
+                    `\n✗ Profile "${profile.name}" failed with exit code ${code} (${formatDuration(duration)})`
+                );
+            }
+
+            resolve({
+                profile: profile.name,
+                passed,
+                duration,
+                testFiles,
+                error: passed ? undefined : `Exit code: ${code}. ${stderr.slice(-500)}`
+            });
+        });
+
+        child.on("error", (err) => {
+            const duration = Date.now() - startTime;
+            logger.error("ProfileRunner", `\n✗ Profile "${profile.name}" failed to start: ${err.message}`);
+
+            resolve({
+                profile: profile.name,
+                passed: false,
+                duration,
+                testFiles,
+                error: err.message
+            });
+        });
+    });
+}
+
+/**
+ * Formats duration in milliseconds to a human-readable string.
+ */
+function formatDuration(ms: number): string {
+    if (ms < 1000) {
+        return `${ms}ms`;
+    } else if (ms < 60000) {
+        return `${(ms / 1000).toFixed(1)}s`;
+    } else {
+        const minutes = Math.floor(ms / 60000);
+        const seconds = ((ms % 60000) / 1000).toFixed(0);
+        return `${minutes}m ${seconds}s`;
+    }
+}
+
+/**
+ * Generates and prints a comprehensive summary matrix.
+ */
+function printSummaryMatrix(results: TestFileResult[], profiles: string[], testFiles: string[]): void {
+    const logger = getTestLogger();
+
+    // Build results map for quick lookup
+    const resultsMap = new Map<string, TestFileResult>();
+    for (const result of results) {
+        const key = `${result.profile}|${result.testFile}`;
+        resultsMap.set(key, result);
+    }
+
+    // Calculate column widths
+    const shortNames = testFiles.map((f) => TEST_FILE_SHORT_NAMES[f] || f.replace(".ui.test.ts", ""));
+    const maxProfileWidth = Math.max(20, ...profiles.map((p) => p.length));
+    const colWidth = Math.max(8, ...shortNames.map((n) => n.length + 2));
+
+    // Header
+    logger.info("Summary", `\n${"=".repeat(maxProfileWidth + 4 + testFiles.length * (colWidth + 1) + 10)}`);
+    logger.info(
+        "Summary",
+        `TEST EXECUTION SUMMARY MATRIX (${profiles.length} profiles × ${testFiles.length} tests = ${profiles.length * testFiles.length} combinations)`
+    );
+    logger.info("Summary", `${"=".repeat(maxProfileWidth + 4 + testFiles.length * (colWidth + 1) + 10)}`);
+
+    // Column headers
+    let headerRow = "Profile".padEnd(maxProfileWidth) + " │";
+    for (const shortName of shortNames) {
+        headerRow += shortName.padStart(colWidth) + " ";
+    }
+    headerRow += "│ Total";
+    logger.info("Summary", headerRow);
+
+    // Separator
+    let separator = "─".repeat(maxProfileWidth) + "─┼";
+    for (let i = 0; i < testFiles.length; i++) {
+        separator += "─".repeat(colWidth) + "─";
+    }
+    separator += "┼───────";
+    logger.info("Summary", separator);
+
+    // Data rows
+    let totalPassed = 0;
+    let totalFailed = 0;
+
+    for (const profile of profiles) {
+        let row = profile.padEnd(maxProfileWidth) + " │";
+        let profilePassed = 0;
+        let profileTotal = 0;
+
+        for (const testFile of testFiles) {
+            const key = `${profile}|${testFile}`;
+            const result = resultsMap.get(key);
+
+            if (result) {
+                profileTotal++;
+                if (result.passed) {
+                    row += "✓".padStart(colWidth) + " ";
+                    profilePassed++;
+                    totalPassed++;
+                } else {
+                    row += "✗".padStart(colWidth) + " ";
+                    totalFailed++;
+                }
+            } else {
+                row += "-".padStart(colWidth) + " ";
+            }
+        }
+
+        row += `│ ${profilePassed}/${profileTotal}`;
+        logger.info("Summary", row);
+    }
+
+    // Footer separator
+    logger.info("Summary", separator);
+
+    // Totals row
+    let totalsRow = "TOTAL".padEnd(maxProfileWidth) + " │";
+    for (const testFile of testFiles) {
+        const passedForFile = results.filter((r) => r.testFile === testFile && r.passed).length;
+        const totalForFile = results.filter((r) => r.testFile === testFile).length;
+        totalsRow += `${passedForFile}/${totalForFile}`.padStart(colWidth) + " ";
+    }
+    totalsRow += `│ ${totalPassed}/${totalPassed + totalFailed}`;
+    logger.info("Summary", totalsRow);
+
+    logger.info("Summary", `${"=".repeat(maxProfileWidth + 4 + testFiles.length * (colWidth + 1) + 10)}`);
+
+    // Summary statistics
+    const totalTests = totalPassed + totalFailed;
+    const passRate = totalTests > 0 ? ((totalPassed / totalTests) * 100).toFixed(1) : "0.0";
+    const totalDuration = results.reduce((sum, r) => sum + r.duration, 0);
+
+    logger.info("Summary", "");
+    logger.info("Summary", `Results: ${totalPassed}/${totalTests} passed (${passRate}%)`);
+    logger.info("Summary", `Total duration: ${formatDuration(totalDuration)}`);
+
+    // List failures if any
+    const failures = results.filter((r) => !r.passed);
+    if (failures.length > 0) {
+        logger.info("Summary", "");
+        logger.info("Summary", `Failed tests (${failures.length}):`);
+        for (const failure of failures) {
+            logger.info("Summary", `  ✗ ${failure.profile} / ${failure.testFile}`);
+            if (failure.error) {
+                // Truncate long error messages
+                const shortError = failure.error.length > 100 ? failure.error.substring(0, 100) + "..." : failure.error;
+                logger.info("Summary", `      Error: ${shortError}`);
+            }
+        }
+    }
+
+    logger.info("Summary", "");
+}
+
+/**
+ * Prints a simple profile-level summary (used when running all tests per profile).
+ */
+function printProfileSummary(results: ProfileResult[]): void {
+    const logger = getTestLogger();
+
+    logger.info("Summary", `\n${"=".repeat(80)}`);
+    logger.info("Summary", `TEST EXECUTION SUMMARY (${results.length} profiles)`);
+    logger.info("Summary", `${"=".repeat(80)}`);
+
+    const totalDuration = results.reduce((sum, r) => sum + r.duration, 0);
+    const passedProfiles = results.filter((r) => r.passed).length;
+    const failedProfiles = results.filter((r) => !r.passed).length;
+
+    for (const result of results) {
+        const status = result.passed ? "✓ PASSED" : "✗ FAILED";
+        const duration = formatDuration(result.duration);
+        logger.info("Summary", `  ${status.padEnd(10)} ${result.profile.padEnd(25)} (${duration})`);
+    }
+
+    logger.info("Summary", `${"=".repeat(80)}`);
+    logger.info("Summary", "");
+    logger.info("Summary", `Results: ${passedProfiles}/${results.length} profiles passed`);
+    logger.info("Summary", `Total duration: ${formatDuration(totalDuration)}`);
+
+    // List failures if any
+    if (failedProfiles > 0) {
+        logger.info("Summary", "");
+        logger.info("Summary", `Failed profiles (${failedProfiles}):`);
+        for (const result of results.filter((r) => !r.passed)) {
+            logger.info("Summary", `  ✗ ${result.profile}`);
+            if (result.error) {
+                const shortError = result.error.length > 100 ? result.error.substring(0, 100) + "..." : result.error;
+                logger.info("Summary", `      Error: ${shortError}`);
+            }
+        }
+    }
+
+    logger.info("Summary", "");
 }
 
 /**
@@ -125,7 +506,7 @@ async function main(): Promise<void> {
         const args = process.argv.slice(2);
         const options: TestRunOptions = {};
 
-        // Parse arguments: --profile=<name> --test=<file> --skip-setup
+        // Parse arguments: --profile=<name> --test=<file> --skip-setup --granular
         for (const arg of args) {
             if (arg.startsWith("--profile=")) {
                 options.profile = arg.substring("--profile=".length);
@@ -133,6 +514,8 @@ async function main(): Promise<void> {
                 options.testFile = arg.substring("--test=".length);
             } else if (arg === "--skip-setup") {
                 options.skipSetup = true;
+            } else if (arg === "--granular") {
+                options.granular = true;
             } else if (!arg.startsWith("--")) {
                 // Support legacy format: just the test filename
                 options.testFile = arg;
@@ -199,8 +582,8 @@ async function main(): Promise<void> {
             }
         }
 
-        // Setup ExTester
-        const performSetup = async (forceClean: boolean = false): Promise<ExTester> => {
+        // One-time setup: download VS Code and ChromeDriver
+        const performOneTimeSetup = async (forceClean: boolean = false): Promise<void> => {
             if (forceClean) {
                 logger.info("Setup", "Cleaning VS Code data...");
                 if (fs.existsSync(testStoragePath)) {
@@ -228,20 +611,22 @@ async function main(): Promise<void> {
                 await tester.downloadChromeDriver();
             }
 
-            // Always install extension (required for profile-specific settings)
+            // Install extension once during setup
             logger.info("Setup", `Installing extension from: ${vsixPath}`);
             await tester.installVsix({
                 vsixFile: vsixPath,
                 installDependencies: true
             });
-
-            return tester;
         };
 
-        let exTester: ExTester;
+        // Create a fresh ExTester instance for each profile run
+        // This ensures each profile gets a clean VS Code session
+        const createExTester = (): ExTester => {
+            return new ExTester(testStoragePath, ReleaseQuality.Stable, extensionsPath);
+        };
 
         try {
-            exTester = await performSetup(false);
+            await performOneTimeSetup(false);
         } catch (err: any) {
             const isCorruptionError =
                 err.message &&
@@ -251,7 +636,7 @@ async function main(): Promise<void> {
 
             if (isCorruptionError) {
                 logger.warn("Setup", "Detected corrupted VS Code. Cleaning and retrying...");
-                exTester = await performSetup(true);
+                await performOneTimeSetup(true);
             } else {
                 throw err;
             }
@@ -260,43 +645,100 @@ async function main(): Promise<void> {
         // Determine which profiles to run
         const profilesToRun = options.profile ? [getProfileByName(options.profile)!] : TEST_PROFILES;
 
-        logger.info("TestRunner", `Will run tests with ${profilesToRun.length} profile(s)`);
+        // Determine which test files to run
+        const testFilesToRun = options.testFile ? [options.testFile] : UI_TEST_FILES;
 
-        // Run tests with each profile
-        const results: { profile: string; passed: boolean }[] = [];
-
-        for (const profile of profilesToRun) {
-            const passed = await runTestsWithProfile(profile, options, exTester, projectRoot, runtimeWorkspacePath);
-            results.push({ profile: profile.name, passed });
-
-            // If running multiple profiles and one fails, continue with others
-            // but track the failure for final report
-        }
-
-        // Print summary
-        logger.info("Summary", `\n${"=".repeat(80)}`);
-        logger.info("Summary", "Test Execution Summary");
-        logger.info("Summary", `${"=".repeat(80)}`);
-
-        let allPassed = true;
-        for (const result of results) {
-            const status = result.passed ? "✓ PASSED" : "✗ FAILED";
-            logger.info("Summary", `  ${status.padEnd(10)} - ${result.profile}`);
-            if (!result.passed) {
-                allPassed = false;
+        // Validate test files exist
+        for (const testFile of testFilesToRun) {
+            const compiledPath = path.join(__dirname, "..", testFile.replace(".ts", ".js"));
+            if (!fs.existsSync(compiledPath)) {
+                logger.error("Setup", `Test file not found: ${testFile}`);
+                logger.error("Setup", `Expected at: ${compiledPath}`);
+                process.exit(1);
             }
         }
 
-        logger.info("Summary", `${"=".repeat(80)}\n`);
+        const totalCombinations = profilesToRun.length * testFilesToRun.length;
+        logger.info(
+            "TestRunner",
+            `Will run ${totalCombinations} test combination(s): ${profilesToRun.length} profile(s) × ${testFilesToRun.length} test file(s)`
+        );
 
-        if (allPassed) {
-            logger.info("Summary", "All tests passed successfully!");
-            logger.close();
-            process.exit(0);
+        // Determine execution mode:
+        // - Granular mode: Run each test file separately (slower, gives per-file results)
+        // - Fast mode (default): Run all tests per profile in single VS Code session
+        const useGranularMode = options.granular || options.testFile !== undefined;
+
+        if (useGranularMode) {
+            logger.info("TestRunner", "Mode: Granular (running each test file separately)");
+
+            // Run tests with each profile, tracking each test file separately
+            const allResults: TestFileResult[] = [];
+
+            for (const profile of profilesToRun) {
+                // Create a fresh ExTester instance for each profile
+                // This ensures each profile gets a clean VS Code session
+                const exTester = createExTester();
+                logger.info("ProfileRunner", `Created fresh ExTester instance for profile: ${profile.name}`);
+
+                const profileResults = await runTestsWithProfile(
+                    profile,
+                    testFilesToRun,
+                    exTester,
+                    projectRoot,
+                    runtimeWorkspacePath
+                );
+                allResults.push(...profileResults);
+            }
+
+            // Print comprehensive summary matrix
+            printSummaryMatrix(
+                allResults,
+                profilesToRun.map((p) => p.name),
+                testFilesToRun
+            );
+
+            // Determine exit code
+            const allPassed = allResults.every((r) => r.passed);
+
+            if (allPassed) {
+                logger.info("Summary", "✓ All tests passed successfully!");
+                logger.close();
+                process.exit(0);
+            } else {
+                logger.error("Summary", "✗ Some tests failed. See details above.");
+                logger.close();
+                process.exit(1);
+            }
         } else {
-            logger.error("Summary", "Some tests failed. See log above for details.");
-            logger.close();
-            process.exit(1);
+            logger.info("TestRunner", "Mode: Subprocess (running each profile in isolated subprocess)");
+
+            // Run all tests for each profile in a separate subprocess
+            // This ensures complete isolation - Mocha and VS Code state are fresh for each profile
+            const profileResults: ProfileResult[] = [];
+
+            for (const profile of profilesToRun) {
+                logger.info("ProfileRunner", `Starting isolated subprocess for profile: ${profile.name}`);
+
+                const result = await runAllTestsForProfile(profile, testFilesToRun, projectRoot);
+                profileResults.push(result);
+            }
+
+            // Print profile-level summary
+            printProfileSummary(profileResults);
+
+            // Determine exit code
+            const allPassed = profileResults.every((r) => r.passed);
+
+            if (allPassed) {
+                logger.info("Summary", "✓ All tests passed successfully!");
+                logger.close();
+                process.exit(0);
+            } else {
+                logger.error("Summary", "✗ Some tests failed. See details above.");
+                logger.close();
+                process.exit(1);
+            }
         }
     } catch (err) {
         const logger = getTestLogger();
