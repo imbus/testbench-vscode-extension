@@ -3108,7 +3108,14 @@ export async function waitForRefactorPreview(
 // Filesystem Verification Utilities
 // ============================================
 
-import { getRobotOutputDirectory } from "../config/testConfig";
+import {
+    getRobotOutputDirectory,
+    getResourceDirectoryPath,
+    getExtensionSetting,
+    clearSettingsCache
+} from "../config/testConfig";
+
+export { getExtensionSetting, getResourceDirectoryPath, clearSettingsCache };
 
 /**
  * Result of filesystem verification for generated Robot Framework files.

@@ -37,6 +37,7 @@ export const TEST_PATHS = {
 /**
  * Gets the absolute path to the Robot Framework output directory.
  * This is where generated .robot files are placed.
+ * Now reads from the active VS Code settings to support different test profiles.
  *
  * @param workspaceRoot - Optional workspace root path. If not provided, uses TEST_PATHS.WORKSPACE
  * @returns Absolute path to the output directory
@@ -44,12 +45,17 @@ export const TEST_PATHS = {
 export function getRobotOutputDirectory(workspaceRoot?: string): string {
     const root =
         workspaceRoot || path.resolve(__dirname, "../../../../", TEST_PATHS.BASE_STORAGE, TEST_PATHS.WORKSPACE);
-    return path.join(root, TEST_PATHS.ROBOT_OUTPUT_DIR);
+
+    // Read the output directory from the current settings (profile-specific or default)
+    const outputDir = getExtensionSetting<string>("testbenchExtension.outputDirectory", TEST_PATHS.ROBOT_OUTPUT_DIR);
+
+    return path.join(root, outputDir!);
 }
 
 /**
  * Gets the absolute path to the Robot Framework output XML file.
  * This is where test execution results are stored.
+ * Reads from the active VS Code settings to support different test profiles.
  *
  * @param workspaceRoot - Optional workspace root path. If not provided, uses TEST_PATHS.WORKSPACE
  * @returns Absolute path to the output XML file
@@ -57,7 +63,13 @@ export function getRobotOutputDirectory(workspaceRoot?: string): string {
 export function getRobotOutputXmlPath(workspaceRoot?: string): string {
     const root =
         workspaceRoot || path.resolve(__dirname, "../../../../", TEST_PATHS.BASE_STORAGE, TEST_PATHS.WORKSPACE);
-    return path.join(root, TEST_PATHS.ROBOT_OUTPUT_XML);
+
+    const outputXmlPath = getExtensionSetting<string>(
+        "testbenchExtension.outputXmlFilePath",
+        TEST_PATHS.ROBOT_OUTPUT_XML
+    );
+
+    return path.join(root, outputXmlPath!);
 }
 
 /**
@@ -497,4 +509,124 @@ export function getLoggerConfig(): TestLoggerConfig {
         maxLogFiles: 5,
         includeTimestamp: true
     };
+}
+
+// ============================================
+// Extension Settings Utilities
+// ============================================
+
+/**
+ * Cache for loaded settings to avoid repeated file reads.
+ */
+let settingsCache: Record<string, any> | null = null;
+let lastSettingsPath: string | null = null;
+
+/**
+ * Loads settings from the current VS Code test settings file.
+ * Checks multiple possible locations for settings files including profile-specific ones.
+ *
+ * @returns Settings object or null if not found
+ */
+function loadTestSettings(): Record<string, any> | null {
+    try {
+        const projectRoot = path.resolve(__dirname, "../../../..");
+
+        // Possible settings file locations (in priority order)
+        const possiblePaths = [
+            // Profile-specific settings in profiles directory
+            path.join(projectRoot, "src/test/ui/config/profiles"),
+            // Default settings file
+            path.join(projectRoot, "src/test/ui/config/.vscode-test.settings.json")
+        ];
+
+        // Check profile-specific settings first
+        const profilesDir = possiblePaths[0];
+        if (fs.existsSync(profilesDir)) {
+            const profileFiles = fs
+                .readdirSync(profilesDir)
+                .filter((f) => f.startsWith(".vscode-test.settings.") && f.endsWith(".json"))
+                .sort((a, b) => {
+                    // Sort by modification time, newest first
+                    const statA = fs.statSync(path.join(profilesDir, a));
+                    const statB = fs.statSync(path.join(profilesDir, b));
+                    return statB.mtimeMs - statA.mtimeMs;
+                });
+
+            if (profileFiles.length > 0) {
+                const settingsPath = path.join(profilesDir, profileFiles[0]);
+                if (lastSettingsPath === settingsPath && settingsCache) {
+                    return settingsCache;
+                }
+
+                const content = fs.readFileSync(settingsPath, "utf-8");
+                settingsCache = JSON.parse(content);
+                lastSettingsPath = settingsPath;
+                logger.debug("Settings", `Loaded settings from profile: ${profileFiles[0]}`);
+                return settingsCache;
+            }
+        }
+
+        // Fall back to default settings
+        const defaultSettingsPath = possiblePaths[1];
+        if (fs.existsSync(defaultSettingsPath)) {
+            if (lastSettingsPath === defaultSettingsPath && settingsCache) {
+                return settingsCache;
+            }
+
+            const content = fs.readFileSync(defaultSettingsPath, "utf-8");
+            settingsCache = JSON.parse(content);
+            lastSettingsPath = defaultSettingsPath;
+            logger.debug("Settings", "Loaded default settings");
+            return settingsCache;
+        }
+
+        logger.warn("Settings", "No settings file found, using defaults");
+        return null;
+    } catch (error) {
+        logger.error("Settings", `Error loading test settings: ${error}`);
+        return null;
+    }
+}
+
+/**
+ * Gets a specific extension setting value from the loaded VS Code settings.
+ *
+ * @param settingKey - The full setting key (e.g., "testbenchExtension.outputDirectory")
+ * @param defaultValue - Optional default value if setting is not found
+ * @returns The setting value or default value
+ */
+export function getExtensionSetting<T = any>(settingKey: string, defaultValue?: T): T | undefined {
+    const settings = loadTestSettings();
+
+    if (!settings) {
+        return defaultValue;
+    }
+
+    const value = settings[settingKey];
+    return value !== undefined ? value : defaultValue;
+}
+
+/**
+ * Gets the resource directory path from extension settings.
+ * This is where .resource files are created.
+ *
+ * @param workspaceRoot - Optional workspace root path. If not provided, uses TEST_PATHS.WORKSPACE
+ * @returns Absolute path to the resource directory
+ */
+export function getResourceDirectoryPath(workspaceRoot?: string): string {
+    const root =
+        workspaceRoot || path.resolve(__dirname, "../../../../", TEST_PATHS.BASE_STORAGE, TEST_PATHS.WORKSPACE);
+
+    // Try to read the resource directory from the current settings
+    const resourceDir = getExtensionSetting<string>("testbenchExtension.resourceDirectoryPath", "resources");
+
+    return path.join(root, resourceDir!);
+}
+
+/**
+ * Clears the settings cache. Useful when switching between test profiles.
+ */
+export function clearSettingsCache(): void {
+    settingsCache = null;
+    lastSettingsPath = null;
 }

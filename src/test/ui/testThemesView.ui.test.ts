@@ -1166,7 +1166,14 @@ async function executeRobotTestsViaTerminal(driver: WebDriver, _config: { testTh
             return false;
         }
 
-        const robotCommand = "robot --dryrun --outputdir results tests";
+        // Get dynamic paths from extension settings
+        const { getExtensionSetting } = await import("./config/testConfig");
+        const outputDir = getExtensionSetting<string>("testbenchExtension.outputDirectory", "tests");
+        const outputXmlPath = getExtensionSetting<string>("testbenchExtension.outputXmlFilePath", "results/output.xml");
+        // Extract directory from full path (e.g., "results/output.xml" -> "results")
+        const resultsDir = path.dirname(outputXmlPath!);
+
+        const robotCommand = `robot --dryrun --outputdir ${resultsDir} ${outputDir}`;
         logger.info("Terminal", `Executing: ${robotCommand}`);
 
         await driver.actions().sendKeys(robotCommand).perform();
@@ -2314,9 +2321,6 @@ describe("Test Themes View UI Tests", function () {
             // Phase 6: Execute Generated Tests
             // ============================================
             logger.info("Phase6", "Executing Generated Robot Framework Tests...");
-
-            // The generated .robot files are placed in the "tests" directory (testbenchExtension.outputDirectory)
-            // The output XML will be written to "results/output.xml" (testbenchExtension.outputXmlFilePath)
 
             // Wait for extension to potentially switch views after generation
             await waitForCondition(

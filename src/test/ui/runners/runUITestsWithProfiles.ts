@@ -71,6 +71,10 @@ async function runTestsWithProfile(
     const settingsPath = createSettingsFile(profile, projectRoot);
     logger.info("ProfileRunner", `Settings file: ${settingsPath}`);
 
+    // Clear settings cache to ensure fresh settings are loaded for this profile
+    const { clearSettingsCache } = await import("../config/testConfig");
+    clearSettingsCache();
+
     // Determine test pattern
     let testFilesPattern: string;
     if (options.testFile) {

@@ -103,7 +103,8 @@ export const TEST_PROFILES: ExtensionSettingsProfile[] = [
         settings: {
             ...DEFAULT_EXTENSION_SETTINGS,
             "testbenchExtension.outputDirectory": "custom-tests",
-            "testbenchExtension.resourceDirectoryPath": "custom-resources"
+            "testbenchExtension.resourceDirectoryPath": "custom-resources",
+            "testbenchExtension.outputXmlFilePath": "custom-results/output.xml"
         }
     },
     {
