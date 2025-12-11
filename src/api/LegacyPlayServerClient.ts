@@ -1,10 +1,10 @@
 /**
  * @file src/api/LegacyPlayServerClient.ts
- * @description Client for communicating with the legacy Play Server (port 9443).
+ * @description Client for communicating with the legacy Play Server (port 9444).
  *
  * This client will be removed when the new Play Server
  * implements the missing endpoints. All methods in this class use the old Play Server
- * running on port 9443 with BasicAuth authentication.
+ * running on port 9444 with BasicAuth authentication.
  */
 
 import * as vscode from "vscode";
@@ -19,7 +19,7 @@ import { withRetry, RetryPredicateFactory } from "../testBenchConnection";
  * Client for legacy Play Server API calls.
  */
 export class LegacyPlayServerClient {
-    private static readonly OLD_SERVER_PORT = 9443;
+    private static readonly OLD_SERVER_PORT = 9444;
     private static readonly OLD_SERVER_BASE_PATH = "/api/1";
 
     /**
@@ -73,7 +73,7 @@ export class LegacyPlayServerClient {
 
             const oldPlayServerSession: AxiosInstance = axios.create({
                 baseURL: oldPlayServerBaseUrl,
-                // Old Play Server, which runs on port 9443, uses BasicAuth.
+                // Old Play Server, which runs on port 9444, uses BasicAuth.
                 // Use loginName as username, and use sessionToken as the password
                 auth: {
                     username: this.username,
@@ -150,7 +150,7 @@ export class LegacyPlayServerClient {
 
             const oldPlayServerSession: AxiosInstance = axios.create({
                 baseURL: oldPlayServerBaseUrl,
-                // Old Play Server, which runs on port 9443, uses BasicAuth.
+                // Old Play Server, which runs on port 9444, uses BasicAuth.
                 // Use loginName as username, and use sessionToken as the password
                 auth: {
                     username: this.username,

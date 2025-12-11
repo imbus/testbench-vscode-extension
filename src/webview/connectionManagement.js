@@ -199,7 +199,7 @@
         // Clear and reset form
         addConnectionForm.reset();
         passwordInput.placeholder = "Enter your password";
-        portNumberInput.value = "9445"; // Reset default port
+        portNumberInput.value = "9443"; // Reset default port
         storePasswordCheckbox.checked = true; // Reset default
     }
 
