@@ -194,11 +194,6 @@ Settings are grouped in VS Code under these sections
 
 These settings control how the extension generates Robot Framework test suites from TestBench data.
 
-- **Use Configuration File**
-    - **Type:** Boolean
-    - **Default:** `false`
-    - **Description:** When enabled, `testbench2robotframework` prioritizes settings specified in the `pyproject.toml` file over the extension settings defined in VS Code.
-
 - **Clean Files Before Test Generation**
     - **Type:** Boolean
     - **Default:** `true`
