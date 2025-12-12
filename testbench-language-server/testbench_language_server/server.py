@@ -38,6 +38,7 @@ from robot.api.parsing import Keyword, KeywordName, KeywordSection, SectionHeade
 from testbench2robotframework.cli import fetch_results, get_tb2robot_file_configuration
 from testbench2robotframework.testbench2robotframework import testbench2robotframework
 
+from testbench2robotframework.robotframework2testbench import robot2testbench
 from testbench_language_server import __version__
 from testbench_language_server.testbench_api.testbench_resource_connection import (
     TestBenchResourceConnection,
@@ -236,11 +237,11 @@ def generate_test_suites(ls: LanguageServer, kwargs):
 @testbench_ls.command(COMMAND_FETCH_RESULTS)
 def generate_test_suites(ls: LanguageServer, kwargs):
     kwargs, *_ = kwargs
-    fetch_results.callback(
-        config=None,
-        robot_result=pathlib.Path(kwargs.get("robot_result")),
-        output_directory=pathlib.Path(kwargs.get("output_directory")),
-        testbench_report=pathlib.Path(kwargs.get("testbench_report")),
+    robot2testbench(
+        json_input_report=pathlib.Path(kwargs.get("testbench_report")),
+        robot_result_xml=pathlib.Path(kwargs.get("robot_result")),
+        json_output_result=pathlib.Path(kwargs.get("output_directory")),
+        config={}
     )
 
 

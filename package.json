@@ -84,15 +84,18 @@
             {
                 "id": "testbench2robotframework",
                 "title": "TestBench2RobotFramework",
-                "properties": {
+                "_disabledSettings": {
                     "testbenchExtension.UseConfigurationFile": {
                         "type": "boolean",
                         "propertyNames": true,
                         "description": "If enabled, testbench2robotframework will prioritize the settings specified in the pyproject.toml over those specified in the extension settings.",
                         "default": false,
                         "order": 10,
-                        "scope": "window"
-                    },
+                        "scope": "window",
+                        "_note": "Temporarily disabled due to bug with tree item marking after test generation. Move back to 'properties' when fixed. (tbe-162)"
+                    }
+                },
+                "properties": {
                     "testbenchExtension.cleanFilesBeforeTestGeneration": {
                         "type": "boolean",
                         "default": true,
