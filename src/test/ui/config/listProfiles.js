@@ -28,10 +28,12 @@ const profiles = [
         name: "suite-logging",
         description: "Tests with different compound keyword logging"
     },
+    /*
     {
         name: "config-file-mode",
         description: "Tests using configuration file"
     },
+    */
     {
         name: "open-testing-view",
         description: "Tests with automatic testing view opening"

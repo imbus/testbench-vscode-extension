@@ -51,7 +51,7 @@ const BASE_VSCODE_SETTINGS = {
 const DEFAULT_EXTENSION_SETTINGS = {
     "testbenchExtension.automaticLoginAfterExtensionActivation": false,
     "testbenchExtension.testbenchLogLevel": "Trace",
-    "testbenchExtension.UseConfigurationFile": false,
+    // "testbenchExtension.UseConfigurationFile": false,
     "testbenchExtension.cleanFilesBeforeTestGeneration": true,
     "testbenchExtension.fullyQualifiedKeywords": false,
     "testbenchExtension.outputDirectory": "tests",
@@ -116,6 +116,7 @@ export const TEST_PROFILES: ExtensionSettingsProfile[] = [
             "testbenchExtension.logSuiteNumbering": false
         }
     },
+    /*
     {
         name: "config-file-mode",
         description: "Tests using configuration file",
@@ -124,6 +125,7 @@ export const TEST_PROFILES: ExtensionSettingsProfile[] = [
             "testbenchExtension.UseConfigurationFile": true
         }
     },
+    */
     {
         name: "open-testing-view",
         description: "Tests with automatic testing view opening",

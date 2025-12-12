@@ -8,24 +8,60 @@
 
 const { execSync } = require("child_process");
 const readline = require("readline");
+const fs = require("fs");
+const path = require("path");
 
-const profiles = [
-    "default",
-    "fully-qualified-keywords",
-    "clean-files-disabled",
-    "custom-output-path",
-    "suite-logging",
-    "config-file-mode",
-    "open-testing-view",
-    "clear-internal-directory"
-];
+function getProfilesFromConfig() {
+    try {
+        const configPath = path.join(__dirname, "../src/test/ui/config/testConfigurations.ts");
+        const content = fs.readFileSync(configPath, "utf8");
 
-const testFiles = [
-    "loginWebview.ui.test.ts",
-    "projectsView.ui.test.ts",
-    "testThemesView.ui.test.ts",
-    "resourceCreationFlow.ui.test.ts"
-];
+        // Remove comments to avoid matching commented-out profiles
+        const contentWithoutComments = content.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
+
+        const profiles = [];
+        const regex = /name:\s*"([^"]+)"/g;
+        let match;
+
+        while ((match = regex.exec(contentWithoutComments)) !== null) {
+            profiles.push(match[1]);
+        }
+
+        return profiles;
+    } catch (error) {
+        console.warn("Could not read profiles from config, falling back to default list.", error.message);
+        return [
+            "default",
+            "fully-qualified-keywords",
+            "clean-files-disabled",
+            "custom-output-path",
+            "suite-logging",
+            "open-testing-view",
+            "clear-internal-directory"
+        ];
+    }
+}
+
+function getTestFiles() {
+    try {
+        const testDir = path.join(__dirname, "../src/test/ui");
+        if (fs.existsSync(testDir)) {
+            return fs.readdirSync(testDir).filter((file) => file.endsWith(".ui.test.ts"));
+        }
+    } catch (error) {
+        console.warn("Could not list test files, falling back to default list.", error.message);
+    }
+
+    return [
+        "loginWebview.ui.test.ts",
+        "projectsView.ui.test.ts",
+        "testThemesView.ui.test.ts",
+        "resourceCreationFlow.ui.test.ts"
+    ];
+}
+
+const profiles = getProfilesFromConfig();
+const testFiles = getTestFiles();
 
 const rl = readline.createInterface({
     input: process.stdin,

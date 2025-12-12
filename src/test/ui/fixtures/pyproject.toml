@@ -15,7 +15,7 @@ clean = true
 fully-qualified = false
 
 # Compound keyword logging - enable logging for compound keywords
-compound-keyword-logging = false
+compound-keyword-logging = "COMMENT"
 
 # Log suite numbering - include test suite numbering in logs
 log-suite-numbering = false
