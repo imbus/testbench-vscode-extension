@@ -61,6 +61,7 @@ release.config.js
 tasks.py
 .nycrc.json
 .nycrc
+user-guide.md
 
 # Cache & Temporary Files
 __pycache__/
