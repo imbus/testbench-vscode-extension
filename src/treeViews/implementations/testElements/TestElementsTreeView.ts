@@ -211,6 +211,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     /**
      * Updates parent marking flags for all subdivision items in the tree.
      * This is called after file system changes to ensure parent markings are accurate.
+     * Parents are only marked if all their child resources are locally available.
      */
     private async updateAllParentMarkings(): Promise<void> {
         if (!ENABLE_PARENT_MARKING || !this.rootItems || this.rootItems.length === 0) {
@@ -231,10 +232,12 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             };
             collectSubdivisions(this.rootItems);
 
-            // Update hasLocalChildren flag for each subdivision
             for (const item of subdivisionItems) {
-                const hasLocalChildren = await this.hasAnyLocalChildResources(item);
-                item.hasLocalChildren = hasLocalChildren;
+                // Only non-resource folders (virtual folders) need the hasLocalChildren flag
+                if (!item.data.directRegexMatch) {
+                    const allChildrenAvailable = await this.hasAllChildResourcesAvailable(item);
+                    item.hasLocalChildren = allChildrenAvailable;
+                }
             }
         } catch (error) {
             this.logger.error("[TestElementsTreeView] Error updating all parent markings:", error);
@@ -403,7 +406,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
         targetItem.updateLocalAvailability(true, resourcePath.finalPath);
         await this.updateParentIcons(targetItem);
-        await this.markParentSubdivisions(targetItem);
+        await this.updateParentSubdivisionMarking(targetItem);
         this.refreshItemWithParents(targetItem);
 
         return true;
@@ -813,7 +816,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                                 subdivisionItem.updateLocalAvailability(resourcePathExists, resourcePath);
 
                                 if (resourcePathExists) {
-                                    await this.markParentSubdivisions(subdivisionItem);
+                                    await this.updateParentSubdivisionMarking(subdivisionItem);
                                 }
                             }
                         }
@@ -833,36 +836,44 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Checks if a subdivision item has any locally available child resources.
-     * This recursively checks all descendants to see if any resource files exist.
+     * Checks if all child resource subdivisions of an item are locally available.
+     * A parent should only be marked if all its resource descendants are available.
+     * Non-resource folders (virtual) are checked recursively for their descendants.
      * @param item The subdivision item to check
-     * @returns True if any child resources exist locally, false otherwise
+     * @returns True if all child resource subdivisions are locally available, false otherwise
      */
-    private async hasAnyLocalChildResources(item: TestElementsTreeItem): Promise<boolean> {
-        if (item.data.isLocallyAvailable) {
-            return true;
+    private async hasAllChildResourcesAvailable(item: TestElementsTreeItem): Promise<boolean> {
+        if (!item.children || item.children.length === 0) {
+            // Leaf
+            return item.data.directRegexMatch ? item.data.isLocallyAvailable === true : true;
         }
 
-        if (item.children && item.children.length > 0) {
-            for (const child of item.children as TestElementsTreeItem[]) {
-                if (child.data.testElementType === TestElementType.Subdivision) {
-                    const hasLocal = await this.hasAnyLocalChildResources(child);
-                    if (hasLocal) {
-                        return true;
+        for (const child of item.children as TestElementsTreeItem[]) {
+            if (child.data.testElementType === TestElementType.Subdivision) {
+                if (child.data.directRegexMatch) {
+                    if (!child.data.isLocallyAvailable) {
+                        return false;
+                    }
+                } else {
+                    // Folder, recursively check all its children
+                    const allChildrenAvailable = await this.hasAllChildResourcesAvailable(child);
+                    if (!allChildrenAvailable) {
+                        return false;
                     }
                 }
             }
         }
 
-        return false;
+        return true;
     }
 
     /**
-     * Marks parent subdivision items to indicate they have locally available child resources.
-     * This is called when a resource is created to visually mark the parent hierarchy.
-     * @param item The tree item whose parents should be marked
+     * Updates parent subdivision marking based on whether all child resources are locally available.
+     * Parents are only marked when ALL their descendant resources are available.
+     * This is called when a resource is created or deleted to update the parent hierarchy.
+     * @param item The tree item whose parents should be checked and updated
      */
-    private async markParentSubdivisions(item: TestElementsTreeItem): Promise<void> {
+    private async updateParentSubdivisionMarking(item: TestElementsTreeItem): Promise<void> {
         if (!ENABLE_PARENT_MARKING) {
             return;
         }
@@ -871,50 +882,17 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             let parent = item.parent as TestElementsTreeItem | null;
             while (parent) {
                 if (parent.data.testElementType === TestElementType.Subdivision) {
-                    parent.hasLocalChildren = true;
+                    const allChildrenAvailable = await this.hasAllChildResourcesAvailable(parent);
+                    parent.hasLocalChildren = allChildrenAvailable;
                     this.logger.trace(
-                        `[TestElementsTreeView] Marked parent subdivision '${parent.label}' as having local children`
+                        `[TestElementsTreeView] Parent '${parent.label}' marking updated: ${allChildrenAvailable}`
                     );
                 }
                 parent = parent.parent as TestElementsTreeItem | null;
             }
         } catch (error) {
             this.logger.error(
-                `[TestElementsTreeView] Error marking parent subdivisions for item ${item.label}:`,
-                error
-            );
-        }
-    }
-
-    /**
-     * Unmarks parent subdivision items if they no longer have any locally available child resources.
-     * This is called when a resource is deleted to update the parent hierarchy marking.
-     * @param item The tree item whose parents should be checked and potentially unmarked
-     */
-    private async unmarkParentSubdivisionsIfNeeded(item: TestElementsTreeItem): Promise<void> {
-        if (!ENABLE_PARENT_MARKING) {
-            return;
-        }
-
-        try {
-            let parent = item.parent as TestElementsTreeItem | null;
-            while (parent) {
-                if (parent.data.testElementType === TestElementType.Subdivision) {
-                    // Check if this parent still has any local child resources
-                    const hasLocalChildren = await this.hasAnyLocalChildResources(parent);
-                    parent.hasLocalChildren = hasLocalChildren;
-
-                    if (!hasLocalChildren) {
-                        this.logger.trace(
-                            `[TestElementsTreeView] Unmarked parent subdivision '${parent.label}' - no local children remaining`
-                        );
-                    }
-                }
-                parent = parent.parent as TestElementsTreeItem | null;
-            }
-        } catch (error) {
-            this.logger.error(
-                `[TestElementsTreeView] Error unmarking parent subdivisions for item ${item.label}:`,
+                `[TestElementsTreeView] Error updating parent subdivision marking for item ${item.label}:`,
                 error
             );
         }
