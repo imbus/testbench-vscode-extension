@@ -100,13 +100,22 @@ After executing the generated Robot Framework test suites, you can import the ex
 
 ![Upload Execution Results to TestBench](userGuideImages/upload_results.png)
 
+## Certificate Path
+
+To make the VS Code extension trust a custom or self-signed certificate from your TestBench server, you can set the Certificate Path in the extension settings.
+
+### How to set it:
+
+- Obtain the public certificate file (.pem) from your TestBench server.
+- In the extension settings, set Certificate Path.
+
 <!-- ## Documentation
 
 For comprehensive documentation including detailed feature descriptions, configuration settings, and a troubleshooting guide, see the [User Guide](user-guide.md). -->
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE.md) file for details.
+This project is licensed under the Apache-2.0 License. See the [LICENSE] file for details.
 
 ## Contributing / Feedback
 

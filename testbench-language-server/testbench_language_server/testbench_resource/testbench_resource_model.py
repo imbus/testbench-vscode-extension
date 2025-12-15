@@ -19,7 +19,7 @@ from robot.api.parsing import (
 )
 from robot.parsing.model import Block, Statement
 
-from ..testbench_api.model import KeywordCallType
+from testbench2robotframework.model import KeywordCallType
 
 
 class TestBenchResourceModel:

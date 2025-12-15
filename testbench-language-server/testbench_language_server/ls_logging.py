@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from testbench_language_server.messages import TESTBENCH_LS_CLASS_NAME
 
 if TYPE_CHECKING:
-    from pygls.server import LanguageServer
+    from pygls.lsp.server import LanguageServer
 
 
 class LogLevel(Enum):
@@ -18,28 +18,28 @@ class LogLevel(Enum):
 
 
 def show_error(ls: LanguageServer, message: str):
-    ls.send_notification(
+    ls.protocol.notify(
         f"{TESTBENCH_LS_CLASS_NAME}/show-error",
         {"message": message},
     )
 
 
 def show_info(ls: LanguageServer, message: str):
-    ls.send_notification(
+    ls.protocol.notify(
         f"{TESTBENCH_LS_CLASS_NAME}/show-info",
         {"message": message},
     )
 
 
 def show_warning(ls: LanguageServer, message: str):
-    ls.send_notification(
+    ls.protocol.notify(
         f"{TESTBENCH_LS_CLASS_NAME}/show-warning",
         {"message": message},
     )
 
 
 def log(ls: LanguageServer, message: str, level: LogLevel = LogLevel.INFO):
-    ls.send_notification(
+    ls.protocol.notify(
         f"{TESTBENCH_LS_CLASS_NAME}/log-{level.value}",
         {"message": message},
     )

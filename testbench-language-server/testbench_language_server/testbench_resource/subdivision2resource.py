@@ -9,13 +9,13 @@ from robot.api.parsing import (
 
 from ..ls_exceptions import TestBenchKeywordNotFound
 from ..testbench_api.legacy_model import (
+    get_keywords_resource_path,
     get_tb_keyword_key,
     get_tb_keyword_parent_key,
-    get_keywords_resource_path,
     get_test_element_uid,
     is_tb_keyword,
 )
-from ..testbench_api.model import (
+from testbench2robotframework.model import (
     KeywordCallType,
     KeywordDetails,
     ParameterEvaluationType,

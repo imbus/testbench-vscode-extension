@@ -1,6 +1,6 @@
 from .legacy_model import TestElement
-from .model import KeywordDetails
-from .model_utils import from_dict
+from testbench2robotframework.model import KeywordDetails
+from testbench2robotframework.model_utils import from_dict
 from .testbench_resource_connection import TestBenchResourceConnection
 
 
