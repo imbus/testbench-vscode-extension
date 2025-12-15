@@ -60,9 +60,9 @@ src/test/ui/
 │   ├── BasePage.ts                    # Base page with common methods
 │   ├── ConnectionPage.ts              # Connection webview page object
 │   ├── ProjectsViewPage.ts            # Projects view page object
+│   ├── TestElementsPage.ts            # Test Elements view page object
 │   └── TestThemesViewPage.ts          # Test Themes view page object
 │
-
 ├── fixtures/                          # Static test files (copied to workspace)
 │   ├── resources/                     # .resource files for Robot Framework
 │   ├── tests/                         # Test file templates
@@ -71,7 +71,11 @@ src/test/ui/
 ├── loginWebview.ui.test.ts            # Login webview UI tests
 ├── projectsView.ui.test.ts            # Projects tree view UI tests
 ├── testThemesView.ui.test.ts          # Test Themes view UI tests
-└── resourceCreationFlow.ui.test.ts    # End-to-end resource creation flow tests
+├── testElementsView.ui.test.ts        # Test Elements view UI tests
+├── resourceCreationFlow.ui.test.ts    # End-to-end resource creation flow tests
+├── searchFeature.ui.test.ts           # Search functionality UI tests
+├── contextConfiguration.ui.test.ts    # Context configuration and active project/TOV tests
+└── toolbarActions.ui.test.ts          # Toolbar button actions UI tests
 ```
 
 ## Test Fixtures
@@ -130,7 +134,11 @@ To execute a specific test file instead of the entire suite, use the `test:ui-si
 npm run test:ui-single -- loginWebview.ui.test.ts
 npm run test:ui-single -- projectsView.ui.test.ts
 npm run test:ui-single -- testThemesView.ui.test.ts
+npm run test:ui-single -- testElementsView.ui.test.ts
 npm run test:ui-single -- resourceCreationFlow.ui.test.ts
+npm run test:ui-single -- searchFeature.ui.test.ts
+npm run test:ui-single -- contextConfiguration.ui.test.ts
+npm run test:ui-single -- toolbarActions.ui.test.ts
 ```
 
 ### Run Tests with Multiple Configuration Profiles

@@ -60,15 +60,11 @@ describe("Resource Creation Flow UI Tests", function () {
         const testThemesPage = new TestThemesPage(driver);
         const testElementsPage = new TestElementsPage(driver);
 
-        // ============================================
-        // Phase 1: Navigation to Test Themes View
-        // ============================================
         logger.info("Phase1", "Starting Navigation to Test Themes View...");
 
         const sideBar = new SideBarView();
         const content = sideBar.getContent();
 
-        // Check if we are already in the Test Themes view
         const testThemesSection = await testThemesPage.getSection(content);
         let isInTestThemesView = false;
 
@@ -85,7 +81,6 @@ describe("Resource Creation Flow UI Tests", function () {
         }
 
         if (!isInTestThemesView) {
-            // Navigate from Projects View
             const projectsSection = await projectsPage.getSection(content);
             if (!projectsSection) {
                 throw new Error("Projects View not found");
@@ -93,7 +88,6 @@ describe("Resource Creation Flow UI Tests", function () {
 
             await waitForTreeItems(projectsSection, driver);
 
-            // Debug: Log all visible projects to help diagnose the issue
             const allProjects = await projectsSection.getVisibleItems();
             logger.debug("Phase1", `All visible projects (${allProjects.length}):`);
             for (let i = 0; i < allProjects.length; i++) {
@@ -110,7 +104,6 @@ describe("Resource Creation Flow UI Tests", function () {
                 throw new Error(`Project "${config.projectName}" not found`);
             }
 
-            // Verify we found the correct project by checking its label
             const foundProjectLabel = await project.getLabel();
             logger.debug("Phase1", `Found project with label: "${foundProjectLabel}"`);
             if (foundProjectLabel !== config.projectName) {
@@ -137,7 +130,6 @@ describe("Resource Creation Flow UI Tests", function () {
             const foundCycleLabel = await cycle.getLabel();
             logger.debug("Phase1", `Found cycle with label: "${foundCycleLabel}"`);
 
-            // Verify we're working with the correct project by checking the project label again
             const verifiedProjectLabel = await project.getLabel();
             if (verifiedProjectLabel !== config.projectName) {
                 throw new Error(
@@ -157,7 +149,6 @@ describe("Resource Creation Flow UI Tests", function () {
                 version
             );
 
-            // Re-locate entire hierarchy after potential tree reordering to get fresh references
             logger.debug("Phase1", "Re-locating project hierarchy after configuration...");
             const refreshedContent = sideBar.getContent();
             const refreshedProjectsSection = await projectsPage.getSection(refreshedContent);
@@ -166,10 +157,8 @@ describe("Resource Creation Flow UI Tests", function () {
 
             if (!refreshedProjectsSection) {
                 logger.warn("Phase1", "Projects section not found after configuration");
-                // Fallback to original references
                 cycleToClick = cycle;
             } else {
-                // Re-fetch project to ensure we have a fresh reference
                 const refreshedProject = await projectsPage.getProject(refreshedProjectsSection, config.projectName);
                 if (!refreshedProject) {
                     logger.warn(
@@ -187,7 +176,6 @@ describe("Resource Creation Flow UI Tests", function () {
                         );
                     }
 
-                    // Re-fetch version
                     const refreshedVersion = await projectsPage.getVersion(refreshedProject, config.versionName);
                     if (!refreshedVersion) {
                         logger.warn(
@@ -199,7 +187,6 @@ describe("Resource Creation Flow UI Tests", function () {
                         const refreshedVersionLabel = await refreshedVersion.getLabel();
                         logger.debug("Phase1", `Re-located version: "${refreshedVersionLabel}"`);
 
-                        // Re-fetch cycle
                         const refreshedCycle = await projectsPage.getCycle(refreshedVersion, config.cycleName);
                         if (!refreshedCycle) {
                             logger.warn(
@@ -216,11 +203,9 @@ describe("Resource Creation Flow UI Tests", function () {
                 }
             }
 
-            // Final verification: log what we're about to click
             const finalCycleLabel = await cycleToClick.getLabel();
             logger.debug("Phase1", `About to double-click cycle with label: "${finalCycleLabel}"`);
 
-            // Verify the project one more time by re-fetching it
             const finalProjectsSection = sideBar.getContent();
             const finalProjectsSectionObj = await projectsPage.getSection(finalProjectsSection);
             if (finalProjectsSectionObj) {
@@ -246,9 +231,6 @@ describe("Resource Creation Flow UI Tests", function () {
             }
         }
 
-        // ============================================
-        // Phase 2: Select Test Theme
-        // ============================================
         logger.info("Phase2", "Selecting Test Theme...");
 
         const updatedContent = sideBar.getContent();
@@ -272,9 +254,6 @@ describe("Resource Creation Flow UI Tests", function () {
         await testTheme.click();
         await applySlowMotion(driver);
 
-        // ============================================
-        // Phase 3: Create New Resource (Test Element)
-        // ============================================
         logger.info("Phase3", "Creating New Resource...");
 
         const elementsSection = await testElementsPage.getSection(updatedContent);
@@ -282,10 +261,8 @@ describe("Resource Creation Flow UI Tests", function () {
             throw new Error("Test Elements section not found");
         }
 
-        // Wait for tree items to load
         await waitForTreeItems(elementsSection, driver);
 
-        // Find the subdivision tree item that should have the "Create Resource" button
         logger.info("Phase3", `Looking for subdivision "${config.subdivisionName}"...`);
         let subdivision = await testElementsPage.getItem(elementsSection, config.subdivisionName);
         if (!subdivision) {
@@ -299,18 +276,14 @@ describe("Resource Creation Flow UI Tests", function () {
 
         logger.info("Phase3", `Found subdivision "${config.subdivisionName}", clicking to expand it...`);
 
-        // The expected resource file name
         const expectedResourceFileName = config.resourceFileName || `${config.subdivisionName}.resource`;
         logger.debug("Phase3", `Expected resource file: "${expectedResourceFileName}"`);
 
-        // Cache the subdivision label to avoid stale element issues
         const subdivisionLabel = await subdivision.getLabel();
 
-        // Click the subdivision once to expand it and make the "Create Resource" button visible
         await subdivision.click();
         await applySlowMotion(driver);
 
-        // Wait for the "Create Resource" button to become visible
         const buttonVisible = await waitForTreeItemButton(subdivision, driver, "Create Resource", UITimeouts.MEDIUM);
         if (!buttonVisible) {
             logger.warn("Phase3", "Create Resource button did not become visible");
@@ -318,9 +291,6 @@ describe("Resource Creation Flow UI Tests", function () {
 
         logger.info("Phase3", "Clicking Create Resource button...");
 
-        // Click the "Create Resource" button on the subdivision tree item
-        // Note: "Create Resource" is a tree item action button, not a toolbar action
-        // This opens the resource file directly in the editor (no input box)
         const createClicked = await testElementsPage.clickCreateResource(subdivision, subdivisionLabel);
         if (!createClicked) {
             throw new Error('Failed to click "Create Resource" button on subdivision');
@@ -328,7 +298,6 @@ describe("Resource Creation Flow UI Tests", function () {
 
         logger.info("Phase3", "Waiting for resource file to be created and opened in editor...");
 
-        // Some builds prompt for a name, others create/open directly. Handle both.
         const quickInput = await waitForQuickInput(driver, UITimeouts.SHORT);
         if (quickInput) {
             logger.info("Phase3", "Quick input appeared; confirming resource name...");
@@ -361,18 +330,12 @@ describe("Resource Creation Flow UI Tests", function () {
 
         logger.info("Phase3", `✓ Resource file "${expectedResourceFileName}" opened in editor`);
 
-        // The resource file is automatically named after the subdivision
         const newResourceName = config.subdivisionName;
 
-        // ============================================
-        // Phase 4: Verify Created Resource
-        // ============================================
         logger.info("Phase4", "Verifying Created Resource...");
 
-        // Ensure TestBench sidebar is open (in case file open switched to Explorer)
         await openTestBenchSidebar(driver);
 
-        // Re-acquire the sidebar content and section as the tree might have refreshed
         const sideBarRefreshed = new SideBarView();
         const contentRefreshed = sideBarRefreshed.getContent();
         const elementsSectionRefreshed = await testElementsPage.getSection(contentRefreshed);
@@ -389,16 +352,12 @@ describe("Resource Creation Flow UI Tests", function () {
 
         if (newResource) {
             logger.info("Phase4", ` Found new resource: "${newResourceName}"`);
-
-            // Optional: Open the resource to verify it opens the editor
             await testElementsPage.clickOpenResource(newResource);
         }
 
-        // Return focus to the active editor window for resource file
         const editorView2 = new EditorView();
         let resourceEditor: TextEditor | null = null;
 
-        // Find and focus the resource file editor
         const openEditorTitles = await editorView2.getOpenEditorTitles();
         for (const title of openEditorTitles) {
             if (title.includes(config.resourceFileName || "") || title.includes(config.subdivisionName)) {
@@ -410,7 +369,6 @@ describe("Resource Creation Flow UI Tests", function () {
 
         if (!resourceEditor) {
             logger.warn("Phase4", "Resource editor not found. Trying to open file...");
-            // Try to open the file if it exists
             try {
                 resourceEditor = (await editorView2.openEditor(
                     config.resourceFileName || config.subdivisionName + ".resource"
@@ -420,18 +378,14 @@ describe("Resource Creation Flow UI Tests", function () {
             }
         }
 
-        // Trigger CodeLens: Place the cursor at Line 1
         if (resourceEditor) {
             const cursorSet = await setCursorPosition(resourceEditor, driver, 1, 0);
             if (!cursorSet) {
                 logger.warn("Phase4", "Warning: Failed to set cursor position, continuing anyway");
             }
 
-            // Remove contents from line 4 onwards (usually starts with "*** Keywords ***")
-            // Keep lines 1, 2, and 3 intact
             logger.info("Phase4", "Removing content from line 4 onwards...");
 
-            // Retry deletion up to 3 times if it fails
             let contentDeleted = false;
             const maxRetries = 3;
             for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -447,7 +401,6 @@ describe("Resource Creation Flow UI Tests", function () {
                 } else {
                     logger.warn("Phase4", `✗ Deletion failed on attempt ${attempt}`);
                     if (attempt < maxRetries) {
-                        // Re-focus the editor before retry
                         try {
                             await resourceEditor.click();
                             await driver.sleep(200);
@@ -464,35 +417,28 @@ describe("Resource Creation Flow UI Tests", function () {
                 return;
             }
 
-            // Add stabilization delay.
-            // CodeLenses need time to re-render and attach event listeners after document edits.
             logger.debug("Phase4", "Waiting for CodeLens to stabilize after deletion...");
             await driver.sleep(3000);
         }
 
-        // Wait for CodeLens to appear
         const codeLensAppeared = await waitForCodeLens(driver, "Pull changes from TestBench");
         if (!codeLensAppeared) {
             logger.warn("Phase4", "CodeLens 'Pull changes from TestBench' did not appear");
             this.skip();
         }
 
-        // Locate the CodeLens action text above the first line that reads "Pull changes from TestBench"
-        // Ensure you have updated clickCodeLens in testUtils.ts to use the MouseEvent logic
         const codeLensClicked = await clickCodeLens(driver, "Pull changes from TestBench", 0);
         if (!codeLensClicked) {
             logger.warn("Phase4", "Failed to click CodeLens 'Pull changes from TestBench'");
             this.skip();
         }
 
-        // Wait for Refactor Preview to open
         const refactorPreviewOpened = await waitForRefactorPreview(driver);
         if (!refactorPreviewOpened) {
             logger.warn("Phase4", "Refactor Preview did not open after clicking CodeLens");
             this.skip();
         }
 
-        // Ensure the checkbox for resource file is checked
         const checkboxReady = await ensureRefactorPreviewItemChecked(
             driver,
             config.resourceFileName || config.subdivisionName + ".resource"
@@ -501,7 +447,6 @@ describe("Resource Creation Flow UI Tests", function () {
             logger.warn("Phase4", "Warning: Could not ensure checkbox is checked, Apply might fail.");
         }
 
-        // Click the "Apply" button inside the Refactor Preview tab
         const applyClicked = await clickRefactorPreviewApply(driver);
         if (!applyClicked) {
             logger.warn("Phase4", "Failed to click Apply button in Refactor Preview");

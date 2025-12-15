@@ -44,7 +44,11 @@ const UI_TEST_FILES = [
     "loginWebview.ui.test.ts",
     "projectsView.ui.test.ts",
     "testThemesView.ui.test.ts",
-    "resourceCreationFlow.ui.test.ts"
+    "resourceCreationFlow.ui.test.ts",
+    "searchFeature.ui.test.ts",
+    "testElementsView.ui.test.ts",
+    "contextConfiguration.ui.test.ts",
+    "toolbarActions.ui.test.ts"
 ];
 
 /**
@@ -54,7 +58,11 @@ const TEST_FILE_SHORT_NAMES: Record<string, string> = {
     "loginWebview.ui.test.ts": "login",
     "projectsView.ui.test.ts": "projects",
     "testThemesView.ui.test.ts": "themes",
-    "resourceCreationFlow.ui.test.ts": "resource"
+    "resourceCreationFlow.ui.test.ts": "resource",
+    "searchFeature.ui.test.ts": "search",
+    "testElementsView.ui.test.ts": "elements",
+    "contextConfiguration.ui.test.ts": "config",
+    "toolbarActions.ui.test.ts": "toolbar"
 };
 
 /**
