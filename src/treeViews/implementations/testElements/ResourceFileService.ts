@@ -161,24 +161,20 @@ export class ResourceFileService {
 
         let relativePathComponents: string[];
 
-        if (resourceDirectoryMarker) {
-            const resourceDirectoryMarkerIndex: number = await vscode.commands.executeCommand(
-                "testbench_ls.get_resource_directory_subdivision_index",
-                {
-                    subdivision_parts: normalizedPathComponents,
-                    resource_directory_regex: resourceDirectoryMarker
-                }
-            );
-
-            if (resourceDirectoryMarkerIndex !== -1) {
-                // Marker is found, ignore everything up to and including the marker itself
-                relativePathComponents = normalizedPathComponents.slice(resourceDirectoryMarkerIndex + 1);
-            } else {
-                // No marker match, create resource file directly under resource directory without subdivision folder hierarchy
-                relativePathComponents = [normalizedPathComponents[normalizedPathComponents.length - 1]];
+        const resourceDirectoryMarkerIndex: number = await vscode.commands.executeCommand(
+            "testbench_ls.get_resource_directory_subdivision_index",
+            {
+                subdivision_parts: normalizedPathComponents,
+                resource_directory_regex: resourceDirectoryMarker
             }
+        );
+
+        if (resourceDirectoryMarkerIndex !== -1) {
+            // Marker is found, ignore everything up to and including the marker itself
+            relativePathComponents = normalizedPathComponents.slice(resourceDirectoryMarkerIndex + 1);
         } else {
-            relativePathComponents = normalizedPathComponents;
+            // No marker match, create resource file directly under resource directory without subdivision folder hierarchy
+            relativePathComponents = [normalizedPathComponents[normalizedPathComponents.length - 1]];
         }
 
         // Filter out empty components that might result from normalization
