@@ -1,7 +1,7 @@
 from typing import Any
 
 from ..ls_exceptions import TestBenchKeywordNotFound, TestBenchSubdivisionNotFound
-from .legacy_model import get_tb_keyword_key, get_subdivision_key
+from .legacy_model import get_subdivision_key, get_tb_keyword_key
 from .testbench_get import get_test_element
 from .testbench_resource_connection import TestBenchResourceConnection
 

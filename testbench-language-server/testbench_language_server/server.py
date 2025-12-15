@@ -26,19 +26,20 @@ from lsprotocol.types import (
     InitializeResult,
     OptionalVersionedTextDocumentIdentifier,
     Position,
+    PublishDiagnosticsParams,
     Range,
     ServerCapabilities,
     TextDocumentEdit,
     TextDocumentSyncKind,
     WorkspaceEdit,
 )
-from pygls.server import LanguageServer
+from pygls.lsp.server import LanguageServer
 from pygls.workspace.text_document import TextDocument
 from robot.api.parsing import Keyword, KeywordName, KeywordSection, SectionHeader, Token
-from testbench2robotframework.cli import fetch_results, get_tb2robot_file_configuration
+from testbench2robotframework.cli import get_tb2robot_file_configuration
+from testbench2robotframework.robotframework2testbench import robot2testbench
 from testbench2robotframework.testbench2robotframework import testbench2robotframework
 
-from testbench2robotframework.robotframework2testbench import robot2testbench
 from testbench_language_server import __version__
 from testbench_language_server.testbench_api.testbench_resource_connection import (
     TestBenchResourceConnection,
@@ -128,14 +129,14 @@ from .testbench_resource.resource_utils import (
     robot_model_to_string,
 )
 from .testbench_resource.subdivision2resource import (
-    create_rf_keyword_from_tb_keyword,
     create_resource_from_subdivision,
+    create_rf_keyword_from_tb_keyword,
 )
 from .testbench_resource.testbench_resource_model import (
     TestBenchResourceModel,
-    get_tb_keyword_call_type,
     get_kw_name,
     get_kw_uid,
+    get_tb_keyword_call_type,
 )
 
 
@@ -196,7 +197,6 @@ def parse_subdivision_mapping(ls: LanguageServer, values: list[str]) -> dict[str
 
 @testbench_ls.command(COMMAND_GENERATE_TEST_SUITES)
 def generate_test_suites(ls: LanguageServer, kwargs):
-    kwargs, *_ = kwargs
     toml_settings = get_tb2robot_file_configuration(None)
     settings = {
         "clean": kwargs.get("clean"),
@@ -236,7 +236,6 @@ def generate_test_suites(ls: LanguageServer, kwargs):
 
 @testbench_ls.command(COMMAND_FETCH_RESULTS)
 def generate_test_suites(ls: LanguageServer, kwargs):
-    kwargs, *_ = kwargs
     robot2testbench(
         json_input_report=pathlib.Path(kwargs.get("testbench_report")),
         robot_result_xml=pathlib.Path(kwargs.get("robot_result")),
@@ -252,31 +251,31 @@ def initialize(params: InitializeParams) -> InitializeResult:
 
 
 @testbench_ls.command(COMMAND_UPDATE_SERVER_NAME)
-def update_server_name(ls: LanguageServer, args):
+def update_server_name(ls: LanguageServer, *args):
     new_name, *_ = args
     ls.set_server_name(new_name)
 
 
 @testbench_ls.command(COMMAND_UPDATE_SERVER_PORT)
-def update_server_port(ls: LanguageServer, args):
+def update_server_port(ls: LanguageServer, *args):
     new_port, *_ = args
     ls.set_server_port(new_port)
 
 
 @testbench_ls.command(COMMAND_UPDATE_LOGIN_NAME)
-def update_login_name(ls: LanguageServer, args):
+def update_login_name(ls: LanguageServer, *args):
     new_name, *_ = args
     ls.set_login_name(new_name)
 
 
 @testbench_ls.command(COMMAND_UPDATE_SESSION_TOKEN)
-def update_session_token(ls: LanguageServer, args):
+def update_session_token(ls: LanguageServer, *args):
     new_session_token, *_ = args
     ls.set_session_token(new_session_token)
 
 
 @testbench_ls.command(COMMAND_UPDATE_PROJECT)
-def update_project(ls: LanguageServer, args):
+def update_project(ls: LanguageServer, *args):
     new_project, *_ = args
     ls.set_project(new_project)
     tb_connection = TestBenchResourceConnection.singleton()
@@ -284,15 +283,13 @@ def update_project(ls: LanguageServer, args):
     for docum in testbench_ls.workspace.text_documents:
         document = testbench_ls.workspace.get_text_document(docum)
         diagnostics = get_context_diagnostics(testbench_ls, document)
-        testbench_ls.publish_diagnostics(
-            document.uri,
-            diagnostics=diagnostics,
-            version=document.version,
+        ls.text_document_publish_diagnostics(
+            PublishDiagnosticsParams(document.uri, diagnostics=diagnostics, version=document.version)
         )
 
 
 @testbench_ls.command(COMMAND_UPDATE_TOV)
-def update_tov(ls: LanguageServer, args):
+def update_tov(ls: LanguageServer, *args):
     new_tov, *_ = args
     ls.set_tov(new_tov)
     tb_connection = TestBenchResourceConnection.singleton()
@@ -300,10 +297,8 @@ def update_tov(ls: LanguageServer, args):
     for docum in testbench_ls.workspace.text_documents:
         document = testbench_ls.workspace.get_text_document(docum)
         diagnostics = get_context_diagnostics(testbench_ls, document)
-        testbench_ls.publish_diagnostics(
-            document.uri,
-            diagnostics=diagnostics,
-            version=document.version,
+        ls.text_document_publish_diagnostics(
+            PublishDiagnosticsParams(document.uri, diagnostics=diagnostics, version=document.version)
         )
 
 
@@ -411,7 +406,6 @@ def context_is_valid(
 
 @testbench_ls.command(COMMAND_SHOW_TESTBENCH_SUBDIVISON_DIFF)
 def show_testbench_diff(ls: LanguageServer, kwargs):
-    kwargs, *_ = kwargs
     document_uri = kwargs.get("document_uri")
     subdivision_uid = kwargs.get("subdivision_uid")
     document = testbench_ls.workspace.get_text_document(document_uri)
@@ -459,7 +453,7 @@ def show_testbench_diff(ls: LanguageServer, kwargs):
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
     testbench_content = apply_text_edits(robot_model_to_string(existing_resource.file), edits)
-    ls.send_notification(
+    ls.protocol.notify(
         "testbench-language-server/display-diff",
         {"path": document_uri, "virtualContent": testbench_content},
     )
@@ -493,7 +487,7 @@ def apply_text_edits(content: str, text_edits: list[AnnotatedTextEdit]) -> str:
 
 
 @testbench_ls.command(COMMAND_ATTEMPT_PUSH_SUBDIVISION)
-def attempt_push_subdivision(ls: LanguageServer, args):
+def attempt_push_subdivision(ls: LanguageServer, *args):
     document_uri, subdivision_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
     existing_resource = TestBenchResourceModel.from_file(document.source)
@@ -540,14 +534,14 @@ def attempt_push_subdivision(ls: LanguageServer, args):
     if not edits:
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
-    ls.send_notification(
+    ls.protocol.notify(
         "testbench-language-server/attempt-push-subdivision",
         {"path": document_uri, "subdivisionUid": subdivision_uid},
     )
 
 
 @testbench_ls.command(COMMAND_ATTEMPT_PUSH_KEYWORD)
-def attempt_push_keyword(ls: LanguageServer, args):
+def attempt_push_keyword(ls: LanguageServer, *args):
     document_uri, keyword_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
     resource = TestBenchResourceModel.from_file(document.source)
@@ -572,14 +566,14 @@ def attempt_push_keyword(ls: LanguageServer, args):
     if not edits:
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
-    ls.send_notification(
+    ls.protocol.notify(
         "testbench-language-server/attempt-push-keyword",
         {"path": document_uri, "keyword_uid": keyword_uid},
     )
 
 
 @testbench_ls.command(COMMAND_ATTEMPT_CREATE_KEYWORD)
-def attempt_create_keyword(ls: LanguageServer, args):
+def attempt_create_keyword(ls: LanguageServer, *args):
     document_uri, keyword_name, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
     resource = TestBenchResourceModel.from_file(document.source)
@@ -594,7 +588,7 @@ def attempt_create_keyword(ls: LanguageServer, args):
         )
         return
     if len(existing_keywords) == 1:
-        ls.send_notification(
+        ls.protocol.notify(
             "testbench-language-server/attempt-create-keyword",
             {"path": document_uri, "keyword_name": keyword_name},
         )
@@ -603,7 +597,6 @@ def attempt_create_keyword(ls: LanguageServer, args):
 
 @testbench_ls.command("testbench_ls.get_resource_directory_subdivision_index")
 def get_resource_directory_subdivision_index(ls: LanguageServer, kwargs) -> int:
-    kwargs, *_ = kwargs
     subdivision_parts = kwargs.get("subdivision_parts")
     resource_directory_regex = kwargs.get("resource_directory_regex")
     if not subdivision_parts:
@@ -617,7 +610,6 @@ def get_resource_directory_subdivision_index(ls: LanguageServer, kwargs) -> int:
 
 @testbench_ls.command(COMMAND_PUSH_SUBDIVISION)
 def push_testbench_subdivision(ls: LanguageServer, kwargs):
-    kwargs, *_ = kwargs
     document_uri = kwargs.get("document_uri")
     document = testbench_ls.workspace.get_text_document(document_uri)
     existing_resource = TestBenchResourceModel.from_file(document.source)
@@ -670,7 +662,7 @@ def push_testbench_subdivision(ls: LanguageServer, kwargs):
 
 
 @testbench_ls.command(COMMAND_PULL_SUBDIVISION)
-def pull_testbench_subdivision(ls: LanguageServer, args):
+def pull_testbench_subdivision(ls: LanguageServer, *args):
     document_uri, subdivision_uid, needs_user_confirmation, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
     existing_resource = TestBenchResourceModel.from_file(document.source)
@@ -742,7 +734,7 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
         KEYWORD_INTERFACE_CHANGE_LABEL,
         needs_user_confirmation,
     )
-    ls.lsp.send_request(
+    ls.protocol.send_request(
         WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
     )
 
@@ -835,7 +827,6 @@ def create_keyword_edits(
 
 @testbench_ls.command(COMMAND_SHOW_TESTBENCH_KEYWORD_DIFF)
 def show_testbench_keyword_diff(ls: LanguageServer, kwargs):
-    kwargs, *_ = kwargs
     document_uri = kwargs.get("document_uri")
     keyword_uid = kwargs.get("keyword_uid")
     document = testbench_ls.workspace.get_text_document(document_uri)
@@ -862,15 +853,15 @@ def show_testbench_keyword_diff(ls: LanguageServer, kwargs):
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
     testbench_content = apply_text_edits(robot_model_to_string(resource.file), edits)
-    ls.send_notification(
+    ls.protocol.notify(
         "testbench-language-server/display-diff",
         {"path": document_uri, "virtualContent": testbench_content},
     )
 
 
 @testbench_ls.command(COMMAND_PULL_KEYWORD)
-def pull_testbench_keyword(ls: LanguageServer, args):
-    document_uri, keyword_uid, *_ = args
+def pull_testbench_keyword(ls: LanguageServer, *args):
+    document_uri, keyword_uid = args
     document = testbench_ls.workspace.get_text_document(document_uri)
     resource = TestBenchResourceModel.from_file(document.source)
     if not context_is_valid(ls, resource):
@@ -903,7 +894,7 @@ def pull_testbench_keyword(ls: LanguageServer, args):
     edit = create_workspace_edit(
         document_uri, edits, change_identifier, KEYWORD_INTERFACE_CHANGE_LABEL
     )
-    ls.lsp.send_request(
+    ls.protocol.send_request(
         WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
     )
 
@@ -932,7 +923,6 @@ def create_workspace_edit(
 
 @testbench_ls.command(COMMAND_PUSH_KEYWORD)
 def push_testbench_keyword(ls: LanguageServer, kwargs):
-    kwargs, *_ = kwargs
     document_uri = kwargs.get("document_uri")
     keyword_uid = kwargs.get("keyword_uid")
     document = testbench_ls.workspace.get_text_document(document_uri)
@@ -974,7 +964,6 @@ def push_testbench_keyword(ls: LanguageServer, kwargs):
 
 @testbench_ls.command(COMMAND_CREATE_KEYWORD)
 def create_testbench_keyword(ls: LanguageServer, kwargs):
-    kwargs, *_ = kwargs
     document_uri = kwargs.get("document_uri")
     keyword_name = kwargs.get("keyword_name")
     document = testbench_ls.workspace.get_text_document(document_uri)
@@ -1026,7 +1015,7 @@ def create_testbench_keyword(ls: LanguageServer, kwargs):
             KEYWORD_INTERFACE_CHANGE_LABEL,
             False,
         )
-        ls.lsp.send_request(
+        ls.protocol.send_request(
             WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
         )
     except requests.exceptions.HTTPError as http_error:
@@ -1065,7 +1054,7 @@ def code_actions(ls: LanguageServer, params: CodeActionParams):
 @testbench_ls.command(
     "testbench_ls.applyTestBenchContext",
 )
-def apply_selected_context(ls: LanguageServer, args):
+def apply_selected_context(ls: LanguageServer, *args):
     document_uri, start_line, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
     change_identifier = ChangeAnnotationIdentifier()
@@ -1092,7 +1081,7 @@ def apply_selected_context(ls: LanguageServer, args):
         )
     ]
     edit = create_workspace_edit(document_uri, edits, change_identifier, CONTEXT_CHANGE_LABEL)
-    ls.lsp.send_request(
+    ls.protocol.send_request(
         WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
     )
 
@@ -1142,10 +1131,8 @@ def get_context_diagnostics(ls: LanguageServer, document: TextDocument) -> list[
 def did_open(ls: LanguageServer, params: DidOpenTextDocumentParams):
     document = ls.workspace.get_text_document(params.text_document.uri)
     diagnostics = get_context_diagnostics(ls, document)
-    ls.publish_diagnostics(
-        document.uri,
-        diagnostics=diagnostics,
-        version=document.version,
+    ls.text_document_publish_diagnostics(
+        PublishDiagnosticsParams(document.uri, diagnostics=diagnostics, version=document.version)
     )
 
 
@@ -1153,15 +1140,13 @@ def did_open(ls: LanguageServer, params: DidOpenTextDocumentParams):
 def did_change(ls: LanguageServer, params: DidOpenTextDocumentParams):
     document = ls.workspace.get_text_document(params.text_document.uri)
     diagnostics = get_context_diagnostics(ls, document)
-    ls.publish_diagnostics(
-        document.uri,
-        diagnostics=diagnostics,
-        version=document.version,
+    ls.text_document_publish_diagnostics(
+        PublishDiagnosticsParams(document.uri, diagnostics=diagnostics, version=document.version)
     )
 
 
 @testbench_ls.command(COMMAND_FIND_KEYWORD_POSITION)
-def find_keyword_position(ls: LanguageServer, args) -> int | None:
+def find_keyword_position(ls: LanguageServer, *args) -> int | None:
     document_uri, keyword_name, keyword_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
     resource = TestBenchResourceModel.from_file(document.source)
