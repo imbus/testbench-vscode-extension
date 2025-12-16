@@ -16,16 +16,32 @@ import { logger } from "../extension";
 import { withRetry, RetryPredicateFactory } from "../testBenchConnection";
 
 /**
+ * Interface for server locations response from the new Play server.
+ */
+interface ServerLocationsResponse {
+    jBossHost: string;
+    jBossJNDIPort: number;
+    legacyPlayHost: string;
+    legacyPlayPort: number;
+}
+
+/**
  * Client for legacy Play Server API calls.
  */
 export class LegacyPlayServerClient {
-    private static readonly OLD_SERVER_PORT = 9444;
-    private static readonly OLD_SERVER_BASE_PATH = "/api/1";
+    private static readonly DEFAULT_LEGACY_PORT = 9444;
+    private static readonly LEGACY_SERVER_BASE_PATH = "/api/1";
+    private static readonly SERVER_LOCATIONS_ENDPOINT = "/2/serverLocations";
+
+    /** The currently active legacy server port (discovered during initialization or defaulted to 9444) */
+    private currentLegacyPort: number = LegacyPlayServerClient.DEFAULT_LEGACY_PORT;
 
     /**
      * Creates a new LegacyPlayServerClient instance.
+     * Note: Call initialize() after construction to discover the correct legacy server port.
      *
      * @param serverName The TestBench server hostname
+     * @param newServerPort The new Play server port (used for serverLocations discovery)
      * @param sessionToken The session token for authentication
      * @param username The username for authentication
      * @param httpsAgent The HTTPS agent to use for requests (includes TLS configuration)
@@ -33,18 +49,225 @@ export class LegacyPlayServerClient {
      */
     constructor(
         private serverName: string,
+        private newServerPort: number,
         private sessionToken: string,
         private username: string,
         private httpsAgent: https.Agent | HttpsProxyAgent<string>,
         private context: vscode.ExtensionContext
     ) {
         logger.trace(
-            `[LegacyPlayServerClient] Initialized for server '${this.serverName}:${LegacyPlayServerClient.OLD_SERVER_PORT}'`
+            `[LegacyPlayServerClient] Initialized for server '${this.serverName}' (default legacy port: ${LegacyPlayServerClient.DEFAULT_LEGACY_PORT}, new server port: ${this.newServerPort})`
         );
     }
 
     /**
-     * Fetches test elements using the Test Object Version (TOV) key from the old Play Server.
+     * Fetches server locations from the new Play server to discover the legacy Play server port.
+     * This is called during initialization to determine the correct port before any legacy server requests.
+     *
+     * @returns A promise that resolves to the ServerLocationsResponse or null if the call fails
+     */
+    private async fetchServerLocations(): Promise<ServerLocationsResponse | null> {
+        try {
+            const newServerBaseUrl = `https://${this.serverName}:${this.newServerPort}/api`;
+            const serverLocationsUrl = `${newServerBaseUrl}${LegacyPlayServerClient.SERVER_LOCATIONS_ENDPOINT}`;
+
+            logger.debug(`[LegacyPlayServerClient] Attempting to fetch server locations from ${serverLocationsUrl}`);
+
+            // New Play server uses session token directly in Authorization header
+            const newServerSession: AxiosInstance = axios.create({
+                baseURL: newServerBaseUrl,
+                headers: {
+                    Authorization: this.sessionToken,
+                    "Content-Type": "application/vnd.testbench+json; charset=utf-8"
+                },
+                proxy: false,
+                httpsAgent: this.httpsAgent
+            });
+
+            const serverLocationsResponse: AxiosResponse<ServerLocationsResponse> = await withRetry(
+                () => newServerSession.get(LegacyPlayServerClient.SERVER_LOCATIONS_ENDPOINT),
+                2, // maxRetries
+                1000, // delayMs
+                RetryPredicateFactory.createDefaultPredicate(),
+                false // Don't show progress bar for fallback attempts
+            );
+
+            if (serverLocationsResponse.status === 200 && serverLocationsResponse.data) {
+                logger.info(
+                    `[LegacyPlayServerClient] Successfully fetched server locations. Legacy Play port: ${serverLocationsResponse.data.legacyPlayPort}`
+                );
+                return serverLocationsResponse.data;
+            } else {
+                logger.warn(
+                    `[LegacyPlayServerClient] Unexpected response status ${serverLocationsResponse.status} when fetching server locations`
+                );
+                return null;
+            }
+        } catch (error: any) {
+            if (error?.response?.status === 404) {
+                logger.warn(
+                    `[LegacyPlayServerClient] Server locations endpoint returned 404. The legacy server port cannot be discovered dynamically.`
+                );
+            } else {
+                logger.error(`[LegacyPlayServerClient] Error fetching server locations: ${error?.message || error}`);
+            }
+            return null;
+        }
+    }
+
+    /**
+     * Initializes the legacy Play server client by discovering the correct port.
+     * This method should be called immediately after construction.
+     * First checks the cache for a previously discovered port for this server.
+     * If not cached, it fetches from the new Play server's serverLocations endpoint and caches the result.
+     * If the fetch fails, it falls back to the default port 9444 for backward compatibility.
+     *
+     * @returns A promise that resolves when initialization is complete
+     */
+    public async initialize(): Promise<void> {
+        logger.debug(`[LegacyPlayServerClient] Initializing and discovering legacy server port...`);
+
+        // Check cache first to avoid redundant API calls
+        const cachedPort = this.getCachedPort();
+        if (cachedPort !== null) {
+            this.currentLegacyPort = cachedPort;
+            logger.info(
+                `[LegacyPlayServerClient] Using cached legacy Play server port: ${this.currentLegacyPort} for server '${this.serverName}'`
+            );
+            logger.debug(
+                `[LegacyPlayServerClient] Initialization complete. Will use port ${this.currentLegacyPort} for legacy server requests.`
+            );
+            return;
+        }
+
+        // No cache, fetch from server
+        logger.debug(`[LegacyPlayServerClient] No cached port found. Fetching from server...`);
+        const serverLocations = await this.fetchServerLocations();
+
+        if (serverLocations && serverLocations.legacyPlayPort) {
+            this.currentLegacyPort = serverLocations.legacyPlayPort;
+            // Cache the discovered port for future use
+            this.cachePort(this.currentLegacyPort);
+            logger.info(
+                `[LegacyPlayServerClient] Successfully discovered and cached legacy Play server port: ${this.currentLegacyPort}`
+            );
+        } else {
+            // Cache the default port so we don't keep trying to fetch
+            this.cachePort(LegacyPlayServerClient.DEFAULT_LEGACY_PORT);
+            logger.info(
+                `[LegacyPlayServerClient] Could not discover legacy server port. Using and caching default port ${LegacyPlayServerClient.DEFAULT_LEGACY_PORT}`
+            );
+        }
+
+        logger.debug(
+            `[LegacyPlayServerClient] Initialization complete. Will use port ${this.currentLegacyPort} for legacy server requests.`
+        );
+    }
+
+    /**
+     * Gets the storage key for caching the legacy Play server port for a specific server.
+     *
+     * @returns The storage key string
+     */
+    private getPortCacheKey(): string {
+        return `testbenchExtension.legacyPlayServerPort.${this.serverName}`;
+    }
+
+    /**
+     * Retrieves the cached legacy Play server port for the current server from persistent storage.
+     *
+     * @returns The cached port number, or null if not found or invalid
+     */
+    private getCachedPort(): number | null {
+        try {
+            const cacheKey = this.getPortCacheKey();
+            const cachedValue = this.context.globalState.get<number>(cacheKey);
+
+            if (cachedValue && typeof cachedValue === "number" && cachedValue > 0) {
+                logger.trace(
+                    `[LegacyPlayServerClient] Found cached port ${cachedValue} for server '${this.serverName}'`
+                );
+                return cachedValue;
+            }
+
+            logger.trace(`[LegacyPlayServerClient] No valid cached port found for server '${this.serverName}'`);
+            return null;
+        } catch (error) {
+            logger.warn(
+                `[LegacyPlayServerClient] Error retrieving cached port for server '${this.serverName}': ${error}`
+            );
+            return null;
+        }
+    }
+
+    /**
+     * Stores the legacy Play server port in persistent storage for future use.
+     * The port is cached per server and persists across VS Code window reloads.
+     *
+     * @param port The port number to cache
+     */
+    private async cachePort(port: number): Promise<void> {
+        try {
+            const cacheKey = this.getPortCacheKey();
+            await this.context.globalState.update(cacheKey, port);
+            logger.trace(
+                `[LegacyPlayServerClient] Cached port ${port} for server '${this.serverName}' in persistent storage`
+            );
+        } catch (error) {
+            logger.warn(`[LegacyPlayServerClient] Failed to cache port for server '${this.serverName}': ${error}`);
+        }
+    }
+
+    /**
+     * Clears the cached legacy Play server port for the current server.
+     * This can be useful if the server configuration changes or for troubleshooting.
+     *
+     * @returns A promise that resolves when the cache is cleared
+     */
+    public async clearPortCache(): Promise<void> {
+        try {
+            const cacheKey = this.getPortCacheKey();
+            await this.context.globalState.update(cacheKey, undefined);
+            logger.info(`[LegacyPlayServerClient] Cleared cached port for server '${this.serverName}'`);
+        } catch (error) {
+            logger.warn(
+                `[LegacyPlayServerClient] Failed to clear cached port for server '${this.serverName}': ${error}`
+            );
+        }
+    }
+
+    /**
+     * Creates an axios instance configured for the legacy Play server with the current port.
+     * The port is discovered during initialization via the serverLocations endpoint.
+     *
+     * @returns A configured AxiosInstance
+     */
+    private createLegacyServerSession(): AxiosInstance {
+        const legacyServerBaseUrl = `https://${this.serverName}:${this.currentLegacyPort}${LegacyPlayServerClient.LEGACY_SERVER_BASE_PATH}`;
+        const encoded = base64.encode(`${this.username}:${this.sessionToken}`);
+
+        logger.trace(`[LegacyPlayServerClient] Creating legacy server session with URL ${legacyServerBaseUrl}`);
+
+        return axios.create({
+            baseURL: legacyServerBaseUrl,
+            // Old Play Server uses BasicAuth with username and sessionToken as password
+            auth: {
+                username: this.username,
+                password: this.sessionToken
+            },
+            headers: {
+                Authorization: `Basic ${encoded}`,
+                "Content-Type": "application/vnd.testbench+json; charset=utf-8"
+            },
+            proxy: false,
+            httpsAgent: this.httpsAgent
+        });
+    }
+
+    /**
+     * Fetches test elements using the Test Object Version (TOV) key from the legacy Play Server.
+     * Uses the port discovered during initialization.
+     *
      * @param tovKey The TOV key as a string
      * @returns A promise that resolves to the test elements data or null if an error occurs
      */
@@ -62,63 +285,27 @@ export class LegacyPlayServerClient {
         }
 
         try {
-            const oldPlayServerBaseUrl: string = `https://${this.serverName}:${LegacyPlayServerClient.OLD_SERVER_PORT}${LegacyPlayServerClient.OLD_SERVER_BASE_PATH}`;
-            const getTestElementsURL: string = `tovs/${tovKey}/testElements`;
-
-            const encoded = base64.encode(`${this.username}:${this.sessionToken}`);
-
-            logger.debug(
-                `[LegacyPlayServerClient] Creating session for old Play Server with URL ${oldPlayServerBaseUrl} to fetch test elements.`
-            );
-
-            const oldPlayServerSession: AxiosInstance = axios.create({
-                baseURL: oldPlayServerBaseUrl,
-                // Old Play Server, which runs on port 9444, uses BasicAuth.
-                // Use loginName as username, and use sessionToken as the password
-                auth: {
-                    username: this.username,
-                    password: this.sessionToken
-                },
-                headers: {
-                    Authorization: `Basic ${encoded}`,
-                    "Content-Type": "application/vnd.testbench+json; charset=utf-8"
-                },
-                proxy: false,
-                httpsAgent: this.httpsAgent
-            });
-
-            if (!oldPlayServerSession) {
-                logger.error(
-                    `[LegacyPlayServerClient] Failed to create session for old Play Server with URL ${oldPlayServerBaseUrl} while fetching test elements for TOV key ${tovKey}`
-                );
-                return null;
-            }
-
+            const getTestElementsURL = `tovs/${tovKey}/testElements`;
             logger.trace(
-                `[LegacyPlayServerClient] Fetching test elements for TOV key ${tovKey} from ${getTestElementsURL}`
+                `[LegacyPlayServerClient] Fetching test elements for TOV key ${tovKey} from port ${this.currentLegacyPort}`
             );
 
-            const testElementsResponse: AxiosResponse = await withRetry(
-                () => oldPlayServerSession.get(getTestElementsURL),
+            const session = this.createLegacyServerSession();
+            const response: AxiosResponse = await withRetry(
+                () => session.get(getTestElementsURL),
                 3, // maxRetries
                 2000, // delayMs
                 RetryPredicateFactory.createDefaultPredicate()
             );
 
-            logger.debug(
-                `[LegacyPlayServerClient] Response status of GET test elements request for URL ${getTestElementsURL}: ${testElementsResponse.status}`
-            );
-
-            if (testElementsResponse.data) {
+            if (response.data) {
                 logger.trace(
-                    `[LegacyPlayServerClient] Fetched test elements data from URL ${getTestElementsURL}:`,
-                    testElementsResponse.data
+                    `[LegacyPlayServerClient] Successfully fetched test elements data for TOV ${tovKey}:`,
+                    response.data
                 );
-                return testElementsResponse.data;
+                return response.data;
             } else {
-                logger.error(
-                    `[LegacyPlayServerClient] Test elements data is not available from URL ${getTestElementsURL}.`
-                );
+                logger.error(`[LegacyPlayServerClient] Test elements data is not available for TOV key ${tovKey}.`);
                 return null;
             }
         } catch (error) {
@@ -129,7 +316,9 @@ export class LegacyPlayServerClient {
     }
 
     /**
-     * Returns all filters that can be accessed by the connected user from the old Play Server.
+     * Returns all filters that can be accessed by the connected user from the legacy Play Server.
+     * Uses the port discovered during initialization.
+     *
      * @returns A promise that resolves to the filters data or null if an error occurs
      */
     async getFilters(): Promise<any | null> {
@@ -139,59 +328,24 @@ export class LegacyPlayServerClient {
         }
 
         try {
-            const oldPlayServerBaseUrl: string = `https://${this.serverName}:${LegacyPlayServerClient.OLD_SERVER_PORT}${LegacyPlayServerClient.OLD_SERVER_BASE_PATH}`;
-            const getFiltersURL: string = `${oldPlayServerBaseUrl}/filters`;
-
-            logger.debug(
-                `[LegacyPlayServerClient] Creating session for old Play Server with URL ${oldPlayServerBaseUrl} to fetch filters`
+            const getFiltersPath = "/filters";
+            logger.trace(
+                `[LegacyPlayServerClient] Fetching filters from legacy Play server on port ${this.currentLegacyPort}`
             );
 
-            const encoded = base64.encode(`${this.username}:${this.sessionToken}`);
-
-            const oldPlayServerSession: AxiosInstance = axios.create({
-                baseURL: oldPlayServerBaseUrl,
-                // Old Play Server, which runs on port 9444, uses BasicAuth.
-                // Use loginName as username, and use sessionToken as the password
-                auth: {
-                    username: this.username,
-                    password: this.sessionToken
-                },
-                headers: {
-                    Authorization: `Basic ${encoded}`,
-                    "Content-Type": "application/vnd.testbench+json; charset=utf-8"
-                },
-                proxy: false,
-                httpsAgent: this.httpsAgent
-            });
-
-            if (!oldPlayServerSession) {
-                logger.error(
-                    `[LegacyPlayServerClient] Failed to create session for old Play Server with URL ${oldPlayServerBaseUrl} while fetching filters`
-                );
-                return null;
-            }
-
-            logger.trace(`[LegacyPlayServerClient] Fetching filters from URL ${getFiltersURL}`);
-
-            const getFiltersResponse: AxiosResponse = await withRetry(
-                () => oldPlayServerSession.get(getFiltersURL),
+            const session = this.createLegacyServerSession();
+            const response: AxiosResponse = await withRetry(
+                () => session.get(getFiltersPath),
                 3, // maxRetries
                 2000, // delayMs
                 RetryPredicateFactory.createDefaultPredicate()
             );
 
-            logger.debug(
-                `[LegacyPlayServerClient] Response status of get filters request for URL ${getFiltersURL}: ${getFiltersResponse.status}`
-            );
-
-            if (getFiltersResponse.data) {
-                logger.trace(
-                    `[LegacyPlayServerClient] Fetched filters data for request ${getFiltersURL}:`,
-                    getFiltersResponse.data
-                );
-                return getFiltersResponse.data;
+            if (response.data) {
+                logger.trace(`[LegacyPlayServerClient] Successfully fetched filters data:`, response.data);
+                return response.data;
             } else {
-                logger.error(`[LegacyPlayServerClient] Filters data is not available from URL ${getFiltersURL}.`);
+                logger.error(`[LegacyPlayServerClient] Filters data is not available.`);
                 return null;
             }
         } catch (error) {

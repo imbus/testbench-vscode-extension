@@ -328,11 +328,19 @@ export class PlayServerConnection {
         // Initialize legacy client for old Play Server API calls
         this.legacyClient = new LegacyPlayServerClient(
             this.serverName,
+            this.portNumber,
             this.sessionToken,
             this.username,
             agentToUse,
             this.context
         );
+
+        // Initialize legacy server port discovery in the background
+        this.legacyClient.initialize().catch((error) => {
+            logger.warn(
+                `[testBenchConnection] Legacy Play server initialization failed, but main connection is still functional: ${error?.message || error}`
+            );
+        });
 
         if (this.sessionToken) {
             // Start the keep-alive process immediately to prevent session timeout after 5 minutes
