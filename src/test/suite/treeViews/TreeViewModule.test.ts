@@ -10,11 +10,11 @@ import { TreeViewContext } from "../../../treeViews/core/TreeViewContext";
 import { TreeViewConfig } from "../../../treeViews/core/TreeViewConfig";
 import { StateManager } from "../../../treeViews/state/StateManager";
 import { EventBus } from "../../../treeViews/utils/EventBus";
-import { ErrorHandler } from "../../../treeViews/utils/ErrorHandler";
 import { TestBenchLogger } from "../../../testBenchLogger";
 import { TreeViewBase } from "../../../treeViews/core/TreeViewBase";
 import { TreeItemBase } from "../../../treeViews/core/TreeItemBase";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
+import { UserSessionManager } from "../../../userSessionManager";
 
 // Mock TreeViewBase for testing
 class MockTreeView extends TreeViewBase<TreeItemBase> {
@@ -22,7 +22,7 @@ class MockTreeView extends TreeViewBase<TreeItemBase> {
         return [];
     }
 
-    protected async getChildrenForItem(item: TreeItemBase): Promise<TreeItemBase[]> {
+    protected async getChildrenForItem(_item: TreeItemBase): Promise<TreeItemBase[]> {
         return [];
     }
 
@@ -75,12 +75,12 @@ class TestModule implements TreeViewModule {
         this.context = undefined;
     }
 
-    public onConfigChange?(config: any): Promise<void> {
+    public onConfigChange?(_config: any): Promise<void> {
         this.onConfigChangeCalled = true;
         return Promise.resolve();
     }
 
-    public onStateChange?(state: any): void {
+    public onStateChange?(_state: any): void {
         this.onStateChangeCalled = true;
     }
 
@@ -110,13 +110,15 @@ suite("TreeViewModule", function () {
     let stateManager: StateManager;
     let eventBus: EventBus;
     let logger: TestBenchLogger;
-    let errorHandler: ErrorHandler;
     let mockTreeView: MockTreeView;
     let treeViewContext: TreeViewContext;
+    let userSessionManager: UserSessionManager;
 
     this.beforeEach(function () {
         testEnv = setupTestEnvironment();
         mockContext = testEnv.mockContext;
+        userSessionManager = new UserSessionManager(mockContext);
+        testEnv.sandbox.stub(userSessionManager, "getCurrentUserId").returns("test-user-id");
 
         // Create test configuration
         config = {
@@ -150,8 +152,7 @@ suite("TreeViewModule", function () {
         // Create dependencies
         eventBus = new EventBus();
         logger = new TestBenchLogger();
-        errorHandler = new ErrorHandler(logger);
-        stateManager = new StateManager(mockContext, config.id, eventBus);
+        stateManager = new StateManager(mockContext, config.id, eventBus, userSessionManager);
         mockTreeView = new MockTreeView(mockContext, config);
 
         // Create the context
@@ -161,10 +162,12 @@ suite("TreeViewModule", function () {
             stateManager: stateManager,
             eventBus: eventBus,
             logger: logger,
-            errorHandler: errorHandler,
             refresh: () => mockTreeView.refresh(),
             getTreeView: () => mockTreeView,
-            getCurrentRootItems: () => mockTreeView.getCurrentRootItems()
+            getCurrentRootItems: () => mockTreeView.getCurrentRootItems(),
+            buildLogPrefix: (moduleId: string, operation: string): string => {
+                return `[${moduleId}:${config.id}] ${operation}`;
+            }
         };
     });
 
@@ -232,8 +235,7 @@ suite("TreeViewModule", function () {
             assert.strictEqual(context.config, config);
             assert.strictEqual(context.stateManager, stateManager);
             assert.strictEqual(context.eventBus, eventBus);
-            assert.strictEqual(context.logger, logger);
-            assert.strictEqual(context.errorHandler, errorHandler);
+            assert.ok(context.logger instanceof TestBenchLogger);
         });
 
         test("should throw error during initialization if needed", async () => {
@@ -318,7 +320,7 @@ suite("TreeViewModule", function () {
         test("should handle modules without optional hooks", () => {
             const moduleWithoutHooks: TreeViewModule = {
                 id: "no-hooks-module",
-                async initialize(context: TreeViewContext): Promise<void> {},
+                async initialize(_context: TreeViewContext): Promise<void> {},
                 dispose(): void {}
             };
 
@@ -372,24 +374,10 @@ suite("TreeViewModule", function () {
 
         test("should access logger through module context", async () => {
             const module = new TestModule();
-
             await module.initialize(treeViewContext);
-
             const context = module.moduleContext!;
             const logger = context.logger;
             assert.ok(logger instanceof TestBenchLogger);
-            assert.strictEqual(typeof logger.info, "function");
-        });
-
-        test("should access error handler through module context", async () => {
-            const module = new TestModule();
-
-            await module.initialize(treeViewContext);
-
-            const context = module.moduleContext!;
-            const errorHandler = context.errorHandler;
-            assert.ok(errorHandler instanceof ErrorHandler);
-            assert.strictEqual(typeof errorHandler.handle, "function");
         });
     });
 

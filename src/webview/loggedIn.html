@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            http-equiv="Content-Security-Policy"
+            content="default-src 'none'; img-src {{cspSource}} https: data:; style-src {{cspSource}} 'unsafe-inline'; script-src 'nonce-{{nonce}}'; font-src {{cspSource}};"
+        />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <style id="main-styles">
+            {{mainCss}}
+        </style>
+        <title>TestBench Connected</title>
+    </head>
+    <body>
+        <div class="container">
+            <img src="{{logoUri}}" alt="TestBench Logo" class="logo" />
+            <p class="connection-info">{{connectedAsInfo}}</p>
+            <p class="info-text">Use the TestBench views in the explorer or run TestBench commands.</p>
+            <button id="logoutButton"><span class="icon icon-logout"></span>Sign Out</button>
+        </div>
+        <script nonce="{{nonce}}" src="{{jsUri}}"></script>
+    </body>
+</html>

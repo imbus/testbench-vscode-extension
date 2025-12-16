@@ -3,10 +3,8 @@
  * @description Data provider for managing test themes in the tree view.
  */
 
-import { ErrorHandler } from "../../utils/ErrorHandler";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { TestStructure } from "../../../testBenchTypes";
-import { EventBus } from "../../utils/EventBus";
 import { TestBenchLogger } from "../../../testBenchLogger";
 import { FrameworkCache } from "../../utils/FrameworkCache";
 import { TestThemeItemTypes } from "../../../constants";
@@ -20,93 +18,118 @@ export class TestThemesDataProvider {
 
     constructor(
         private logger: TestBenchLogger,
-        private errorHandler: ErrorHandler,
-        private getConnection: () => PlayServerConnection | null,
-        private eventBus: EventBus
+        private getConnection: () => PlayServerConnection | null
     ) {}
 
     /**
-     * Fetch the cycle structure containing test themes
-     * @param projectKey - The project key
-     * @param cycleKey - The cycle key
-     * @returns Promise resolving to TestStructure or null
+     * Fetches the test structure for a given cycle from the server or cache
+     * @param projectKey The project key
+     * @param cycleKey The cycle key
+     * @param suppressFilteredData Flag to suppress filtered data on the server
+     * @return Promise resolving to the test structure or null if not found
      */
-    public async fetchCycleStructure(projectKey: string, cycleKey: string): Promise<TestStructure | null> {
-        const cacheKey = `${projectKey}:${cycleKey}`;
+    public async fetchCycleStructure(
+        projectKey: string,
+        cycleKey: string,
+        suppressFilteredData: boolean = true
+    ): Promise<TestStructure | null> {
+        const cacheKey = `${this.getCacheKey(projectKey, cycleKey)}.${suppressFilteredData}`;
+        const cachedData = this.cache.get(cacheKey);
 
-        const cached = this.cache.get(cacheKey);
-        if (cached) {
-            this.logger.debug(`Using cached structure for ${cacheKey}`);
-            return cached;
+        if (cachedData) {
+            return cachedData;
         }
 
         const connection = this.getConnection();
         if (!connection) {
-            throw new Error("No connection available");
+            this.logger.error("[TestThemesDataProvider] No connection available when fetching cycle structure");
+            return null;
         }
 
         try {
-            this.logger.debug(`Fetching cycle structure for project: ${projectKey}, cycle: ${cycleKey}`);
-
-            const testStructure = await connection.fetchTestStructureOfCycleFromServer(projectKey, cycleKey);
-
+            const testStructure = await connection.fetchTestStructureOfCycleFromServer(
+                projectKey,
+                cycleKey,
+                suppressFilteredData
+            );
             if (!testStructure) {
-                this.logger.warn("No test structure returned from server");
                 return null;
             }
 
             // Validate and normalize the structure
-            const normalized = this.normalizeTestStructure(testStructure);
+            const normalizedTestStructure = this.normalizeTestStructure(testStructure);
+            if (!normalizedTestStructure) {
+                return null;
+            }
 
-            this.cache.set(cacheKey, normalized);
-            this.logger.info(`Successfully fetched test structure with ${normalized.nodes?.length || 0} nodes`);
+            this.cache.set(cacheKey, normalizedTestStructure);
+            this.logger.trace(
+                `[TestThemesDataProvider] Successfully fetched test structure with ${normalizedTestStructure.nodes?.length || 0} nodes`
+            );
 
-            return normalized;
+            return normalizedTestStructure;
         } catch (error) {
-            this.logger.error(`Failed to fetch cycle structure for ${cacheKey}:`, error as Error);
+            this.logger.error(
+                `[TestThemesDataProvider] Failed to fetch cycle structure for project key ${projectKey} and cycle key ${cycleKey}:`,
+                error as Error
+            );
             throw error;
         }
     }
 
     /**
-     * Fetch the TOV structure containing test themes
-     * @param projectKey - The project key
-     * @param tovKey - The TOV key
-     * @returns Promise resolving to TestStructure or null
+     * Fetches the test structure for a given TOV from the server or cache
+     * @param projectKey The project key
+     * @param tovKey The TOV key
+     * @param suppressFilteredData Flag to suppress filtered data on the server
+     * @return Promise resolving to the test structure or null if not found
      */
-    public async fetchTovStructure(projectKey: string, tovKey: string): Promise<TestStructure | null> {
-        const cacheKey = `${projectKey}:tov:${tovKey}`;
+    public async fetchTovStructure(
+        projectKey: string,
+        tovKey: string,
+        suppressFilteredData: boolean = true
+    ): Promise<TestStructure | null> {
+        const cacheKey = `${this.getCacheKey(projectKey, tovKey, true)}.${suppressFilteredData}`;
+        const cachedData = this.cache.get(cacheKey);
 
-        const cached = this.cache.get(cacheKey);
-        if (cached) {
-            this.logger.debug(`Using cached TOV structure for ${cacheKey}`);
-            return cached;
+        if (cachedData) {
+            return cachedData;
         }
 
         const connection = this.getConnection();
         if (!connection) {
-            throw new Error("No connection available");
+            this.logger.error("[TestThemesDataProvider] No connection available when fetching TOV structure");
+            return null;
         }
 
         try {
-            this.logger.debug(`Fetching TOV structure for project: ${projectKey}, TOV: ${tovKey}`);
-
-            const testStructure = await connection.fetchTestStructureOfTOVFromServer(projectKey, tovKey);
+            const testStructure = await connection.fetchTestStructureOfTOVFromServer(
+                projectKey,
+                tovKey,
+                suppressFilteredData
+            );
 
             if (!testStructure) {
-                this.logger.warn("No test structure returned from server");
                 return null;
             }
 
             // Validate and normalize the structure
-            const normalized = this.normalizeTestStructure(testStructure);
+            const normalizedTestStructure = this.normalizeTestStructure(testStructure);
+            if (!normalizedTestStructure) {
+                return null;
+            }
 
-            this.cache.set(cacheKey, normalized);
-            this.logger.info(`Successfully fetched TOV structure with ${normalized.nodes?.length || 0} nodes`);
+            this.cache.set(cacheKey, normalizedTestStructure);
+            this.logger.debug(
+                `[TestThemesDataProvider] Successfully fetched TOV structure with ${normalizedTestStructure.nodes?.length || 0} nodes`
+            );
 
-            return normalized;
+            return normalizedTestStructure;
         } catch (error) {
-            this.logger.error(`Failed to fetch TOV structure for ${cacheKey}:`, error as Error);
+            this.logger.error(
+                `[TestThemesDataProvider] Failed to fetch TOV structure for project key ${projectKey} and TOV key ${tovKey}:`,
+                error as Error
+            );
             throw error;
         }
     }
@@ -116,7 +139,7 @@ export class TestThemesDataProvider {
      */
     public clearCache(): void {
         this.cache.clear();
-        this.logger.debug("Cleared all cached test structures");
+        this.logger.trace("[TestThemesDataProvider] Cleared all cached test structures");
     }
 
     /**
@@ -128,7 +151,7 @@ export class TestThemesDataProvider {
     public invalidateCache(projectKey: string, key: string, isTov: boolean = false): void {
         const cacheKey = isTov ? `${projectKey}:tov:${key}` : `${projectKey}:${key}`;
         this.cache.clear(cacheKey);
-        this.logger.debug(`Invalidated cache for ${cacheKey}`);
+        this.logger.trace(`[TestThemesDataProvider] Invalidated cache for ${cacheKey}`);
     }
 
     /**
@@ -137,10 +160,11 @@ export class TestThemesDataProvider {
      * @return Normalized TestStructure object
      * @throws Error if structure format is invalid
      */
-    private normalizeTestStructure(structure: any): TestStructure {
+    private normalizeTestStructure(structure: any): TestStructure | null {
         // Handle different possible formats of the test structure
         if (!structure || typeof structure !== "object") {
-            throw new Error("Invalid test structure format");
+            this.logger.error(`[TestThemesDataProvider] Invalid test structure format`);
+            return null;
         }
 
         // If the structure already has the expected format
@@ -148,8 +172,7 @@ export class TestThemesDataProvider {
             return this.normalizeExistingStructure(structure);
         }
 
-        // Convert old format to new format
-        return this.convertOldFormat(structure);
+        return this.formatTestStructure(structure);
     }
 
     /**
@@ -178,6 +201,40 @@ export class TestThemesDataProvider {
     }
 
     /**
+     * Normalizes a locker value from the server
+     * The server can return locker as either:
+     * - null
+     * - a string (e.g., "-2")
+     * - an object with key and name properties (e.g., { key: "-2", name: "System" })
+     *
+     * @param locker The raw locker value from the server
+     * @return Normalized locker as string or null, or the object if it has the correct structure
+     */
+    private normalizeLocker(locker: any): string | { key: string; name: string } | null {
+        if (locker === null || locker === undefined) {
+            return null;
+        }
+
+        // If it's already a string, return it as is
+        if (typeof locker === "string") {
+            return locker;
+        }
+
+        // If it's an object with key and name properties, return it as is
+        // This allows the _isVisible method to handle it properly
+        if (typeof locker === "object" && locker.key !== undefined && locker.name !== undefined) {
+            return { key: String(locker.key), name: String(locker.name) };
+        }
+
+        // Fallback: try to extract the key property if it exists
+        if (typeof locker === "object" && locker.key !== undefined) {
+            return String(locker.key);
+        }
+
+        return null;
+    }
+
+    /**
      * Normalizes a single node within the test structure
      * @param node The raw node data
      * @return Normalized node object
@@ -194,12 +251,12 @@ export class TestThemesDataProvider {
             },
             spec: {
                 key: node.spec?.key || "",
-                locker: node.spec?.locker || null,
+                locker: this.normalizeLocker(node.spec?.locker),
                 status: node.spec?.status || "None"
             },
             aut: {
                 key: node.aut?.key || "",
-                locker: node.aut?.locker || null,
+                locker: this.normalizeLocker(node.aut?.locker),
                 status: node.aut?.status || "None"
             },
             exec: node.exec
@@ -208,7 +265,7 @@ export class TestThemesDataProvider {
                       execStatus: node.exec.execStatus || "None",
                       verdict: node.exec.verdict || "None",
                       key: node.exec.key || "",
-                      locker: node.exec.locker || null
+                      locker: this.normalizeLocker(node.exec.locker)
                   }
                 : null,
             filters: node.filters || [],
@@ -219,12 +276,12 @@ export class TestThemesDataProvider {
     }
 
     /**
-     * Converts old format test structure to new normalized format
-     * @param structure The old format test structure
-     * @return Normalized TestStructure object
+     * Formats test structure to contain the proper fields.
+     * @param structure The test structure to format
+     * @return Formatted TestStructure object
      */
-    private convertOldFormat(structure: any): TestStructure {
-        const normalized: TestStructure = {
+    private formatTestStructure(structure: any): TestStructure {
+        const formatted: TestStructure = {
             root: {
                 base: {
                     key: structure.elementKey || structure.key || "",
@@ -240,12 +297,11 @@ export class TestThemesDataProvider {
             nodes: []
         };
 
-        // Convert old format to new format
         if (structure.children && Array.isArray(structure.children)) {
-            this.flattenTreeToNodes(structure, normalized.nodes);
+            this.flattenTreeToNodes(structure, formatted.nodes);
         }
 
-        return normalized;
+        return formatted;
     }
 
     /**
@@ -266,12 +322,12 @@ export class TestThemesDataProvider {
             },
             spec: {
                 key: item.spec?.key || "",
-                locker: item.spec?.locker || null,
+                locker: this.normalizeLocker(item.spec?.locker),
                 status: item.spec?.status || "None"
             },
             aut: {
                 key: item.aut?.key || "",
-                locker: item.aut?.locker || null,
+                locker: this.normalizeLocker(item.aut?.locker),
                 status: item.aut?.status || "None"
             },
             exec: item.exec
@@ -280,7 +336,7 @@ export class TestThemesDataProvider {
                       execStatus: item.exec.execStatus || "None",
                       verdict: item.exec.verdict || "None",
                       key: item.exec.key || "",
-                      locker: item.exec.locker || null
+                      locker: this.normalizeLocker(item.exec.locker)
                   }
                 : null,
             filters: item.filters || [],
@@ -313,5 +369,16 @@ export class TestThemesDataProvider {
             return "TestCaseNode";
         }
         return "TestThemeNode";
+    }
+
+    /**
+     * Generates a cache key for a given project key and key.
+     * @param projectKey The project key.
+     * @param key The cycle or TOV key.
+     * @param isTov Whether the key is for a TOV.
+     * @returns The generated cache key.
+     */
+    private getCacheKey(projectKey: string, key: string, isTov: boolean = false): string {
+        return `${projectKey}:${key}:${isTov ? "tov" : "cycle"}`;
     }
 }

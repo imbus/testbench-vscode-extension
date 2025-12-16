@@ -9,16 +9,126 @@ import { TreeItemBase } from "../core/TreeItemBase";
 import { MarkingState, MarkingInfo, MarkingHierarchy } from "../state/StateTypes";
 import { TreeViewEventTypes } from "../utils/EventBus";
 
+export interface MarkingContext {
+    projectKey?: string | null;
+    tovKey?: string | null;
+    cycleKey?: string | null;
+    contextId?: string | null;
+    contextType?: "cycle" | "tov" | "unknown";
+}
+
+interface ResolvedMarkingContext {
+    projectKey: string;
+    cycleKey: string;
+    contextType: "cycle" | "tov" | "unknown";
+    tovKey?: string;
+    contextId?: string;
+}
+
 export class MarkingModule implements TreeViewModule {
     readonly id = "marking";
 
     private context!: TreeViewContext;
     private markingState: MarkingState;
+    private contextResolver?: () => MarkingContext;
     constructor() {
         this.markingState = {
             markedItems: new Map(),
             hierarchies: new Map()
         };
+    }
+
+    /**
+     * Registers a resolver used to determine the active tree view context when applying markings.
+     * @param resolver Function returning the current marking context information.
+     */
+    public setContextResolver(resolver: () => MarkingContext): void {
+        this.contextResolver = resolver;
+    }
+
+    private resolveCurrentContext(): MarkingContext {
+        try {
+            return this.contextResolver ? this.contextResolver() : {};
+        } catch {
+            return {};
+        }
+    }
+
+    /**
+     * Normalizes the marking context details.
+     * @param contextDetails The marking context details to normalize.
+     * @returns Normalized marking context.
+     */
+    private normalizeContext(contextDetails: MarkingContext): ResolvedMarkingContext {
+        const contextType =
+            contextDetails.contextType ??
+            (contextDetails.cycleKey ? "cycle" : contextDetails.tovKey ? "tov" : "unknown");
+
+        const projectKey = contextDetails.projectKey ?? "";
+        const primaryKey =
+            contextType === "cycle"
+                ? (contextDetails.cycleKey ?? "")
+                : (contextDetails.tovKey ?? contextDetails.cycleKey ?? "");
+
+        const normalizedContext: ResolvedMarkingContext = {
+            projectKey,
+            cycleKey: primaryKey,
+            contextType
+        };
+
+        if (contextDetails.tovKey && contextDetails.tovKey !== "") {
+            normalizedContext.tovKey = contextDetails.tovKey;
+        } else if (contextType === "tov" && primaryKey) {
+            normalizedContext.tovKey = primaryKey;
+        }
+
+        if (typeof contextDetails.contextId === "string" && contextDetails.contextId.trim() !== "") {
+            normalizedContext.contextId = contextDetails.contextId.trim();
+        }
+
+        return normalizedContext;
+    }
+
+    private doesMarkingMatchCurrentContext(markingInfo: MarkingInfo): boolean {
+        const currentContext = this.resolveCurrentContext();
+
+        if (!currentContext || Object.keys(currentContext).length === 0) {
+            return true;
+        }
+
+        if (markingInfo.contextId && currentContext.contextId && markingInfo.contextId !== currentContext.contextId) {
+            return false;
+        }
+
+        if (
+            markingInfo.projectKey &&
+            currentContext.projectKey &&
+            markingInfo.projectKey !== currentContext.projectKey
+        ) {
+            return false;
+        }
+
+        const expectedType = markingInfo.contextType ?? (markingInfo.cycleKey ? "cycle" : "unknown");
+
+        if (expectedType === "cycle") {
+            if (markingInfo.cycleKey && currentContext.cycleKey && markingInfo.cycleKey !== currentContext.cycleKey) {
+                return false;
+            }
+            if (markingInfo.tovKey && currentContext.tovKey && markingInfo.tovKey !== currentContext.tovKey) {
+                return false;
+            }
+        } else if (expectedType === "tov") {
+            const infoTovKey = markingInfo.tovKey ?? markingInfo.cycleKey;
+            if (infoTovKey && currentContext.tovKey && infoTovKey !== currentContext.tovKey) {
+                return false;
+            }
+        } else {
+            if (markingInfo.cycleKey && currentContext.cycleKey && markingInfo.cycleKey !== currentContext.cycleKey) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -33,14 +143,12 @@ export class MarkingModule implements TreeViewModule {
         }
 
         context.eventBus.on("state:changed", (event) => {
-            const changes = event.data.changes;
-            const markingChange = changes.find((c: any) => c.field === "marking");
-            if (markingChange) {
-                this.markingState = markingChange.newValue || this.createEmptyState();
+            if (event.data?.marking) {
+                this.markingState = event.data.marking || this.createEmptyState();
             }
         });
 
-        this.context.logger.debug("MarkingModule initialized");
+        this.context.logger.trace(context.buildLogPrefix("MarkingModule", "Marking module initialized."));
     }
 
     /**
@@ -61,15 +169,20 @@ export class MarkingModule implements TreeViewModule {
      * @param cycleKey The cycle key
      * @param type The marking type (default value is "default")
      */
-    public markItem(item: TreeItemBase, projectKey: string, cycleKey: string, type: string = "default"): void {
+    public markItem(item: TreeItemBase, contextDetails: MarkingContext = {}, type: string = "default"): void {
         const markingConfig = this.context.config.modules.marking;
         if (!markingConfig?.enabled) {
-            this.context.logger.warn("Marking is not enabled");
+            this.context.logger.warn(this.context.buildLogPrefix("MarkingModule", "Marking is not enabled"));
             return;
         }
 
         if (!item.id) {
-            this.context.logger.warn(`Cannot mark item without ID: ${item.label}`);
+            this.context.logger.warn(
+                this.context.buildLogPrefix(
+                    "MarkingModule",
+                    `Item ID does not exist for ${item.label}. Cannot mark item`
+                )
+            );
             return;
         }
 
@@ -77,16 +190,23 @@ export class MarkingModule implements TreeViewModule {
             markingConfig.markingContextValues &&
             markingConfig.markingContextValues.includes(item.originalContextValue);
         if (!canBeMarked) {
-            this.context.logger.warn(`Item type ${item.originalContextValue} cannot be marked`);
+            this.context.logger.debug(
+                this.context.buildLogPrefix("MarkingModule", `Item type ${item.originalContextValue} cannot be marked`)
+            );
             return;
         }
 
+        const normalizedContext = this.normalizeContext(contextDetails);
+
         const markingInfo: MarkingInfo = {
             itemId: item.id,
-            projectKey,
-            cycleKey,
+            projectKey: normalizedContext.projectKey,
+            cycleKey: normalizedContext.cycleKey,
             timestamp: Date.now(),
             type,
+            tovKey: normalizedContext.tovKey,
+            contextId: normalizedContext.contextId,
+            contextType: normalizedContext.contextType,
             metadata: {
                 label: item.label as string,
                 contextValue: item.originalContextValue,
@@ -109,7 +229,7 @@ export class MarkingModule implements TreeViewModule {
             },
             timestamp: Date.now()
         });
-        this.context.logger.info(`Marked item: ${item.label}`);
+        this.context.logger.trace(this.context.buildLogPrefix("MarkingModule", `Marked item: ${item.label}`));
     }
 
     /**
@@ -121,25 +241,23 @@ export class MarkingModule implements TreeViewModule {
      */
     public markItemWithDescendants(
         item: TreeItemBase,
-        projectKey: string,
-        cycleKey: string,
+        contextDetails: MarkingContext = {},
         type: string = "default"
     ): void {
         if (!item.id) {
-            this.context.logger.warn(`Cannot mark item without ID: ${item.label}`);
+            this.context.logger.warn(
+                this.context.buildLogPrefix(
+                    "MarkingModule",
+                    `Item ID does not exist for ${item.label}. Cannot mark item and its descendants`
+                )
+            );
             return;
         }
 
-        this.markItem(item, projectKey, cycleKey, type);
+        this.markItem(item, contextDetails, type);
         const descendants = item.getDescendants();
         const validDescendants = descendants.filter((desc) => desc.id !== undefined);
         const descendantIds = validDescendants.map((desc) => desc.id!);
-        const skippedCount: number = descendants.length - validDescendants.length;
-        if (skippedCount > 0) {
-            this.context.logger.warn(
-                `Skipped ${skippedCount} descendants without IDs while marking item with descendants`
-            );
-        }
 
         const markHierarchy: MarkingHierarchy = {
             rootId: item.id,
@@ -148,11 +266,16 @@ export class MarkingModule implements TreeViewModule {
         this.markingState.hierarchies.set(item.id, markHierarchy);
 
         validDescendants.forEach((descendant) => {
-            this.markItem(descendant, projectKey, cycleKey, type);
+            this.markItem(descendant, contextDetails, type);
         });
         this.updateState();
-        this.context.logger.info(`Marked item and ${validDescendants.length} descendants: ${item.label}`);
-        this.context.refresh({ immediate: true });
+        this.context.logger.trace(
+            this.context.buildLogPrefix(
+                "MarkingModule",
+                `Marked item ${item.label} and ${validDescendants.length} descendants`
+            )
+        );
+        this.context.refresh({ immediate: true, skipDataReload: true });
     }
 
     /**
@@ -177,7 +300,7 @@ export class MarkingModule implements TreeViewModule {
         }
 
         this.updateState();
-        this.context.logger.info(`Unmarked item: ${itemId}`);
+        this.context.logger.trace(this.context.buildLogPrefix("MarkingModule", `Unmarked item: ${itemId}`));
     }
 
     /**
@@ -207,42 +330,12 @@ export class MarkingModule implements TreeViewModule {
     }
 
     /**
-     * Gets marked items filtered by type
-     * @param type The marking type to filter by
-     * @returns Array of marking information for items of the specified type
-     */
-    public getMarkedItemsByType(type: string): MarkingInfo[] {
-        const items: MarkingInfo[] = [];
-        this.markingState.markedItems.forEach((info) => {
-            if (info.type === type) {
-                items.push(info);
-            }
-        });
-        return items;
-    }
-
-    /**
      * Gets hierarchy information for a root item
      * @param rootId The ID of the root item
      * @returns Hierarchy information or undefined if not found
      */
     public getHierarchy(rootId: string): MarkingHierarchy | undefined {
         return this.markingState.hierarchies.get(rootId);
-    }
-
-    /**
-     * Checks if an item is marked as a descendant in any hierarchy
-     * @param itemId The ID of the item to check
-     * @returns True if the item is marked as a descendant, false otherwise
-     */
-    public isDescendantMarked(itemId: string): boolean {
-        // Check if this item is part of any hierarchy as a descendant
-        for (const hierarchy of this.markingState.hierarchies.values()) {
-            if (hierarchy.descendantIds.has(itemId)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
@@ -267,8 +360,8 @@ export class MarkingModule implements TreeViewModule {
     public clearAllMarkings(emitGlobalEvent: boolean = true): void {
         this.markingState = this.createEmptyState();
         this.updateState();
-        this.context.refresh();
-        this.context.logger.info("Cleared all markings");
+        this.context.refresh({ skipDataReload: true });
+        this.context.logger.trace(this.context.buildLogPrefix("MarkingModule", "Cleared all markings"));
 
         if (emitGlobalEvent) {
             this.context.eventBus.emit({
@@ -284,21 +377,6 @@ export class MarkingModule implements TreeViewModule {
     }
 
     /**
-     * Clears markings filtered by type
-     * @param type The marking type to clear
-     */
-    public clearMarkingsByType(type: string): void {
-        const itemsToRemove: string[] = [];
-        this.markingState.markedItems.forEach((info, itemId) => {
-            if (info.type === type) {
-                itemsToRemove.push(itemId);
-            }
-        });
-        itemsToRemove.forEach((itemId) => this.unmarkItemByID(itemId));
-        this.context.logger.info(`Cleared ${itemsToRemove.length} markings of type: ${type}`);
-    }
-
-    /**
      * Applies marking state to a tree item when it is created or refreshed
      * by setting metadata. The item itself is responsible for updating its
      * context value based on this metadata.
@@ -311,6 +389,15 @@ export class MarkingModule implements TreeViewModule {
 
         const markingInfo = this.markingState.markedItems.get(item.id);
         if (markingInfo) {
+            if (!this.doesMarkingMatchCurrentContext(markingInfo)) {
+                item.setMetadata("marked", false);
+                item.setMetadata("markingInfo", undefined);
+                if (typeof (item as any).updateContextValue === "function") {
+                    (item as any).updateContextValue();
+                }
+                return;
+            }
+
             // Check if import marking should be applied based on configuration
             const markingConfig = this.context.config.modules.marking;
             if (markingInfo.type === "import" && markingConfig && !markingConfig.showImportButton) {
@@ -337,17 +424,7 @@ export class MarkingModule implements TreeViewModule {
      */
     private updateState(): void {
         this.context.stateManager.setState({ marking: this.markingState });
-        this.context.refresh({ immediate: true });
-    }
-
-    /**
-     * Refreshes marking state for all items in the tree
-     * This should be called when the tree is rebuilt or when marking state changes
-     */
-    public refreshMarkingState(): void {
-        // The marking state will be applied to items when they are created or refreshed
-        this.context.refresh({ immediate: true });
-        this.context.logger.debug("Refreshed marking state for all items");
+        this.context.refresh({ immediate: true, skipDataReload: true });
     }
 
     /**

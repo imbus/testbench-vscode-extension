@@ -6,6 +6,7 @@
 import * as vscode from "vscode";
 import { TreeItemBase } from "../../core/TreeItemBase";
 import { allExtensionCommands } from "../../../constants";
+import { userSessionManager } from "../../../extension";
 
 export interface ProjectData {
     key: string;
@@ -42,18 +43,14 @@ export class ProjectsTreeItem extends TreeItemBase {
             case "project":
                 this.contextValue = "Project";
                 break;
+
             case "version":
                 this.contextValue = "Version";
-                this.command = {
-                    command: allExtensionCommands.handleProjectVersionClick,
-                    title: "Select Version",
-                    arguments: [this]
-                };
                 break;
             case "cycle":
                 this.contextValue = "Cycle";
                 this.command = {
-                    command: allExtensionCommands.handleProjectCycleClick,
+                    command: allExtensionCommands.handleCycleClick,
                     title: "Select Cycle",
                     arguments: [this]
                 };
@@ -67,7 +64,8 @@ export class ProjectsTreeItem extends TreeItemBase {
      */
     protected generateUniqueId(): string {
         const parentPath = this.parent ? (this.parent as ProjectsTreeItem).data.key : "";
-        return `${this.data.type}:${parentPath}:${this.data.key}`;
+        const userId = userSessionManager.getCurrentUserId();
+        return `${userId}:${this.data.type}:${parentPath}:${this.data.key}`;
     }
 
     /**
@@ -84,7 +82,9 @@ export class ProjectsTreeItem extends TreeItemBase {
     private generateTooltip(): string {
         const tooltipContentLines: string[] = [];
 
-        tooltipContentLines.push(`Type: ${this.data.type}`);
+        // Capitalize the first letter of the type
+        const type = this.data.type.charAt(0).toUpperCase() + this.data.type.slice(1);
+        tooltipContentLines.push(`Type: ${type}`);
 
         if (this.data.name) {
             tooltipContentLines.push(`Name: ${this.data.name}`);

@@ -39,33 +39,38 @@ export interface TestStructure {
         filters: any[];
         elementType: string;
     };
-    nodes: Array<{
-        base: {
-            key: string;
-            numbering: string;
-            parentKey: string;
-            name: string;
-            uniqueID: string;
-            matchesFilter: boolean;
-        };
-        spec: {
-            key: string;
-            locker: string | null;
-            status: string;
-        };
-        aut: {
-            key: string;
-            locker: string | null;
-            status: string;
-        };
-        exec?: {
-            locker?: string;
-            status?: string;
-        };
-        filters: any[];
-        elementType: string;
-        children?: any[];
-    }>;
+    nodes: TestStructureNode[];
+}
+
+/**
+ * Represents a single node in the test structure
+ */
+export interface TestStructureNode {
+    base: {
+        key: string;
+        numbering: string;
+        parentKey: string;
+        name: string;
+        uniqueID: string;
+        matchesFilter: boolean;
+    };
+    spec: {
+        key: string;
+        locker: string | { key: string; name: string } | null;
+        status: string;
+    };
+    aut: {
+        key: string;
+        locker: string | { key: string; name: string } | null;
+        status: string;
+    };
+    exec?: {
+        locker?: string | { key: string; name: string } | null;
+        status?: string;
+    };
+    filters: any[];
+    elementType: string;
+    children?: any[];
 }
 
 /**
@@ -92,13 +97,13 @@ export interface CycleTreeItemData {
 
 export interface OptionalJobIDRequestParameter {
     treeRootUID?: string;
-    executionMode?: ExecutionMode;
+    basedOnExecution?: boolean;
     suppressFilteredData?: boolean;
     suppressNotExecutable?: boolean;
     suppressEmptyTestThemes?: boolean;
     filters?: {
         name: string;
-        filterType: "TestTheme";
+        filterType: "TestTheme" | "TestCase" | "TestCaseSet";
         testThemeUID: string;
     }[];
 }
@@ -179,7 +184,7 @@ export interface TreeNode {
 
 export interface ImportData {
     fileName: string;
-    reportRootUID: string;
+    treeRootUID: string;
     useExistingDefect: boolean;
     discardTesterInformation: boolean;
     defaultTester?: string;
@@ -218,7 +223,7 @@ export interface TovStructureOptions {
 
 export interface TovFilter {
     name: string;
-    filterType: "TestTheme";
+    filterType: string;
     testThemeUID: string;
 }
 

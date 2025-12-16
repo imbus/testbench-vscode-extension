@@ -1,0 +1,534 @@
+/* Css custom properties */
+:root {
+    /* Spacing scale */
+    --spacing-xs: 4px;
+    --spacing-sm: 6px;
+    --spacing-md: 8px;
+    --spacing-lg: 10px;
+    --spacing-xl: 12px;
+    --spacing-2xl: 15px;
+    --spacing-3xl: 20px;
+
+    /* Icon sizing */
+    --icon-size: 16px;
+    --icon-size-sm: 14px;
+
+    /* Button sizing */
+    --btn-min-size: 32px;
+    --btn-min-size-sm: 28px;
+    --btn-padding: 8px 15px;
+    --btn-padding-sm: 6px 8px;
+    --btn-padding-xs: 4px 6px;
+
+    /* Border radius */
+    --border-radius: 4px;
+    --border-radius-sm: 3px;
+    --border-radius-lg: 6px;
+
+    /* Colors using CSS custom properties with fallbacks */
+    --color-primary-bg: var(--vscode-button-primaryBackground, var(--vscode-button-background));
+    --color-primary-fg: var(--vscode-button-primaryForeground, var(--vscode-button-foreground));
+    --color-primary-hover: var(--vscode-button-primaryHoverBackground, var(--vscode-button-hoverBackground));
+
+    --color-secondary-bg: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
+    --color-secondary-fg: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+    --color-secondary-hover: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground));
+
+    --color-error: var(--vscode-errorForeground);
+    --color-error-fg: var(--vscode-button-primaryForeground, white);
+
+    --color-border: var(--vscode-button-border, var(--vscode-contrastBorder));
+    --color-focus: var(--vscode-focusBorder);
+    --color-input-border: var(--vscode-input-border, var(--vscode-settings-textInputBorder));
+
+    /* Theme-specific background colors */
+    --bg-body: var(--vscode-side-bar-background, var(--vscode-editor-background));
+    --bg-section: var(--vscode-list-inactiveSelectionBackground);
+    --bg-list-hover: var(--vscode-list-hoverBackground);
+    --bg-list-focus: var(--vscode-list-focusBackground);
+    --bg-input: var(--vscode-input-background);
+
+    /* Text colors */
+    --text-primary: var(--vscode-editor-foreground);
+    --text-secondary: var(--vscode-descriptionForeground);
+    --text-header: var(--vscode-settings-headerForeground);
+    --text-input: var(--vscode-input-foreground);
+}
+
+[data-vscode-theme-kind="vscode-dark"],
+[data-vscode-theme-kind="vscode-high-contrast"] {
+    --bg-body: #2d2d30;
+}
+
+[data-vscode-theme-kind="vscode-light"] {
+    --bg-body: #f8f8f8;
+    /* Light theme specific button colors */
+    --color-secondary-bg: var(--vscode-input-background, #ffffff);
+    --color-secondary-fg: var(--vscode-foreground, #000000);
+    --color-border: var(--vscode-input-border, #d0d0d0);
+    --bg-list-hover: var(--vscode-list-hoverBackground, #f0f0f0);
+}
+
+[data-vscode-theme-kind="vscode-high-contrast"] {
+    --bg-body: #1e1e1e;
+}
+
+/* Base styles */
+body {
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    color: var(--text-primary);
+    background-color: var(--bg-body);
+    padding: var(--spacing-2xl);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    box-sizing: border-box;
+    gap: var(--spacing-3xl);
+    margin: 0;
+}
+
+/* Layout components */
+.scrollable-content {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding-right: 5px;
+}
+
+.connection-section,
+.add-connection-section {
+    padding: var(--spacing-2xl);
+    border: 1px solid var(--vscode-settings-dropdownBorder, var(--vscode-contrastBorder));
+    border-radius: var(--border-radius-lg);
+    background-color: var(--bg-section);
+    min-width: 0;
+    overflow: hidden;
+    min-height: auto;
+}
+
+/* Typography */
+h2,
+h3 {
+    color: var(--text-header);
+    margin: 0 0 var(--spacing-2xl) 0;
+    padding-bottom: var(--spacing-md);
+    border-bottom: 1px solid var(--color-focus, var(--vscode-settings-dropdownBorder));
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+}
+
+.form-group label,
+.connection-label {
+    color: var(--text-primary) !important;
+}
+
+/* Icon system */
+.icon {
+    width: var(--icon-size);
+    height: var(--icon-size);
+    margin-right: var(--spacing-md);
+    background: no-repeat center / var(--icon-size);
+    flex-shrink: 0;
+}
+
+.icon-connections-header {
+    background-image: var(--icon-connections-header);
+}
+.icon-add-connection-header {
+    background-image: var(--icon-add-connection-header);
+}
+.icon-edit-connection-header {
+    background-image: var(--icon-edit-connection-header);
+}
+.icon-save {
+    background-image: var(--icon-save);
+}
+.icon-login {
+    background-image: var(--icon-login);
+}
+.icon-edit {
+    background-image: var(--icon-edit);
+}
+.icon-delete {
+    background-image: var(--icon-delete);
+}
+
+/* Remove margin for connection action icons */
+.connection-actions .icon {
+    margin-right: 0;
+}
+
+/* Button system */
+button {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: 1px solid var(--color-border);
+    padding: var(--btn-padding);
+    cursor: pointer;
+    border-radius: var(--border-radius);
+    font-weight: 500;
+    transition:
+        background-color 0.2s ease-in-out,
+        border-color 0.2s ease-in-out;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+button:hover {
+    background-color: var(--vscode-button-hoverBackground);
+    border-color: var(--color-focus);
+}
+
+button:focus {
+    outline: 1px solid var(--color-focus);
+    outline-offset: 2px;
+}
+
+button .icon {
+    margin-right: var(--spacing-sm);
+}
+
+/* Button variants */
+#saveConnectionBtn {
+    background-color: var(--color-primary-bg);
+    color: var(--color-primary-fg);
+    border-color: var(--color-primary-bg);
+}
+
+#saveConnectionBtn:hover {
+    background-color: var(--color-primary-hover);
+}
+
+.login-btn,
+.edit-btn,
+.delete-btn,
+#cancelEditBtn {
+    background-color: var(--color-secondary-bg);
+    color: var(--color-secondary-fg);
+    border-color: var(--color-secondary-bg);
+}
+
+.login-btn:hover,
+.edit-btn:hover,
+#cancelEditBtn:hover {
+    background-color: var(--color-secondary-hover);
+}
+
+.delete-btn:hover {
+    background-color: var(--color-error);
+    color: var(--color-error-fg);
+    border-color: var(--color-error);
+    opacity: 0.8;
+}
+
+/* Connection list component */
+#connectionsList {
+    list-style: none;
+    padding: 0;
+    max-height: min(60vh, 400px);
+    border: 1px solid var(--color-input-border);
+    border-radius: var(--border-radius);
+    transition: max-height 0.2s ease-in-out;
+}
+
+#connectionsList li {
+    box-sizing: border-box;
+    padding: var(--spacing-lg) var(--spacing-xl);
+    margin-bottom: -1px;
+    border-bottom: 1px solid var(--color-input-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--bg-list-hover);
+    transition: background-color 0.2s ease-in-out;
+    min-height: 60px;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    min-width: 0;
+}
+
+#connectionsList li:last-child {
+    border-bottom: none;
+}
+
+#connectionsList li:hover {
+    background-color: var(--bg-list-focus);
+}
+
+.connection-details {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin-right: var(--spacing-lg);
+    min-width: 0;
+    overflow: hidden;
+}
+
+.connection-label {
+    font-weight: bold;
+    color: var(--vscode-foreground);
+    font-size: 1.05em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.connection-info {
+    font-size: 0.9em;
+    color: var(--text-secondary);
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.connection-being-edited {
+    background-color: var(--bg-list-focus);
+    border-left: 3px solid var(--vscode-gitDecoration-modifiedResourceForeground, #e1c16e);
+    padding-left: 9px;
+}
+
+.connection-being-edited:focus-within {
+    outline: 2px solid var(--vscode-gitDecoration-modifiedResourceForeground);
+    outline-offset: 2px;
+}
+
+.editing-indicator {
+    font-size: 0.8em;
+    color: var(--vscode-gitDecoration-modifiedResourceForeground, #e1c16e);
+    font-weight: normal;
+    margin-left: var(--spacing-md);
+    opacity: 0.8;
+}
+
+/* Connection actions */
+.connection-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+    flex-shrink: 0;
+    min-width: fit-content;
+}
+
+.connection-actions button {
+    padding: var(--btn-padding-sm);
+    font-size: 0.9em;
+    min-width: var(--btn-min-size);
+    min-height: var(--btn-min-size);
+    max-width: var(--btn-min-size);
+    position: relative;
+}
+
+.connection-actions button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    background-color: var(--color-secondary-bg);
+    color: var(--text-secondary);
+}
+
+.connection-actions button:disabled:hover {
+    background-color: var(--color-secondary-bg);
+    opacity: 0.3;
+}
+
+.delete-btn:disabled {
+    background-color: var(--color-secondary-bg);
+    color: var(--text-secondary);
+    border-color: var(--color-secondary-bg);
+    opacity: 0.3;
+}
+
+/* Form component */
+.form-group {
+    margin-bottom: var(--spacing-2xl);
+    min-width: 0;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 0.95em;
+    font-weight: 500;
+}
+
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group input[type="password"] {
+    width: calc(100% - 12px);
+    padding: var(--spacing-md) var(--spacing-sm);
+    border-radius: var(--border-radius-sm);
+    border: 1px solid var(--color-input-border);
+    background-color: var(--bg-input);
+    color: var(--text-input);
+    box-sizing: border-box;
+    min-width: 0;
+}
+
+.form-group input:focus {
+    border-color: var(--color-focus);
+    box-shadow: 0 0 0 1px var(--color-focus);
+}
+
+.password-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.password-wrapper input[type="password"] {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+.password-toggle {
+    position: absolute;
+    right: var(--spacing-md);
+    cursor: pointer;
+    background: none;
+    border: none;
+    color: var(--vscode-icon-foreground);
+}
+
+.form-group.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.form-group.checkbox-group label {
+    margin-bottom: 0;
+    font-weight: normal;
+}
+
+.form-group.checkbox-group input[type="checkbox"] {
+    accent-color: var(--color-primary-bg);
+    width: auto;
+    height: auto;
+    margin-right: 5px;
+}
+
+/* Edit mode */
+.edit-mode .add-connection-section {
+    border-color: var(--vscode-gitDecoration-modifiedResourceForeground);
+}
+
+.edit-mode .add-connection-section h3 {
+    color: var(--vscode-gitDecoration-modifiedResourceForeground);
+}
+
+.edit-actions {
+    display: flex;
+    gap: var(--spacing-lg);
+    margin-top: var(--spacing-lg);
+    flex-wrap: wrap;
+}
+
+.edit-actions button {
+    flex: 1;
+    min-width: 120px;
+}
+
+/* Messages */
+#messages {
+    margin-top: var(--spacing-2xl);
+    padding: var(--spacing-lg) var(--spacing-xl);
+    border-radius: var(--border-radius);
+    word-break: break-word;
+    font-size: 0.95em;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    overflow-wrap: break-word;
+    hyphens: auto;
+}
+
+#messages.hidden {
+    display: none;
+}
+
+.message-info {
+    background-color: var(--vscode-inputValidation-infoBackground);
+    color: var(--vscode-inputValidation-infoForeground);
+    border: 1px solid var(--vscode-inputValidation-infoBorder);
+    text-shadow: 0 0 1px rgba(0, 0, 0, 0.3);
+    font-weight: 500;
+}
+
+.message-success {
+    background-color: rgba(115, 201, 144, 0.18);
+    color: var(--vscode-notification-infoForeground);
+    border: 1px solid rgba(115, 201, 144, 0.4);
+    text-shadow: 0 0 1px rgba(0, 0, 0, 0.3);
+    font-weight: 500;
+}
+
+.message-error {
+    background-color: var(--vscode-inputValidation-errorBackground);
+    color: var(--vscode-inputValidation-errorForeground);
+    border: 1px solid var(--vscode-inputValidation-errorBorder);
+    text-shadow: 0 0 1px rgba(0, 0, 0, 0.3);
+    font-weight: 500;
+}
+
+.message-warning {
+    background-color: var(--vscode-inputValidation-warningBackground, #warning_color_background_fallback);
+    color: var(--vscode-inputValidation-warningForeground, var(--vscode-foreground));
+    border: 1px solid var(--vscode-inputValidation-warningBorder, #warning_color_border_fallback);
+    text-shadow: 0 0 1px rgba(0, 0, 0, 0.3);
+    font-weight: 500;
+}
+
+#noConnectionsMessage {
+    padding: var(--spacing-2xl);
+    text-align: center;
+    color: var(--text-secondary);
+    border: 1px dashed var(--color-input-border);
+    border-radius: var(--border-radius);
+    min-height: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: var(--spacing-lg) 0;
+    word-wrap: break-word;
+    hyphens: auto;
+}
+
+@media (max-width: 300px) {
+    #connectionsList li {
+        padding: var(--spacing-md) var(--spacing-lg);
+    }
+
+    .connection-actions {
+        gap: var(--spacing-xs);
+    }
+
+    .connection-actions button {
+        min-width: var(--btn-min-size-sm);
+        min-height: var(--btn-min-size-sm);
+        max-width: var(--btn-min-size-sm);
+        padding: var(--btn-padding-xs);
+    }
+
+    .connection-actions button .icon {
+        width: var(--icon-size-sm);
+        height: var(--icon-size-sm);
+        background-size: var(--icon-size-sm);
+    }
+}
+
+@media (max-width: 280px) {
+    .edit-actions {
+        flex-direction: column;
+        gap: var(--spacing-md);
+    }
+
+    .edit-actions button {
+        flex: none;
+        width: 100%;
+    }
+}

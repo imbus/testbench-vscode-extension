@@ -1,30 +1,85 @@
-.vscode/**
-.vscode-test/**
-out/**
-node_modules/**
-src/**
+# Version Control & Git
+.git/
 .gitignore
-.yarnrc
-webpack.config.js
-vsc-extension-quickstart.md
-**/tsconfig.json
-**/.eslintrc.json
-**/*.map
-**/*.ts
-**/.vscode-test.*
-.venv/**
 .github/**
 .husky/**
-.ruff/**
+
+# VS Code Configuration
+.vscode/**
+.vscodeignore
+.vscode-test/**
+**/.vscode-test.*
+
+# Build Artifacts & Outputs
 *.vsix
-.env
+out/**
+**/*.map
+tsconfig.tsbuildinfo
+imbus.testbench-extension-*/
+d-biehl.robotcode-*/
+ms-python.*/
+VSCode-win32-*/
+
+# Dependencies
+node_modules/**
 package-lock.json
-packages/**
-**/__pycache__/**
+.yarnrc
+
+# Source Files & Development Files
+src/**
+**/*.ts
+testbench-language-server/**
+
+# Test Resources & Artifacts
+.test-resources/
+test-resources/
+test-workspace/
+out/test/
+src/test/
+
+# Python Environment & Files
+.venv/**
 .python-version
 pyproject.toml
 requirements.txt
-.testbench/**
-.nox/**
-.ruff_cache/**
+*.whl
 .whl
+noxfile.py
+.nox/**
+
+# Configuration Files
+tsconfig.json
+**/tsconfig.json
+webpack.config.js
+webpack.test.config.js
+.eslintrc.json
+**/.eslintrc.json
+eslint.config.mjs
+.prettierrc
+commitlint.config.js
+release.config.js
+tasks.py
+.nycrc.json
+.nycrc
+user-guide.md
+
+# Cache & Temporary Files
+__pycache__/
+**/__pycache__/**
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/**
+.ruff/**
+
+# Security & Certificates
+.env
+certs/**
+*.pem
+*.crt
+
+# Project-Specific
+.testbench/**
+vsc-extension-quickstart.md
+
+# Logs
+*.log

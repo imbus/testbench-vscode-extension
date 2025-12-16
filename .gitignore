@@ -1,6 +1,10 @@
 # VS Code Unit tests
 .vscode-test/
 
+# UI Test Artifacts
+.test-resources/
+test-resources/
+
 # VS Code package
 *.vsix
 
@@ -13,6 +17,8 @@ bundled/libs/bin/
 # Ignore compiled output folder
 out/
 /out
+
+certs/
 
 # Typescript
 tsconfig.tsbuildinfo
@@ -179,6 +185,8 @@ celerybeat.pid
 # Environments
 .env
 .env.local
+.env.*
+*.env
 .venv
 env/
 venv/

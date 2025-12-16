@@ -11,7 +11,6 @@ import { TreeViewConfig } from "../../../treeViews/core/TreeViewConfig";
 import { TreeViewModule } from "../../../treeViews/core/TreeViewModule";
 import { StateManager } from "../../../treeViews/state/StateManager";
 import { EventBus } from "../../../treeViews/utils/EventBus";
-import { ErrorHandler } from "../../../treeViews/utils/ErrorHandler";
 import { TestBenchLogger } from "../../../testBenchLogger";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
 
@@ -70,7 +69,7 @@ class TestTreeView extends TreeViewBase<TestTreeItem> {
         return this.mockRootItems;
     }
 
-    protected async getChildrenForItem(item: TestTreeItem): Promise<TestTreeItem[]> {
+    protected async getChildrenForItem(_item: TestTreeItem): Promise<TestTreeItem[]> {
         this.getChildrenForItemCalled = true;
         return this.mockChildren;
     }
@@ -123,10 +122,6 @@ class TestTreeView extends TreeViewBase<TestTreeItem> {
     // Expose protected properties for testing
     public getProtectedLogger(): TestBenchLogger {
         return (this as any).logger;
-    }
-
-    public getProtectedErrorHandler(): ErrorHandler {
-        return (this as any).errorHandler;
     }
 
     public getProtectedStateManager(): StateManager {
@@ -216,7 +211,6 @@ suite("TreeViewBase", function () {
 
         test("should initialize core components", () => {
             assert.ok(treeView.getProtectedLogger() instanceof TestBenchLogger);
-            assert.ok(treeView.getProtectedErrorHandler() instanceof ErrorHandler);
             assert.ok(treeView.eventBus instanceof EventBus);
             assert.ok(treeView.getProtectedStateManager() instanceof StateManager);
         });
@@ -506,11 +500,11 @@ suite("TreeViewBase", function () {
             await treeView.testGetRootItems();
             assert.strictEqual(treeView.fetchRootItemsCalled, true);
 
-            // Reset flag and set old timestamp
+            // Reset flag and clear cache to simulate expired cache
             treeView.fetchRootItemsCalled = false;
-            treeView.setLastDataFetch(Date.now() - 10000); // 10 seconds ago
+            (treeView as any).rootItemsCache.clearCache();
 
-            // Second request should fetch again due to old timestamp
+            // Second request should fetch again due to cleared cache
             await treeView.testGetRootItems();
             assert.strictEqual(treeView.fetchRootItemsCalled, true);
         });

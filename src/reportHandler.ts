@@ -12,23 +12,24 @@ import * as os from "os";
 import * as testBenchTypes from "./testBenchTypes";
 import * as utils from "./utils";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
-import JSZip from "jszip";
-import axios, { AxiosResponse } from "axios";
-import { connection, logger, ALLOW_PERSISTENT_IMPORT_BUTTON } from "./extension";
+import { AxiosResponse, AxiosInstance } from "axios";
+import { connection, logger, treeViews, userSessionManager } from "./extension";
 import {
     ConfigKeys,
     StorageKeys,
     JobTypes,
     folderNameOfInternalTestbenchFolder,
     ProjectItemTypes,
-    TestThemeItemTypes
+    TestThemeItemTypes,
+    INTERNAL_REPORTS_SUBFOLDER_NAME
 } from "./constants";
-import { extractDataFromReport, PlayServerConnection, withRetry } from "./testBenchConnection";
+import { extractDataFromReport, PlayServerConnection, withRetry, RetryPredicateFactory } from "./testBenchConnection";
 import { ExecutionMode } from "./testBenchTypes";
 import { getExtensionConfiguration } from "./configuration";
 import { TestThemesTreeItem } from "./treeViews/implementations/testThemes/TestThemesTreeItem";
 import { ProjectsTreeItem } from "./treeViews/implementations/projects/ProjectsTreeItem";
 import { TreeItemBase } from "./treeViews/core/TreeItemBase";
+import { TestThemesTreeView } from "./treeViews/implementations/testThemes/TestThemesTreeView";
 
 /**
  * Saves the last generated report parameters to workspace storage.
@@ -58,12 +59,22 @@ async function saveLastGeneratedReportParams(
     };
 
     try {
-        await context.workspaceState.update(StorageKeys.LAST_GENERATED_PARAMS, paramsToSave);
+        if (!userSessionManager.hasValidUserSession()) {
+            logger.debug("[reportHandler] No user session active, skipping last generated params storage");
+            return;
+        }
+
+        const storageKey = userSessionManager.getUserStorageKey(StorageKeys.LAST_GENERATED_PARAMS);
+        if (!storageKey) {
+            logger.debug("[reportHandler] Failed to generate storage key, skipping last generated params storage");
+            return;
+        }
+        await context.workspaceState.update(storageKey, paramsToSave);
         logger.debug(
-            `Saved last generated report params to workspace state: UID=${UID}, projectKey=${projectKey}, cycleKey=${cycleKey}, executionMode=${executionMode}, alreadyImported=${alreadyImported}.`
+            `[reportHandler] Saving 'last generated report' parameters to current workspace state for user ${userSessionManager.getCurrentUserId()}: UID=${UID}, projectKey=${projectKey}, cycleKey=${cycleKey}, executionMode=${executionMode}, alreadyImported=${alreadyImported}.`
         );
     } catch (error) {
-        logger.error("Failed to save last generated report params to workspace state:", error);
+        logger.error("[reportHandler] Failed to save 'last generated report' parameters to workspace state:", error);
     }
 }
 
@@ -77,8 +88,18 @@ function getLastGeneratedReportParams(
     context: vscode.ExtensionContext
 ): testBenchTypes.LastGeneratedReportParams | undefined {
     try {
+        if (!userSessionManager.hasValidUserSession()) {
+            logger.debug("[reportHandler] No user session active, cannot retrieve last generated params");
+            return undefined;
+        }
+
+        const storageKey = userSessionManager.getUserStorageKey(StorageKeys.LAST_GENERATED_PARAMS);
+        if (!storageKey) {
+            logger.debug("[reportHandler] Failed to generate storage key, cannot retrieve last generated params");
+            return undefined;
+        }
         const storedParams: testBenchTypes.LastGeneratedReportParams | undefined =
-            context.workspaceState.get<testBenchTypes.LastGeneratedReportParams>(StorageKeys.LAST_GENERATED_PARAMS);
+            context.workspaceState.get<testBenchTypes.LastGeneratedReportParams>(storageKey);
 
         if (
             storedParams &&
@@ -88,14 +109,14 @@ function getLastGeneratedReportParams(
             storedParams.executionMode !== undefined &&
             storedParams.alreadyImported !== undefined
         ) {
-            logger.debug("Retrieved last generated report params from workspace state:", storedParams);
+            logger.debug("[reportHandler] Retrieved last generated report params from workspace state:", storedParams);
             return storedParams;
         } else {
-            logger.warn("No valid last generated report params found in workspace state.");
+            logger.warn("[reportHandler] No valid last generated report params found in workspace state.");
             return undefined;
         }
     } catch (error) {
-        logger.error("Failed to retrieve last generated report params from workspace state:", error);
+        logger.error("[reportHandler] Failed to retrieve last generated report params from workspace state:", error);
         return undefined;
     }
 }
@@ -107,7 +128,6 @@ function getLastGeneratedReportParams(
  */
 export function isReportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobStatusResponse): boolean {
     const success = !!jobStatus?.completion?.result?.ReportingSuccess?.reportName;
-    logger.trace(`isReportJobCompletedSuccessfully: ${success}`);
     return success;
 }
 
@@ -118,7 +138,9 @@ export function isReportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobSt
  */
 export function isImportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobStatusResponse): boolean {
     const success = !!jobStatus?.completion?.result?.ExecutionImportingSuccess;
-    logger.trace(`isImportJobCompletedSuccessfully: ${success}`);
+    if (success) {
+        logger.debug(`[reportHandler] Successfully uploaded TestBench report.`);
+    }
     return success;
 }
 
@@ -129,7 +151,7 @@ export function isImportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobSt
  */
 export function isImportJobFailed(jobStatus: testBenchTypes.JobStatusResponse): boolean {
     const failed = !!jobStatus?.completion?.result?.ExecutionImportingFailure;
-    logger.trace(`isImportJobFailed: ${failed}`);
+    logger.debug(`[reportHandler] Is import job failed: ${failed}`);
     return failed;
 }
 
@@ -161,12 +183,12 @@ export async function pollJobStatus(
     while (true) {
         if (cancellationToken?.isCancellationRequested) {
             const cancellationMsg = "Job status polling cancelled by the user.";
-            logger.debug(cancellationMsg);
+            logger.debug(`[reportHandler] ${cancellationMsg}`);
             vscode.window.showInformationMessage(cancellationMsg);
             throw new vscode.CancellationError();
         }
         if (!connection) {
-            logger.error("Connection object is missing, cannot poll job status.");
+            logger.error("[reportHandler] No connection available, cannot poll job status.");
             return null;
         }
         pollingAttemptAmount++;
@@ -174,7 +196,7 @@ export async function pollJobStatus(
         try {
             jobStatus = await getJobStatus(projectKey, jobId, jobType);
             if (!jobStatus) {
-                logger.error("Job status not received from server.");
+                logger.error("[reportHandler] Job status not received from server.");
                 return null;
             }
 
@@ -184,33 +206,31 @@ export async function pollJobStatus(
             if (totalItems && handledItems) {
                 const percentage: number = Math.round((handledItems / totalItems) * 100);
                 progress?.report({
-                    message: `Fetching job status (${handledItems}/${totalItems}).`,
+                    message: `Downloading TestBench report (${handledItems}/${totalItems}).`,
                     increment: (percentage - lastProgressIncrement) / 3
                 });
-                logger.debug(`Polling attempt ${pollingAttemptAmount}: Progress ${percentage}%`);
+                logger.trace(`[reportHandler] Polling attempt ${pollingAttemptAmount}: Progress ${percentage}%`);
                 lastProgressIncrement = percentage;
             } else {
-                logger.debug(`Polling attempt ${pollingAttemptAmount}: Job status fetched.`);
+                logger.trace(`[reportHandler] Polling attempt ${pollingAttemptAmount}: Job status fetched.`);
             }
 
             if (jobType === JobTypes.REPORT && isReportJobCompletedSuccessfully(jobStatus)) {
-                logger.debug("Report job completed successfully.");
                 return jobStatus;
             } else if (jobType === JobTypes.IMPORT) {
                 if (isImportJobCompletedSuccessfully(jobStatus)) {
-                    logger.debug("Import job completed successfully.");
                     return jobStatus;
                 } else if (isImportJobFailed(jobStatus)) {
                     return null;
                 }
             }
         } catch (error) {
-            logger.error(`Polling attempt ${pollingAttemptAmount}: Failed to get job status.`, error);
+            logger.error(`[reportHandler] Failed to get job status at polling attempt ${pollingAttemptAmount}:`, error);
         }
 
         // Check if the maximum polling time has been exceeded.
         if (maxPollingTimeMs !== undefined && Date.now() - startTime >= maxPollingTimeMs) {
-            logger.warn("Maximum polling time exceeded. Aborting job status polling.");
+            logger.warn("[reportHandler] Maximum polling time exceeded. Aborting job status polling.");
             break;
         }
 
@@ -220,8 +240,6 @@ export async function pollJobStatus(
         const delayMs: number = elapsedTime < 10000 ? 200 : 1000;
         await utils.delay(delayMs);
     }
-
-    logger.trace("Final job status:", jobStatus);
     return jobStatus;
 }
 
@@ -239,14 +257,14 @@ export async function getJobIdOfCycleReport(
     requestParams?: testBenchTypes.OptionalJobIDRequestParameter
 ): Promise<string | null> {
     if (!connection) {
-        logger.error("Connection object is missing, cannot get job ID.");
+        logger.error("[reportHandler] No connection available, cannot get job ID.");
         return null;
     }
 
-    const getJobIDUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
-    logger.debug(`Fetching job ID from URL: ${getJobIDUrl}`);
+    const getJobIDUrl: string = `${connection.getBaseURL()}/2/projects/${projectKey}/cycles/${cycleKey}/report`;
+    logger.trace(`[reportHandler] Fetching job ID of cycle report from URL: ${getJobIDUrl}`);
     try {
-        const apiClient: axios.AxiosInstance = connection.getApiClient();
+        const apiClient: AxiosInstance = connection.getApiClient();
         const jobIdResponse: AxiosResponse<testBenchTypes.JobIdResponse> = await withRetry(
             () =>
                 apiClient.post<testBenchTypes.JobIdResponse>(getJobIDUrl, requestParams, {
@@ -257,34 +275,23 @@ export async function getJobIdOfCycleReport(
                 }),
             3, // maxRetries
             2000, // delayMs
-            (error: { response: { status: number } }) => {
-                // shouldRetry predicate
-                if (axios.isAxiosError(error) && error.response) {
-                    const nonRetryableStatusCodes = [400, 401, 403, 404, 422]; // Common non-retryable client errors
-                    if (nonRetryableStatusCodes.includes(error.response.status)) {
-                        logger.warn(
-                            `[ReportHandler] Non-retryable error ${error.response.status} for getJobId. Not retrying.`
-                        );
-                        return false;
-                    }
-                }
-                return true; // Retry on other errors (e.g., network issues, 5xx server errors)
-            }
+            RetryPredicateFactory.createDefaultPredicate()
         );
 
-        logger.trace("[ReportHandler] Job ID response status:", jobIdResponse.status);
-        logger.trace("[ReportHandler] Job ID response data:", jobIdResponse.data);
+        logger.trace(`[reportHandler] Job ID response status for URL: ${getJobIDUrl}:`, jobIdResponse.status);
+        logger.trace(`[reportHandler] Job ID response data for URL: ${getJobIDUrl}:`, jobIdResponse.data);
 
         if (jobIdResponse.status !== 200) {
-            logger.error(`Failed to fetch job ID, status code: ${jobIdResponse.status}`);
-
+            const errorMsg: string = `[reportHandler] Failed to fetch job ID, status code: ${jobIdResponse.status}`;
+            logger.error(errorMsg);
             return null;
         }
 
         return jobIdResponse.data.jobID;
     } catch (error: any) {
-        logger.error("Error fetching job ID:", error);
-        vscode.window.showErrorMessage(`Failed to fetch job ID: ${error.message}`);
+        const errorMsg: string = `Error fetching job ID: ${error.message}`;
+        logger.error("[reportHandler] " + errorMsg);
+        vscode.window.showErrorMessage(errorMsg);
         return null;
     }
 }
@@ -303,40 +310,32 @@ export async function getJobStatus(
     jobType: string
 ): Promise<testBenchTypes.JobStatusResponse | null> {
     if (!connection) {
-        logger.error("Connection object is missing, cannot get job status.");
+        logger.error("[reportHandler] No connection available, cannot get job status.");
         return null;
     }
-    const getJobStatusUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/${jobType}/job/${jobId}/v1`;
-    logger.debug(`Checking job status at: ${getJobStatusUrl}`);
+    const getJobStatusUrl: string = `${connection.getBaseURL()}/2/projects/${projectKey}/${jobType}/job/${jobId}`;
+    logger.trace(`[reportHandler] Fetching job status at: ${getJobStatusUrl}`);
 
-    const apiClient: axios.AxiosInstance = connection.getApiClient();
+    const apiClient: AxiosInstance = connection.getApiClient();
     const jobStatusResponse: AxiosResponse<testBenchTypes.JobStatusResponse> = await withRetry(
         () =>
             apiClient.get(getJobStatusUrl, {
                 headers: {
                     accept: "application/vnd.testbench+json"
-                }
+                },
+                proxy: false
             }),
         3, // max retries
         2000, // delay in ms between retries
-        (error: { response: { status: number } }) => {
-            if (axios.isAxiosError(error) && error.response) {
-                const nonRetryableStatusCodes = [400, 401, 403, 404, 422];
-                if (nonRetryableStatusCodes.includes(error.response.status)) {
-                    logger.warn(
-                        `[ReportHandler] Non-retryable error ${error.response.status} for getJobStatus. Not retrying.`
-                    );
-                    return false;
-                }
-            }
-            return true;
-        }
+        RetryPredicateFactory.createDefaultPredicate()
     );
 
-    logger.trace("Job status response:", jobStatusResponse.data);
+    logger.trace(`[reportHandler] Job status response status for URL: ${getJobStatusUrl}:`, jobStatusResponse.status);
+    logger.trace(`[reportHandler] Job status response data for URL: ${getJobStatusUrl}:`, jobStatusResponse.data);
     if (jobStatusResponse.status !== 200) {
-        logger.error(`Failed to fetch job status, status code: ${jobStatusResponse.status}`);
-        throw new Error(`Failed to fetch job status, status code: ${jobStatusResponse.status}`);
+        const errorMsg: string = `[reportHandler] Failed to fetch job status, status code: ${jobStatusResponse.status}`;
+        logger.error(errorMsg);
+        throw new Error(errorMsg);
     }
     return jobStatusResponse.data;
 }
@@ -363,50 +362,38 @@ export async function downloadReport(
 ): Promise<string | null> {
     try {
         if (!connection) {
-            const missingConnectionError: string = "Connection object is missing, cannot download report.";
-            logger.error(missingConnectionError);
+            const missingConnectionError: string = "No connection available, cannot download report.";
+            logger.error(`[reportHandler] ${missingConnectionError}`);
             vscode.window.showErrorMessage(missingConnectionError);
             return null;
         }
-        const downloadReportUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/report/${fileNameToDownload}/v1`;
-        logger.debug(`Downloading report "${fileNameToDownload}" from URL: ${downloadReportUrl}`);
+        const downloadReportUrl: string = `${connection.getBaseURL()}/2/projects/${projectKey}/report/${fileNameToDownload}`;
+        logger.debug(`[reportHandler] Downloading report "${fileNameToDownload}" from URL: ${downloadReportUrl}`);
 
-        const apiClient: axios.AxiosInstance = connection.getApiClient();
+        const apiClient: AxiosInstance = connection.getApiClient();
         const downloadZipResponse: AxiosResponse<any> = await withRetry(
             () =>
                 apiClient.get(downloadReportUrl, {
                     responseType: "arraybuffer", // Expecting binary data
                     headers: {
                         accept: "application/vnd.testbench+json"
-                    }
+                    },
+                    proxy: false
                 }),
             3, // maxRetries
             2000, // delayMs
-            (error: { response: { status: number } }) => {
-                const nonRetryableStatusCodes = [400, 401, 403, 404, 422];
-                if (
-                    axios.isAxiosError(error) &&
-                    error.response &&
-                    nonRetryableStatusCodes.includes(error.response.status)
-                ) {
-                    logger.warn(
-                        `[ReportHandler] Non-retryable error ${error.response.status} during report download. Not retrying.`
-                    );
-                    return false;
-                }
-                return true;
-            }
+            RetryPredicateFactory.createDefaultPredicate()
         );
 
         if (downloadZipResponse.status !== 200) {
             const downloadReportErrorMessage: string = `Failed to download report, status code: ${downloadZipResponse.status}`;
-            logger.error(downloadReportErrorMessage);
+            logger.error(`[reportHandler] ${downloadReportErrorMessage}`);
             throw new Error(downloadReportErrorMessage);
         }
 
         const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
         if (!workspaceLocation || !fs.existsSync(workspaceLocation)) {
-            const invalidWorkspaceLocationError: string = `Workspace location is not valid: ${workspaceLocation}`;
+            const invalidWorkspaceLocationError: string = `[reportHandler] Workspace location is not valid: ${workspaceLocation}`;
             logger.error(invalidWorkspaceLocationError);
             return await promptUserForSaveLocationAndSaveReportToFile(fileNameToDownload, downloadZipResponse);
         }
@@ -418,14 +405,14 @@ export async function downloadReport(
         );
     } catch (error) {
         const downloadReportErrorMessage: string = `Failed to download report: ${(error as Error).message}`;
-        logger.error(downloadReportErrorMessage);
+        logger.error(`[reportHandler] ${downloadReportErrorMessage}`);
         vscode.window.showErrorMessage(downloadReportErrorMessage);
         return null;
     }
 }
 
 /**
- * Saves the downloaded report file locally.
+ * Saves the downloaded report file locally inside the internal .testbench folder's reports subfolder.
  *
  * @param {string} workspaceLocation The workspace location.
  * @param {string} folderNameOfReport The folder name for saving the report.
@@ -441,13 +428,15 @@ async function storeReportFileLocally(
 ): Promise<string | null> {
     try {
         const filePath: string = path.join(workspaceLocation, folderNameOfReport, fileNameOfReport);
+        const dirPath: string = path.dirname(filePath);
+        await vscode.workspace.fs.createDirectory(vscode.Uri.file(dirPath));
         const uri: vscode.Uri = vscode.Uri.file(filePath);
         await vscode.workspace.fs.writeFile(uri, new Uint8Array(downloadResponse.data));
-        logger.debug(`Report saved to ${uri.fsPath}`);
+        logger.debug(`[reportHandler] Report file saved to '${uri.fsPath}'.`);
         return uri.fsPath;
     } catch (error) {
         const failedReportSaveMessage: string = `Failed to save report file: ${(error as Error).message}`;
-        logger.error(failedReportSaveMessage);
+        logger.error(`[reportHandler] ${failedReportSaveMessage}`);
         vscode.window.showErrorMessage(failedReportSaveMessage);
         return null;
     }
@@ -464,14 +453,12 @@ async function promptUserForSaveLocationAndSaveReportToFile(
     fileNameOfReport: string,
     downloadResponse: AxiosResponse<any>
 ): Promise<string | null> {
-    logger.debug("Prompting user to select a save location for the report file.");
     const zipUri: vscode.Uri | undefined = await vscode.window.showSaveDialog({
         defaultUri: vscode.Uri.file(fileNameOfReport),
         filters: { "Zip Files": ["zip"] },
         title: "Select a location to save the report file"
     });
     if (!zipUri) {
-        logger.debug("User cancelled save location selection.");
         return null;
     }
     try {
@@ -482,7 +469,9 @@ async function promptUserForSaveLocationAndSaveReportToFile(
         } catch (error) {
             // If the file does not exist, ignore; otherwise, rethrow
             if ((error as vscode.FileSystemError).code !== "FileNotFound") {
-                logger.error(`Error checking file existence: ${(error as Error).message}`);
+                logger.error(
+                    `[reportHandler] Error checking file existence while prompting user for save location: ${(error as Error).message}`
+                );
                 throw error;
             }
         }
@@ -495,19 +484,18 @@ async function promptUserForSaveLocationAndSaveReportToFile(
                 "Skip"
             );
             if (overwritePromptResult === "Skip") {
-                const skipDownloadMsg: string = "File download skipped by the user.";
-                vscode.window.showInformationMessage(skipDownloadMsg);
+                const skipDownloadMsg: string = "[reportHandler] File download skipped by the user.";
                 logger.debug(skipDownloadMsg);
                 return null;
             }
         }
 
         await vscode.workspace.fs.writeFile(zipUri, new Uint8Array(downloadResponse.data));
-        logger.debug(`Report saved to ${zipUri.fsPath}`);
+        logger.debug(`[reportHandler] Report file saved to '${zipUri.fsPath}'.`);
         return zipUri.fsPath;
     } catch (error) {
-        const failedReportSaveMessage: string = `Failed to save report: ${(error as Error).message}`;
-        logger.error(failedReportSaveMessage);
+        const failedReportSaveMessage: string = `Failed to save report file: ${(error as Error).message}`;
+        logger.error(`[reportHandler] ${failedReportSaveMessage}`);
         vscode.window.showErrorMessage(failedReportSaveMessage);
         return null;
     }
@@ -538,21 +526,19 @@ export async function fetchReportZipOfCycleFromServer(
 ): Promise<string | null> {
     try {
         if (!connection) {
-            logger.error("Connection object is missing, cannot fetch report.");
+            logger.error("[reportHandler] No connection available, cannot fetch report.");
             return null;
         }
 
-        logger.debug(
-            `Fetching report zip for projectKey: ${projectKey}, cycleKey: ${cycleKey}, folder: ${folderNameToDownloadReport}.`
+        logger.trace(
+            `[reportHandler] Fetching report zip for projectKey: ${projectKey}, cycleKey: ${cycleKey}, folder: ${folderNameToDownloadReport} and request parameters:`,
+            requestParameters
         );
-        logger.trace("Request parameters:", requestParameters);
 
         const jobId: string | null = await getJobIdOfCycleReport(projectKey, cycleKey, requestParameters);
         if (!jobId) {
-            logger.error("Job ID not received from server.");
             return null;
         }
-        logger.debug(`Job ID received: ${jobId}`);
 
         const jobStatus: testBenchTypes.JobStatusResponse | null = await pollJobStatus(
             projectKey,
@@ -562,28 +548,26 @@ export async function fetchReportZipOfCycleFromServer(
             cancellationToken
         );
         if (!jobStatus || !isReportJobCompletedSuccessfully(jobStatus)) {
-            const reportGenerationErrorMsg: string = "Report generation was unsuccessful.";
-            logger.error(reportGenerationErrorMsg);
+            const reportGenerationErrorMsg: string = "TestBench report generation failed.";
+            logger.error(`[reportHandler] ${reportGenerationErrorMsg}`);
             vscode.window.showErrorMessage(reportGenerationErrorMsg);
             return null;
         }
+        logger.debug(`[reportHandler] Successfully finished TestBench report generation.`);
         const reportName: string = jobStatus.completion.result.ReportingSuccess!.reportName;
-        logger.debug(`Report name to download: ${reportName}`);
-
         const downloadedFilePath: string | null = await downloadReport(
             projectKey,
             reportName,
             folderNameToDownloadReport
         );
         if (downloadedFilePath) {
-            logger.debug(`Report downloaded successfully to: ${downloadedFilePath}`);
             return downloadedFilePath;
         } else {
-            logger.warn("Report download failed or was canceled.");
+            logger.warn("[reportHandler] Downloading report failed or was canceled.");
             return null;
         }
     } catch (error) {
-        logger.error("Error in fetchReportZipFromServer:", error);
+        logger.error(`[reportHandler] Error while fetching report zip from server: ${error}`);
         return null;
     }
 }
@@ -595,69 +579,23 @@ export async function fetchReportZipOfCycleFromServer(
  */
 async function setLastImportedItem(context: vscode.ExtensionContext, reportRootUID: string): Promise<void> {
     try {
-        await context.workspaceState.update(StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY, reportRootUID);
-        logger.debug(`Set last imported item UID to ${reportRootUID}.`);
-    } catch (error) {
-        logger.error("Error setting last imported item UID:", error);
-    }
-}
+        if (!userSessionManager.hasValidUserSession()) {
+            logger.debug("[reportHandler] No user session active, skipping last imported item tracking");
+            return;
+        }
 
-/**
- * Generates Robot Framework test cases for a selected TestThemeNode or TestCaseSetNode.
- *
- * @param {vscode.ExtensionContext} context The VS Code extension context.
- * @param {TestThemeTreeItem} selectedTreeItem The selected tree item (using new type).
- * @returns {Promise<void | null>} Resolves when test generation is complete, or null if errors occur.
- */
-export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
-    context: vscode.ExtensionContext,
-    selectedTreeItem: TestThemesTreeItem,
-    providedCycleKey?: string
-): Promise<void | null> {
-    logger.debug("Generating tests for non-cycle tree item:", selectedTreeItem.label);
-    const treeItemUID = selectedTreeItem.data.elementKey;
-    const cycleKey: string | null = providedCycleKey || null;
-    let projectKey: string | null = null;
-
-    if (!cycleKey) {
-        logger.warn(`CycleKey not provided for ${selectedTreeItem.label}, attempting to find via parent traversal.`);
-        return null;
-    }
-
-    if (!providedCycleKey) {
-        logger.error(`CycleKey not provided and cannot be reliably determined for ${selectedTreeItem.label}.`);
-        vscode.window.showErrorMessage(`Cannot determine Cycle Key for ${selectedTreeItem.label}.`);
-        return null;
-    }
-
-    const currentTdpProjectKey = (globalThis as any).testThemeTreeDataProvider?.getCurrentProjectKey();
-    if (currentTdpProjectKey && (globalThis as any).testThemeTreeDataProvider?.getCurrentCycleKey() === cycleKey) {
-        projectKey = currentTdpProjectKey;
-    } else {
-        logger.warn(
-            `ProjectKey not directly available for cycle ${cycleKey}. This might require caller to provide it.`
+        const storageKey = userSessionManager.getUserStorageKey(StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY);
+        if (!storageKey) {
+            logger.debug("[reportHandler] Failed to generate storage key, skipping last imported item tracking");
+            return;
+        }
+        await context.workspaceState.update(storageKey, reportRootUID);
+        logger.debug(
+            `[reportHandler] Set last imported item UID to ${reportRootUID} for user ${userSessionManager.getCurrentUserId()}.`
         );
+    } catch (error) {
+        logger.error(`[reportHandler] Error setting last imported item UID: ${error}`);
     }
-
-    if (!projectKey) {
-        logger.error(`Project key not found for cycle ${cycleKey}.`);
-        vscode.window.showErrorMessage(`Error: Project key could not be determined for the current cycle.`);
-        return null;
-    }
-
-    if (!treeItemUID) {
-        logger.error(`Cannot generate RF Tests. Missing UID for item ${selectedTreeItem.label}.`);
-        return null;
-    }
-
-    await generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
-        context,
-        selectedTreeItem,
-        typeof selectedTreeItem.label === "string" ? selectedTreeItem.label : selectedTreeItem.data.base.name,
-        projectKey,
-        cycleKey,
-        treeItemUID
-    );
 }
 
 /**
@@ -681,39 +619,43 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
 ): Promise<boolean> {
     let testGenerationSuccessful: boolean = false;
     try {
-        logger.debug("Generating tests for:", selectedTreeItem.label);
         const defaultExecutionMode: testBenchTypes.ExecutionMode = testBenchTypes.ExecutionMode.Execute;
         let UIDforRequest: string;
 
         const effectiveContext: string | undefined = selectedTreeItem.originalContextValue;
 
         if (effectiveContext?.toLowerCase() === ProjectItemTypes.CYCLE.toLowerCase()) {
-            logger.debug("Generating tests for the entire cycle.");
+            logger.debug(`[reportHandler] Generating Robot Framework test suites for test cycle '${itemLabel}'.`);
             UIDforRequest = "";
         } else if (
             effectiveContext === TestThemeItemTypes.TEST_THEME ||
             effectiveContext === TestThemeItemTypes.TEST_CASE_SET
         ) {
-            logger.debug(`Generating tests for specific tree item UID: ${treeItemUID}.`);
+            logger.debug(`[reportHandler] Generating Robot Framework test suites from ${treeItemUID} (${itemLabel}).`);
             UIDforRequest = treeItemUID;
         } else {
-            logger.error(`Unsupported item type for test generation: ${effectiveContext}`);
-            vscode.window.showErrorMessage(`Cannot generate tests for item type: ${effectiveContext}`);
+            logger.error(
+                `[reportHandler] Unsupported test structure element type for test generation: '${effectiveContext}'.`
+            );
+            vscode.window.showErrorMessage(
+                `Unsupported test structure element type for test generation: '${effectiveContext}'.`
+            );
             return false;
         }
 
+        const currentFilters = await TestThemesTreeView.getValidatedFiltersForTreeItem(selectedTreeItem);
         const cycleReportOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
-            executionMode: defaultExecutionMode,
+            basedOnExecution: defaultExecutionMode === testBenchTypes.ExecutionMode.Execute,
             treeRootUID: UIDforRequest,
-            suppressFilteredData: false,
+            suppressFilteredData: true, // Hides tree items after filtering
             suppressNotExecutable: true, // Exclude not executable tests (including NotPlanned)
             suppressEmptyTestThemes: false,
-            filters: []
+            filters: currentFilters
         };
         await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
-                title: `Generating Tests for ${itemLabel}`,
+                title: `Generating Robot Framework test suites`,
                 cancellable: true
             },
             async (progress, cancellationToken) => {
@@ -735,25 +677,32 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
     } catch (error) {
         if (error instanceof vscode.CancellationError) {
             const testGenerationCancelledMessage: string =
-                "[generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary] Test generation cancelled by the user.";
+                "[reportHandler] Robot Framework test suite generation has been cancelled by user.";
             logger.debug(testGenerationCancelledMessage);
             vscode.window.showInformationMessage(testGenerationCancelledMessage);
             return false;
         } else {
-            logger.error(
-                "[generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary] Error during test generation:",
-                error
+            logger.error("[reportHandler] Error during Robot Framework test suite generation:", error);
+            vscode.window.showErrorMessage(
+                `Error during Robot Framework test suite generation. Check the logs for more details.`
             );
-            vscode.window.showErrorMessage(`Error: ${error instanceof Error ? error.message : error}`);
             return false;
         }
     }
 
     if (testGenerationSuccessful) {
-        await vscode.commands.executeCommand("workbench.view.extension.test");
-        const successfulTestGenerationMessage: string = `Robot Framework tests generated successfully for: ${itemLabel}`;
+        if (getExtensionConfiguration().get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_TEST_GENERATION, false)) {
+            await vscode.commands.executeCommand("workbench.view.extension.test");
+        }
+
+        let successfulTestGenerationMessage: string = `Successfully generated Robot Framework test suites from ${treeItemUID} ('${itemLabel}').`;
+        const effectiveContext: string | undefined = selectedTreeItem.originalContextValue;
+
+        if (effectiveContext?.toLowerCase() === ProjectItemTypes.CYCLE.toLowerCase()) {
+            successfulTestGenerationMessage = `Successfully generated Robot Framework test suites from Test Cycle '${itemLabel}'.`;
+        }
         vscode.window.showInformationMessage(successfulTestGenerationMessage);
-        logger.info(successfulTestGenerationMessage);
+        logger.info(`[reportHandler] ${successfulTestGenerationMessage}`);
         return true;
     }
     return false;
@@ -786,29 +735,30 @@ async function runRobotFrameworkTestGenerationProcess(
     const downloadedReportZipPath: string | null = await fetchReportZipOfCycleFromServer(
         projectKey,
         cycleKey,
-        folderNameOfInternalTestbenchFolder,
+        path.join(folderNameOfInternalTestbenchFolder, INTERNAL_REPORTS_SUBFOLDER_NAME),
         cycleStructureOptionsRequestParams,
         progress,
         cancellationToken
     );
     if (!downloadedReportZipPath) {
-        logger.warn("[runRobotFrameworkTestGenerationProcess] Download cancelled or failed.");
+        logger.warn("[reportHandler] Download cancelled or failed.");
         return false;
     }
 
-    progress.report({ increment: 30, message: "Generating tests via testbench2robotframework." });
+    progress.report({ increment: 30, message: "Generating Robot Framework test suites from TestBench report." });
     const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
     if (!workspaceLocation) {
         const workspaceLocationMissingErrorMessage: string =
-            "[runRobotFrameworkTestGenerationProcess] Workspace location not configured.";
-        logger.error(workspaceLocationMissingErrorMessage);
-        vscode.window.showErrorMessage(workspaceLocationMissingErrorMessage);
+            "[reportHandler] Workspace location not configured, cannot generate tests.";
+        const workspaceLocationMissingErrorMessageForUser: string =
+            "Workspace location not configured, cannot generate tests.";
+        logger.warn(workspaceLocationMissingErrorMessage);
+        vscode.window.showWarningMessage(workspaceLocationMissingErrorMessageForUser);
         return false;
     }
 
     const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
         await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(downloadedReportZipPath);
-    await cleanUpReportFileIfConfiguredInSettings(downloadedReportZipPath);
     if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
         return false;
     }
@@ -816,21 +766,8 @@ async function runRobotFrameworkTestGenerationProcess(
     // Update the last generated report parameters workspaceState to be able to import the generated tests later
     await saveLastGeneratedReportParams(context, treeItemUID, projectKey, cycleKey, executionMode, false);
 
-    logger.trace("[runRobotFrameworkTestGenerationProcess] Test generation process completed successfully.");
+    logger.debug("[reportHandler] Test generation process completed successfully.");
     return true;
-}
-
-/**
- * Removes the report zip file if configured in the extension settings.
- *
- * @param {string} reportZipFilePath The path of the report zip file.
- */
-export async function cleanUpReportFileIfConfiguredInSettings(reportZipFilePath: string): Promise<void> {
-    if (getExtensionConfiguration().get<boolean>(ConfigKeys.CLEAR_REPORT_AFTER_PROCESSING)) {
-        await removeReportZipFile(reportZipFilePath);
-    } else {
-        logger.debug("Report ZIP file removal skipped per the extension settings.");
-    }
 }
 
 /**
@@ -846,9 +783,8 @@ export async function removeReportZipFile(
     maxRetries: number = 5,
     delayMs: number = 500
 ): Promise<void> {
-    logger.debug(`Removing report zip file: ${zipFileFullPath}`);
+    logger.debug(`[reportHandler] Removing report zip file: ${zipFileFullPath}`);
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        logger.debug(`Attempt ${attempt} to delete ${zipFileFullPath}`);
         try {
             // Check if the file exists (throws error if not)
             await fsPromise.access(zipFileFullPath);
@@ -857,61 +793,24 @@ export async function removeReportZipFile(
             }
 
             await fsPromise.unlink(zipFileFullPath);
-            logger.debug(`Zip file removed: ${zipFileFullPath}`);
+            logger.debug(`[reportHandler] Zip file removed: ${zipFileFullPath}`);
             return;
         } catch (error: any) {
             if (error.code === "ENOENT") {
                 const fileNotFoundMsg: string = `File not found: ${zipFileFullPath}`;
-                logger.error(fileNotFoundMsg);
+                logger.error(`[reportHandler] ${fileNotFoundMsg}`);
                 vscode.window.showWarningMessage(fileNotFoundMsg);
                 return;
             } else if (error.code === "EBUSY" && attempt < maxRetries) {
-                logger.warn(`Attempt ${attempt} failed due to EBUSY. Retrying in ${delayMs}ms...`);
+                logger.warn(`[reportHandler] Attempt ${attempt} failed due to EBUSY. Retrying in ${delayMs}ms...`);
                 await utils.delay(delayMs);
             } else {
-                logger.error(`Error removing file ${zipFileFullPath}:`, error);
-                vscode.window.showErrorMessage(`Error removing file: ${(error as Error).message}`);
+                logger.error(`[reportHandler] Error removing file ${zipFileFullPath}:`, error);
+                vscode.window.showErrorMessage(`Error removing file ${zipFileFullPath}: ${(error as Error).message}`);
                 return;
             }
         }
     }
-}
-
-/**
- * Recursively searches for a file within a directory.
- *
- * @param {string} directoryToSearchInside The directory to search.
- * @param {string} fileNameToSearch The file name to search for.
- * @returns {string | null} The full path of the file if found, otherwise null.
- */
-export async function findFileRecursivelyInDirectory(
-    directoryToSearchInside: string,
-    fileNameToSearch: string
-): Promise<string | null> {
-    try {
-        logger.debug(`Searching for "${fileNameToSearch}" in "${directoryToSearchInside}" recursively.`);
-        const allFileNamesInsideDirectory: string[] = await fsPromise.readdir(directoryToSearchInside);
-        for (const currentFileName of allFileNamesInsideDirectory) {
-            const pathOfCurrentFile: string = path.join(directoryToSearchInside, currentFileName);
-            const stat = await fsPromise.stat(pathOfCurrentFile);
-            if (stat.isDirectory()) {
-                const foundSearchResult: string | null = await findFileRecursivelyInDirectory(
-                    pathOfCurrentFile,
-                    fileNameToSearch
-                );
-                if (foundSearchResult) {
-                    return foundSearchResult;
-                }
-            } else if (stat.isFile() && currentFileName === fileNameToSearch) {
-                logger.debug(`File found: ${pathOfCurrentFile}`);
-                return pathOfCurrentFile;
-            }
-        }
-    } catch (error) {
-        logger.error(`Error searching for file: ${error instanceof Error ? error.message : String(error)}`);
-    }
-    logger.warn(`File "${fileNameToSearch}" not found in "${directoryToSearchInside}"`);
-    return null;
 }
 
 /**
@@ -924,7 +823,7 @@ export async function findFileRecursivelyInDirectory(
  * @returns {Promise<string | null>} The absolute path of the selected output XML file, or null if none selected.
  */
 async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): Promise<string | null> {
-    logger.debug(`Choosing output XML file using working directory: ${workingDirectoryPath}`);
+    logger.debug(`[reportHandler] Searching output XML file using working directory: ${workingDirectoryPath}`);
 
     // To use relative paths to the workspace root,
     // get the workspace location to construct the full path of outputXmlFilePath.
@@ -936,10 +835,10 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
         true
     );
     if (outputXMLFileAbsolutePath) {
+        logger.debug(`[reportHandler] Using output XML file from extension settings: ${outputXMLFileAbsolutePath}`);
         return outputXMLFileAbsolutePath;
     }
 
-    logger.trace("outputXmlFilePath could not be constructred. Prompting user to select output XML file manually.");
     const firstWorkspaceFolderPath: string | undefined = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     // Determine which path to use as the default URI for the file selection dialog
     const defaultUri: vscode.Uri = firstWorkspaceFolderPath
@@ -947,7 +846,6 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
         : workingDirectoryPath
           ? vscode.Uri.file(workingDirectoryPath) // Try working directory
           : vscode.Uri.file(os.homedir()); // Fallback to the user's home directory
-    logger.trace(`Default URI for XML selection: ${defaultUri.fsPath}`);
     const selectedXMLFileUri: vscode.Uri[] | undefined = await vscode.window.showOpenDialog({
         defaultUri: defaultUri,
         canSelectFiles: true,
@@ -958,13 +856,11 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
     });
 
     if (selectedXMLFileUri && selectedXMLFileUri.length > 0) {
-        logger.debug(`Output XML file selected: ${selectedXMLFileUri[0].fsPath}`);
+        logger.debug(`[reportHandler] Output XML file selected by user: ${selectedXMLFileUri[0].fsPath}`);
         return selectedXMLFileUri[0].fsPath;
     }
 
-    const xmlFileNotSelectedError: string = "No output.xml file selected.";
-    logger.error(xmlFileNotSelectedError);
-    vscode.window.showErrorMessage(xmlFileNotSelectedError);
+    logger.warn("[reportHandler] No output.xml file selected.");
     return null;
 }
 
@@ -984,9 +880,10 @@ async function chooseReportWithoutResultsZipFile(workingDirectoryPath: string): 
         filters: { "Zip Files": ["zip"] }
     });
     if (selectedFiles && selectedFiles.length > 0) {
+        logger.debug(`[reportHandler] Report zip file without results selected by user: ${selectedFiles[0].fsPath}`);
         return selectedFiles[0].fsPath;
     }
-    logger.error("No report zip file selected for the results zip file.");
+    logger.warn("[reportHandler] No report zip file selected for the results zip file.");
     return null;
 }
 
@@ -995,15 +892,19 @@ async function chooseReportWithoutResultsZipFile(workingDirectoryPath: string): 
  *
  * @param {vscode.ExtensionContext} context The extension context.
  * @param {vscode.Progress} currentProgress Optional progress reporter.
+ * @param {vscode.CancellationToken} cancellationToken Optional cancellation token.
+ * @param {string} reportRootUID Optional report root UID to use instead of the stored UID from last generation.
  * @returns {Promise<{createdReportPath: string; outputXmlPathUsed: string; baseReportPathUsed: string} | undefined>}
  * An object with paths, or undefined on error.
  */
 export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
     context: vscode.ExtensionContext,
-    currentProgress?: vscode.Progress<{ message?: string; increment?: number }>
+    currentProgress?: vscode.Progress<{ message?: string; increment?: number }>,
+    cancellationToken?: vscode.CancellationToken,
+    reportRootUID?: string
 ): Promise<{ createdReportPath: string; outputXmlPathUsed: string; baseReportPathUsed: string } | undefined> {
     try {
-        logger.debug("Started fetching test results and creating report with results.");
+        logger.trace("[reportHandler] Fetching test results and creating report with results.");
         const executeWithProgress = async (
             progress: vscode.Progress<{ message?: string; increment?: number }>
         ): Promise<
@@ -1016,35 +917,40 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             const timestampedResultsZipName: string = `ReportWithResults_${Date.now()}.zip`;
             const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
             if (!workspaceLocation) {
-                logger.error("Workspace location not configured for report creation.");
+                logger.error("[reportHandler] Workspace location not configured for report creation.");
                 vscode.window.showErrorMessage("Workspace location not configured. Cannot create report.");
                 return undefined;
             }
             const testbenchWorkingDirectoryPathInsideWorkspace: string = path.join(
                 workspaceLocation,
-                folderNameOfInternalTestbenchFolder
+                folderNameOfInternalTestbenchFolder,
+                INTERNAL_REPORTS_SUBFOLDER_NAME
             );
+            try {
+                await vscode.workspace.fs.createDirectory(
+                    vscode.Uri.file(testbenchWorkingDirectoryPathInsideWorkspace)
+                );
+            } catch (e) {
+                logger.warn(
+                    `[reportHandler] Failed to ensure reports directory exists at ${testbenchWorkingDirectoryPathInsideWorkspace}: ${e}`
+                );
+            }
 
             const outputXMLPath: string | null = await chooseRobotOutputXMLFileIfNotSet(workspaceLocation);
             if (!outputXMLPath) {
                 return undefined;
             }
-            logger.trace(`Using output XML file: ${outputXMLPath}`);
 
-            logger.debug(`Generated report zip file will be named ${timestampedResultsZipName}`);
             reportProgress("Fetching base report structure.", reportIncrement);
-
-            // TODO: Currently we are using the last generated report parameters to create the report with results,
-            // these are used to fetch the report without results from the server.
-            // Later we can make this process independent of the last generated report parameters.
-            // Retrieve parameters from workspace state instead of global variable
             const retrievedParams: testBenchTypes.LastGeneratedReportParams | undefined =
                 getLastGeneratedReportParams(context);
             if (!retrievedParams) {
-                const missingParamsError: string =
+                const missingParamsErrorForUser: string =
                     "Could not find parameters from previous test generation required for base report. Please generate tests first in this workspace.";
+                const missingParamsError: string =
+                    "[reportHandler] Could not find parameters from previous test generation required for base report.";
                 logger.error(missingParamsError);
-                vscode.window.showErrorMessage(missingParamsError);
+                vscode.window.showErrorMessage(missingParamsErrorForUser);
                 return undefined;
             }
 
@@ -1057,23 +963,35 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 alreadyImported === undefined
             ) {
                 const invalidParamsError: string =
-                    "Retrieved parameters from previous test generation are incomplete/invalid for fetching base report.";
+                    "[reportHandler] Previous test generation parameters are invalid for fetching report.";
+                const invalidParamsErrorForUser: string =
+                    "Previous test generation parameters are invalid for fetching report.";
                 logger.error(invalidParamsError);
-                vscode.window.showErrorMessage(invalidParamsError);
+                vscode.window.showErrorMessage(invalidParamsErrorForUser);
                 return undefined;
             }
 
+            // Use the provided reportRootUID if available (for specific tree item imports),
+            // otherwise use the UID from last generation (for full cycle imports)
+            const effectiveUID = reportRootUID !== undefined ? reportRootUID : UID;
+            logger.debug(
+                `[reportHandler] Using treeRootUID for import: ${effectiveUID} (provided: ${reportRootUID !== undefined}, stored: ${UID})`
+            );
+
+            const currentFiltersForImport = await TestThemesTreeView.getValidatedFiltersForApiRequest();
             const cycleStructureOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
-                executionMode: executionBased,
-                treeRootUID: UID
+                basedOnExecution: executionBased === testBenchTypes.ExecutionMode.Execute,
+                treeRootUID: effectiveUID,
+                filters: currentFiltersForImport
             };
 
             const downloadedReportWithoutResultsZip: string | null = await fetchReportZipOfCycleFromServer(
                 projectKey,
                 cycleKey,
-                folderNameOfInternalTestbenchFolder,
+                path.join(folderNameOfInternalTestbenchFolder, INTERNAL_REPORTS_SUBFOLDER_NAME),
                 cycleStructureOptionsRequestParams,
-                progress
+                progress,
+                cancellationToken
             );
 
             // If report fetching fails, prompt user to select the report zip file manually
@@ -1082,13 +1000,12 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 (await chooseReportWithoutResultsZipFile(testbenchWorkingDirectoryPathInsideWorkspace));
 
             if (!finalBaseReportPath) {
-                logger.error("Base report (without results) could not be obtained.");
-                vscode.window.showErrorMessage(
-                    "Could not obtain the necessary base report file (without results). Process aborted."
-                );
+                const baseReportNotObtainedError: string =
+                    "[reportHandler] Could not obtain the necessary base report file without results. Process aborted.";
+                logger.error(baseReportNotObtainedError);
+                vscode.window.showErrorMessage("Could not obtain the necessary report file. Process aborted.");
                 return undefined;
             }
-            logger.trace(`Using base report file: ${finalBaseReportPath}`);
 
             reportProgress("Merging results with base report.", reportIncrement / 2);
             const reportWithResultsZipFullPath: string = path.join(
@@ -1103,18 +1020,16 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                     reportWithResultsZipFullPath
                 );
 
-            if (downloadedReportWithoutResultsZip) {
-                await cleanUpReportFileIfConfiguredInSettings(downloadedReportWithoutResultsZip);
-            }
-
             if (!isTb2RobotFetchResultsExecutionSuccessful) {
                 const testResultsImportError: string =
-                    "Merging test results with base report failed. Please check the output.xml and base report.";
+                    "[reportHandler] Parsing Robot Framework results with testbench2robotframework failed.";
+                const testResultsImportErrorForUser: string =
+                    "Parsing Robot Framework results with testbench2robotframework failed.";
                 logger.error(testResultsImportError);
-                vscode.window.showErrorMessage(testResultsImportError);
+                vscode.window.showErrorMessage(testResultsImportErrorForUser);
                 return undefined;
             }
-            const successMessage: string = `Report with results created: ${reportWithResultsZipFullPath}`;
+            const successMessage: string = `[reportHandler] Report with results created: ${reportWithResultsZipFullPath}`;
             logger.debug(successMessage);
 
             return {
@@ -1130,16 +1045,17 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             return await vscode.window.withProgress(
                 {
                     location: vscode.ProgressLocation.Notification,
-                    title: "Creating Report with Test Results",
+                    title: "Creating TestBench report containing execution results",
                     cancellable: true
                 },
                 executeWithProgress
             );
         }
     } catch (error) {
-        const fetchResultsErrorMessage: string = `An error occurred while creating report with results: ${error instanceof Error ? error.message : String(error)}`;
-        vscode.window.showErrorMessage(fetchResultsErrorMessage);
-        logger.error(fetchResultsErrorMessage, error);
+        const fetchResultsErrorMessage: string = `[reportHandler] Error while creating TestBench report with execution results: ${error instanceof Error ? error.message : String(error)}`;
+        const fetchResultsErrorMessageForUser: string = "Error while creating TestBench report with execution results.";
+        logger.error(fetchResultsErrorMessage);
+        vscode.window.showErrorMessage(fetchResultsErrorMessageForUser);
         return undefined;
     }
 }
@@ -1159,32 +1075,31 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
     projectKeyString: string,
     cycleKeyString: string,
     reportWithResultsZipFilePath: string,
-    reportRootUID: string
+    reportRootUID: string,
+    cancellationToken?: vscode.CancellationToken
 ): Promise<void | null> {
     try {
-        logger.debug(`[Import] Starting import for specific UID: ${reportRootUID}`);
-        logger.debug(`[Import] Report file: ${reportWithResultsZipFilePath}`);
-        logger.debug(`[Import] Target: Project ${projectKeyString}, Cycle ${cycleKeyString}`);
-
+        logger.debug(
+            `[reportHandler] Starting import for specific UID: ${reportRootUID}, Report file: ${reportWithResultsZipFilePath}, Project key: ${projectKeyString}, Cycle key: ${cycleKeyString}`
+        );
         const { uniqueID } = await extractDataFromReport(reportWithResultsZipFilePath);
         if (!uniqueID) {
-            const extractionErrorMsg: string = "Error extracting unique ID from the zip file.";
-            vscode.window.showErrorMessage(extractionErrorMsg);
+            const extractionErrorMsg: string = "[reportHandler] Error extracting unique ID from the zip file.";
+            const extractionErrorMsgForUser: string = "Error extracting unique ID from the zip file.";
+            vscode.window.showErrorMessage(extractionErrorMsgForUser);
             logger.error(extractionErrorMsg);
             return null;
         }
 
-        logger.debug(`[Import] Extracted report cycle root UID from zip: ${uniqueID}`);
-        logger.debug(`[Import] Using specific target UID for import: ${reportRootUID}`);
-
+        logger.trace(`[reportHandler] Extracted report cycle root UID from zip: ${uniqueID}`);
         const projectKey: number = Number(projectKeyString);
         const cycleKey: number = Number(cycleKeyString);
 
         if (isNaN(projectKey) || isNaN(cycleKey)) {
-            logger.error(
-                `Invalid projectKey (${projectKeyString}) or cycleKey (${cycleKeyString}) provided for import.`
-            );
-            vscode.window.showErrorMessage("Internal error: Invalid project or cycle identifier for import.");
+            const invalidProjectOrCycleKeyError: string = `[reportHandler] Invalid projectKey (${projectKeyString}) or cycleKey (${cycleKeyString}) provided for import.`;
+            const invalidProjectOrCycleKeyErrorForUser: string = "Invalid project or cycle identifier for import.";
+            logger.error(invalidProjectOrCycleKeyError);
+            vscode.window.showErrorMessage(invalidProjectOrCycleKeyErrorForUser);
             return null;
         }
 
@@ -1194,48 +1109,48 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
         );
 
         if (!zipFilenameFromServer) {
-            const importErrorMessage: string = "Error importing the result file to the server.";
+            const importErrorMessage: string = "[reportHandler] Error importing the result file to the server.";
+            const importErrorMessageForUser: string = "Error importing the result file to the server.";
             logger.error(importErrorMessage);
-            vscode.window.showErrorMessage(importErrorMessage);
+            vscode.window.showErrorMessage(importErrorMessageForUser);
             return null;
         }
 
         const importData: testBenchTypes.ImportData = {
             fileName: zipFilenameFromServer,
-            reportRootUID: reportRootUID,
+            treeRootUID: reportRootUID,
             useExistingDefect: true,
             discardTesterInformation: false,
             filters: []
         };
 
         try {
-            logger.debug(`Starting import execution results for specific tree item with UID: ${reportRootUID}`);
             const importJobID: string = await connection.getJobIDOfImportJob(projectKey, cycleKey, importData);
             const importJobStatus: testBenchTypes.JobStatusResponse | null = await pollJobStatus(
                 projectKeyString,
                 importJobID,
-                JobTypes.IMPORT
+                JobTypes.IMPORT,
+                undefined,
+                cancellationToken
             );
 
             if (!importJobStatus || isImportJobFailed(importJobStatus)) {
-                const importJobFailedMessage: string = `Import job for tree item UID "${reportRootUID}" could not be completed.`;
-                logger.warn(importJobFailedMessage);
-                vscode.window.showErrorMessage(importJobFailedMessage);
+                const importJobFailedMessageForUser: string = "Import job could not be completed.";
+                vscode.window.showErrorMessage(importJobFailedMessageForUser);
                 return null;
-            } else if (isImportJobCompletedSuccessfully(importJobStatus)) {
-                logger.debug(`Import job for specific tree item UID "${reportRootUID}" completed successfully.`);
-                // Do not display success message to user, only display the end result
-            } else {
-                logger.warn("Import job finished polling but status is unknown.", importJobStatus);
-                vscode.window.showWarningMessage("Import job status unknown after polling.");
+            } else if (!isImportJobCompletedSuccessfully(importJobStatus)) {
+                logger.warn("[reportHandler] Import job finished polling but status is unknown.", importJobStatus);
             }
         } catch (error: any) {
-            logger.error(`Error during import job for specific tree item UID ${reportRootUID}:`, error.message);
+            logger.error(
+                `[reportHandler] Error during import job for specific tree item UID ${reportRootUID}:`,
+                error.message
+            );
             return null;
         }
     } catch (error: any) {
-        logger.error("Error importing report for specific tree item:", error.message);
-        vscode.window.showErrorMessage(`An unexpected error occurred: ${error.message}`);
+        logger.error("[reportHandler] Error importing report:", error.message);
+        vscode.window.showErrorMessage(`Error importing report: ${error.message}`);
         return null;
     }
 }
@@ -1246,10 +1161,22 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
  */
 export async function clearImportedSubTreeItemsTracking(context: vscode.ExtensionContext): Promise<void> {
     try {
-        await context.workspaceState.update(StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY, undefined);
-        logger.debug("Cleared last imported item tracking.");
+        if (!userSessionManager.hasValidUserSession()) {
+            logger.debug("[reportHandler] No user session active, skipping clear imported item tracking");
+            return;
+        }
+
+        const storageKey = userSessionManager.getUserStorageKey(StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY);
+        if (!storageKey) {
+            logger.debug("[reportHandler] Failed to generate storage key, skipping clear imported item tracking");
+            return;
+        }
+        await context.workspaceState.update(storageKey, undefined);
+        logger.debug(
+            `[reportHandler] Cleared last imported item tracking for user ${userSessionManager.getCurrentUserId()}.`
+        );
     } catch (error) {
-        logger.error("Error clearing last imported item tracking:", error);
+        logger.error("[reportHandler] Error clearing last imported item tracking:", error);
     }
 }
 
@@ -1269,8 +1196,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
     resolvedTargetCycleKey: string,
     resolvedReportRootUID: string
 ): Promise<boolean> {
-    logger.trace("Starting: Read, Create, and Import Test Results to Testbench.");
-    logger.trace(`Invoked on item: ${invokedOnItem.label}`);
+    logger.trace(`[reportHandler] Fetching results and importing to Testbench for tree item: ${invokedOnItem.label}`);
     return vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
@@ -1280,7 +1206,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
         async (progress, cancellationToken) => {
             try {
                 if (cancellationToken.isCancellationRequested) {
-                    logger.trace("User cancelled the import process at the beginning.");
+                    logger.debug("[reportHandler] User cancelled the fetch and import process.");
                     vscode.window.showInformationMessage("Import process cancelled.");
                     return false;
                 }
@@ -1288,66 +1214,52 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 progress.report({ message: "Step 1/4: Validating parameters...", increment: 10 });
 
                 if (cancellationToken.isCancellationRequested) {
-                    logger.trace("Cancelled after param retrieval.");
                     return false;
                 }
 
                 progress.report({ message: "Step 2/4: Creating report with local test results...", increment: 30 });
                 const reportCreationDetails = await fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                     context,
-                    progress
+                    progress,
+                    cancellationToken,
+                    resolvedReportRootUID
                 );
                 if (cancellationToken.isCancellationRequested || !reportCreationDetails?.createdReportPath) {
-                    logger.error("Failed to create report with results, or process was cancelled. Aborting import.");
+                    logger.error("[reportHandler] Failed to create report with results, or process was cancelled.");
                     return false;
                 }
 
                 const { createdReportPath } = reportCreationDetails!;
-                const reportFileNameForDisplay: string = path.basename(createdReportPath);
                 progress.report({
                     message: `Step 3/4: Importing ${invokedOnItem.label} to TestBench...`,
                     increment: 30
                 });
-                const importTargetMessage: string = `Importing "${invokedOnItem.label}" from report '${reportFileNameForDisplay}' to TestBench Project: ${resolvedTargetProjectKey}, Cycle: ${resolvedTargetCycleKey}.`;
-                logger.trace(importTargetMessage);
 
                 await importReportWithResultsToTestbenchWithSpecificUID(
                     connection!,
                     resolvedTargetProjectKey,
                     resolvedTargetCycleKey,
                     createdReportPath,
-                    resolvedReportRootUID // Use the resolved UID
+                    resolvedReportRootUID,
+                    cancellationToken
                 );
 
                 if (cancellationToken.isCancellationRequested) {
-                    logger.trace("Cancelled after import to TestBench.");
+                    logger.debug("[reportHandler] Fetch and import process cancelled.");
                     return false;
                 }
 
                 progress.report({ message: "Step 4/4: Cleaning up and updating state...", increment: 30 });
                 await setLastImportedItem(context, resolvedReportRootUID);
-
-                await cleanUpReportFileIfConfiguredInSettings(createdReportPath);
-                if (!ALLOW_PERSISTENT_IMPORT_BUTTON) {
-                    logger.debug(
-                        `[ReportHandler] Import successful. Command handler should clear marked state for item: ${invokedOnItem.label} if configured.`
-                    );
-                } else {
-                    logger.debug(
-                        `[ReportHandler] Import successful. Import command will persist on item: ${invokedOnItem.label} if configured.`
-                    );
-                }
-
-                logger.trace(
-                    "[ReportHandler] Process Completed: Read, Create, and Import specific tree item to Testbench."
-                );
+                logger.debug("[reportHandler] Fetch and import process completed.");
                 return true;
             } catch (error) {
-                const errorMsg: string = `An error occurred during the import process: ${
+                const fetchAndImportErrorMsg: string = `[reportHandler] Error during fetch and import process: ${
                     error instanceof Error ? error.message : String(error)
                 }`;
-                logger.error(errorMsg, error);
-                vscode.window.showErrorMessage(errorMsg);
+                const fetchAndImportErrorMsgForUser: string = "Error during fetch and import process.";
+                logger.error(fetchAndImportErrorMsg, error);
+                vscode.window.showErrorMessage(fetchAndImportErrorMsgForUser);
                 return false;
             }
         }
@@ -1366,25 +1278,26 @@ export async function startTestGenerationForCycle(
 ): Promise<void | null> {
     try {
         if (!connection) {
-            const connectionErrorMessage: string = "No connection available. Cannot generate tests for cycle.";
+            const connectionErrorMessage: string =
+                "[reportHandler] No connection available. Cannot generate tests for cycle.";
             vscode.window.showErrorMessage(connectionErrorMessage);
             logger.error(connectionErrorMessage);
             return null;
         }
         const cycleKey = selectedCycleTreeItem.data.key;
         if (!cycleKey) {
-            const cycleKeyMissingMessage: string = "Cycle key is missing for test generation.";
+            const cycleKeyMissingMessage: string = "[reportHandler] Cycle key is missing for test generation.";
             logger.error(cycleKeyMissingMessage);
             return null;
         }
         const projectKey: string | null = selectedCycleTreeItem.getProjectKey();
         if (!projectKey) {
-            const projectKeyMissingMessage = "Project key of cycle is missing.";
+            const projectKeyMissingMessage = "[reportHandler] Project key of cycle is missing.";
             logger.error(projectKeyMissingMessage);
             return null;
         }
         if (typeof selectedCycleTreeItem.label !== "string") {
-            const invalidLabelTypeMessage: string = "Invalid label type. Test generation aborted.";
+            const invalidLabelTypeMessage: string = "[reportHandler] Invalid label type. Test generation aborted.";
             logger.error(invalidLabelTypeMessage);
             return null;
         }
@@ -1396,11 +1309,11 @@ export async function startTestGenerationForCycle(
         const cycleUID = selectedCycleTreeItem.data.key || "";
         if (!cycleUID) {
             logger.warn(
-                `Could not determine UID or Key for cycle: ${selectedCycleTreeItem.label}. Using empty string.`
+                `[reportHandler] Could not determine UID or Key for cycle: ${selectedCycleTreeItem.label}. Using empty string.`
             );
         }
 
-        await generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
+        const generationSuccessful = await generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
             context,
             selectedCycleTreeItem,
             selectedCycleTreeItem.label,
@@ -1408,325 +1321,20 @@ export async function startTestGenerationForCycle(
             cycleKey,
             cycleUID
         );
+
+        if (generationSuccessful && treeViews?.testThemesTree) {
+            await treeViews.testThemesTree.markCycleGenerationFromProjectsView(selectedCycleTreeItem);
+        } else if (generationSuccessful) {
+            logger.warn(
+                "[reportHandler] Test themes tree view is not available, cannot apply import markings after cycle generation."
+            );
+        }
     } catch (error) {
-        logger.error("Error in startTestGenerationForCycle:", (error as Error).message);
+        logger.error(
+            `[reportHandler] Error in startTestGenerationForCycle: ${error instanceof Error ? error.message : String(error)}`
+        );
         vscode.window.showErrorMessage((error as Error).message);
     }
-}
-
-/**
- * Displays a Quick Pick menu with multi-select options including control items "Select All" and "Clear All".
- * All regular items are pre-selected by default.
- *
- * @param {string[]} regularItemLabels - An array of strings representing the labels for the regular items.
- * @param {string} placeholder - (Optional) The placeholder text for the quick pick menu.
- * @returns {Promise<string[]>} A promise that resolves with an array of selected regular item labels, or an empty array if cancelled or an error occurs.
- */
-export async function showMultiSelectQuickPick(
-    regularItemLabels: string[],
-    placeholder: string = "Select items (use Select All/Clear All)"
-): Promise<string[]> {
-    return new Promise<string[]>((resolve) => {
-        let quickPick: vscode.QuickPick<vscode.QuickPickItem> | undefined;
-        let isResolutionComplete: boolean = false;
-
-        try {
-            quickPick = vscode.window.createQuickPick();
-            quickPick.canSelectMany = true;
-            quickPick.placeholder = placeholder;
-            quickPick.ignoreFocusOut = true;
-
-            const selectAllButtonLabel: string = "$(check-all) Select All";
-            const clearAllButtonLabel: string = "$(clear-all) Clear All";
-
-            const regularItems: vscode.QuickPickItem[] = regularItemLabels.map((label) => ({ label }));
-
-            const selectAllControlItem: vscode.QuickPickItem = { label: selectAllButtonLabel, alwaysShow: true };
-            const clearAllControlItem: vscode.QuickPickItem = { label: clearAllButtonLabel, alwaysShow: true };
-
-            const separator: vscode.QuickPickItem = {
-                label: "Actions",
-                kind: vscode.QuickPickItemKind.Separator
-            };
-
-            quickPick.items = [selectAllControlItem, clearAllControlItem, separator, ...regularItems];
-
-            // Pre-select all regular items initially
-            if (quickPick) {
-                quickPick.selectedItems = [...regularItems];
-            }
-
-            // --- Event Listeners ---
-            let ignoreSelectionChange: boolean = false;
-            quickPick.onDidChangeSelection((selection) => {
-                if (ignoreSelectionChange || isResolutionComplete) {
-                    return;
-                } // Prevent updates if flagged or after resolution
-
-                const selectedLabels: string[] = selection.map((item) => item.label);
-                const isSelectAllTriggered: boolean = selectedLabels.includes(selectAllButtonLabel);
-                const isClearAllTriggered: boolean = selectedLabels.includes(clearAllButtonLabel);
-
-                if (isSelectAllTriggered || isClearAllTriggered) {
-                    ignoreSelectionChange = true;
-                    if (isSelectAllTriggered) {
-                        if (quickPick) {
-                            quickPick.selectedItems = [...regularItems];
-                        }
-                    } else {
-                        if (quickPick) {
-                            quickPick.selectedItems = [];
-                        }
-                    }
-                    // Re-enable the listener after 10ms to allow for quick pick updates
-                    setTimeout(() => {
-                        ignoreSelectionChange = false;
-                    }, 10);
-                }
-            });
-
-            quickPick.onDidAccept(() => {
-                if (isResolutionComplete || !quickPick) {
-                    return;
-                }
-                isResolutionComplete = true;
-                try {
-                    const selectedRegularLabels: string[] = quickPick.selectedItems
-                        .filter(
-                            (item) =>
-                                item.label !== selectAllButtonLabel &&
-                                item.label !== clearAllButtonLabel &&
-                                item.kind !== vscode.QuickPickItemKind.Separator
-                        )
-                        .map((item) => item.label);
-                    resolve(selectedRegularLabels);
-                } catch (err) {
-                    logger.error("Error processing Quick Pick acceptance:", err);
-                    resolve([]);
-                } finally {
-                    quickPick.dispose();
-                }
-            });
-
-            quickPick.onDidHide(() => {
-                if (isResolutionComplete || !quickPick) {
-                    return;
-                }
-                isResolutionComplete = true;
-                resolve([]);
-                quickPick.dispose();
-            });
-
-            quickPick.show();
-        } catch (error) {
-            logger.error("Error creating or displaying Quick Pick:", error);
-            if (quickPick && !isResolutionComplete) {
-                quickPick.dispose();
-            }
-            isResolutionComplete = true;
-            resolve([]);
-        }
-    });
-}
-
-/**
- * Reads a zip file and extracts unique quick pick items based on the file names.
- *
- * 1. Reads the zip file from disk.
- * 2. Loads the zip file using JSZip.
- * 3. Iterates over all file entries and checks for files with names starting with "iTB-TC-" or "iTB-TT-" and ending with ".json".
- * 4. Uses a regular expression to capture the common prefix (e.g. "iTB-TC-325") from each file.
- * 5. If groupByPrefix is true, it attempts to read the corresponding "{prefix}.json" file to extract a 'name' property
- * and formats the quick pick item label as "{prefix} (name)" or "{prefix}" if the name is not available.
- * 6. Adds the common identifier (or full filename if not grouping) to a set to ensure uniqueness.
- *
- * @param {string} zipFilePath - The path to the zip file.
- * @param {boolean} groupByPrefix - (Optional) When true, related JSON files sharing the same prefix (e.g., "iTB-TC-325")
- * are combined into a single quick pick item, potentially including a name from the JSON.
- * When false, every file is returned as an individual item label.
- * Default is true.
- * @returns {Promise<string[]>} A promise that resolves with an array of unique quick pick item labels.
- */
-export async function getQuickPickItemsFromReportZipWithResults(
-    zipFilePath: string,
-    groupByPrefix: boolean = true
-): Promise<string[]> {
-    logger.trace(`Reading JSON's from zip file: ${zipFilePath}, groupByPrefix: ${groupByPrefix}`);
-    try {
-        const binaryDataOfZip: Buffer<ArrayBufferLike> = fs.readFileSync(zipFilePath);
-        const zip = await JSZip.loadAsync(binaryDataOfZip);
-        const filesNamesInZip: string[] = Object.keys(zip.files);
-
-        if (groupByPrefix) {
-            logger.trace("Grouping JSON files by prefix and fetching names.");
-            const uniquePrefixes: Set<string> = new Set<string>();
-
-            for (const fileName of filesNamesInZip) {
-                if (isCandidateJsonFile(fileName)) {
-                    const prefix: string | null = extractPrefix(fileName);
-                    if (prefix) {
-                        uniquePrefixes.add(prefix);
-                    }
-                }
-            }
-
-            const quickPickItemLabels: string[] = [];
-            for (const prefix of uniquePrefixes) {
-                let nameProperty: string | null = null;
-                // Attempt to find and read the specific file "{prefix}.json" (case-insensitive)
-                const specificJsonFileNameToFind: string = `${prefix}.json`.toLowerCase();
-                const actualFileNameInZip: string | undefined = filesNamesInZip.find(
-                    (fileName) => fileName.toLowerCase() === specificJsonFileNameToFind
-                );
-
-                if (actualFileNameInZip) {
-                    const jsonFile: JSZip.JSZipObject | null = zip.file(actualFileNameInZip);
-                    if (jsonFile) {
-                        try {
-                            const jsonString: string = await jsonFile.async("string");
-                            const jsonData = JSON.parse(jsonString);
-                            nameProperty = jsonData?.name || null;
-                        } catch (error) {
-                            logger.warn(
-                                `Could not read or parse JSON for ${actualFileNameInZip} to get name property for prefix ${prefix}:`,
-                                error
-                            );
-                        }
-                    }
-                }
-
-                const displayLabel: string = nameProperty ? `${prefix} (${nameProperty})` : prefix;
-                quickPickItemLabels.push(displayLabel);
-            }
-
-            logger.trace(`Unique item labels for quick pick (grouped by prefix): ${quickPickItemLabels}`);
-            return quickPickItemLabels.sort();
-        } else {
-            logger.trace("Listing all candidate JSON files with their names if available.");
-            const quickPickItemLabelsIndividual: string[] = [];
-
-            for (const fileName of filesNamesInZip) {
-                if (isCandidateJsonFile(fileName)) {
-                    let nameProperty: string | null = null;
-                    const jsonFile: JSZip.JSZipObject | null = zip.file(fileName);
-                    if (jsonFile) {
-                        try {
-                            const jsonString: string = await jsonFile.async("string");
-                            const jsonData = JSON.parse(jsonString);
-                            nameProperty = jsonData?.name || null;
-                        } catch (e) {
-                            logger.warn(`Could not read or parse JSON for ${fileName} to get name property:`, e);
-                        }
-                    }
-                    const displayLabel: string = nameProperty ? `${fileName} (${nameProperty})` : fileName;
-                    quickPickItemLabelsIndividual.push(displayLabel);
-                }
-            }
-            logger.trace(`Item labels for quick pick (individual files): ${quickPickItemLabelsIndividual}`);
-            return quickPickItemLabelsIndividual.sort();
-        }
-    } catch (error) {
-        logger.error("Error processing the zip file:", error);
-        return [];
-    }
-}
-
-/**
- * Updates the zip file by removing the unselected JSON files.
- *
- * Only candidate JSON files (those starting with the specified prefixes and ending with ".json") are considered.
- * When grouping is enabled, each file is removed if its extracted prefix is not among the selected items.
- * When grouping is disabled, only files whose full names do not appear in the selected list are removed.
- *
- * @param {string} zipFilePath - The path to the zip file.
- * @param {string[]} selectedItems - The array of labels representing the selected items from the quick pick.
- *                        For grouped mode these are prefixes (e.g., "iTB-TC-325") and for non-grouped mode
- *                        these are full file names.
- * @param {boolean} groupByPrefix - (Optinal) Flag indicating the grouping behavior; should be the same used for the quick pick.
- *                        Default is true.
- */
-export async function createNewReportWithSelectedItems(
-    zipFilePath: string,
-    selectedItems: string[],
-    groupByPrefix: boolean = true
-): Promise<void> {
-    logger.trace(`Updating zip file: ${zipFilePath} with selected items: ${selectedItems}`);
-    try {
-        const binaryZipData: Buffer<ArrayBufferLike> = fs.readFileSync(zipFilePath);
-        const zip: JSZip = await JSZip.loadAsync(binaryZipData);
-
-        Object.keys(zip.files).forEach((fileName) => {
-            if (isCandidateJsonFile(fileName)) {
-                if (groupByPrefix) {
-                    // Extract the actual prefixes from the selected display labels
-                    const selectedPrefixes: Set<string> = new Set(
-                        selectedItems.map((label) => {
-                            // Regex to extract prefix from "prefix (name)" or "prefix"
-                            const regexMatchArray: RegExpMatchArray | null = label.match(/^(itb-(?:tc|tt)-\d+)/i);
-                            return regexMatchArray ? regexMatchArray[1] : label;
-                        })
-                    );
-
-                    const prefixFromFile: string | null = extractPrefix(fileName);
-                    if (prefixFromFile && !selectedPrefixes.has(prefixFromFile)) {
-                        logger.trace(
-                            `Removing ${fileName} as its prefix ${prefixFromFile} was not selected (selected were: ${Array.from(selectedPrefixes).join(", ")})`
-                        );
-                        zip.remove(fileName);
-                    }
-                } else {
-                    if (!selectedItems.includes(fileName)) {
-                        zip.remove(fileName);
-                    }
-                }
-            }
-        });
-
-        const filePathWithoutZipExtension: string = zipFilePath.substring(0, zipFilePath.lastIndexOf("."));
-        const zipFileExtension: string = path.extname(zipFilePath);
-        const newZipFilePath: string = `${filePathWithoutZipExtension}-MODIFIED${zipFileExtension}`;
-        const newZipData: Buffer<ArrayBufferLike> = await zip.generateAsync({ type: "nodebuffer" });
-        fs.writeFileSync(newZipFilePath, newZipData);
-
-        const zipUpdateSuccessMessage: string = `Modified report file created at: ${newZipFilePath}`;
-        logger.debug(zipUpdateSuccessMessage);
-        vscode.window.showInformationMessage(zipUpdateSuccessMessage);
-    } catch (error) {
-        logger.error("Error updating zip file:", error);
-    }
-}
-
-/**
- * Helper function to determine if a file is a candidate JSON file based on its name.
- *
- * It checks (in a case-insensitive way) if the file name starts with either "itb-tc-" or "itb-tt-"
- * and ends with ".json".
- *
- * @param {string} fileName - The name of the file.
- * @returns {boolean} True if the file matches the criteria; otherwise, false.
- */
-function isCandidateJsonFile(fileName: string): boolean {
-    const lowerFileName: string = fileName.toLowerCase();
-    return (
-        (lowerFileName.startsWith("itb-tc-") || lowerFileName.startsWith("itb-tt-")) && lowerFileName.endsWith(".json")
-    );
-}
-
-/**
- * Helper function to extract the grouping prefix from a filename.
- *
- * It uses a regular expression to capture the prefix such as "itb-tc-325" or "itb-tt-325"
- * in a case-insensitive way.
- *
- * @param {string} fileName - The name of the file.
- * @returns {string | null} The extracted prefix if found; otherwise, null.
- */
-function extractPrefix(fileName: string): string | null {
-    // This regex matches a string that starts with "itb-" followed by either "tc" or "tt",
-    // then a hyphen and one or more digits.
-    const prefixRegex: RegExp = /^(itb-(tc|tt)-\d+)/i;
-    const match: RegExpMatchArray | null = fileName.match(prefixRegex);
-    return match ? match[1] : null;
 }
 
 /**
@@ -1746,25 +1354,29 @@ export async function startTestGenerationUsingTOV(
     tovKey: string,
     generateTestForSpecificTestThemeTreeItem: boolean = false
 ): Promise<boolean> {
-    logger.debug(`[ReportHandler] Starting test generation for TOV: ${treeItem.label} (${tovKey})`);
+    logger.debug(
+        `[reportHandler] Starting Robot Framework test suite generation from Test Object Version '${treeItem.label}' (${tovKey}).`
+    );
 
     try {
         return await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
-                title: `Generating tests for TOV: ${treeItem.label}`,
+                title: `Generating Robot Framework test suites from Test Object Version '${treeItem.label}'`,
                 cancellable: true
             },
             async (progress, cancellationToken) => {
                 progress.report({
                     increment: 0,
                     message: generateTestForSpecificTestThemeTreeItem
-                        ? `Fetching TOV structure report for specific item: ${treeItem.label}...`
-                        : "Fetching TOV structure report for entire TOV..."
+                        ? `Fetching TestBench TOV report from ${treeItem.label}...`
+                        : "Fetching TestBench TOV report for Test Object Version..."
                 });
 
                 if (!connection) {
-                    throw new Error("No connection available");
+                    throw new Error(
+                        "[reportHandler] No connection available. Cannot generate Robot Framework test suites for selected TOV."
+                    );
                 }
 
                 // Use undefined for root when generating tests for all test themes in TOV
@@ -1772,23 +1384,20 @@ export async function startTestGenerationUsingTOV(
                     ? (treeItem as any).data?.base?.uniqueID
                     : undefined;
 
-                logger.debug(
-                    `[ReportHandler] generateTestForSpecificTestThemeTreeItem: ${generateTestForSpecificTestThemeTreeItem}`
-                );
-                logger.debug(`[ReportHandler] Extracted root UID: ${rootUIDToUse}`);
+                let tovFilters: any[] = [];
+
+                if (treeItem instanceof ProjectsTreeItem || treeItem instanceof TestThemesTreeItem) {
+                    tovFilters = await TestThemesTreeView.getValidatedFiltersForTreeItem(treeItem);
+                }
 
                 // Fetch TOV structure to get all test themes
                 const tovStructureOptions: testBenchTypes.TovStructureOptions = {
                     treeRootUID: rootUIDToUse,
-                    suppressFilteredData: false,
+                    suppressFilteredData: true,
                     //suppressNotExecutable: true,
                     suppressEmptyTestThemes: false,
-                    filters: []
+                    filters: tovFilters
                 };
-
-                logger.trace(
-                    `Requesting TOV structure for project ${projectKey} with root UID ${rootUIDToUse} and options: ${JSON.stringify(tovStructureOptions)}`
-                );
 
                 const tovReportJobID = await connection.requestToPackageTovsInServerAndGetJobID(
                     projectKey,
@@ -1801,11 +1410,8 @@ export async function startTestGenerationUsingTOV(
                 }
 
                 if (!tovReportJobID) {
-                    logger.error("Failed to fetch TOV structure report");
-                    throw new Error("Failed to fetch TOV structure report");
+                    throw new Error("[reportHandler] Failed to fetch TestBench TOV report.");
                 }
-
-                logger.debug(`TOV structure report job ID: ${tovReportJobID}`);
 
                 // Poll job status until completed
                 const tovReportJobStatus: testBenchTypes.JobStatusResponse | null = await pollJobStatus(
@@ -1816,57 +1422,57 @@ export async function startTestGenerationUsingTOV(
                     cancellationToken
                 );
                 if (!tovReportJobStatus || !isReportJobCompletedSuccessfully(tovReportJobStatus)) {
-                    const reportGenerationErrorMsg: string = "Report generation was unsuccessful.";
-                    logger.error(reportGenerationErrorMsg);
+                    const reportGenerationErrorMsg: string = "TestBench TOV report generation failed.";
+                    logger.error(`[reportHandler] ${reportGenerationErrorMsg}`);
                     vscode.window.showErrorMessage(reportGenerationErrorMsg);
                     return false;
                 }
+                logger.debug(`[reportHandler] Successfully finished TestBench report generation job.`);
                 const downloadedTovReportName: string =
                     tovReportJobStatus.completion.result.ReportingSuccess!.reportName;
-                logger.debug(`Report name to download: ${downloadedTovReportName}`);
 
                 const downloadedTovReportPath: string | null = await downloadReport(
                     projectKey,
                     downloadedTovReportName,
-                    folderNameOfInternalTestbenchFolder
+                    path.join(folderNameOfInternalTestbenchFolder, INTERNAL_REPORTS_SUBFOLDER_NAME)
                 );
 
                 if (!downloadedTovReportPath) {
-                    logger.warn("Report download failed or was canceled.");
+                    logger.warn("[reportHandler] Failed to download TestBench TOV report.");
                     return false;
                 }
 
-                logger.debug(`Report downloaded successfully to: ${downloadedTovReportPath}`);
-                progress.report({ increment: 20, message: "Generating tests for TOV..." });
+                progress.report({ increment: 20, message: "Generating Robot Framework test suites..." });
 
-                // Call to language server for testbench2robotframework library test generation
                 const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
                     await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(
                         downloadedTovReportPath
                     );
 
-                await cleanUpReportFileIfConfiguredInSettings(downloadedTovReportPath);
                 if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
                     return false;
                 }
 
                 progress.report({ increment: 30, message: "Test generation completed" });
                 const tovTestGenerationSuccessMessage = generateTestForSpecificTestThemeTreeItem
-                    ? `Test generation completed for specific item: ${treeItem.label}`
-                    : `Test generation completed for entire TOV: ${treeItem.label}`;
-                logger.info(`[ReportHandler] ${tovTestGenerationSuccessMessage}`);
+                    ? `Successfully generated Robot Framework test suites from ${rootUIDToUse} ('${treeItem.label}').`
+                    : `Successfully generated Robot Framework test suites from Test Object Version '${treeItem.label}'.`;
                 vscode.window.showInformationMessage(tovTestGenerationSuccessMessage);
 
-                await vscode.commands.executeCommand("workbench.view.extension.test");
+                if (
+                    getExtensionConfiguration().get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_TEST_GENERATION, false)
+                ) {
+                    await vscode.commands.executeCommand("workbench.view.extension.test");
+                }
 
                 return true;
             }
         );
     } catch (error) {
         const tovTestGenerationErrorMessage = generateTestForSpecificTestThemeTreeItem
-            ? `Test generation failed for specific item ${treeItem.label}: ${error instanceof Error ? error.message : "Unknown error"}`
-            : `Test generation failed for TOV ${treeItem.label}: ${error instanceof Error ? error.message : "Unknown error"}`;
-        logger.error(`[ReportHandler] ${tovTestGenerationErrorMessage}`, error);
+            ? `[reportHandler] Robot Framework test suite generation failed for tree item '${treeItem.label}'. ${error instanceof Error ? error.message : "Unknown error"}`
+            : `[reportHandler] Robot Framework test suite generation failed for Test Object Version '${treeItem.label}'. ${error instanceof Error ? error.message : "Unknown error"}`;
+        logger.error(`[reportHandler] ${tovTestGenerationErrorMessage}`);
         vscode.window.showErrorMessage(tovTestGenerationErrorMessage);
         return false;
     }

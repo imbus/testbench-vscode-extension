@@ -5,9 +5,10 @@
 
 import * as vscode from "vscode";
 import { TreeItemBase } from "../../core/TreeItemBase";
-import { logger, treeViews } from "../../../extension";
-import { TestThemeItemTypes } from "../../../constants";
+import { logger, treeViews, userSessionManager } from "../../../extension";
+import { TestThemeItemTypes, allExtensionCommands } from "../../../constants";
 import { MarkingInfo } from "../../state/StateTypes";
+import { RobotFileService } from "./RobotFileService";
 
 export type TestThemeType =
     | "TestThemeNode"
@@ -30,12 +31,12 @@ export interface TestThemeData {
     };
     spec: {
         key: string;
-        locker: string | null;
+        locker: string | { key: string; name: string } | null;
         status: string;
     };
     aut: {
         key: string;
-        locker: string | null;
+        locker: string | { key: string; name: string } | null;
         status: string;
     };
     exec?: {
@@ -43,13 +44,14 @@ export interface TestThemeData {
         execStatus?: string;
         verdict?: string;
         key?: string;
-        locker?: string | null;
+        locker?: string | { key: string; name: string } | null;
     } | null;
     filters: any[];
     elementType: string;
     hasChildren: boolean;
     projectKey?: string;
     cycleKey?: string;
+    tovKey?: string;
     isGenerated?: boolean;
     isImported?: boolean;
     level?: number;
@@ -65,6 +67,12 @@ export class TestThemesTreeItem extends TreeItemBase {
     protected logger = logger;
     protected rootItems?: TestThemesTreeItem[];
     protected dataProvider: any;
+    private robotFileService: RobotFileService;
+    private robotFileExists: boolean = false;
+    private robotFilePath?: string;
+    private folderExists: boolean = false;
+    private folderPath?: string;
+    public isFilteredOutInDiffMode = false;
 
     constructor(data: TestThemeData, extensionContext: vscode.ExtensionContext, parent?: TestThemesTreeItem) {
         super(
@@ -77,10 +85,18 @@ export class TestThemesTreeItem extends TreeItemBase {
         );
 
         this.data = data;
-
+        this.robotFileService = new RobotFileService(this.logger);
         this.tooltip = this.generateTooltip();
         this.description = data.base.uniqueID;
         this.updateContextValue();
+
+        if (data.elementType === TestThemeItemTypes.TEST_CASE_SET) {
+            this.command = {
+                command: allExtensionCommands.checkForTestCaseSetDoubleClick,
+                title: "Open Robot File",
+                arguments: [this]
+            };
+        }
 
         (this as any).id = this.generateUniqueId();
     }
@@ -90,6 +106,18 @@ export class TestThemesTreeItem extends TreeItemBase {
      */
     public updateId(): void {
         (this as any).id = this.generateUniqueId();
+    }
+
+    /**
+     * Override setMetadata to generate tooltip when marking info changes
+     * @param key The metadata key
+     * @param value The metadata value
+     */
+    public override setMetadata(key: string, value: any): void {
+        super.setMetadata(key, value);
+        if (key === "markingInfo" || key === "marked") {
+            this.tooltip = this.generateTooltip();
+        }
     }
 
     /**
@@ -120,11 +148,13 @@ export class TestThemesTreeItem extends TreeItemBase {
      */
     private getContextIdentifier(): string {
         const projectKey = this.data.projectKey || "unknown-project";
-        const contextKey = this.data.cycleKey || "unknown-context";
+        const tovKey = this.data.tovKey || "unknown-tov";
         const isOpenedFromCycle = this.getMetadata("openedFromCycle") === true;
+        const contextKey = isOpenedFromCycle ? this.data.cycleKey || "unknown-cycle" : tovKey;
         const contextType = isOpenedFromCycle ? "cycle" : "tov";
+        const userId = userSessionManager.getCurrentUserId();
 
-        return `${contextType}:${projectKey}:${contextKey}`;
+        return `${userId}:${contextType}:${projectKey}:${tovKey}:${contextKey}`;
     }
 
     /**
@@ -159,7 +189,8 @@ export class TestThemesTreeItem extends TreeItemBase {
 
         const markingInfo = this.getMetadata("markingInfo") as MarkingInfo | undefined;
         if (markingInfo) {
-            if (markingInfo.type === "import") {
+            if (markingInfo.type === "import" || markingInfo.type === "imported") {
+                // Allow items to be re-imported
                 contextValue = `MarkedForImport.${contextValue}`;
             } else if (markingInfo.type === "generation") {
                 contextValue = `MarkedForGeneration.${contextValue}`;
@@ -168,6 +199,10 @@ export class TestThemesTreeItem extends TreeItemBase {
 
         if (this.getMetadata("openedFromCycle")) {
             contextValue = `openedFromCycle.${contextValue}`;
+        }
+
+        if (this.robotFileExists && this.data.elementType === TestThemeItemTypes.TEST_CASE_SET) {
+            contextValue = `${contextValue}.hasRobotFile`;
         }
 
         return contextValue;
@@ -188,8 +223,19 @@ export class TestThemesTreeItem extends TreeItemBase {
             tooltipContextLines.push(`Name: ${this.data.base.name}`);
         }
 
-        const status = this.data.isGenerated ? "Generated" : this.data.isImported ? "Imported" : "Not Generated";
-        tooltipContextLines.push(`Status: ${status}`);
+        let statusTooltipText = "Not Generated";
+        const isMarked = this.getMetadata("marked") === true;
+        const markingInfo = this.getMetadata("markingInfo") as MarkingInfo | undefined;
+
+        if (isMarked && markingInfo) {
+            if (markingInfo.type === "imported") {
+                statusTooltipText = "Imported";
+                // "import" means ready for import and not yet imported.
+            } else if (markingInfo.type === "import" || markingInfo.type === "generation") {
+                statusTooltipText = "Generated";
+            }
+        }
+        tooltipContextLines.push(`Status: ${statusTooltipText}`);
 
         if (this.data.exec) {
             if (this.data.exec.status) {
@@ -198,14 +244,31 @@ export class TestThemesTreeItem extends TreeItemBase {
             if (this.data.exec.verdict) {
                 tooltipContextLines.push(`Verdict: ${this.data.exec.verdict}`);
             }
+            if (this.data.exec.locker) {
+                const lockerValue =
+                    typeof this.data.exec.locker === "string" ? this.data.exec.locker : this.data.exec.locker.name;
+                tooltipContextLines.push(`Execution Locker: ${lockerValue}`);
+            }
         }
 
         if (this.data.spec.status) {
             tooltipContextLines.push(`Specification Status: ${this.data.spec.status}`);
         }
 
+        if (this.data.spec.locker) {
+            const lockerValue =
+                typeof this.data.spec.locker === "string" ? this.data.spec.locker : this.data.spec.locker.name;
+            tooltipContextLines.push(`Specification Locker: ${lockerValue}`);
+        }
+
         if (this.data.aut.status) {
             tooltipContextLines.push(`Automation Status: ${this.data.aut.status}`);
+        }
+
+        if (this.data.aut.locker) {
+            const lockerValue =
+                typeof this.data.aut.locker === "string" ? this.data.aut.locker : this.data.aut.locker.name;
+            tooltipContextLines.push(`Automation Locker: ${lockerValue}`);
         }
 
         if (this.data.base.uniqueID) {
@@ -220,6 +283,108 @@ export class TestThemesTreeItem extends TreeItemBase {
      */
     public updateContextValue(): void {
         this.contextValue = this.getContextValue();
+    }
+
+    /**
+     * Checks if a robot file exists locally for this test case set tree item.
+     * @returns Promise that resolves to true if the robot file exists
+     */
+    public async checkRobotFileExists(): Promise<boolean> {
+        if (!this.canHaveRobotFile()) {
+            return false;
+        }
+
+        try {
+            const fileInfo = await this.robotFileService.checkRobotFileExists(this);
+            this.robotFileExists = fileInfo.exists;
+            this.robotFilePath = fileInfo.filePath;
+
+            return fileInfo.exists;
+        } catch (error) {
+            this.logger.error(
+                `[TestThemesTreeItem] Error checking robot file existence for ${this.data.base.name}:`,
+                error
+            );
+            return false;
+        }
+    }
+
+    /**
+     * Gets the robot file path if it exists
+     * @returns The robot file path or undefined if it doesn't exist
+     */
+    public getRobotFilePath(): string | undefined {
+        return this.robotFilePath;
+    }
+
+    /**
+     * Checks if this item has a generated robot file
+     * @returns True if the robot file exists locally
+     */
+    public hasGeneratedRobotFile(): boolean {
+        return this.robotFileExists;
+    }
+
+    /**
+     * Checks if a folder exists locally for this test theme tree item.
+     * @returns Promise that resolves to true if the folder exists
+     */
+    public async checkFolderExists(): Promise<boolean> {
+        if (this.data.elementType !== TestThemeItemTypes.TEST_THEME) {
+            return false;
+        }
+
+        try {
+            const folderInfo = await this.robotFileService.checkFolderExists(this);
+            this.folderExists = folderInfo.exists;
+            this.folderPath = folderInfo.folderPath;
+
+            return folderInfo.exists;
+        } catch (error) {
+            this.logger.error(
+                `[TestThemesTreeItem] Error checking folder existence for ${this.data.base.name}:`,
+                error
+            );
+            return false;
+        }
+    }
+
+    /**
+     * Gets the folder path if it exists
+     * @returns The folder path or undefined if it doesn't exist
+     */
+    public getFolderPath(): string | undefined {
+        return this.folderPath;
+    }
+
+    /**
+     * Checks if this item has a generated folder
+     * @returns True if the folder exists locally
+     */
+    public hasGeneratedFolder(): boolean {
+        return this.folderExists;
+    }
+
+    /**
+     * Opens the generated robot file in VS Code editor
+     * @returns Promise that resolves when the file is opened
+     */
+    public async openGeneratedRobotFile(): Promise<void> {
+        if (!this.canHaveRobotFile()) {
+            this.logger.debug(
+                `[TestThemesTreeItem] Cannot open robot file: Item type ${this.data.elementType} cannot have a robot file`
+            );
+            return;
+        }
+
+        if (!this.robotFilePath) {
+            this.logger.debug(
+                `[TestThemesTreeItem] Cannot open robot file: No robot file path available for ${this.data.base.name}`
+            );
+            return;
+        }
+
+        await this.robotFileService.openRobotFileInVSCodeEditor(this.robotFilePath, this);
     }
 
     /**
@@ -267,6 +432,41 @@ export class TestThemesTreeItem extends TreeItemBase {
             this.data.elementType === TestThemeItemTypes.TEST_THEME ||
             this.data.elementType === TestThemeItemTypes.TEST_CASE_SET
         );
+    }
+
+    /**
+     * Checks if the item can have a robot file.
+     * Test case sets can have robot files, test themes represent folders.
+     * @return True if the item type can have a robot file
+     */
+    public canHaveRobotFile(): boolean {
+        return this.data.elementType === TestThemeItemTypes.TEST_CASE_SET;
+    }
+
+    /**
+     * Checks if the item can be marked based on file/folder existence.
+     * Test case sets are marked if their robot file exists.
+     * Test themes are marked if their folder exists.
+     * @return True if the item type can be marked
+     */
+    public canBeMarked(): boolean {
+        return (
+            this.data.elementType === TestThemeItemTypes.TEST_CASE_SET ||
+            this.data.elementType === TestThemeItemTypes.TEST_THEME
+        );
+    }
+
+    /**
+     * Checks if this item has generated content (robot file for test case sets, folder for test themes).
+     * @returns True if the item has generated content locally
+     */
+    public hasGeneratedContent(): boolean {
+        if (this.data.elementType === TestThemeItemTypes.TEST_CASE_SET) {
+            return this.robotFileExists;
+        } else if (this.data.elementType === TestThemeItemTypes.TEST_THEME) {
+            return this.folderExists;
+        }
+        return false;
     }
 
     /**
@@ -339,7 +539,9 @@ export class TestThemesTreeItem extends TreeItemBase {
         }
 
         if (!treeViews) {
-            this.logger.error("Tree views are not initialized, cannot get language server parameters.");
+            this.logger.error(
+                "[TestThemesTreeItem] Tree views are not initialized, cannot get language server parameters."
+            );
             return undefined;
         }
 

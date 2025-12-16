@@ -6,10 +6,13 @@
 import * as vscode from "vscode";
 import { TreeItemBase } from "../../core/TreeItemBase";
 import { EventBus } from "../../utils/EventBus";
+import { allExtensionCommands } from "../../../constants";
+import { userSessionManager } from "../../../extension";
+import { ResourceFileService } from "./ResourceFileService";
 
 export enum TestElementType {
     Subdivision = "Subdivision",
-    Interaction = "Interaction",
+    Keyword = "Keyword",
     DataType = "DataType",
     Condition = "Condition",
     Other = "Other"
@@ -18,7 +21,8 @@ export enum TestElementType {
 export interface TestElementData {
     id: string;
     parentId: string | null;
-    name: string;
+    displayName: string;
+    originalName: string;
     uniqueID: string;
     libraryKey: string | null;
     jsonString: string;
@@ -28,6 +32,7 @@ export interface TestElementData {
     children?: TestElementData[];
     hierarchicalName: string;
     parent?: TestElementData;
+    isVirtual?: boolean;
 }
 
 // Extended interface for tree item specific data
@@ -36,39 +41,97 @@ export interface TestElementItemData extends TestElementData {
     resourceFiles?: string[];
     isLocallyAvailable?: boolean;
     localPath?: string;
+    hasLocalChildren?: boolean;
 }
 
 export class TestElementsTreeItem extends TreeItemBase {
     public readonly data: TestElementItemData;
     private _resourceStatus: "none" | "available" | "missing" | "partial" = "none";
+    private _hasLocalChildren: boolean = false;
     private eventBus: EventBus;
-    private _isLocallyAvailable: boolean = false;
 
     constructor(
         data: TestElementItemData,
         extensionContext: vscode.ExtensionContext,
         parent?: TestElementsTreeItem,
-        eventBus?: EventBus
+        eventBus?: EventBus,
+        /**
+         * If false, prevents this item from being added to its parent's children.
+         * Used by the `clone` method to avoid modifying the original tree, which
+         * caused an infinite loop during filtering.
+         */
+        addToParent: boolean = true
     ) {
-        const label = TestElementsTreeItem.extractLabel(data.hierarchicalName || data.name);
+        const label = TestElementsTreeItem.extractLabel(data.hierarchicalName || data.displayName);
         const description = TestElementsTreeItem.buildDescription(data);
         const collapsibleState = TestElementsTreeItem.getInitialCollapsibleState(data);
-        const contextValue = TestElementsTreeItem.getContextValue(data.testElementType);
+        const initialContextValue = TestElementsTreeItem.getInitialContextValue(data);
 
-        super(label, description, contextValue, collapsibleState, extensionContext, parent);
+        super(label, description, initialContextValue, collapsibleState, extensionContext, parent);
+
         this.data = data;
-        this._isLocallyAvailable = data.isLocallyAvailable || false;
         this.eventBus = eventBus || new EventBus();
-
         this.id = this.generateUniqueId();
-        this.updateResourceStatus();
         this.tooltip = this.generateTooltip();
         this.registerEventHandlers();
 
-        // Set resource URI for theme integration
+        if (parent && addToParent) {
+            parent.addChild(this);
+        }
+
+        if (this.data.testElementType === TestElementType.Keyword) {
+            this.command = {
+                command: allExtensionCommands.handleKeywordClick,
+                title: "Open Resource",
+                arguments: [this]
+            };
+        }
+
         if (this.data.hierarchicalName) {
             this.resourceUri = vscode.Uri.parse(`testElement:${this.data.hierarchicalName}`);
         }
+    }
+
+    /**
+     * Determines the initial context value for a tree item based on its data.
+     * @param data The test element data.
+     * @returns The context value string.
+     */
+    private static getInitialContextValue(data: TestElementItemData): string {
+        const elementType = data.testElementType;
+
+        if (elementType === TestElementType.Subdivision) {
+            if (data.displayName === undefined || data.displayName === null) {
+                return "testElement.subdivision.folder";
+            }
+            const isResource = ResourceFileService.hasResourceMarker(data.displayName);
+            if (isResource) {
+                return data.isLocallyAvailable
+                    ? "testElement.subdivision.resource.available"
+                    : "testElement.subdivision.resource.missing";
+            } else {
+                if (data.isVirtual) {
+                    return "testElement.subdivision.virtualFolder";
+                }
+                return "testElement.subdivision.folder";
+            }
+        }
+
+        if (elementType === TestElementType.Keyword) {
+            const parentResource = this.getParentResourceAvailability(data);
+            return parentResource ? "testElement.keyword.resource.available" : "testElement.keyword.resource.missing";
+        }
+
+        return `testElement.${elementType.toLowerCase()}`;
+    }
+
+    /**
+     * Determines if the parent resource for an keyword is locally available.
+     * @param data The test element data
+     * @returns True if parent resource is locally available, false otherwise
+     */
+    private static getParentResourceAvailability(data: TestElementItemData): boolean {
+        return data.isLocallyAvailable || false;
     }
 
     /**
@@ -115,13 +178,14 @@ export class TestElementsTreeItem extends TreeItemBase {
      * @returns A unique string identifier for this tree item.
      */
     protected generateUniqueId(): string {
+        const userId = userSessionManager.getCurrentUserId();
         // Use hierarchical name as unique ID, or fallback to name + parent path
         if (this.data.hierarchicalName) {
-            return `testElement:${this.data.hierarchicalName}`;
+            return `${userId}:testElement:${this.data.hierarchicalName}`;
         }
 
         const parentPath = this.parent ? (this.parent as TestElementsTreeItem).id : "";
-        return `testElement:${parentPath}/${this.data.name}`;
+        return `${userId}:testElement:${parentPath}/${this.data.displayName}`;
     }
 
     /**
@@ -177,20 +241,11 @@ export class TestElementsTreeItem extends TreeItemBase {
     }
 
     /**
-     * Creates a context value string for the given element type.
-     * @param elementType The type of test element.
-     * @returns A context value string for commands and when clauses.
-     */
-    private static getContextValue(elementType: TestElementType): string {
-        return `testElement.${elementType.toLowerCase()}`;
-    }
-
-    /**
      * Generates a tooltip string containing detailed information about the tree item.
      * @returns A formatted tooltip string with type, name, and additional details.
      */
     private generateTooltip(): string {
-        const tooltipLines: string[] = [`Type: ${this.data.testElementType}`, `Name: ${this.data.name}`];
+        const tooltipLines: string[] = [`Type: ${this.data.testElementType}`, `Name: ${this.data.displayName}`];
 
         if (this.data.uniqueID) {
             tooltipLines.push(`UniqueID: ${this.data.uniqueID}`);
@@ -242,14 +297,60 @@ export class TestElementsTreeItem extends TreeItemBase {
 
         // Update visual indicators
         this.updateResourceStatus();
+        this.updateContextValue();
         this.tooltip = this.generateTooltip();
-        // Notify tree view of the change
         this.eventBus.emit({
             type: "testElement:updated",
             source: "testElement",
             data: { id: this.id },
             timestamp: Date.now()
         });
+
+        if (
+            this.data.testElementType === TestElementType.Subdivision &&
+            this.data.displayName &&
+            ResourceFileService.hasResourceMarker(this.data.displayName)
+        ) {
+            this.updateChildKeywords(isAvailable);
+        }
+    }
+
+    /**
+     * Updates child keywords when parent resource availability changes.
+     * @param {boolean} parentAvailable - Whether the parent resource is available.
+     */
+    private updateChildKeywords(parentAvailable: boolean): void {
+        if (this.children) {
+            for (const child of this.children) {
+                const childItem = child as TestElementsTreeItem;
+                if (childItem.data.testElementType === TestElementType.Keyword) {
+                    childItem.data.isLocallyAvailable = parentAvailable;
+                    childItem.updateContextValue();
+                    childItem.tooltip = childItem.generateTooltip();
+                    childItem.eventBus.emit({
+                        type: "testElement:updated",
+                        source: "testElement",
+                        data: { id: childItem.id },
+                        timestamp: Date.now()
+                    });
+                }
+            }
+        }
+    }
+
+    /**
+     * Updates the context value when the item's state changes dynamically.
+     */
+    public updateContextValue(): void {
+        if (this.data.testElementType === TestElementType.Keyword) {
+            const parent = this.parent as TestElementsTreeItem | null;
+            const parentAvailable = parent?.data.isLocallyAvailable || false;
+            this.contextValue = parentAvailable
+                ? "testElement.keyword.resource.available"
+                : "testElement.keyword.resource.missing";
+        } else {
+            this.contextValue = TestElementsTreeItem.getInitialContextValue(this.data);
+        }
     }
 
     /**
@@ -261,7 +362,6 @@ export class TestElementsTreeItem extends TreeItemBase {
         this.updateResourceStatus();
         this.tooltip = this.generateTooltip();
 
-        // Notify tree view of the change
         this.eventBus.emit({
             type: "testElement:updated",
             source: "testElement",
@@ -292,12 +392,12 @@ export class TestElementsTreeItem extends TreeItemBase {
      * @returns {string} A slash-separated path constructed from the current item and all its ancestors.
      */
     private buildPathFromAncestors(): string {
-        const pathParts: string[] = [this.data.name];
+        const pathParts: string[] = [this.data.displayName];
 
         let parentItem = this.parent as TestElementsTreeItem | null;
 
         while (parentItem) {
-            pathParts.unshift(parentItem.data.name);
+            pathParts.unshift(parentItem.data.displayName);
             parentItem = parentItem.parent as TestElementsTreeItem | null;
         }
 
@@ -338,6 +438,27 @@ export class TestElementsTreeItem extends TreeItemBase {
     }
 
     /**
+     * Gets whether this item has any locally available child resources.
+     * @returns True if any child resources exist locally, false otherwise.
+     */
+    public get hasLocalChildren(): boolean {
+        return this._hasLocalChildren;
+    }
+
+    /**
+     * Sets whether this item has any locally available child resources.
+     * This is used for parent marking when child resources are created/deleted.
+     * @param value True if any child resources exist locally, false otherwise.
+     */
+    public set hasLocalChildren(value: boolean) {
+        if (this._hasLocalChildren !== value) {
+            this._hasLocalChildren = value;
+            this.data.hasLocalChildren = value;
+            this.updateContextValue();
+        }
+    }
+
+    /**
      * Creates a deep copy of this test element tree item.
      * @returns {TestElementsTreeItem} A new instance with copied data, metadata, and state.
      */
@@ -349,7 +470,10 @@ export class TestElementsTreeItem extends TreeItemBase {
                 children: [...(this.data.children || [])]
             },
             this.extensionContext,
-            this.parent as TestElementsTreeItem
+            this.parent as TestElementsTreeItem,
+            this.eventBus,
+            // Pass false to prevent the cloned item from being added to the original parent's children.
+            false
         );
 
         // Copy metadata
@@ -435,39 +559,35 @@ export class TestElementsTreeItem extends TreeItemBase {
     ): (data: any) => TestElementsTreeItem {
         return (data: any) => {
             const ctx = extensionContext || (parent?.extensionContext as vscode.ExtensionContext);
-            return new TestElementsTreeItem(data.data || data, ctx, parent);
+            // When deserializing, we want to reconstruct the original tree, so we add items to their parents.
+            return new TestElementsTreeItem(data.data || data, ctx, parent, undefined, true);
         };
     }
 
     /**
-     * Updates the local availability status of this test element.
+     * Updates the local availability status of this test element tree item.
      * @param {boolean} isAvailable - Whether the element is locally available.
+     * @param {string} [localPath] - The absolute local file path.
      */
-    public updateLocalAvailability(isAvailable: boolean): void {
-        this._isLocallyAvailable = isAvailable;
+    public updateLocalAvailability(isAvailable: boolean, localPath?: string): void {
         this.data.isLocallyAvailable = isAvailable;
-
+        this.data.localPath = localPath;
+        this.updateContextValue();
         this.tooltip = this.generateTooltip();
-        // Notify tree view of the change
+
+        if (
+            this.data.testElementType === TestElementType.Subdivision &&
+            this.data.displayName &&
+            ResourceFileService.hasResourceMarker(this.data.displayName)
+        ) {
+            this.updateChildKeywords(isAvailable);
+        }
+
         this.eventBus.emit({
             type: "testElement:updated",
             source: "testElement",
-            data: { id: this.id },
+            data: { item: this },
             timestamp: Date.now()
         });
-    }
-
-    /**
-     * Updates the collapsible state based on the number of children.
-     * For subdivisions, sets to collapsed if there are children, none otherwise.
-     */
-    private updateCollapsibleState(): void {
-        if (this.data.testElementType === TestElementType.Subdivision) {
-            if (this._children.length > 0) {
-                this.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
-            } else {
-                this.collapsibleState = vscode.TreeItemCollapsibleState.None;
-            }
-        }
     }
 }

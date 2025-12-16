@@ -33,11 +33,17 @@ export class ExpansionModule implements TreeViewModule {
 
         const state = context.stateManager.getState();
         if (state.expansion) {
-            this.expandedItems = new Set(state.expansion.expandedItems);
-            this.collapsedItems = new Set(state.expansion.collapsedItems);
-            this.defaultExpanded = state.expansion.defaultExpanded ?? this.defaultExpanded;
-
-            context.logger.debug(`Expansion state loaded from current state manager state`);
+            this.updateExpansionFromState(state.expansion);
+            context.logger.debug(
+                context.buildLogPrefix(
+                    "ExpansionModule",
+                    `Initialized tree view with ${this.expandedItems.size} expanded nodes and ${this.collapsedItems.size} collapsed nodes.`
+                )
+            );
+        } else {
+            context.logger.debug(
+                context.buildLogPrefix("ExpansionModule", "No expansion state found during initialization")
+            );
         }
 
         context.eventBus.on("tree:itemExpanded", (event) => {
@@ -55,14 +61,29 @@ export class ExpansionModule implements TreeViewModule {
         });
 
         context.eventBus.on("state:changed", (event) => {
-            if (event.data?.expansion) {
-                this.expandedItems = new Set(event.data.expansion.expandedItems);
-                this.collapsedItems = new Set(event.data.expansion.collapsedItems);
-                this.defaultExpanded = event.data.expansion.defaultExpanded ?? this.defaultExpanded;
+            const newState = event.data?.newState;
+            if (newState?.expansion) {
+                this.updateExpansionFromState(newState.expansion);
+                context.logger.debug(
+                    context.buildLogPrefix(
+                        "ExpansionModule",
+                        `Successfully updated persistent expansion tree state with ${this.expandedItems.size} expanded nodes and ${this.collapsedItems.size} collapsed nodes.`
+                    )
+                );
             }
         });
 
-        context.logger.debug("ExpansionModule initialized");
+        context.logger.trace(context.buildLogPrefix("ExpansionModule", "Expansion module initialized."));
+    }
+
+    /**
+     * Updates the expansion state from loaded state data
+     * @param expansionState The expansion state to apply
+     */
+    private updateExpansionFromState(expansionState: ExpansionState): void {
+        this.expandedItems = new Set(expansionState.expandedItems);
+        this.collapsedItems = new Set(expansionState.collapsedItems);
+        this.defaultExpanded = expansionState.defaultExpanded ?? this.defaultExpanded;
     }
 
     /**
@@ -74,11 +95,9 @@ export class ExpansionModule implements TreeViewModule {
         if (isExpanded) {
             this.expandedItems.add(itemId);
             this.collapsedItems.delete(itemId);
-            this.context.logger.debug(`Item expanded: ${itemId}`);
         } else {
             this.expandedItems.delete(itemId);
             this.collapsedItems.add(itemId);
-            this.context.logger.debug(`Item collapsed: ${itemId}`);
         }
 
         this.saveStateDebounced();
@@ -109,8 +128,11 @@ export class ExpansionModule implements TreeViewModule {
 
         this.context.stateManager.setState({ expansion: expansionState });
 
-        this.context.logger.debug(
-            `Saving expansion state: ${this.expandedItems.size} expanded, ${this.collapsedItems.size} collapsed`
+        this.context.logger.trace(
+            this.context.buildLogPrefix(
+                "ExpansionModule",
+                `Saving expansion state: ${this.expandedItems.size} expanded, ${this.collapsedItems.size} collapsed`
+            )
         );
 
         this.context.eventBus.emit({
@@ -130,12 +152,38 @@ export class ExpansionModule implements TreeViewModule {
             return;
         }
 
+        const originalState = item.collapsibleState;
+
         if (this.expandedItems.has(item.id)) {
             item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+            if (originalState !== vscode.TreeItemCollapsibleState.Expanded) {
+                this.context.logger.trace(
+                    this.context.buildLogPrefix(
+                        "ExpansionModule",
+                        `Applied expanded state to item: ${item.label} (${item.id})`
+                    )
+                );
+            }
         } else if (this.collapsedItems.has(item.id)) {
             item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+            if (originalState !== vscode.TreeItemCollapsibleState.Collapsed) {
+                this.context.logger.trace(
+                    this.context.buildLogPrefix(
+                        "ExpansionModule",
+                        `Applied collapsed state to item: ${item.label} (${item.id})`
+                    )
+                );
+            }
         } else if (this.defaultExpanded) {
             item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+            if (originalState !== vscode.TreeItemCollapsibleState.Expanded) {
+                this.context.logger.trace(
+                    this.context.buildLogPrefix(
+                        "ExpansionModule",
+                        `Applied default expanded state to item: ${item.label} (${item.id})`
+                    )
+                );
+            }
         }
     }
 

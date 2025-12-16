@@ -24,10 +24,9 @@ import { TESTBENCH_AUTH_PROVIDER_ID, TestBenchAuthenticationProvider } from "../
 import { allExtensionCommands, ContextKeys } from "../../constants";
 import { LoginWebViewProvider } from "../../loginWebView";
 import * as configuration from "../../configuration";
-import { delay } from "../utils/testUtils";
 import * as testBenchLogger from "../../testBenchLogger";
 import * as testBenchConnection from "../../testBenchConnection";
-import * as server from "../../server";
+import * as server from "../../languageServer/server";
 
 suite("Extension Test Suite", function () {
     let testEnv: TestEnvironment;
@@ -90,8 +89,6 @@ suite("Extension Test Suite", function () {
 
         test("should initialize logger on activation", async () => {
             await activate(testEnv.mockContext);
-
-            // The logger should be set and used during activation
             assert.ok(logger, "Logger should be initialized");
             assert.ok(typeof logger.info === "function", "Logger should have info method");
         });
@@ -151,41 +148,6 @@ suite("Extension Test Suite", function () {
             assert.ok(
                 registeredCommands.includes(allExtensionCommands.displayAllProjects),
                 "Display projects command should be registered"
-            );
-        });
-
-        test("should trigger auto-login command when auto-login is enabled", async () => {
-            // Arrange: modify existing config stub to enable auto-login
-            const configStub = configuration.getExtensionConfiguration as sinon.SinonStub;
-            const autoLoginStub = testEnv.sandbox.stub();
-            autoLoginStub.withArgs("automaticLoginAfterExtensionActivation", false).returns(true);
-            configStub.returns({
-                get: autoLoginStub
-            } as any);
-            const executeCommandStub = testEnv.vscodeMocks.executeCommandStub;
-
-            // Act
-            await activate(testEnv.mockContext);
-            await delay(1100); // Wait for setTimeout in activate
-
-            // Assert
-            assert.ok(
-                executeCommandStub.calledWith(allExtensionCommands.automaticLoginAfterExtensionActivation),
-                "Auto-login command should be triggered when enabled"
-            );
-        });
-
-        test("should not trigger auto-login command when auto-login is disabled", async () => {
-            const executeCommandStub = testEnv.vscodeMocks.executeCommandStub;
-
-            await activate(testEnv.mockContext);
-
-            // Wait a bit to ensure no command is executed
-            await new Promise((resolve) => setTimeout(resolve, 50));
-
-            assert.ok(
-                !executeCommandStub.calledWith(allExtensionCommands.automaticLoginAfterExtensionActivation),
-                "Auto-login command should not be triggered when disabled"
             );
         });
     });

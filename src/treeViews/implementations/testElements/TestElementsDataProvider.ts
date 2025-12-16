@@ -3,7 +3,6 @@
  * @description Data provider for managing test elements in the tree view.
  */
 
-import { ErrorHandler } from "../../utils/ErrorHandler";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { TestElementData, TestElementType } from "./TestElementsTreeItem";
 import { EventBus } from "../../utils/EventBus";
@@ -11,6 +10,8 @@ import { TestBenchLogger } from "../../../testBenchLogger";
 import { FrameworkCache } from "../../utils/FrameworkCache";
 import { getExtensionSetting } from "../../../configuration";
 import { ConfigKeys } from "../../../constants";
+import * as vscode from "vscode";
+import { ResourceFileService } from "./ResourceFileService";
 
 interface RawTestElement {
     id: string;
@@ -25,6 +26,8 @@ interface RawTestElement {
     type?: string;
     regexMatch?: boolean;
     Subdivision_key?: { serial: string };
+    // TODO: API v1 uses Interaction_key for Keywords, Keyword_key is not used yet. Replace API v1 support when no longer needed
+    Keyword_key?: { serial: string };
     Interaction_key?: { serial: string };
     Condition_key?: { serial: string };
     DataType_key?: { serial: string };
@@ -32,19 +35,48 @@ interface RawTestElement {
 
 export class TestElementsDataProvider {
     private elementsCache = new FrameworkCache<TestElementData[]>();
-    private readonly resourceRegexPatterns: RegExp[];
+    private disposables: vscode.Disposable[] = [];
 
     constructor(
         private logger: TestBenchLogger,
-        private errorHandler: ErrorHandler,
         private getConnection: () => PlayServerConnection | null,
         private eventBus: EventBus
     ) {
-        this.resourceRegexPatterns = this._getResourceRegexPatternsFromSettings();
+        this.setupConfigurationChangeListener();
+    }
+
+    /**
+     * Sets up a listener for configuration changes to clear cache when resource markers change
+     */
+    private setupConfigurationChangeListener(): void {
+        const configChangeDisposable = vscode.workspace.onDidChangeConfiguration((event) => {
+            if (event.affectsConfiguration("testbenchExtension.resourceMarker")) {
+                this.logger.debug("[TestElementsDataProvider] Resource marker configuration changed, clearing cache");
+
+                const newPatterns = this._getResourceRegexPatternsFromSettings();
+                this.logger.debug(
+                    `[TestElementsDataProvider] New resource marker patterns: ${JSON.stringify(newPatterns.map((p) => p.source))}`
+                );
+
+                this.clearCache();
+                this.eventBus.emit({
+                    type: "testElements:configurationChanged",
+                    source: "testElements",
+                    data: {
+                        message: "Resource marker configuration changed, cache cleared",
+                        newPatterns: newPatterns.map((p) => p.source),
+                        timestamp: Date.now()
+                    },
+                    timestamp: Date.now()
+                });
+            }
+        });
+        this.disposables.push(configChangeDisposable);
     }
 
     /**
      * Retrieves resource regex patterns from extension settings.
+     * This method is now dynamic and will always return the current configuration.
      *
      * @returns {RegExp[]} Array of compiled regex patterns for resource markers.
      */
@@ -52,13 +84,26 @@ export class TestElementsDataProvider {
         const resourceMarkers: string[] | undefined = getExtensionSetting<string[]>(
             ConfigKeys.TB2ROBOT_RESOURCE_MARKER
         );
-        if (!resourceMarkers) {
+
+        /*
+        this.logger.debug(
+            `[TestElementsDataProvider] Retrieved resource markers from settings: ${JSON.stringify(resourceMarkers)}`
+        );
+        */
+
+        if (!resourceMarkers || resourceMarkers.length === 0) {
+            this.logger.debug("[TestElementsDataProvider] No resource markers configured, returning empty patterns");
             return [];
         }
-        return resourceMarkers.map((marker) => {
+
+        const patterns = resourceMarkers.map((marker) => {
+            // Escape special regex characters in the marker
             const escaped = marker.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
-            return new RegExp(`(?:.*\\.)?(?<resourceName>[^.]+?)\\s*${escaped}.*`);
+            return new RegExp(escaped);
         });
+
+        // this.logger.debug(`[TestElementsDataProvider] Generated regex patterns: ${JSON.stringify(patterns.map((p) => p.source))}`);
+        return patterns;
     }
 
     /**
@@ -76,20 +121,17 @@ export class TestElementsDataProvider {
 
         const cachedElements = this.elementsCache.get(tovKey);
         if (cachedElements) {
-            this.logger.debug(`Returning cached test elements for TOV: ${tovKey}`);
+            this.logger.debug(`[TestElementsDataProvider] Returning cached test elements for TOV: ${tovKey}`);
             return cachedElements;
         }
 
         try {
-            this.logger.debug(`Fetching raw test elements for TOV: ${tovKey}`);
             const rawTestElementsData = await connection.getTestElementsWithTovKeyUsingOldPlayServer(tovKey);
-
             if (!rawTestElementsData || !Array.isArray(rawTestElementsData)) {
-                this.logger.warn(`No test elements returned for TOV: ${tovKey}`);
                 return [];
             }
 
-            const hierarchicalTestElemData = this._buildAndFilterHierarchy(rawTestElementsData);
+            const hierarchicalTestElemData = await this._buildAndFilterHierarchy(rawTestElementsData);
 
             this.elementsCache.set(tovKey, hierarchicalTestElemData);
             this.eventBus.emit({
@@ -99,12 +141,9 @@ export class TestElementsDataProvider {
                 timestamp: Date.now()
             });
 
-            this.logger.info(
-                `Successfully built and filtered tree with ${hierarchicalTestElemData.length} root elements for TOV: ${tovKey}`
-            );
             return hierarchicalTestElemData;
         } catch (error) {
-            this.logger.error(`Failed to fetch test elements for TOV ${tovKey}:`, error);
+            this.logger.error(`[TestElementsDataProvider] Failed to fetch test elements for TOV key ${tovKey}:`, error);
             this.eventBus.emit({
                 type: "testElements:error",
                 source: "testElements",
@@ -118,18 +157,14 @@ export class TestElementsDataProvider {
     /**
      * Orchestrates the transformation of flat test element data into a filtered hierarchy.
      * @param flatJsonTestElements - Array of raw test element data from the server
-     * @returns Array of root TestElementData objects forming the filtered hierarchy
+     * @returns Promise resolving to array of root TestElementData objects forming the filtered hierarchy
      */
-    private _buildAndFilterHierarchy(flatJsonTestElements: RawTestElement[]): TestElementData[] {
-        this.logger.trace(
-            "[TestElementsDataProvider] Building tree with regex patterns:",
-            this.resourceRegexPatterns.map((p) => p.source)
-        );
-
+    private async _buildAndFilterHierarchy(flatJsonTestElements: RawTestElement[]): Promise<TestElementData[]> {
         const testElementIdToDataMap = this._transformRawElements(flatJsonTestElements);
         const { roots } = this._linkParentChildRelationships(testElementIdToDataMap);
         const filteredRoots = this._filterElementTree(roots);
         this._assignHierarchicalNames(filteredRoots);
+        await this._markVirtualFolders(filteredRoots);
         this._checkForNestedResources(filteredRoots);
 
         return filteredRoots;
@@ -157,21 +192,32 @@ export class TestElementsDataProvider {
             const compositeId: string = this._generateElementId(jsonTestElement);
             const parentIdString: string | null = this._getParentId(jsonTestElement);
 
+            const currentPatterns = this._getResourceRegexPatternsFromSettings();
+            const directRegexMatch =
+                currentPatterns.length > 0 ? this._matchesRegex(jsonTestElement.name, currentPatterns) : true;
+
+            /*
+            if (currentPatterns.length > 0) {
+                this.logger.debug(`[TestElementsDataProvider] Element "${jsonTestElement.name}" regex match: ${directRegexMatch} (patterns: ${JSON.stringify(currentPatterns.map((p) => p.source))})`);
+            }
+            */
+
+            const originalName = jsonTestElement.name;
+            const normalizedName = ResourceFileService.normalizePath(originalName);
+
             const testElement: TestElementData = {
                 id: compositeId,
                 parentId: parentIdString,
-                name: jsonTestElement.name,
+                displayName: normalizedName,
+                originalName: originalName,
                 uniqueID: testElementOwnUniqueID,
                 libraryKey,
                 jsonString: JSON.stringify(jsonTestElement, null, 2),
                 details: jsonTestElement || {},
                 testElementType: testElementType,
-                directRegexMatch:
-                    this.resourceRegexPatterns.length > 0
-                        ? this._matchesRegex(jsonTestElement.name, this.resourceRegexPatterns)
-                        : true,
+                directRegexMatch: directRegexMatch,
                 children: [],
-                hierarchicalName: jsonTestElement.name // Will be properly set later
+                hierarchicalName: normalizedName // Will be set later
             };
             testElementIdToDataMap[compositeId] = testElement;
         });
@@ -201,7 +247,10 @@ export class TestElementsDataProvider {
                         let parentSerialFromDetails: string | undefined;
                         if (potentialParent.details?.Subdivision_key?.serial) {
                             parentSerialFromDetails = String(potentialParent.details.Subdivision_key.serial);
+                        } else if (potentialParent.details?.Keyword_key?.serial) {
+                            parentSerialFromDetails = String(potentialParent.details.Keyword_key.serial);
                         } else if (potentialParent.details?.Interaction_key?.serial) {
+                            // TODO: Replace API v1 (Interaction_key usage) with API v2 (Keyword_key) if no longer needed
                             parentSerialFromDetails = String(potentialParent.details.Interaction_key.serial);
                         }
 
@@ -216,9 +265,6 @@ export class TestElementsDataProvider {
                     testElementData.parent = foundParentTestElementData;
                     foundParentTestElementData.children!.push(testElementData);
                 } else {
-                    this.logger.warn(
-                        `[TestElementsDataProvider] Parent with ID '${testElementData.parentId}' not found for element '${testElementData.name}' (ID: ${testElementData.id}). Making it a root.`
-                    );
                     roots.push(testElementData);
                 }
             } else {
@@ -229,11 +275,18 @@ export class TestElementsDataProvider {
     }
 
     /**
-     * Recursively filters the element tree based on regex matches and hierarchy rules.
-     * @param roots The root elements of the tree to filter.
+     * Recursively filters the element tree items.
+     * Rules:
+     * - Filter out empty subdivisions, DataTypes and Conditions.
+     * - Include Subdivision if:
+     *       Subdivision name matches resource marker defined in extension settings
+     *       OR a child subdivision tree item has a resource marker match.
+     * - Include Keyword if:
+     *       The direct parent subdivision has a resource directory match.
+     * @param rootsToFilter The root elements of the unfiltered test elements tree to filter.
      * @returns A new array of filtered root elements.
      */
-    private _filterElementTree(roots: TestElementData[]): TestElementData[] {
+    private _filterElementTree(rootsToFilter: TestElementData[]): TestElementData[] {
         const recursiveFilter = (testElementData: TestElementData, inheritedMatch: boolean): TestElementData | null => {
             let validChildren: TestElementData[] = [];
             if (testElementData.children) {
@@ -265,7 +318,9 @@ export class TestElementsDataProvider {
             return null;
         };
 
-        return roots.map((root) => recursiveFilter(root, false)).filter((node) => node !== null) as TestElementData[];
+        return rootsToFilter
+            .map((root) => recursiveFilter(root, false))
+            .filter((node) => node !== null) as TestElementData[];
     }
 
     /**
@@ -274,11 +329,117 @@ export class TestElementsDataProvider {
      */
     private _assignHierarchicalNames(roots: TestElementData[]): void {
         const assign = (testElementData: TestElementData, parentPath: string): void => {
-            const currentPath = parentPath ? `${parentPath}/${testElementData.name}` : testElementData.name;
+            const currentPath = parentPath
+                ? `${parentPath}/${testElementData.displayName}`
+                : testElementData.displayName;
             testElementData.hierarchicalName = currentPath;
             testElementData.children?.forEach((child) => assign(child, currentPath));
         };
         roots.forEach((rootTestElementData) => assign(rootTestElementData, ""));
+    }
+
+    /**
+     * Traverses the tree to mark subdivisions that are virtual containers for resources.
+     * A folder is "virtual" if it is a non-resource subdivision that has resource descendants.
+     * Virtual folders don't have a direct 1:1 mapping to local directories and should not
+     * show file system action buttons (like "Create Resource" or "Open in Explorer").
+     *
+     * If a `resourceDirectoryMarker` is configured, additional logic determines which folders
+     * map to local directories based on the marker position in the path.
+     *
+     * @param roots The root elements of the tree.
+     */
+    private async _markVirtualFolders(roots: TestElementData[]): Promise<void> {
+        const resourceDirectoryMarker =
+            getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER) || "";
+
+        let lsCommandUnavailable = false;
+
+        /**
+         * Checks if a folder should be marked as virtual based on marker position.
+         * Returns false (not virtual) only if the folder is below the marker position.
+         */
+        const checkVirtualStatus = async (
+            node: TestElementData,
+            descendantResource: TestElementData
+        ): Promise<boolean> => {
+            if (!resourceDirectoryMarker || lsCommandUnavailable) {
+                return true;
+            }
+
+            try {
+                const markerPosition: number | undefined = await vscode.commands.executeCommand(
+                    "testbench_ls.get_resource_directory_subdivision_index",
+                    {
+                        resource_directory_regex: resourceDirectoryMarker,
+                        subdivision_parts: descendantResource.hierarchicalName.split("/")
+                    }
+                );
+
+                // Folder is not virtual if it's after the marker position (maps to a real subdirectory)
+                if (markerPosition !== undefined && markerPosition !== -1) {
+                    const folderDepth = node.hierarchicalName.split("/").length;
+                    return folderDepth <= markerPosition + 1;
+                }
+                return true; // Entire hierarchy is virtual
+            } catch {
+                lsCommandUnavailable = true;
+                this.logger.warn(
+                    "[TestElementsDataProvider] LS command unavailable. Marking ancestor folders of resources as virtual."
+                );
+                return true;
+            }
+        };
+
+        /**
+         * Recursively traverses the test elements tree and marks non-resource folders with
+         * resource descendants as virtual.
+         * @returns True if this node or any descendant is a resource.
+         */
+        const markVirtualFolders = async (node: TestElementData): Promise<boolean> => {
+            const childMarkingResults = await Promise.all(
+                node.children?.map((child) => markVirtualFolders(child)) || []
+            );
+            const hasResourceDescendant = childMarkingResults.some(Boolean);
+            const isSubdivision = node.testElementType === TestElementType.Subdivision;
+            const isResource = node.directRegexMatch;
+
+            if (isSubdivision && isResource) {
+                return true;
+            }
+
+            if (isSubdivision && hasResourceDescendant) {
+                const descendantResource = this._findFirstResourceDescendant(node);
+                if (descendantResource) {
+                    node.isVirtual = await checkVirtualStatus(node, descendantResource);
+                } else {
+                    node.isVirtual = true;
+                }
+                return true;
+            }
+
+            return hasResourceDescendant;
+        };
+
+        await Promise.all(roots.map(markVirtualFolders));
+    }
+
+    /**
+     * Finds the first resource descendant of a node.
+     * @param node The node to search from.
+     * @returns The first resource descendant, or undefined if none found.
+     */
+    private _findFirstResourceDescendant(node: TestElementData): TestElementData | undefined {
+        for (const child of node.children || []) {
+            if (child.testElementType === TestElementType.Subdivision && child.directRegexMatch) {
+                return child;
+            }
+            const descendant = this._findFirstResourceDescendant(child);
+            if (descendant) {
+                return descendant;
+            }
+        }
+        return undefined;
     }
 
     /**
@@ -292,7 +453,7 @@ export class TestElementsDataProvider {
                 testElementData.children?.forEach((child) => {
                     if (child.directRegexMatch) {
                         nestedResourceWarnings.push(
-                            `Robot resource '${testElementData.name}' contains another resource '${child.name}'.`
+                            `Robot resource '${testElementData.displayName}' contains another resource '${child.displayName}'.`
                         );
                     }
                     check(child);
@@ -326,8 +487,13 @@ export class TestElementsDataProvider {
         if (item.Subdivision_key?.serial) {
             return TestElementType.Subdivision;
         }
-        if (item.Interaction_key?.serial) {
-            return TestElementType.Interaction;
+        // TODO: Replace API v1 support when no longer needed
+        // Check both Keyword_key and Interaction_key (API v1)
+        if (item.Keyword_key?.serial || item.Interaction_key?.serial) {
+            this.logger.trace(
+                `[TestElementsDataProvider] Identified element "${item.name}" as Keyword (Keyword_key: ${!!item.Keyword_key?.serial}, Interaction_key: ${!!item.Interaction_key?.serial})`
+            );
+            return TestElementType.Keyword;
         }
         if (item.Condition_key?.serial) {
             return TestElementType.Condition;
@@ -335,6 +501,9 @@ export class TestElementsDataProvider {
         if (item.DataType_key?.serial) {
             return TestElementType.DataType;
         }
+        this.logger.trace(
+            `[TestElementsDataProvider] Element "${item.name}" could not be typed (no matching key found), defaulting to Other`
+        );
         return TestElementType.Other;
     }
 
@@ -347,15 +516,31 @@ export class TestElementsDataProvider {
         const elementType = this._getTestElementType(raw);
         switch (elementType) {
             case TestElementType.Subdivision:
-            case TestElementType.Interaction:
             case TestElementType.Condition:
             case TestElementType.DataType: {
-                const specificKey = raw[`${elementType}_key`];
+                const keyFieldMap: Record<string, string> = {
+                    [TestElementType.Subdivision]: "Subdivision_key",
+                    [TestElementType.Condition]: "Condition_key",
+                    [TestElementType.DataType]: "DataType_key"
+                };
+                const keyField = keyFieldMap[elementType];
+                const specificKey = raw[keyField as keyof RawTestElement] as { serial: string } | undefined;
                 if (specificKey?.serial && raw.uniqueID) {
                     return `${specificKey.serial}_${raw.uniqueID}`;
                 }
                 this.logger.warn(
-                    `[generateElementId] Test element type ${elementType} for item ${raw.uniqueID} missing specific key serial.`
+                    `[TestElementsDataProvider] Test element tree item with UID ${raw.uniqueID} and type ${elementType} is missing specific key serial.`
+                );
+                return raw.uniqueID || `fallback_${Date.now()}_${Math.random()}`;
+            }
+            case TestElementType.Keyword: {
+                // Check both Keyword_key and Interaction_key (API v1)
+                const keywordKey = raw.Keyword_key || raw.Interaction_key;
+                if (keywordKey?.serial && raw.uniqueID) {
+                    return `${keywordKey.serial}_${raw.uniqueID}`;
+                }
+                this.logger.warn(
+                    `[TestElementsDataProvider] Test element tree item with UID ${raw.uniqueID} and type ${elementType} is missing specific key serial.`
                 );
                 return raw.uniqueID || `fallback_${Date.now()}_${Math.random()}`;
             }
@@ -386,10 +571,19 @@ export class TestElementsDataProvider {
     public clearCache(tovKey?: string): void {
         if (tovKey) {
             this.elementsCache.clear(tovKey);
-            this.logger.debug(`Cleared cache for TOV: ${tovKey}`);
         } else {
             this.elementsCache.clear();
-            this.logger.debug("Cleared all test elements cache");
         }
+    }
+
+    /**
+     * Cleans up resources and disposes of configuration listeners
+     */
+    public dispose(): void {
+        for (const disposable of this.disposables) {
+            disposable.dispose();
+        }
+        this.disposables = [];
+        this.clearCache();
     }
 }

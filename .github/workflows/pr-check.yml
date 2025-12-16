@@ -1,0 +1,159 @@
+name: PR Check
+
+on:
+    pull_request:
+        types: [opened, synchronize, reopened]
+
+jobs:
+    check-version:
+        name: Check Version Impact
+        runs-on: ubuntu-latest
+
+        steps:
+            # Step 1: Checkout code with full history
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            # Step 2: Setup Node.js
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "lts/*"
+
+            # Step 3: Install dependencies
+            - name: Install dependencies
+              run: npm ci
+
+            # Step 4: Run semantic-release in dry-run mode
+            - name: Check semantic version
+              id: semantic_dry_run
+              run: |
+                  # Run semantic-release in dry-run mode
+                  npx semantic-release --dry-run --no-ci | tee semantic-output.log
+
+                  # Extract version info from the output
+                  if grep -q "The next release version is" semantic-output.log; then
+                    NEXT_VERSION=$(grep "The next release version is" semantic-output.log | grep -oE '[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?')
+                    echo "NEXT_VERSION=$NEXT_VERSION" >> $GITHUB_OUTPUT
+                    echo "HAS_RELEASE=true" >> $GITHUB_OUTPUT
+                  else
+                    echo "HAS_RELEASE=false" >> $GITHUB_OUTPUT
+                  fi
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+            # Step 5: Comment on PR with version info
+            - name: Comment PR
+              uses: actions/github-script@v6
+              if: steps.semantic_dry_run.outputs.HAS_RELEASE == 'true'
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  script: |
+                      const output = `### 🚀 Version Preview
+
+                      Based on the commits in this PR, the next release version will be: **v${{ steps.semantic_dry_run.outputs.NEXT_VERSION }}**
+
+                      This is determined by analyzing your commit messages using [Conventional Commits](https://www.conventionalcommits.org/).`;
+
+                      // Find existing comment
+                      const comments = await github.rest.issues.listComments({
+                        issue_number: context.issue.number,
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                      });
+
+                      const botComment = comments.data.find(comment => 
+                        comment.user.type === 'Bot' && comment.body.includes('Version Preview')
+                      );
+
+                      if (botComment) {
+                        // Update existing comment
+                        await github.rest.issues.updateComment({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          comment_id: botComment.id,
+                          body: output
+                        });
+                      } else {
+                        // Create new comment
+                        await github.rest.issues.createComment({
+                          issue_number: context.issue.number,
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          body: output
+                        });
+                      }
+
+            # Step 6: Comment if no release will be created
+            - name: Comment PR (No Release)
+              uses: actions/github-script@v6
+              if: steps.semantic_dry_run.outputs.HAS_RELEASE == 'false'
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  script: |
+                      const output = `### 📝 Version Preview
+
+                      No version bump will occur with the current commits in this PR.
+
+                      To trigger a version bump, ensure your commits follow the [Conventional Commits](https://www.conventionalcommits.org/) format:
+                      - \`feat:\` for new features (minor version bump)
+                      - \`fix:\` for bug fixes (patch version bump)
+                      - \`feat!:\` or \`fix!:\` for breaking changes (major version bump)`;
+
+                      // Find existing comment
+                      const comments = await github.rest.issues.listComments({
+                        issue_number: context.issue.number,
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                      });
+
+                      const botComment = comments.data.find(comment => 
+                        comment.user.type === 'Bot' && comment.body.includes('Version Preview')
+                      );
+
+                      if (botComment) {
+                        // Update existing comment
+                        await github.rest.issues.updateComment({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          comment_id: botComment.id,
+                          body: output
+                        });
+                      } else {
+                        // Create new comment
+                        await github.rest.issues.createComment({
+                          issue_number: context.issue.number,
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          body: output
+                        });
+                      }
+
+            # # Run commit message validation
+            # commitlint:
+            #     name: Validate Commit Messages
+            #     runs-on: ubuntu-latest
+
+            #     steps:
+            #         - name: Checkout code
+            #           uses: actions/checkout@v4
+            #           with:
+            #               fetch-depth: 0
+
+            #         - name: Setup Node.js
+            #           uses: actions/setup-node@v4
+            #           with:
+            #               node-version: "lts/*"
+
+            #         - name: Install commitlint
+            #           run: |
+            #               npm install -g @commitlint/cli @commitlint/config-conventional
+
+            #         # Note: Old commit messages in repository are not in conventional commits format.
+            #         # Options: Rewrite commit messages OR rewrite commit history OR do not enforce conventional commits.
+            #         # - name: Validate commits
+            #         #   run: |
+            #         #       # Get all commits in the PR
+            #         #       npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose

@@ -55,7 +55,9 @@ export class IconModule implements TreeViewModule {
                 this.onConfigChange(event.data.icons);
             }
         });
-        this.context.logger.debug(`IconModule initialized with theme: ${this.config.theme}`);
+        this.context.logger.trace(
+            context.buildLogPrefix("IconModule", `Icon module initialized with theme '${this.config.theme}'.`)
+        );
     }
 
     /**
@@ -90,7 +92,7 @@ export class IconModule implements TreeViewModule {
 
                 // Test elements tree
                 ["Subdivision", new vscode.ThemeIcon("symbol-namespace")],
-                ["Interaction", new vscode.ThemeIcon("symbol-event")],
+                ["Keyword", new vscode.ThemeIcon("symbol-event")],
                 ["DataType", new vscode.ThemeIcon("symbol-variable")],
                 ["Condition", new vscode.ThemeIcon("symbol-boolean")],
                 ["Other", new vscode.ThemeIcon("symbol-misc")]
@@ -117,7 +119,7 @@ export class IconModule implements TreeViewModule {
                 ["TestCaseSetNode", new vscode.ThemeIcon("file-submodule")],
                 ["TestCaseNode", new vscode.ThemeIcon("file")],
                 ["Subdivision", new vscode.ThemeIcon("folder")],
-                ["Interaction", new vscode.ThemeIcon("play")],
+                ["Keyword", new vscode.ThemeIcon("play")],
                 ["DataType", new vscode.ThemeIcon("symbol-key")],
                 ["Condition", new vscode.ThemeIcon("question")],
                 ["Other", new vscode.ThemeIcon("file")]
@@ -144,7 +146,7 @@ export class IconModule implements TreeViewModule {
                 ["TestCaseSetNode", new vscode.ThemeIcon("symbol-namespace", new vscode.ThemeColor("charts.yellow"))],
                 ["TestCaseNode", new vscode.ThemeIcon("circle-outline", new vscode.ThemeColor("charts.red"))],
                 ["Subdivision", new vscode.ThemeIcon("symbol-namespace", new vscode.ThemeColor("charts.blue"))],
-                ["Interaction", new vscode.ThemeIcon("symbol-event", new vscode.ThemeColor("charts.green"))],
+                ["Keyword", new vscode.ThemeIcon("symbol-event", new vscode.ThemeColor("charts.green"))],
                 ["DataType", new vscode.ThemeIcon("symbol-variable", new vscode.ThemeColor("charts.orange"))],
                 ["Condition", new vscode.ThemeIcon("symbol-boolean", new vscode.ThemeColor("charts.purple"))],
                 ["Other", new vscode.ThemeIcon("symbol-misc", new vscode.ThemeColor("charts.yellow"))]
@@ -194,6 +196,14 @@ export class IconModule implements TreeViewModule {
         item: TreeItemBase
     ): vscode.ThemeIcon | string | { light: vscode.Uri; dark: vscode.Uri } | undefined {
         const extensionUri = this.context.extensionContext.extensionUri;
+
+        // Display blocked icon for filtered out items in filter diff mode
+        if (item instanceof TestThemesTreeItem && item.isFilteredOutInDiffMode) {
+            return {
+                light: vscode.Uri.joinPath(extensionUri, "resources", "icons", "block-light.svg"),
+                dark: vscode.Uri.joinPath(extensionUri, "resources", "icons", "block-dark.svg")
+            };
+        }
 
         if (item instanceof ProjectsTreeItem) {
             switch (item.data.type) {
@@ -258,13 +268,17 @@ export class IconModule implements TreeViewModule {
         if (item instanceof TestElementsTreeItem) {
             switch (item.data.testElementType) {
                 case TestElementType.Subdivision: {
-                    const baseIconName = item.data.isLocallyAvailable ? "localSubdivision" : "missingSubdivision";
+                    // Determine icon based on availability and parent marking state
+                    const baseIconName =
+                        item.data.isLocallyAvailable || item.hasLocalChildren
+                            ? "localSubdivision"
+                            : "missingSubdivision";
                     return {
                         light: vscode.Uri.joinPath(extensionUri, "resources", "icons", `${baseIconName}-light.svg`),
                         dark: vscode.Uri.joinPath(extensionUri, "resources", "icons", `${baseIconName}-dark.svg`)
                     };
                 }
-                case TestElementType.Interaction:
+                case TestElementType.Keyword:
                     return {
                         light: vscode.Uri.joinPath(extensionUri, "resources", "icons", "testStep-light.svg"),
                         dark: vscode.Uri.joinPath(extensionUri, "resources", "icons", "testStep-dark.svg")
@@ -390,45 +404,14 @@ export class IconModule implements TreeViewModule {
     }
 
     /**
-     * Sets a loading icon for a tree item
-     * @param item The tree item to set loading icon for
-     */
-    public setLoadingIcon(item: TreeItemBase): void {
-        // Check if filter diff mode is enabled and this item is filtered
-        const treeView = this.context.getTreeView();
-        const filteringModule = treeView.getModule("filtering") as FilteringModule | undefined;
-        if (filteringModule && typeof filteringModule.getFilterDiffState === "function") {
-            const filterDiffState = filteringModule.getFilterDiffState();
-            if (filterDiffState.enabled && item.id && filterDiffState.filteredItems.has(item.id)) {
-                // Skip setting loading icon for filtered items in diff mode - let the FilteringModule handle it
-                return;
-            }
-        }
-
-        if (this.config.animateLoading) {
-            item.iconPath = new vscode.ThemeIcon("sync~spin");
-        } else {
-            item.iconPath = new vscode.ThemeIcon("sync");
-        }
-        item.setMetadata("loading", true);
-    }
-
-    /**
-     * Clears loading icon and restores original icon for tree item
-     * @param item The tree item to clear loading icon for
-     */
-    public clearLoadingIcon(item: TreeItemBase): void {
-        item.setMetadata("loading", false);
-        this.setItemIcon(item);
-    }
-
-    /**
      * Sets the active icon theme
      * @param themeName The name of the theme to set
      */
     public setTheme(themeName: string): void {
         if (!this.isValidThemeName(themeName)) {
-            this.context.logger.warn(`Invalid theme name: ${themeName}`);
+            this.context.logger.warn(
+                this.context.buildLogPrefix("IconModule", `Cannot set theme. Invalid theme name: ${themeName}`)
+            );
             return;
         }
 
@@ -437,7 +420,7 @@ export class IconModule implements TreeViewModule {
             this.currentTheme = theme;
             this.config.theme = themeName;
             this.context.refresh();
-            this.context.logger.info(`Icon theme changed to: ${themeName}`);
+            this.context.logger.debug(this.context.buildLogPrefix("IconModule", `Icon theme changed to: ${themeName}`));
         }
     }
 
@@ -448,38 +431,6 @@ export class IconModule implements TreeViewModule {
      */
     private isValidThemeName(themeName: string): themeName is IconThemeName {
         return ["default", "minimal", "colorful", "custom"].includes(themeName);
-    }
-
-    /**
-     * Registers custom icon for context value
-     * @param contextValue The context value to map icon to
-     * @param icon The icon to register
-     */
-    public registerCustomIcon(contextValue: string, icon: vscode.ThemeIcon | string): void {
-        this.customMappings.set(contextValue, icon);
-    }
-
-    /**
-     * Clears all custom icon mappings
-     */
-    public clearCustomIcons(): void {
-        this.customMappings.clear();
-    }
-
-    /**
-     * Gets list of available theme names
-     * @return Array of available theme names
-     */
-    public getAvailableThemes(): IconThemeName[] {
-        return Array.from(this.themes.keys());
-    }
-
-    /**
-     * Gets the currently active theme
-     * @return The current icon theme
-     */
-    public getCurrentTheme(): IconTheme {
-        return this.currentTheme;
     }
 
     /**

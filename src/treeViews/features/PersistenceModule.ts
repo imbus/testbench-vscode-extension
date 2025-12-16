@@ -7,6 +7,7 @@ import { TreeViewModule } from "../core/TreeViewModule";
 import { TreeViewContext } from "../core/TreeViewContext";
 import { TreeViewState } from "../state/StateTypes";
 import * as vscode from "vscode";
+import { userSessionManager } from "../../extension";
 
 export class PersistenceModule implements TreeViewModule {
     readonly id = "persistence";
@@ -34,19 +35,25 @@ export class PersistenceModule implements TreeViewModule {
             this.debouncedSave();
         });
 
-        const loadedState = await this.load();
-        if (loadedState) {
-            context.logger.debug("Persistence module loaded state from storage");
-            context.stateManager.setState(loadedState);
-            context.logger.debug("Persistence module set state in state manager");
-
-            // Apply expansion state after a delay to ensure tree is ready
-            setTimeout(() => {
-                context.logger.debug("Triggering expansion state restoration");
-                this.restoreExpansionState();
-            }, 200);
+        // Skip state loading during initialization if user session is not available yet.
+        // State will be loaded later during session restoration.
+        if (userSessionManager.hasValidUserSession()) {
+            const loadedState = await this.loadState();
+            if (loadedState) {
+                context.stateManager.setState(loadedState);
+                context.logger.trace(
+                    context.buildLogPrefix("PersistenceModule", "State loaded and applied to state manager.")
+                );
+            } else {
+                context.logger.trace(context.buildLogPrefix("PersistenceModule", "No saved state found"));
+            }
         } else {
-            context.logger.debug("Persistence module: no saved state found");
+            context.logger.trace(
+                context.buildLogPrefix(
+                    "PersistenceModule",
+                    "Skipping state loading during initialization - user session not available yet"
+                )
+            );
         }
 
         // Listen for VS Code workspace events to save before shutdown
@@ -56,7 +63,7 @@ export class PersistenceModule implements TreeViewModule {
             })
         );
 
-        context.logger.debug("PersistenceModule initialized");
+        context.logger.trace(context.buildLogPrefix("PersistenceModule", "Persistence module initialized"));
     }
 
     /**
@@ -81,6 +88,13 @@ export class PersistenceModule implements TreeViewModule {
             return;
         }
 
+        if (!userSessionManager.hasValidUserSession()) {
+            this.context.logger.trace(
+                this.context.buildLogPrefix("PersistenceModule", "No valid user session for saving state, skipping")
+            );
+            return;
+        }
+
         this.isSaving = true;
 
         try {
@@ -93,11 +107,24 @@ export class PersistenceModule implements TreeViewModule {
                 await this.saveToGlobal(dataToSave);
             }
 
-            this.context.logger.debug("State saved successfully");
+            this.context.logger.debug(
+                this.context.buildLogPrefix("PersistenceModule", `Successfully saved tree view state.`)
+            );
+            if (dataToSave.expansion) {
+                this.context.logger.trace(
+                    this.context.buildLogPrefix(
+                        "PersistenceModule",
+                        `Saved tree view expansion state with ${dataToSave.expansion.expandedItems?.length || 0} expanded nodes.`
+                    )
+                );
+            }
         } catch (error) {
             // Only log error if it's not a cancellation
             if (error instanceof Error && !error.message.includes("Canceled")) {
-                this.context.errorHandler.handleVoid(error, "Failed to save state");
+                this.context.logger.error(
+                    this.context.buildLogPrefix("PersistenceModule", "Failed to save state:"),
+                    error
+                );
             }
         } finally {
             this.isSaving = false;
@@ -108,9 +135,16 @@ export class PersistenceModule implements TreeViewModule {
      * Loads state from storage
      * @returns The loaded state or null if not found
      */
-    public async load(): Promise<Partial<TreeViewState> | null> {
+    public async loadState(): Promise<Partial<TreeViewState> | null> {
         const persistenceConfig = this.context.config.modules.persistence;
         if (!persistenceConfig || persistenceConfig.strategy === "none") {
+            return null;
+        }
+
+        if (!userSessionManager.hasValidUserSession()) {
+            this.context.logger.warn(
+                this.context.buildLogPrefix("PersistenceModule", "No valid user session for loading state, skipping")
+            );
             return null;
         }
 
@@ -123,32 +157,33 @@ export class PersistenceModule implements TreeViewModule {
                 data = await this.loadFromGlobal();
             }
 
-            return this.parseLoadedData(data);
+            const parsedState = this.parseLoadedData(data);
+            if (parsedState) {
+                this.context.logger.debug(
+                    this.context.buildLogPrefix("PersistenceModule", `Successfully loaded tree view state.`)
+                );
+                if (parsedState.expansion) {
+                    this.context.logger.trace(
+                        this.context.buildLogPrefix(
+                            "PersistenceModule",
+                            `Loaded expansion state: ${parsedState.expansion.expandedItems?.size || 0} expanded items`
+                        )
+                    );
+                }
+            } else {
+                this.context.logger.debug(
+                    this.context.buildLogPrefix(
+                        "PersistenceModule",
+                        `No saved state found for user ${userSessionManager.getCurrentUserId()}`
+                    )
+                );
+            }
+
+            return parsedState;
         } catch (error) {
-            this.context.errorHandler.handleVoid(error as Error, "Failed to load state");
+            this.context.logger.error(this.context.buildLogPrefix("PersistenceModule", "Failed to load state:"), error);
             return null;
         }
-    }
-
-    /**
-     * Restores expansion state by triggering expansion of saved items
-     */
-    private async restoreExpansionState(): Promise<void> {
-        const state = this.context.stateManager.getState();
-        if (!state.expansion || state.expansion.expandedItems.size === 0) {
-            return;
-        }
-
-        this.context.logger.debug(`Restoring expansion for ${state.expansion.expandedItems.size} items`);
-
-        // Get the VS Code tree view if available
-        const treeView = (this.context as any).treeView?.vscTreeView;
-        if (!treeView) {
-            this.context.logger.debug("No VS Code tree view available for expansion restoration");
-            return;
-        }
-
-        this.context.refresh();
     }
 
     /**
@@ -174,8 +209,11 @@ export class PersistenceModule implements TreeViewModule {
                 collapsedItems: Array.from(state.expansion.collapsedItems),
                 defaultExpanded: state.expansion.defaultExpanded
             };
-            this.context.logger.debug(
-                `Saving expansion state: ${dataToSave.expansion.expandedItems.length} expanded, ${dataToSave.expansion.collapsedItems.length} collapsed`
+            this.context.logger.trace(
+                this.context.buildLogPrefix(
+                    "PersistenceModule",
+                    `Saving expansion state: ${dataToSave.expansion.expandedItems.length} expanded, ${dataToSave.expansion.collapsedItems.length} collapsed`
+                )
             );
         }
 
@@ -213,7 +251,12 @@ export class PersistenceModule implements TreeViewModule {
         }
 
         if (data.version && data.version !== this.STORAGE_VERSION) {
-            this.context.logger.warn(`Storage version mismatch: expected ${this.STORAGE_VERSION}, got ${data.version}`);
+            this.context.logger.warn(
+                this.context.buildLogPrefix(
+                    "PersistenceModule",
+                    `Storage version mismatch: expected ${this.STORAGE_VERSION}, got ${data.version}`
+                )
+            );
         }
 
         const state: Partial<TreeViewState> = {};
@@ -233,8 +276,11 @@ export class PersistenceModule implements TreeViewModule {
                 collapsedItems: new Set(data.expansion.collapsedItems || []),
                 defaultExpanded: data.expansion.defaultExpanded ?? expansionConfig?.defaultExpanded ?? false
             };
-            this.context.logger.debug(
-                `Loaded expansion state: ${state.expansion.expandedItems.size} expanded, ${state.expansion.collapsedItems.size} collapsed`
+            this.context.logger.trace(
+                this.context.buildLogPrefix(
+                    "PersistenceModule",
+                    `Loaded expansion state: ${state.expansion.expandedItems.size} expanded, ${state.expansion.collapsedItems.size} collapsed`
+                )
             );
         }
 
@@ -278,7 +324,8 @@ export class PersistenceModule implements TreeViewModule {
      * @param data The data to save
      */
     private async saveToWorkspace(data: any): Promise<void> {
-        const storageKey = `${this.STORAGE_KEY_PREFIX}${this.context.config.id}`;
+        const userId = userSessionManager.getCurrentUserId();
+        const storageKey = `${this.STORAGE_KEY_PREFIX}${userId}.${this.context.config.id}`;
         await this.context.extensionContext.workspaceState.update(storageKey, data);
     }
 
@@ -287,7 +334,8 @@ export class PersistenceModule implements TreeViewModule {
      * @returns The loaded data or undefined
      */
     private async loadFromWorkspace(): Promise<any> {
-        const storageKey = `${this.STORAGE_KEY_PREFIX}${this.context.config.id}`;
+        const userId = userSessionManager.getCurrentUserId();
+        const storageKey = `${this.STORAGE_KEY_PREFIX}${userId}.${this.context.config.id}`;
         return this.context.extensionContext.workspaceState.get(storageKey);
     }
 
@@ -296,7 +344,8 @@ export class PersistenceModule implements TreeViewModule {
      * @param data The data to save
      */
     private async saveToGlobal(data: any): Promise<void> {
-        const storageKey = `${this.STORAGE_KEY_PREFIX}${this.context.config.id}`;
+        const userId = userSessionManager.getCurrentUserId();
+        const storageKey = `${this.STORAGE_KEY_PREFIX}${userId}.${this.context.config.id}`;
         await this.context.extensionContext.globalState.update(storageKey, data);
     }
 
@@ -305,7 +354,8 @@ export class PersistenceModule implements TreeViewModule {
      * @returns The loaded data or undefined
      */
     private async loadFromGlobal(): Promise<any> {
-        const storageKey = `${this.STORAGE_KEY_PREFIX}${this.context.config.id}`;
+        const userId = userSessionManager.getCurrentUserId();
+        const storageKey = `${this.STORAGE_KEY_PREFIX}${userId}.${this.context.config.id}`;
         return this.context.extensionContext.globalState.get(storageKey);
     }
 
@@ -318,7 +368,8 @@ export class PersistenceModule implements TreeViewModule {
             return;
         }
 
-        const storageKey = `${this.STORAGE_KEY_PREFIX}${this.context.config.id}`;
+        const userId = userSessionManager.getCurrentUserId();
+        const storageKey = `${this.STORAGE_KEY_PREFIX}${userId}.${this.context.config.id}`;
 
         if (config.strategy === "workspace") {
             await this.context.extensionContext.workspaceState.update(storageKey, undefined);

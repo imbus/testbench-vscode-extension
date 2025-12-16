@@ -3,15 +3,14 @@
  * @description Utility functions for the TestBench VS Code extension.
  */
 
-import { logger, setLogger } from "./extension";
-import * as testBenchLogger from "./testBenchLogger";
+import { logger } from "./extension";
 import * as fsPromises from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as os from "os";
 import JSZip from "jszip";
-import { folderNameOfInternalTestbenchFolder } from "./constants";
+import { folderNameOfInternalTestbenchFolder, LS_CONFIG_FILE_NAME } from "./constants";
 
 // Module-level variable to cache the workspace location selection.
 let cachedWorkspaceLocation: string | undefined;
@@ -23,27 +22,7 @@ let cachedWorkspaceLocation: string | undefined;
  * @returns A promise that resolves after the delay.
  */
 export function delay(milliseconds: number): Promise<void> {
-    logger.trace(`Waiting for ${milliseconds} milliseconds for job completion.`);
     return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-/**
- * A simple debounce utility function to delay execution of a function.
- * @param func The function to debounce.
- * @param waitFor The time in milliseconds to wait before executing.
- * @returns A debounced version of the function.
- */
-export function debounce<F extends (...args: any[]) => any>(
-    func: F,
-    waitFor: number
-): (...args: Parameters<F>) => void {
-    let timeout: NodeJS.Timeout | null = null;
-    return (...args: Parameters<F>): void => {
-        if (timeout) {
-            clearTimeout(timeout);
-        }
-        timeout = setTimeout(() => func(...args), waitFor);
-    };
 }
 
 /**
@@ -55,31 +34,17 @@ export function debounce<F extends (...args: any[]) => any>(
  */
 export async function isAbsolutePath(filePath: string, verifyExistenceOfFile: boolean = false): Promise<boolean> {
     try {
-        if (verifyExistenceOfFile) {
-            logger.trace(`Checking if "${filePath}" is an absolute path and verifying it exists.`);
-        } else {
-            logger.trace(`Checking if "${filePath}" is an absolute path.`);
-        }
         if (!path.isAbsolute(filePath)) {
-            logger.trace(`"${filePath}" is not an absolute path.`);
+            logger.warn(`[utils] File path "${filePath}" is not absolute.`);
             return false;
         }
         if (verifyExistenceOfFile) {
             await fsPromises.access(filePath);
         }
-
-        if (verifyExistenceOfFile) {
-            logger.trace(`"${filePath}" is an absolute path and it exists.`);
-        } else {
-            logger.trace(`"${filePath}" is an absolute path.`);
-        }
+        logger.trace(`[utils] File path "${filePath}" is absolute.`);
         return true;
-    } catch {
-        if (!verifyExistenceOfFile) {
-            logger.trace(`"${filePath}" is not an absolute path.`);
-        } else {
-            logger.trace(`"${filePath}" is not an absolute path or the file does not exist.`);
-        }
+    } catch (error) {
+        logger.trace(`[utils] Error while checking if file path "${filePath}" is absolute:`, error);
         return false;
     }
 }
@@ -96,13 +61,12 @@ export async function constructAbsolutePathFromRelativePath(
     verifyExistenceOfFile: boolean = false
 ): Promise<string | null> {
     if (!relativePath) {
-        logger.error("Relative path is not set while constructing an absolute path.");
+        logger.error("[utils] Relative path is not set while constructing an absolute path.");
         return null;
     }
 
     const workspaceLocation: string | undefined = await validateAndReturnWorkspaceLocation();
     if (!workspaceLocation) {
-        logger.error("Workspace location was not set while constructing an absolute path.");
         return null;
     }
 
@@ -112,7 +76,7 @@ export async function constructAbsolutePathFromRelativePath(
         return null;
     }
 
-    logger.trace(`Constructed absolute path: "${absolutePath}"`);
+    logger.trace(`[utils] Constructed absolute path "${absolutePath}" from relative path "${relativePath}"`);
     return absolutePath;
 }
 
@@ -125,10 +89,12 @@ export async function constructAbsolutePathFromRelativePath(
  */
 export async function deleteDirectoryRecursively(
     directoryPathToDelete: string,
-    excludedFoldersFromDeletion: string[]
+    excludedFoldersFromDeletion: string[],
+    excludedFilesFromDeletion: string[] = [LS_CONFIG_FILE_NAME]
 ): Promise<void | null> {
-    logger.debug(`Deleting directory recursively: "${directoryPathToDelete}"`);
-    logger.debug("Excluded folders from recursive deletion:", excludedFoldersFromDeletion);
+    logger.debug(
+        `[utils] Deleting directory recursively: "${directoryPathToDelete}", excluded folders from recursive deletion: ${excludedFoldersFromDeletion}`
+    );
 
     try {
         const files: string[] = await fsPromises.readdir(directoryPathToDelete);
@@ -137,15 +103,18 @@ export async function deleteDirectoryRecursively(
             const currentPath: string = path.join(directoryPathToDelete, file);
 
             if (excludedFoldersFromDeletion.includes(file)) {
-                logger.trace(`Skipped deleting excluded item: "${file}"`);
                 continue;
             }
 
             const fileStats: fs.Stats = await fsPromises.stat(currentPath);
             if (fileStats.isDirectory()) {
-                await deleteDirectoryRecursively(currentPath, excludedFoldersFromDeletion);
+                await deleteDirectoryRecursively(currentPath, excludedFoldersFromDeletion, excludedFilesFromDeletion);
             } else {
-                logger.debug(`Deleting file: "${currentPath}"`);
+                if (excludedFilesFromDeletion.includes(file)) {
+                    logger.trace(`[utils] Skipping excluded file: "${currentPath}"`);
+                    continue;
+                }
+                logger.debug(`[utils] Deleting file: "${currentPath}"`);
                 await fsPromises.unlink(currentPath);
             }
         }
@@ -153,13 +122,11 @@ export async function deleteDirectoryRecursively(
         // Remove the directory itself
         const folderName: string = path.basename(directoryPathToDelete);
         if (!excludedFoldersFromDeletion.includes(folderName)) {
-            logger.debug(`Deleting directory: "${directoryPathToDelete}"`);
+            logger.debug(`[utils] Deleting directory: "${directoryPathToDelete}"`);
             await fsPromises.rmdir(directoryPathToDelete);
         }
     } catch (error: any) {
-        logger.error(
-            `Failed to delete directory "${directoryPathToDelete}": ${error.message} (deleteDirectoryRecursively)`
-        );
+        logger.error(`[utils] Failed to delete directory "${directoryPathToDelete}": ${error.message}`);
         return null;
     }
 }
@@ -175,23 +142,22 @@ export async function deleteDirectoryRecursively(
 export async function clearInternalTestbenchFolder(
     workspaceLocationToClear: string,
     excludedFoldersFromDeletion: string[] = [],
-    promptForConfirmation: boolean = true
+    promptForConfirmation: boolean = true,
+    excludedFilesFromDeletion: string[] = [LS_CONFIG_FILE_NAME]
 ): Promise<void | null> {
-    logger.debug(`Clearing workspace folder: "${workspaceLocationToClear}"`);
-
     try {
         try {
             const stats: fs.Stats = await fsPromises.stat(workspaceLocationToClear);
             if (!stats.isDirectory()) {
                 const notADirectoryMsg: string = `The path "${workspaceLocationToClear}" is not a directory. Cannot clear workspace folder.`;
                 vscode.window.showErrorMessage(notADirectoryMsg);
-                logger.error(notADirectoryMsg);
+                logger.error(`[utils] ${notADirectoryMsg}`);
                 return null;
             }
         } catch {
             const folderNotExistMsg: string = `The folder at path "${workspaceLocationToClear}" does not exist. Cannot clear workspace folder.`;
-            vscode.window.showErrorMessage(folderNotExistMsg);
-            logger.error(folderNotExistMsg);
+            vscode.window.showWarningMessage(folderNotExistMsg);
+            logger.warn(`[utils] ${folderNotExistMsg}`);
             return null;
         }
 
@@ -203,7 +169,6 @@ export async function clearInternalTestbenchFolder(
                 "No"
             );
             if (userResponse !== "Yes") {
-                logger.debug("User cancelled the clear workspace folder operation.");
                 return null;
             }
         }
@@ -224,14 +189,17 @@ export async function clearInternalTestbenchFolder(
                 const filePath: string = path.join(workspaceLocationToClear, file);
 
                 if (excludedFoldersFromDeletion.includes(file)) {
-                    logger.trace(`Skipped deleting excluded item: "${file}"`);
                     continue;
                 }
 
                 const fileStats: fs.Stats = await fsPromises.stat(filePath);
                 if (fileStats.isDirectory()) {
-                    await deleteDirectoryRecursively(filePath, excludedFoldersFromDeletion);
+                    await deleteDirectoryRecursively(filePath, excludedFoldersFromDeletion, excludedFilesFromDeletion);
                 } else {
+                    if (excludedFilesFromDeletion.includes(file)) {
+                        logger.trace(`[utils] Skipping excluded file: "${filePath}"`);
+                        continue;
+                    }
                     await fsPromises.unlink(filePath);
                 }
             }
@@ -251,12 +219,12 @@ export async function clearInternalTestbenchFolder(
             await clearFolderOperation();
         }
 
-        logger.debug(`Internal testbench folder cleared successfully: "${workspaceLocationToClear}"`);
+        logger.debug(`[utils] Internal testbench folder "${workspaceLocationToClear}" cleared successfully`);
         // vscode.window.showInformationMessage(`${folderNameOfInternalTestbenchFolder} folder cleared successfully.`);
     } catch (error: any) {
         const errorMsg: string = `An error occurred while clearing the workspace folder: ${error.message}`;
         vscode.window.showErrorMessage(errorMsg);
-        logger.error(errorMsg);
+        logger.error(`[utils] ${errorMsg}`);
         return null;
     }
 }
@@ -268,23 +236,17 @@ export async function clearInternalTestbenchFolder(
  * 1. The workspace folder containing the currently active text editor.
  * 2. A previously cached workspace location, if it still exists.
  * 3. The first workspace folder if multiple are open and no active editor or cache is available.
- * 4. The user's home directory as a last resort.
  *
  * If a workspace location is found, it is cached for subsequent calls.
- * If no workspace or home directory can be determined, an error is logged and displayed,
- * and the function returns `undefined`.
+ * If no workspace can be determined, the function returns `undefined` (no fallback to user's home directory).
  *
- * The user can set workspace manually using the 'Set Workspace' command.
+ * The user can set or open a workspace via VS Code (e.g., "Open Folder" or a dedicated command in the extension).
  *
- * @param enableLogging - Optional. If `true` (default), logs trace, warning, and error messages during execution.
+ * @param enableLogging - Optional. If `true`, logs trace/warn/error messages and shows a user-facing error on failure.
  * @returns A promise that resolves to the file system path of the determined workspace location,
  * or `undefined` if no suitable location can be found.
  */
 export async function validateAndReturnWorkspaceLocation(enableLogging: boolean = false): Promise<string | undefined> {
-    if (logger && enableLogging) {
-        logger.trace("Validating and returning active workspace location.");
-    }
-
     const activeEditor: vscode.TextEditor | undefined = vscode.window.activeTextEditor;
     if (activeEditor) {
         const workspaceFolder: vscode.WorkspaceFolder | undefined = vscode.workspace.getWorkspaceFolder(
@@ -292,7 +254,7 @@ export async function validateAndReturnWorkspaceLocation(enableLogging: boolean 
         );
         if (workspaceFolder) {
             if (logger && enableLogging) {
-                logger.trace(`Active workspace found: "${workspaceFolder.uri.fsPath}"`);
+                logger.trace(`[utils] Active workspace found: "${workspaceFolder.uri.fsPath}"`);
             }
             cachedWorkspaceLocation = workspaceFolder.uri.fsPath;
             return workspaceFolder.uri.fsPath;
@@ -305,12 +267,14 @@ export async function validateAndReturnWorkspaceLocation(enableLogging: boolean 
         );
         if (isWorkspaceFolderPresent) {
             if (logger && enableLogging) {
-                logger.trace(`Returning cached workspace location: "${cachedWorkspaceLocation}"`);
+                logger.trace(`[utils] Returning cached workspace location: "${cachedWorkspaceLocation}"`);
             }
             return cachedWorkspaceLocation;
         } else {
             if (logger && enableLogging) {
-                logger.warn(`Cached workspace location "${cachedWorkspaceLocation}" no longer exists. Clearing cache.`);
+                logger.warn(
+                    `[utils] Cached workspace location "${cachedWorkspaceLocation}" no longer exists. Clearing cache.`
+                );
             }
             cachedWorkspaceLocation = undefined;
         }
@@ -323,75 +287,42 @@ export async function validateAndReturnWorkspaceLocation(enableLogging: boolean 
             if (logger && enableLogging) {
                 if (workspaceFolders.length > 1) {
                     logger.trace(
-                        `Multiple workspaces found and no active/cached preference; defaulting to first workspace: "${cachedWorkspaceLocation}"`
+                        `[utils] Multiple workspaces found and no active/cached preference; defaulting to first workspace: "${cachedWorkspaceLocation}"`
                     );
                 } else {
-                    logger.trace(`Using single available workspace folder: "${cachedWorkspaceLocation}"`);
+                    logger.trace(`[utils] Using single available workspace folder: "${cachedWorkspaceLocation}"`);
                 }
             }
             return cachedWorkspaceLocation;
         }
     }
 
-    const homeDirectory: string = os.homedir();
     if (logger && enableLogging) {
-        logger.trace(`No workspace available; falling back to user's home directory: "${homeDirectory}"`);
+        logger.error("[utils] No workspace is open. Please open a folder or workspace in VS Code.");
+        vscode.window.showErrorMessage(
+            "No workspace folder is open. Please open a folder or workspace in VS Code to continue."
+        );
     }
-
-    if (!homeDirectory) {
-        const workspaceLocationMissingError: string = "Unable to determine workspace location or home directory.";
-        logger.error(workspaceLocationMissingError);
-        vscode.window.showErrorMessage(workspaceLocationMissingError);
-        return undefined;
-    }
-
-    return homeDirectory;
+    return undefined;
 }
 
 /**
- * Clears the cached workspace location and prompts the user to select a new workspace.
- * Adjusts the logger to use the new workspace location.
- *
- * @param {boolean} enableLogging - Whether to output trace logging (defaults to true).
+ * Checks if workspace is available and shows info message if not.
+ * Called after successful login to inform users about read-only mode.
  */
-export async function setWorkspaceLocation(enableLogging: boolean = true): Promise<void> {
-    cachedWorkspaceLocation = undefined;
-    if (logger && enableLogging) {
-        const logger: testBenchLogger.TestBenchLogger = new testBenchLogger.TestBenchLogger();
-        setLogger(logger);
-        logger.trace("Cleared cached workspace location.");
-    }
-
-    const availableWorkspaceFolders: readonly vscode.WorkspaceFolder[] | undefined = vscode.workspace.workspaceFolders;
-    if (availableWorkspaceFolders && availableWorkspaceFolders.length > 0) {
-        const selectedWorkspaceFolder: vscode.WorkspaceFolder | undefined = await vscode.window.showWorkspaceFolderPick(
-            {
-                placeHolder: "Select a workspace folder"
-            }
+export async function checkWorkspaceAndNotifyUser(): Promise<void> {
+    const hasWorkspace = (vscode.workspace.workspaceFolders?.length || 0) > 0;
+    if (!hasWorkspace) {
+        vscode.window.showInformationMessage(
+            "You don't have an active workspace. Read-only mode is active. Some features requiring a workspace are disabled."
         );
-        if (selectedWorkspaceFolder) {
-            cachedWorkspaceLocation = selectedWorkspaceFolder.uri.fsPath;
-            vscode.window.showInformationMessage(`Workspace changed to: "${cachedWorkspaceLocation}"`);
-            if (logger && enableLogging) {
-                logger.trace(`New workspace selected: "${cachedWorkspaceLocation}"`);
-            }
-        } else {
-            vscode.window.showWarningMessage("No workspace selected; workspace cache remains cleared.");
-            if (logger && enableLogging) {
-                logger.trace("User canceled new workspace selection.");
-            }
-        }
-    } else {
-        vscode.window.showErrorMessage("No workspace folders are available to select from.");
-        if (logger && enableLogging) {
-            logger.trace("No workspace folders available to choose.");
-        }
+        logger.info("[extension] User logged in without an active workspace. Read-only mode active.");
     }
 }
 
 /**
  * Saves JSON data to a file.
- * Useful for analyzing server responses.
+ * Used for analyzing server responses.
  *
  * @param {string} filePath - The file path to save the JSON data.
  * @param {any} data - The JSON data to save.
@@ -399,9 +330,9 @@ export async function setWorkspaceLocation(enableLogging: boolean = true): Promi
 export function saveJsonDataToFile(filePath: string, data: any): void {
     try {
         fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
-        logger.trace(`JSON data saved to file: ${filePath}`);
+        logger.trace(`[utils] JSON data saved to file: ${filePath}`);
     } catch (error: any) {
-        logger.error(`Error saving JSON data to ${filePath}: ${error.message}`);
+        logger.error(`[utils] Error saving JSON data to ${filePath}: ${error.message}`);
     }
 }
 
@@ -417,7 +348,25 @@ export async function extractAndParseJsonContent(zipContents: JSZip, fileName: s
         const fileData: string | undefined = await zipContents.file(fileName)?.async("string");
         return fileData ? JSON.parse(fileData) : null;
     } catch (error) {
-        logger.error(`Error reading or parsing ${fileName}:`, error);
+        logger.error(`[utils] Error reading or parsing file "${fileName}":`, error);
         return null;
     }
+}
+
+/**
+ * For windows systems, sanitizes a file path string by replacing invalid characters with underscores.
+ * Special characters are technically allowed in file names on Unix-based systems.
+ *
+ * @param {string} filePath - The file path to sanitize.
+ * @returns {string} The sanitized file path.
+ */
+export function sanitizeFilePath(filePath: string): string {
+    if (!filePath) {
+        return "";
+    }
+    if (os.platform() === "win32") {
+        const sanitizedPath = filePath.replace(/[<>:"/\\|?*]/g, "_");
+        return sanitizedPath;
+    }
+    return filePath;
 }

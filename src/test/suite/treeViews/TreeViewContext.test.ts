@@ -9,11 +9,11 @@ import { TreeViewContext, TreeViewContextImpl } from "../../../treeViews/core/Tr
 import { TreeViewConfig } from "../../../treeViews/core/TreeViewConfig";
 import { StateManager } from "../../../treeViews/state/StateManager";
 import { EventBus } from "../../../treeViews/utils/EventBus";
-import { ErrorHandler } from "../../../treeViews/utils/ErrorHandler";
 import { TestBenchLogger } from "../../../testBenchLogger";
 import { TreeViewBase } from "../../../treeViews/core/TreeViewBase";
 import { TreeItemBase } from "../../../treeViews/core/TreeItemBase";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
+import { UserSessionManager } from "../../../userSessionManager";
 
 // Mock TreeViewBase for testing
 class MockTreeView extends TreeViewBase<TreeItemBase> {
@@ -21,7 +21,7 @@ class MockTreeView extends TreeViewBase<TreeItemBase> {
         return [];
     }
 
-    protected async getChildrenForItem(item: TreeItemBase): Promise<TreeItemBase[]> {
+    protected async getChildrenForItem(_item: TreeItemBase): Promise<TreeItemBase[]> {
         return [];
     }
 
@@ -54,13 +54,15 @@ suite("TreeViewContext", function () {
     let stateManager: StateManager;
     let eventBus: EventBus;
     let logger: TestBenchLogger;
-    let errorHandler: ErrorHandler;
     let mockTreeView: MockTreeView;
     let treeViewContext: TreeViewContextImpl;
+    let userSessionManager: UserSessionManager;
 
     this.beforeEach(function () {
         testEnv = setupTestEnvironment();
         mockContext = testEnv.mockContext;
+        userSessionManager = new UserSessionManager(mockContext);
+        testEnv.sandbox.stub(userSessionManager, "getCurrentUserId").returns("test-user-id");
 
         // Create test configuration
         config = {
@@ -94,20 +96,12 @@ suite("TreeViewContext", function () {
         // Create dependencies
         eventBus = new EventBus();
         logger = new TestBenchLogger();
-        errorHandler = new ErrorHandler(logger);
-        stateManager = new StateManager(mockContext, config.id, eventBus);
+        userSessionManager = new UserSessionManager(mockContext);
+        stateManager = new StateManager(mockContext, config.id, eventBus, userSessionManager);
         mockTreeView = new MockTreeView(mockContext, config);
 
         // Create the context
-        treeViewContext = new TreeViewContextImpl(
-            mockContext,
-            config,
-            stateManager,
-            eventBus,
-            logger,
-            errorHandler,
-            mockTreeView
-        );
+        treeViewContext = new TreeViewContextImpl(mockContext, config, stateManager, eventBus, logger, mockTreeView);
     });
 
     this.afterEach(function () {
@@ -124,7 +118,6 @@ suite("TreeViewContext", function () {
             assert.strictEqual(treeViewContext.stateManager, stateManager);
             assert.strictEqual(treeViewContext.eventBus, eventBus);
             assert.strictEqual(treeViewContext.logger, logger);
-            assert.strictEqual(treeViewContext.errorHandler, errorHandler);
             assert.strictEqual(treeViewContext.treeView, mockTreeView);
         });
 
@@ -157,7 +150,6 @@ suite("TreeViewContext", function () {
             assert.ok(context.stateManager);
             assert.ok(context.eventBus);
             assert.ok(context.logger);
-            assert.ok(context.errorHandler);
             assert.ok(typeof context.refresh === "function");
             assert.ok(typeof context.getTreeView === "function");
             assert.ok(typeof context.getCurrentRootItems === "function");
@@ -194,14 +186,6 @@ suite("TreeViewContext", function () {
         test("should provide access to logger", () => {
             const contextLogger = treeViewContext.logger;
             assert.ok(contextLogger instanceof TestBenchLogger);
-            assert.strictEqual(typeof contextLogger.info, "function");
-            assert.strictEqual(typeof contextLogger.error, "function");
-        });
-
-        test("should provide access to error handler", () => {
-            const contextErrorHandler = treeViewContext.errorHandler;
-            assert.ok(contextErrorHandler instanceof ErrorHandler);
-            assert.strictEqual(typeof contextErrorHandler.handle, "function");
         });
     });
 
@@ -338,53 +322,6 @@ suite("TreeViewContext", function () {
             subscription.unsubscribe();
             // Event bus should no longer have handlers for this event
             assert.strictEqual(treeViewContext.eventBus.getHandlerCount("test:event"), 0);
-        });
-    });
-
-    suite("Context Error Handling", () => {
-        test("should provide error handler access", () => {
-            const errorHandler = treeViewContext.errorHandler;
-
-            // Test error handling with a simple error
-            const testError = new Error("Test error");
-            const result = errorHandler.handle(testError, "Test operation", "default value");
-
-            assert.strictEqual(result, "default value");
-        });
-
-        test("should handle void operations", () => {
-            const errorHandler = treeViewContext.errorHandler;
-
-            // Test void error handling
-            const testError = new Error("Test error");
-            errorHandler.handleVoid(testError, "Test operation");
-
-            // Should not throw, just log the error
-            assert.ok(true);
-        });
-    });
-
-    suite("Context Logging", () => {
-        test("should provide logger access", () => {
-            const logger = treeViewContext.logger;
-
-            // Test logging methods
-            logger.info("Test info message");
-            logger.debug("Test debug message");
-            logger.warn("Test warning message");
-            logger.error("Test error message");
-
-            // Should not throw
-            assert.ok(true);
-        });
-
-        test("should log through context logger", () => {
-            const loggerSpy = testEnv.sandbox.spy(treeViewContext.logger, "info");
-
-            treeViewContext.logger.info("Test message");
-
-            assert.ok(loggerSpy.calledOnce);
-            assert.ok(loggerSpy.calledWith("Test message"));
         });
     });
 

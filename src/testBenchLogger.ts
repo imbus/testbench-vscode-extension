@@ -5,9 +5,10 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import * as vscode from "vscode";
 import * as utils from "./utils";
 import { getExtensionConfiguration } from "./configuration";
-import { ConfigKeys, folderNameOfInternalTestbenchFolder } from "./constants";
+import { ConfigKeys, folderNameOfInternalTestbenchFolder, baseKeyOfExtension } from "./constants";
 
 // Use the native promises API for filesystem operations.
 const fsp = fs.promises;
@@ -30,9 +31,14 @@ export class TestBenchLogger {
     private logFilePath: string;
     private outputLogToTerminal: boolean;
     private initPromise: Promise<void>;
-    private isRotating: boolean = false;
+    private rotationPromise: Promise<void> | null = null;
     private flattedPromise: Promise<{ stringify: (obj: any) => string }> | null = null;
     private cachedLogLevel: string;
+    private configChangeListener: vscode.Disposable | null = null;
+    private currentLogSize: number = 0;
+    private fileLoggingAvailable: boolean = false;
+    private activeEditorChangeListener: vscode.Disposable | null = null;
+    private workspaceFoldersChangeListener: vscode.Disposable | null = null;
 
     /**
      * Log levels are 0 to 5, with 1 being the most verbose (trace) and 5 being the least verbose (error).
@@ -99,8 +105,27 @@ export class TestBenchLogger {
         this.logFilePath = path.join(this.logFolderPath, fileNameOfActiveLogFile);
         this.outputLogToTerminal = outputToTerminal === true;
         this.cachedLogLevel = getExtensionConfiguration().get(ConfigKeys.LOGGER_LEVEL, "No logging");
+        this.setupConfigurationListener();
+
         // Begin asynchronous initialization
         this.initPromise = this.initialize();
+    }
+
+    /**
+     * Sets up a listener for configuration changes that affect the logger level.
+     */
+    private setupConfigurationListener(): void {
+        this.configChangeListener = vscode.workspace.onDidChangeConfiguration((event) => {
+            if (event.affectsConfiguration(`${baseKeyOfExtension}.${ConfigKeys.LOGGER_LEVEL}`)) {
+                console.log(`[testBenchLogger] Configuration change detected for logger level`);
+                const wasUpdated = this.updateCachedLogLevel();
+                if (wasUpdated) {
+                    console.log(`[testBenchLogger] Successfully updated logger level to: ${this.cachedLogLevel}`);
+                } else {
+                    console.log(`[testBenchLogger] Logger level unchanged: ${this.cachedLogLevel}`);
+                }
+            }
+        });
     }
 
     /**
@@ -111,21 +136,96 @@ export class TestBenchLogger {
      */
     private async initialize(): Promise<void> {
         try {
-            const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation(false);
-            if (workspaceLocation) {
-                // Example logFolderPath: workspaceFolder/.testbench/logs/testBenchExtension.log
-                this.logFolderPath = path.join(
-                    workspaceLocation,
-                    folderNameOfInternalTestbenchFolder,
-                    folderNameOfLogs
+            await this.updateLogTargetForCurrentWorkspace(true);
+            this.setupWorkspaceListeners();
+        } catch (error: any) {
+            if (error.code === "EPERM" || error.code === "EACCES") {
+                console.error(
+                    `[testBenchLogger] Logger Fatal Error: Permission denied to create log directory at '${this.logFolderPath}'. Please check folder permissions. Logging to file will be disabled.`
                 );
-                this.logFilePath = path.join(this.logFolderPath, fileNameOfActiveLogFile);
+                this.cachedLogLevel = "No logging";
             } else {
-                console.log("Workspace location is not set in the extension settings. Using default log folder.");
+                console.error(`[testBenchLogger] Error during logger initialization:`, error);
             }
-            await fsp.mkdir(this.logFolderPath, { recursive: true });
+        }
+    }
+
+    /**
+     * Watches for workspace changes and updates the logger's target folder accordingly.
+     */
+    private setupWorkspaceListeners(): void {
+        try {
+            this.activeEditorChangeListener = vscode.window.onDidChangeActiveTextEditor(() => {
+                this.updateLogTargetForCurrentWorkspace().catch((err) =>
+                    console.error("[testBenchLogger] Error updating log target on editor change:", err)
+                );
+            });
+            this.workspaceFoldersChangeListener = vscode.workspace.onDidChangeWorkspaceFolders(() => {
+                this.updateLogTargetForCurrentWorkspace().catch((err) =>
+                    console.error("[testBenchLogger] Error updating log target on workspace change:", err)
+                );
+            });
         } catch (error) {
-            console.error("Error during logger initialization:", error);
+            console.error("[testBenchLogger] Failed to set up workspace listeners:", error);
+        }
+    }
+
+    /**
+     * Updates internal log paths based on the current VS Code workspace.
+     * When a workspace is available, enables file logging under `.testbench/logs` in that workspace.
+     * When no workspace is available, disables file logging (console-only remains available).
+     */
+    private async updateLogTargetForCurrentWorkspace(initializing: boolean = false): Promise<void> {
+        const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation(false);
+        if (workspaceLocation) {
+            const desiredLogFolder = path.join(
+                workspaceLocation,
+                folderNameOfInternalTestbenchFolder,
+                folderNameOfLogs
+            );
+            const desiredLogFile = path.join(desiredLogFolder, fileNameOfActiveLogFile);
+
+            const logFolderChanged = desiredLogFolder !== this.logFolderPath || desiredLogFile !== this.logFilePath;
+            if (logFolderChanged || !this.fileLoggingAvailable) {
+                this.logFolderPath = desiredLogFolder;
+                this.logFilePath = desiredLogFile;
+                try {
+                    await fsp.mkdir(this.logFolderPath, { recursive: true });
+                    try {
+                        const stats = await fsp.stat(this.logFilePath);
+                        this.currentLogSize = stats.size;
+                    } catch (statError: any) {
+                        if (statError.code === "ENOENT") {
+                            this.currentLogSize = 0;
+                        } else {
+                            throw statError;
+                        }
+                    }
+                    this.fileLoggingAvailable = true;
+                    if (!initializing) {
+                        console.log(`[testBenchLogger] File logging is now enabled at: ${this.logFilePath}`);
+                    }
+                } catch (mkdirError: any) {
+                    this.fileLoggingAvailable = false;
+                    if (mkdirError.code === "EPERM" || mkdirError.code === "EACCES") {
+                        console.error(
+                            `[testBenchLogger] Permission denied creating log directory at '${this.logFolderPath}'. File logging disabled.`
+                        );
+                    } else {
+                        console.error(
+                            `[testBenchLogger] Error preparing log directory '${this.logFolderPath}'. File logging disabled:`,
+                            mkdirError
+                        );
+                    }
+                }
+            }
+        } else {
+            if (this.fileLoggingAvailable) {
+                console.log(
+                    "[testBenchLogger] No workspace is open. Disabling file logging until a workspace is available."
+                );
+            }
+            this.fileLoggingAvailable = false;
         }
     }
 
@@ -135,71 +235,82 @@ export class TestBenchLogger {
      * @returns {boolean} True if the log level was updated, false otherwise.
      */
     public updateCachedLogLevel(): boolean {
-        const newLogLevel: string = getExtensionConfiguration().get("testBenchLogger", "No logging");
+        // Read configuration directly from VS Code instead of using cached version
+        // to avoid race conditions with the configuration watcher
+        const freshConfiguration = vscode.workspace.getConfiguration(baseKeyOfExtension);
+        const newLogLevel: string = freshConfiguration.get(ConfigKeys.LOGGER_LEVEL, "No logging");
         if (this.cachedLogLevel !== newLogLevel) {
             const oldLogLevel: string = this.cachedLogLevel;
             this.cachedLogLevel = newLogLevel;
-            console.log(`Logger level changed from "${oldLogLevel}" to "${this.cachedLogLevel}"`);
+            console.log(`[testBenchLogger] Logger level changed from "${oldLogLevel}" to "${this.cachedLogLevel}"`);
             return true;
         }
         return false;
     }
 
     /**
-     * Retrieves the "flatted" module, caching it after the first dynamic import.
+     * Disposes of the logger and cleans up resources.
      */
-    private async getFlatted() {
-        if (!this.flattedPromise) {
-            this.flattedPromise = import("flatted");
+    public dispose(): void {
+        if (this.configChangeListener) {
+            this.configChangeListener.dispose();
+            this.configChangeListener = null;
         }
-        return this.flattedPromise;
+        if (this.activeEditorChangeListener) {
+            this.activeEditorChangeListener.dispose();
+            this.activeEditorChangeListener = null;
+        }
+        if (this.workspaceFoldersChangeListener) {
+            this.workspaceFoldersChangeListener.dispose();
+            this.workspaceFoldersChangeListener = null;
+        }
     }
 
     /**
      * Rotates log files if the current log file exceeds MAX_LOG_FILE_SIZE.
-     *
-     * The current log file is renamed (with a _0 suffix such as testBenchExtension.log_0) and older backups are shifted.
-     * A simple mutex ensures only one rotation occurs at a time.
+     * Reads all existing log files, sorts them, and renames them,
+     * removes the oldest log file and shifts the index of the rest.
      */
     private async rotateLogs(): Promise<void> {
-        if (this.isRotating) {
+        if (this.currentLogSize < MAX_LOG_FILE_SIZE_IN_BYTES) {
             return;
         }
-        this.isRotating = true;
+
+        this.currentLogSize = 0;
+
         try {
-            let currentLogFileStats;
-            try {
-                // Check if the current log file exists and obtain its size.
-                currentLogFileStats = await fsp.stat(this.logFilePath);
-            } catch (error) {
-                console.error(`Log file ${this.logFilePath} does not exist.`, error);
-                return;
-            }
+            const filesInLogFolderPath: string[] = await fsp.readdir(this.logFolderPath);
+            const logFiles: string[] = filesInLogFolderPath
+                .filter((f) => f.startsWith(fileNameOfActiveLogFile))
+                .sort()
+                .reverse();
 
-            if (currentLogFileStats.size < MAX_LOG_FILE_SIZE_IN_BYTES) {
-                return;
-            }
+            for (const logFile of logFiles) {
+                const filePath: string = path.join(this.logFolderPath, logFile);
+                const logFileNameParts: string[] = logFile.split(".");
+                // Example rotation: testBenchExtension.log.1 -> .2, testBenchExtension.log -> .1
+                const index: number =
+                    logFileNameParts.length > 2 ? parseInt(logFileNameParts[logFileNameParts.length - 1], 10) : 0;
 
-            // Shift existing backup files using a naming scheme of testBenchExtension.log.1, testBenchExtension.log.2, etc.
-            for (let i = MAX_LOG_FILES; i >= 2; i--) {
-                const olderFileName: string = `${this.logFilePath}.${i - 1}`;
-                const newFileName: string = `${this.logFilePath}.${i}`;
-                try {
-                    await fsp.access(olderFileName);
-                    await fsp.rename(olderFileName, newFileName);
-                } catch (error) {
-                    console.error(`Failed to rotate log file ${olderFileName} to ${newFileName}:`, error);
+                if (index >= MAX_LOG_FILES) {
+                    // Delete oldest log file
+                    await fsp.unlink(filePath);
+                } else {
+                    // Rename to the next index
+                    const newFilePath = `${this.logFilePath}.${index + 1}`;
+                    await fsp.rename(filePath, newFilePath);
                 }
             }
-            try {
-                await fsp.rename(this.logFilePath, `${this.logFilePath}.1`);
-            } catch (error) {
-                console.error(`Failed to rename current log file ${this.logFilePath} after rotation:`, error);
+        } catch (error: any) {
+            if (error.code === "EPERM" || error.code === "EACCES") {
+                console.error(
+                    `[testBenchLogger] Logger Error: Permission denied during log rotation in '${this.logFolderPath}'. Please check file and folder permissions.`
+                );
+            } else {
+                console.error(
+                    `[testBenchLogger] Logger Error: An unexpected error occurred during log rotation: ${error.message}`
+                );
             }
-        } catch (error) {
-            console.error(`Log rotation error: ${error}`);
-        } finally {
-            this.isRotating = false;
         }
     }
 
@@ -216,7 +327,6 @@ export class TestBenchLogger {
         }
 
         // Dynamically import the "flatted" library to handle circular references.
-        // This library is only imported if needed, reducing the initial load time.
         const { stringify } = await this.getFlatted();
 
         /**
@@ -230,11 +340,10 @@ export class TestBenchLogger {
             try {
                 // Attempt to stringify the detail using JSON.stringify.
                 // Will fail for circular references.
-                return typeof detail === "object" ? JSON.stringify(detail, null, 2) : detail;
-            } catch (error) {
-                // If JSON.stringify fails due to a circular reference, safely stringify the object.
+                return typeof detail === "object" ? JSON.stringify(detail, null, 2) : String(detail);
+            } catch (error: any) {
                 if (error instanceof TypeError && error.message.includes("Converting circular structure to JSON")) {
-                    return typeof detail === "object" ? stringify(detail) : detail;
+                    return typeof detail === "object" ? stringify(detail) : String(detail);
                 }
                 return "[Error formatting details]";
             }
@@ -246,6 +355,65 @@ export class TestBenchLogger {
         } else {
             return `\n${formatSingleDetail(details)}`;
         }
+    }
+
+    /**
+     * Retrieves the "flatted" module, caching it after the first dynamic import.
+     */
+    private getFlatted() {
+        if (!this.flattedPromise) {
+            this.flattedPromise = import("flatted");
+        }
+        return this.flattedPromise;
+    }
+
+    /**
+     * Ensures the log file exists, creating it if missing.
+     */
+    private async ensureLogFileExists(): Promise<void> {
+        try {
+            await fsp.access(this.logFilePath);
+        } catch (error: any) {
+            if (error.code === "ENOENT") {
+                console.log(`[testBenchLogger] Log file missing, recreating: ${this.logFilePath}`);
+                try {
+                    await fsp.mkdir(this.logFolderPath, { recursive: true });
+                    await fsp.writeFile(this.logFilePath, "", { encoding: "utf8" });
+                    console.log(`[testBenchLogger] Log file recreated successfully: ${this.logFilePath}`);
+                } catch (createError: any) {
+                    console.error(`[testBenchLogger] Failed to recreate log file '${this.logFilePath}':`, createError);
+                    throw createError;
+                }
+            } else {
+                throw error;
+            }
+        }
+    }
+
+    /**
+     * Ensures exclusive access to log file operations like rotation to prevent race conditions.
+     * @param op The async operation (e.g., writing a log) to execute exclusively.
+     */
+    private async performExclusive<T>(op: () => Promise<T>): Promise<T> {
+        // Wait for any ongoing rotation to complete.
+        while (this.rotationPromise) {
+            await this.rotationPromise.catch((err) => {
+                console.error(
+                    "[testBenchLogger] Logger Warning: Waited for a rotation that resulted in an error.",
+                    err
+                );
+            });
+        }
+
+        try {
+            // Set the promise to indicate that a rotation is in progress.
+            this.rotationPromise = this.rotateLogs();
+            await this.rotationPromise;
+        } finally {
+            this.rotationPromise = null;
+        }
+
+        return op();
     }
 
     /**
@@ -268,36 +436,45 @@ export class TestBenchLogger {
         if (this.cachedLogLevel === "No logging" || this.levels[logLevel] < this.levels[this.cachedLogLevel]) {
             return;
         }
+        await this.initPromise;
 
         const timestamp: string = new Date().toISOString();
         const baseLogMessage: string = `${timestamp} [${logLevel.toUpperCase()}]: ${logMessage}`;
         const detailsMessage: string = await this.formatDetails(details);
-        const completeLogMessage: string = `${baseLogMessage}${detailsMessage}`;
-
-        try {
-            await this.rotateLogs();
-
-            // Check if log file exists, if not, create an empty file
-            try {
-                await fsp.access(this.logFilePath, fs.constants.F_OK);
-            } catch (error) {
-                console.error("Log file access failed, creating new file:", error);
-                await fsp.writeFile(this.logFilePath, "");
-            }
-
-            await fsp.appendFile(this.logFilePath, `${completeLogMessage}\n`);
-        } catch (error) {
-            console.error(`Logging error: ${error}`);
-        }
+        const completeLogMessage: string = `${baseLogMessage}${detailsMessage}\n`;
 
         if (shouldOutputToTerminal || this.outputLogToTerminal) {
-            if (Array.isArray(details)) {
-                console.log(baseLogMessage);
-                details.forEach((detail) => console.log(detail));
+            if (Array.isArray(details) && details.length > 0) {
+                console.log(baseLogMessage, ...details);
             } else if (details) {
                 console.log(baseLogMessage, details);
             } else {
-                console.log(completeLogMessage);
+                console.log(baseLogMessage);
+            }
+        }
+
+        if (!this.fileLoggingAvailable) {
+            return;
+        }
+
+        // Perform file writing exclusively to prevent race conditions with rotation.
+        try {
+            await this.performExclusive(async () => {
+                await this.ensureLogFileExists();
+                await fsp.appendFile(this.logFilePath, completeLogMessage, { encoding: "utf8" });
+                this.currentLogSize += Buffer.byteLength(completeLogMessage, "utf8");
+            });
+        } catch (error: any) {
+            if (error.code === "EPERM" || error.code === "EACCES") {
+                console.error(
+                    `[testBenchLogger] Logger Fatal Error: Permission denied to write to log file '${this.logFilePath}'. Please check file permissions. Further file logging may fail.`
+                );
+            } else if (error.code === "ENOENT") {
+                console.error(
+                    `[testBenchLogger] Logger Error: Log file '${this.logFilePath}' was deleted and could not be recreated. File logging may fail.`
+                );
+            } else {
+                console.error(`[testBenchLogger] Logger Error: Failed to write to log file.`, error);
             }
         }
     }
@@ -309,8 +486,8 @@ export class TestBenchLogger {
      * @param details Optional details.
      * @param {boolean | undefined} shouldOutputToTerminal Optional flag to force terminal output.
      */
-    public trace(message: string, details?: any | any[], shouldOutputToTerminal?: boolean): void {
-        this.log("Trace", message, details, shouldOutputToTerminal);
+    public trace(message: string, details?: any | any[], shouldOutputToTerminal?: boolean): Promise<void> {
+        return this.log("Trace", message, details, shouldOutputToTerminal);
     }
 
     /**
@@ -320,8 +497,8 @@ export class TestBenchLogger {
      * @param details Optional details.
      * @param {boolean | undefined} shouldOutputToTerminal Optional flag to force terminal output.
      */
-    public debug(message: string, details?: any | any[], shouldOutputToTerminal?: boolean): void {
-        this.log("Debug", message, details, shouldOutputToTerminal);
+    public debug(message: string, details?: any | any[], shouldOutputToTerminal?: boolean): Promise<void> {
+        return this.log("Debug", message, details, shouldOutputToTerminal);
     }
 
     /**
@@ -331,8 +508,8 @@ export class TestBenchLogger {
      * @param details Optional details.
      * @param {boolean | undefined} shouldOutputToTerminal Optional flag to force terminal output.
      */
-    public info(message: string, details?: any | any[], shouldOutputToTerminal?: boolean): void {
-        this.log("Info", message, details, shouldOutputToTerminal);
+    public info(message: string, details?: any | any[], shouldOutputToTerminal?: boolean): Promise<void> {
+        return this.log("Info", message, details, shouldOutputToTerminal);
     }
 
     /**
@@ -342,8 +519,8 @@ export class TestBenchLogger {
      * @param details Optional details.
      * @param {boolean | undefined} shouldOutputToTerminal Optional flag to force terminal output.
      */
-    public warn(message: string, details?: any | any[], shouldOutputToTerminal?: boolean): void {
-        this.log("Warn", message, details, shouldOutputToTerminal);
+    public warn(message: string, details?: any | any[], shouldOutputToTerminal?: boolean): Promise<void> {
+        return this.log("Warn", message, details, shouldOutputToTerminal);
     }
 
     /**
@@ -355,7 +532,7 @@ export class TestBenchLogger {
      * @param details Optional details.
      * @param {boolean | undefined} shouldOutputToTerminal Optional flag to force terminal output (defaults to true).
      */
-    public error(message: string, details?: any | any[], shouldOutputToTerminal: boolean = true): void {
-        this.log("Error", message, details, shouldOutputToTerminal);
+    public error(message: string, details?: any | any[], shouldOutputToTerminal: boolean = true): Promise<void> {
+        return this.log("Error", message, details, shouldOutputToTerminal);
     }
 }

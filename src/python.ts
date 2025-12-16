@@ -11,22 +11,20 @@ let _pythonExtensionApi: PythonExtension | undefined;
  * @async
  */
 async function getPythonExtensionAPI(): Promise<PythonExtension | undefined> {
-    logger.trace("[getPythonExtensionAPI] Attempting to get PythonExtension API.");
     if (_pythonExtensionApi) {
-        logger.trace("[getPythonExtensionAPI] Returning cached PythonExtension API.");
         return _pythonExtensionApi;
     }
     try {
         _pythonExtensionApi = await PythonExtension.api();
         if (_pythonExtensionApi) {
-            logger.info("[getPythonExtensionAPI] Successfully acquired PythonExtension API.");
+            logger.trace("[python] Successfully acquired PythonExtension API.");
         } else {
             logger.warn(
-                "[getPythonExtensionAPI] PythonExtension.api() returned undefined. Python extension might not be available or activated."
+                "[python] PythonExtension.api() returned undefined. Python extension might not be available or activated."
             );
         }
     } catch (error) {
-        logger.error(`[getPythonExtensionAPI] Error acquiring PythonExtension API: ${(error as Error).message}`, error);
+        logger.error(`[python] Error acquiring PythonExtension API: ${(error as Error).message}`, error);
         _pythonExtensionApi = undefined;
     }
     return _pythonExtensionApi;
@@ -39,91 +37,80 @@ async function getPythonExtensionAPI(): Promise<PythonExtension | undefined> {
  * @async
  */
 export async function getInterpreterPath(resource?: Uri): Promise<string | undefined> {
-    logger.info("[getInterpreterPath] Attempting to get interpreter path.");
     const api: PythonExtension | undefined = await getPythonExtensionAPI();
     if (!api) {
-        logger.error("[getInterpreterPath] PythonExtension API not available. Cannot resolve interpreter path.");
+        logger.error("[python] PythonExtension API not available. Cannot resolve interpreter path.");
         return undefined;
     }
 
     try {
-        logger.trace("[getInterpreterPath] Resolving active environment path.");
         const activeEnvPath = api.environments.getActiveEnvironmentPath(resource);
-        logger.info(
-            `[getInterpreterPath] Active environment path object for resource '${resource?.fsPath || "default"}': ${JSON.stringify(activeEnvPath)}`
-        );
 
         if (!activeEnvPath || !activeEnvPath.path) {
-            logger.warn(
-                `[getInterpreterPath] No active Python environment path found for resource '${resource?.fsPath || "default"}'.`
-            );
+            logger.warn(`[python] No active Python environment path found '${resource?.fsPath || "default"}'.`);
             return undefined;
         }
-        logger.trace(`[getInterpreterPath] Attempting to resolve environment details for: ${activeEnvPath.path}`);
+        logger.debug(
+            `[python] Active python environment path is '${resource?.fsPath || "default"}': ${JSON.stringify(activeEnvPath)}`
+        );
         const environment: ResolvedEnvironment | undefined = await api.environments.resolveEnvironment(activeEnvPath);
 
         if (!environment) {
-            logger.warn(`[getInterpreterPath] Could not resolve environment details for path: ${activeEnvPath.path}`);
+            logger.warn(`[python] Could not resolve environment details for path: ${activeEnvPath.path}`);
             return undefined;
         }
-        logger.info(
-            `[getInterpreterPath] Resolved environment: Name: ${environment.id}, Path: ${environment.path}, Executable: ${environment.executable.uri?.fsPath}, Version: ${environment.version?.major}.${environment.version?.minor}.${environment.version?.micro}`
+        logger.debug(
+            `[python] Resolved python environment: Name=${environment.id}, Path=${environment.path}, Executable=${environment.executable.uri?.fsPath}, Version=${environment.version?.major}.${environment.version?.minor}.${environment.version?.micro}`
         );
 
         if (environment.executable?.uri && checkPythonCompatibility(environment)) {
-            logger.info(`[getInterpreterPath] Compatible interpreter found: ${environment.executable.uri.fsPath}`);
+            logger.debug(
+                `[python] Successfully found compatible python interpreter at '${environment.executable.uri.fsPath}'.`
+            );
             return environment.executable.uri.fsPath;
         } else {
             logger.warn(
-                `[getInterpreterPath] No compatible interpreter found or executable URI is missing for resolved environment: ${environment.id}`
+                `[python] No compatible python interpreter found or executable URI is missing for resolved environment: ${environment.id}`
             );
             if (environment.executable?.uri) {
                 logger.warn(
-                    `[getInterpreterPath] Executable URI was ${environment.executable.uri.fsPath} but compatibility check failed.`
+                    `[python] Executable URI was ${environment.executable.uri.fsPath} but compatibility check failed.`
                 );
             } else {
-                logger.warn(`[getInterpreterPath] Executable URI was missing.`);
+                logger.warn(`[python] Could not detect python executable URI.`);
             }
         }
     } catch (error) {
-        logger.error(`[getInterpreterPath] Error resolving interpreter path: ${(error as Error).message}`, error);
+        logger.error(`[python] Error resolving python interpreter path: ${(error as Error).message}`, error);
     }
 
-    logger.warn("[getInterpreterPath] Interpreter path could not be determined or was incompatible.");
+    logger.warn("[python] Python interpreter path could not be resolved or was incompatible.");
     return undefined;
 }
 
 /**
  * Checks if the resolved Python environment is compatible with the language server requirements.
- * Requires Python 3.9 or newer.
+ * Requires Python 3.10 or newer.
  * @param {ResolvedEnvironment | undefined} resolvedEnv - The resolved Python environment.
  * @returns {boolean} True if the environment is compatible, false otherwise.
  */
 export function checkPythonCompatibility(resolvedEnv: ResolvedEnvironment | undefined): boolean {
-    logger.trace("[checkPythonCompatibility] Checking Python compatibility.");
     if (!resolvedEnv) {
-        logger.warn("[checkPythonCompatibility] Compatibility check: Resolved environment is undefined.");
+        logger.warn("[python] Resolved environment is undefined while checking compatibility.");
         return false;
     }
 
     const version = resolvedEnv.version;
     if (!version) {
-        logger.warn(
-            `[checkPythonCompatibility] Compatibility check: Version information is missing for environment: ${resolvedEnv.executable.uri?.fsPath}`
-        );
+        logger.warn(`[python] Version information is missing for environment: ${resolvedEnv.executable.uri?.fsPath}`);
         return false;
     }
 
-    if (version.major === 3 && version.minor >= 9) {
-        logger.info(
-            `[checkPythonCompatibility] Python version ${version.major}.${version.minor}.${version.micro} is compatible for path: ${resolvedEnv.executable.uri?.fsPath}`
-        );
+    if (version.major === 3 && version.minor >= 10) {
         return true;
     }
 
     const versionString: string = `${version.major}.${version.minor}.${version.micro}`;
-    logger.error(`[checkPythonCompatibility] Python version ${versionString} is not supported.`);
-    logger.error(`[checkPythonCompatibility] Selected Python path: ${resolvedEnv.executable.uri?.fsPath}`);
-    logger.error(`[checkPythonCompatibility] Supported versions are 3.9 and above.`);
+    logger.error(`[python] Python version ${versionString} is not supported. Supported versions are 3.9 and above.`);
     return false;
 }

@@ -4,52 +4,71 @@
  */
 
 import { TestBenchLogger } from "../../../testBenchLogger";
-import { ErrorHandler } from "../../utils/ErrorHandler";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { TreeNode } from "../../../testBenchTypes";
 import { ProjectData } from "./ProjectsTreeItem";
-import { ProjectItemTypes } from "../../../constants";
+import { ProjectItemTypes, TreeViewTiming } from "../../../constants";
+import { CacheManager } from "../../../core/cacheManager";
+
+const PROJECTS_CACHE_KEY = "all_projects";
 
 export class ProjectsDataProvider {
+    private projectsCache: CacheManager<string, ProjectData[]>;
+    private projectTreeCache: CacheManager<string, TreeNode>;
+
     constructor(
         private logger: TestBenchLogger,
-        private errorHandler: ErrorHandler,
         private getConnection: () => PlayServerConnection | null
-    ) {}
+    ) {
+        this.projectsCache = new CacheManager<string, ProjectData[]>(TreeViewTiming.TREE_DATA_FRESHNESS_THRESHOLD_MS);
+        this.projectTreeCache = new CacheManager<string, TreeNode>(TreeViewTiming.TREE_DATA_FRESHNESS_THRESHOLD_MS);
+    }
 
     /**
-     * Fetch all projects from the server and transform them to ProjectData format.
+     * Clears all cached data.
      */
-    public async fetchProjects(): Promise<ProjectData[]> {
+    public clearCache(): void {
+        this.projectsCache.clearCache();
+        this.projectTreeCache.clearCache();
+        this.logger.trace("[ProjectsDataProvider] Cleared all caches.");
+    }
+
+    /**
+     * Fetches all projects from the server and transforms them to ProjectData format.
+     * @returns Promise resolving to ProjectData array on success, null on failure
+     */
+    public async fetchAndTransformProjects(): Promise<ProjectData[] | null> {
+        const cachedProjects = this.projectsCache.getEntryFromCache(PROJECTS_CACHE_KEY);
+        if (cachedProjects) {
+            this.logger.trace("[ProjectsDataProvider] Returning cached projects list.");
+            return cachedProjects;
+        }
+
         const connection = this.getConnection();
         if (!connection) {
-            this.logger.error("No connection available");
-            throw new Error("No connection available");
+            this.logger.trace(
+                "[ProjectsDataProvider] No connection available when fetching projects. This is expected during startup/logout"
+            );
+            return null;
         }
 
         try {
-            this.logger.debug("Fetching projects from server");
-            this.logger.trace(`Using connection: ${connection.getServerName()}:${connection.getServerPort()}`);
-
             const projectsFetchedFromServer = await connection.getProjectsList();
 
             if (!projectsFetchedFromServer || !Array.isArray(projectsFetchedFromServer)) {
-                this.logger.warn("No projects returned from server or invalid response format");
                 return [];
             }
-
-            this.logger.trace(`Processing ${projectsFetchedFromServer.length} projects`);
 
             const transformedProjects: ProjectData[] = [];
             for (const project of projectsFetchedFromServer) {
                 try {
                     if (!project || typeof project !== "object") {
-                        this.logger.warn("Invalid project data received:", project);
+                        this.logger.warn("[ProjectsDataProvider] Invalid project data received:", project);
                         continue;
                     }
 
                     if (!project.key || typeof project.key !== "string") {
-                        this.logger.warn("Project missing key or invalid key:", project);
+                        this.logger.warn("[ProjectsDataProvider] Project missing key or invalid key:", project);
                         continue;
                     }
 
@@ -72,15 +91,15 @@ export class ProjectsDataProvider {
 
                     transformedProjects.push(transformedProject);
                 } catch (transformError) {
-                    this.logger.error("Error transforming project:", transformError);
+                    this.logger.error("[ProjectsDataProvider] Error transforming project:", transformError);
                 }
             }
 
-            this.logger.trace(`Transformed ${transformedProjects.length} projects`);
+            this.projectsCache.setEntryInCache(PROJECTS_CACHE_KEY, transformedProjects);
             return transformedProjects;
         } catch (error) {
-            this.logger.error("Failed to fetch projects:", error);
-            throw error;
+            this.logger.error("[ProjectsDataProvider] Failed to fetch projects:", error);
+            return null;
         }
     }
 
@@ -90,28 +109,32 @@ export class ProjectsDataProvider {
      * @returns The project tree structure or null if no project tree is found.
      */
     public async fetchProjectTree(projectKey: string): Promise<TreeNode | null> {
+        const cachedTree = this.projectTreeCache.getEntryFromCache(projectKey);
+        if (cachedTree) {
+            this.logger.trace(`[ProjectsDataProvider] Returning cached project tree for key ${projectKey}.`);
+            return cachedTree;
+        }
+
         const connection = this.getConnection();
         if (!connection) {
-            this.logger.error("No connection available");
-            throw new Error("No connection available");
+            this.logger.error("[ProjectsDataProvider] No connection available when fetching project tree");
+            return null;
         }
 
         try {
-            this.logger.trace(
-                `Fetching project tree for ${projectKey} using connection: ${connection.getServerName()}:${connection.getServerPort()}`
-            );
-
             const projectTreeFromServer = await connection.getProjectTreeOfProject(projectKey);
             if (!projectTreeFromServer) {
-                this.logger.warn(`No project tree returned for ${projectKey}`);
                 return null;
             }
 
-            this.logger.trace(`Project tree has ${projectTreeFromServer.children?.length || 0} children`);
+            this.projectTreeCache.setEntryInCache(projectKey, projectTreeFromServer);
             return projectTreeFromServer;
         } catch (error) {
-            this.logger.error(`Failed to fetch project tree for ${projectKey}:`, error);
-            throw error;
+            this.logger.error(
+                `[ProjectsDataProvider] Failed to fetch project tree for project key ${projectKey}:`,
+                error
+            );
+            return null;
         }
     }
 

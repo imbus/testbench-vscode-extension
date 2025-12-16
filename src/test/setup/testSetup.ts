@@ -10,6 +10,7 @@ import { setupVSCodeMocks, VSCodeAPIMocks } from "./mockVSCodeAPI";
 import { createMockExtensionContext } from "./mockExtensionContext";
 import { TestBenchLogger } from "../../testBenchLogger";
 import * as vscode from "vscode";
+import * as server from "../../languageServer/server";
 
 // A single context object containing all mocks for a test suite
 export interface TestEnvironment {
@@ -17,6 +18,10 @@ export interface TestEnvironment {
     vscodeMocks: VSCodeAPIMocks;
     mockContext: vscode.ExtensionContext;
     logger: sinon.SinonStubbedInstance<TestBenchLogger>;
+    languageServerMocks: {
+        isLanguageServerRunningStub: sinon.SinonStub;
+        waitForLanguageServerReadyStub: sinon.SinonStub;
+    };
 }
 
 /**
@@ -34,10 +39,18 @@ export function setupTestEnvironment(): TestEnvironment {
     // Create stubs for the extension's internal classes/dependencies
     const logger = sandbox.createStubInstance(TestBenchLogger);
 
+    // Mock language server functions to prevent timeouts in tests
+    const isLanguageServerRunningStub = sandbox.stub(server, "isLanguageServerRunning").returns(true);
+    const waitForLanguageServerReadyStub = sandbox.stub(server, "waitForLanguageServerReady").resolves();
+
     return {
         sandbox,
         vscodeMocks,
         mockContext,
-        logger
+        logger,
+        languageServerMocks: {
+            isLanguageServerRunningStub,
+            waitForLanguageServerReadyStub
+        }
     };
 }

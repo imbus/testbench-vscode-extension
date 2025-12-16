@@ -3,18 +3,24 @@
  * @description Tests for the TestThemesTreeItem class
  */
 
-import * as assert from "assert";
+import assert from "assert";
 import * as vscode from "vscode";
 import { TestThemesTreeItem, TestThemeData } from "../../../treeViews/implementations/testThemes/TestThemesTreeItem";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
+import { UserSessionManager } from "../../../userSessionManager";
+import * as extension from "../../../extension";
 
 suite("TestThemesTreeItem", function () {
     let testEnv: TestEnvironment;
     let mockContext: vscode.ExtensionContext;
+    let userSessionManager: UserSessionManager;
 
     this.beforeEach(function () {
         testEnv = setupTestEnvironment();
         mockContext = testEnv.mockContext;
+        userSessionManager = new UserSessionManager(mockContext);
+        testEnv.sandbox.stub(userSessionManager, "getCurrentUserId").returns("test-user-id");
+        (extension as any).userSessionManager = userSessionManager;
     });
 
     this.afterEach(function () {
@@ -59,7 +65,7 @@ suite("TestThemesTreeItem", function () {
             elementType: "TestThemeNode",
             hasChildren: false,
             projectKey: "project-1",
-            cycleKey: "tov-1"
+            tovKey: "tov-1"
         };
 
         const cycleItem = new TestThemesTreeItem(cycleData, mockContext);
@@ -74,9 +80,11 @@ suite("TestThemesTreeItem", function () {
         const tovId = tovItem.id;
 
         assert.notStrictEqual(cycleId, tovId, "Items from different contexts should have different IDs");
-
-        assert.ok(cycleId && cycleId.includes("cycle:project-1:cycle-1"), "Cycle item ID should contain cycle context");
-        assert.ok(tovId && tovId.includes("tov:project-1:tov-1"), "TOV item ID should contain TOV context");
+        assert.ok(
+            cycleId && cycleId.includes("cycle:project-1:unknown-tov:cycle-1"),
+            "Cycle item ID should contain cycle context"
+        );
+        assert.ok(tovId && tovId.includes("tov:project-1:tov-1:tov-1"), "TOV item ID should contain TOV context");
     });
 
     test("should generate same ID for same item in same context", () => {
@@ -394,6 +402,65 @@ suite("TestThemesTreeItem", function () {
                 projectName: "Test Project",
                 tovName: "Test TOV"
             });
+        });
+    });
+
+    suite("Command Functionality", function () {
+        test("should set command property for test case set items", function () {
+            const testCaseSetData: TestThemeData = {
+                type: "TestCaseSetNode",
+                base: {
+                    key: "test-case-set-123",
+                    name: "Test Case Set",
+                    numbering: "1.1",
+                    parentKey: "",
+                    uniqueID: "uid-123",
+                    matchesFilter: false
+                },
+                spec: { key: "", locker: null, status: "None" },
+                aut: { key: "", locker: null, status: "None" },
+                filters: [],
+                elementType: "TestCaseSetNode",
+                hasChildren: false,
+                projectKey: "project-1",
+                cycleKey: "cycle-1"
+            };
+
+            const item = new TestThemesTreeItem(testCaseSetData, mockContext);
+
+            assert(item.command, "Test case set item should have a command property");
+            assert.strictEqual(
+                item.command?.command,
+                "testbenchExtension.checkForTestCaseSetDoubleClick",
+                "Command should be set to checkForTestCaseSetDoubleClick"
+            );
+            assert.strictEqual(item.command?.title, "Open Robot File", "Command title should be 'Open Robot File'");
+            assert.deepStrictEqual(item.command?.arguments, [item], "Command arguments should include the item itself");
+        });
+
+        test("should not set command property for non-test case set items", function () {
+            const testThemeData: TestThemeData = {
+                type: "TestThemeNode",
+                base: {
+                    key: "test-theme-123",
+                    name: "Test Theme",
+                    numbering: "1.1",
+                    parentKey: "",
+                    uniqueID: "uid-123",
+                    matchesFilter: false
+                },
+                spec: { key: "", locker: null, status: "None" },
+                aut: { key: "", locker: null, status: "None" },
+                filters: [],
+                elementType: "TestThemeNode",
+                hasChildren: false,
+                projectKey: "project-1",
+                cycleKey: "cycle-1"
+            };
+
+            const item = new TestThemesTreeItem(testThemeData, mockContext);
+
+            assert(!item.command, "Non-test case set items should not have a command property");
         });
     });
 });

@@ -8,6 +8,8 @@ def build_vsix(c):
         c.run("python -m venv .venv")
     if os.path.exists("bundled/libs"):
         shutil.rmtree("bundled/libs")
+    if  os.path.exists("requirements.txt"):
+        os.remove("requirements.txt")
     c.run("pip-compile")
     c.run("python -m nox --session bundle_dependencies")
     # for dir in os.listdir("bundled/libs"):
@@ -22,9 +24,11 @@ def update_dependencies(c):
         c.run("python -m venv .venv")
     if  os.path.exists("bundled/libs"):
         shutil.rmtree("bundled/libs")
+    if  os.path.exists("requirements.txt"):
+        os.remove("requirements.txt")
     c.run("pip-compile")
     c.run("python -m nox --session bundle_dependencies")
     
 @task
 def update_language_server(c):
-    shutil.copytree("packages/testbench-ls/testbench_ls", "bundled/libs/testbench_ls", dirs_exist_ok=True)
+    shutil.copytree("testbench-language-server/testbench_language_server", "bundled/libs/testbench_language_server", dirs_exist_ok=True)

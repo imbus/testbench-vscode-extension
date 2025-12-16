@@ -7,8 +7,7 @@ import * as vscode from "vscode";
 import { TreeViewConfig } from "./TreeViewConfig";
 import { StateManager } from "../state/StateManager";
 import { EventBus } from "../utils/EventBus";
-import { ErrorHandler } from "../utils/ErrorHandler";
-import { TreeViewBase } from "./TreeViewBase";
+import { RefreshOptions, TreeViewBase } from "./TreeViewBase";
 import { TestBenchLogger } from "../../testBenchLogger";
 
 /**
@@ -21,12 +20,14 @@ export interface TreeViewContext {
     readonly stateManager: StateManager;
     readonly eventBus: EventBus;
     readonly logger: TestBenchLogger;
-    readonly errorHandler: ErrorHandler;
 
     // Tree view reference
-    readonly refresh: (options?: { immediate?: boolean }) => void;
+    readonly refresh: (options?: RefreshOptions) => void;
     readonly getTreeView: () => TreeViewBase<any>;
     readonly getCurrentRootItems: () => any[];
+
+    // Utility methods
+    buildLogPrefix(moduleId: string, operation: string): string;
 }
 
 /**
@@ -39,11 +40,10 @@ export class TreeViewContextImpl implements TreeViewContext {
         public readonly stateManager: StateManager,
         public readonly eventBus: EventBus,
         public readonly logger: TestBenchLogger,
-        public readonly errorHandler: ErrorHandler,
         public readonly treeView: TreeViewBase<any>
     ) {}
 
-    public refresh(options?: { immediate?: boolean }): void {
+    public refresh(options?: RefreshOptions): void {
         // A refresh from the context is always a full refresh of the tree.
         // Pass "undefined" for the item and forward the options.
         this.treeView.refresh(undefined, options);
@@ -55,5 +55,9 @@ export class TreeViewContextImpl implements TreeViewContext {
 
     public getCurrentRootItems(): any[] {
         return this.treeView.getCurrentRootItems();
+    }
+
+    public buildLogPrefix(moduleId: string, operation: string): string {
+        return `[${moduleId}:${this.config.id}] ${operation}`;
     }
 }
