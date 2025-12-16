@@ -174,8 +174,8 @@
                     },
                     "testbenchExtension.resourceRootRegex": {
                         "type": "string",
-                        "description": "Regular expression that can be used to identify the TestBench Subdivision that corresponds to the <resource-directory>. Resources will be imported relative to this Subdivision based on the test elements structure in TestBench.",
-                        "default": "resources",
+                        "description": "A regular expression used to identify the TestBench subdivision that corresponds to the subdivision containing all Robot Framework keywords. This matching subdivision becomes the anchor point when creating the folder structure and import paths for resources in the generated Robot files. Any subdivisions above and including the matched subdivision are ignored.",
+                        "default": ".*",
                         "order": 19,
                         "scope": "window"
                     },

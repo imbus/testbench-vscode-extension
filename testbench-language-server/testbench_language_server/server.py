@@ -597,9 +597,12 @@ def attempt_create_keyword(ls: LanguageServer, *args):
 
 @testbench_ls.command("testbench_ls.get_resource_directory_subdivision_index")
 def get_resource_directory_subdivision_index(ls: LanguageServer, kwargs) -> int:
+    # must be the same as in testbench2robotframework
     subdivision_parts = kwargs.get("subdivision_parts")
     resource_directory_regex = kwargs.get("resource_directory_regex")
     if not subdivision_parts:
+        return -1
+    if not resource_directory_regex:
         return -1
     for index, part in enumerate(subdivision_parts):
         resource_directory_match = re.match(resource_directory_regex, part, flags=re.IGNORECASE)
