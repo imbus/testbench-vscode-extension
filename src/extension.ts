@@ -3,10 +3,6 @@
  * @description Main entry point for the TestBench VS Code extension.
  */
 
-// Before releasing the extension:
-// TODO: Add License.md to the extension
-// Note: A virtual python environment is required for the extension to work + an empty pyproject.toml in workspace root.
-
 import * as vscode from "vscode";
 import * as testBenchLogger from "./testBenchLogger";
 import * as testBenchConnection from "./testBenchConnection";
