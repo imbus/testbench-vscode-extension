@@ -115,7 +115,7 @@ For comprehensive documentation including detailed feature descriptions, configu
 
 ## License
 
-This project is licensed under the Apache-2.0 License. See the [LICENSE](LICENSE.md) file for details.
+This project is licensed under the Apache-2.0 License. See the [LICENSE](LICENSE) file for details.
 
 ## Contributing / Feedback
 

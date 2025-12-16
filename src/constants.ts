@@ -130,6 +130,8 @@ export const StorageKeys = {
     CONNECTION_PASSWORD_SECRET_PREFIX: "testbenchExtension.connection.password.",
     MARKED_TEST_GENERATION_ITEM: "testbenchExtension.markedTestGenerationItem",
     SUB_TREE_ITEM_IMPORT_STORAGE_KEY: "testbenchExtension.importedSubTreeItems",
+    // Legacy Play server port cache (per server)
+    LEGACY_PLAY_SERVER_PORT_CACHE: "testbenchExtension.legacyPlayServerPortCache",
     // Persistent tree view storage for tree view restoration
     VISIBLE_VIEWS_STORAGE_KEY: "testbenchExtension.visibleTreeViews",
     LAST_ACTIVE_CYCLE_CONTEXT_KEY: "testbenchExtension.lastActiveCycleContext",
