@@ -493,14 +493,6 @@
                 "title": "TestBench: Clear All Extension Data"
             },
             {
-                "command": "testbenchExtension.logout",
-                "title": "TestBench: Logout",
-                "icon": {
-                    "light": "resources/icons/logout.svg",
-                    "dark": "resources/icons/logout.svg"
-                }
-            },
-            {
                 "command": "testbenchExtension.searchInProjectsTreeOff",
                 "title": "Search",
                 "icon": {
@@ -981,9 +973,9 @@
     },
     "dependencies": {
         "@vscode/python-extension": "^1.0.5",
+        "fast-deep-equal": "^3.1.3",
         "axios": "^1.10.0",
         "base-64": "^1.0.0",
-        "fast-deep-equal": "^3.1.3",
         "flatted": "^3.3.3",
         "https-proxy-agent": "^7.0.6",
         "jszip": "^3.10.1",
