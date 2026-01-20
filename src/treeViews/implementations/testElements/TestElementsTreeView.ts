@@ -14,7 +14,14 @@ import { ResourceFileService } from "./ResourceFileService";
 import { ContextKeys, TestElementItemTypes } from "../../../constants";
 import { treeViews } from "../../../extension";
 import { ClickHandler } from "../../core/ClickHandler";
-import { findKeywordPositionInResourceFile, ensureLanguageServerReady } from "../../../languageServer/server";
+import {
+    findKeywordPositionInResourceFile,
+    ensureLanguageServerReady,
+    isLanguageServerRunning,
+    updateOrRestartLS,
+    waitForLanguageServerReady
+} from "../../../languageServer/server";
+import { hasLsConfig } from "../../../languageServer/lsConfig";
 import { getExtensionSetting } from "../../../configuration";
 import { ConfigKeys } from "../../../constants";
 
