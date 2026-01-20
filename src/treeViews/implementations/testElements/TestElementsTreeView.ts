@@ -16,9 +16,10 @@ import { treeViews } from "../../../extension";
 import { ClickHandler } from "../../core/ClickHandler";
 import {
     findKeywordPositionInResourceFile,
+    ensureLanguageServerReady,
     isLanguageServerRunning,
-    waitForLanguageServerReady,
-    updateOrRestartLS
+    updateOrRestartLS,
+    waitForLanguageServerReady
 } from "../../../languageServer/server";
 import { hasLsConfig } from "../../../languageServer/lsConfig";
 import { getExtensionSetting } from "../../../configuration";
@@ -277,22 +278,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * Ensure Language Server readiness for availability/icon checks.
      */
     private async ensureLanguageServerReadyForAvailabilityChecks(): Promise<void> {
-        if (isLanguageServerRunning()) {
-            return;
-        }
-
-        const cfgExists = await hasLsConfig();
-        if (!cfgExists) {
-            this.logger.trace("[TestElementsTreeView] No LS config present; proceeding with availability checks.");
-            return;
-        }
-
-        try {
-            await updateOrRestartLS();
-            await waitForLanguageServerReady(5000, 100);
-        } catch {
-            this.logger.trace("[TestElementsTreeView] LS not ready, proceeding with availability checks.");
-        }
+        await ensureLanguageServerReady();
     }
 
     private isResourceSubdivision(item: TestElementsTreeItem): boolean {

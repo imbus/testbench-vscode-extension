@@ -12,6 +12,7 @@ import { getExtensionSetting } from "../../../configuration";
 import { ConfigKeys } from "../../../constants";
 import * as vscode from "vscode";
 import { ResourceFileService } from "./ResourceFileService";
+import { ensureLanguageServerReady } from "../../../languageServer/server";
 
 interface RawTestElement {
     id: string;
@@ -353,7 +354,11 @@ export class TestElementsDataProvider {
         const resourceDirectoryMarker =
             getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER) || "";
 
+        // Ensure language server is ready before attempting to call LS commands
         let lsCommandUnavailable = false;
+        if (resourceDirectoryMarker) {
+            lsCommandUnavailable = !(await ensureLanguageServerReady());
+        }
 
         /**
          * Checks if a folder should be marked as virtual based on marker position.
@@ -382,10 +387,11 @@ export class TestElementsDataProvider {
                     return folderDepth <= markerPosition + 1;
                 }
                 return true; // Entire hierarchy is virtual
-            } catch {
+            } catch (error) {
                 lsCommandUnavailable = true;
                 this.logger.warn(
-                    "[TestElementsDataProvider] LS command unavailable. Marking ancestor folders of resources as virtual."
+                    "[TestElementsDataProvider] LS command failed. Command: testbench_ls.get_resource_directory_subdivision_index. Marking ancestor folders of resources as virtual.",
+                    error
                 );
                 return true;
             }
