@@ -69,10 +69,10 @@ describe("Toolbar Actions UI Tests", function () {
                 return;
             }
 
-            const labels = await getToolbarButtonLabels(projectsSection, driver);
-            logger.info("Toolbar", `Projects View toolbar buttons: ${labels.join(", ")}`);
+            const toolbarButtonLabelsOfProjects = await getToolbarButtonLabels(projectsSection, driver);
+            logger.info("Toolbar", `Projects View toolbar buttons: ${toolbarButtonLabelsOfProjects.join(", ")}`);
 
-            const hasLogout = labels.some((l) => l.toLowerCase().includes("logout"));
+            const hasLogout = toolbarButtonLabelsOfProjects.some((l) => l.toLowerCase().includes("logout"));
             if (!hasLogout) {
                 // Try using hasToolbarButton as fallback
                 const hasLogoutBtn = await hasToolbarButton(projectsSection, "logout", driver);
@@ -100,7 +100,7 @@ describe("Toolbar Actions UI Tests", function () {
                 return;
             }
 
-            // According to package.json, the refresh button has title "Refresh Projects"
+            // Refresh button in projects view has title "Refresh Projects"
             const hasRefresh = await hasToolbarButton(projectsSection, "Refresh", driver);
             logger.info("Toolbar", `Refresh button found: ${hasRefresh}`);
 
@@ -118,7 +118,7 @@ describe("Toolbar Actions UI Tests", function () {
                 return;
             }
 
-            // According to package.json, the search button has title "Search"
+            // Search button in projects view has title "Search"
             const hasSearch = await hasToolbarButton(projectsSection, "Search", driver);
             logger.info("Toolbar", `Search button found: ${hasSearch}`);
 
@@ -136,8 +136,8 @@ describe("Toolbar Actions UI Tests", function () {
                 return;
             }
 
-            const labels = await getToolbarButtonLabels(projectsSection, driver);
-            const hasSettings = labels.some(
+            const toolbarButtonLabelsOfProjects = await getToolbarButtonLabels(projectsSection, driver);
+            const hasSettings = toolbarButtonLabelsOfProjects.some(
                 (l) => l.toLowerCase().includes("setting") || l.toLowerCase().includes("extension")
             );
 
@@ -154,10 +154,10 @@ describe("Toolbar Actions UI Tests", function () {
             }
 
             await waitForTreeItems(projectsSection, driver);
-            const initialCount = (await projectsSection.getVisibleItems()).length;
+            const initialProjectsItemCount = (await projectsSection.getVisibleItems()).length;
 
-            const refreshClicked = await clickToolbarButton(projectsSection, "refresh", driver);
-            if (!refreshClicked) {
+            const isRefreshButtonClicked = await clickToolbarButton(projectsSection, "refresh", driver);
+            if (!isRefreshButtonClicked) {
                 logger.warn("Toolbar", "Could not click Refresh button");
                 this.skip();
                 return;
@@ -176,10 +176,10 @@ describe("Toolbar Actions UI Tests", function () {
                 "tree refresh"
             );
 
-            const afterCount = (await projectsSection.getVisibleItems()).length;
-            logger.info("Toolbar", `Items before: ${initialCount}, after: ${afterCount}`);
+            const visibleProjectsItemsCount = (await projectsSection.getVisibleItems()).length;
+            logger.info("Toolbar", `Items before: ${initialProjectsItemCount}, after: ${visibleProjectsItemsCount}`);
 
-            expect(afterCount).to.be.at.least(0, "Tree should have items after refresh");
+            expect(visibleProjectsItemsCount).to.be.at.least(0, "Tree should have items after refresh");
             logger.info("Toolbar", "Refresh completed successfully");
         });
     });
@@ -214,11 +214,11 @@ describe("Toolbar Actions UI Tests", function () {
             const actions = await getActionButtonLabels(version, driver);
             logger.info("Toolbar", `TOV action buttons: ${actions.join(", ")}`);
 
-            const hasOpen = actions.some(
+            const hasOpenAction = actions.some(
                 (a) => a.toLowerCase().includes("open") || a.toLowerCase().includes("test themes")
             );
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-            expect(hasOpen, "TOV should have Open/Test Themes button").to.be.true;
+            expect(hasOpenAction, "TOV should have Open/Test Themes button").to.be.true;
 
             logger.info("Toolbar", "Open action button found on TOV");
         });
@@ -249,11 +249,11 @@ describe("Toolbar Actions UI Tests", function () {
             }
 
             const actions = await getActionButtonLabels(version, driver);
-            const hasGenerate = actions.some(
+            const hasGenerateAction = actions.some(
                 (a) => a.toLowerCase().includes("generate") || a.toLowerCase().includes("robot")
             );
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-            expect(hasGenerate, "TOV should have Generate button").to.be.true;
+            expect(hasGenerateAction, "TOV should have Generate button").to.be.true;
 
             logger.info("Toolbar", "Generate action button found on TOV");
         });
@@ -301,9 +301,9 @@ describe("Toolbar Actions UI Tests", function () {
     describe("Test Themes View Toolbar", function () {
         before(async function () {
             logger.info("Toolbar", "Navigating to Test Themes View...");
-            const result = await navigateToTestView(getDriver(), "testThemes");
-            if (!result.success) {
-                logger.error("Toolbar", `Failed to navigate: ${result.error}`);
+            const testViewNavigationResult = await navigateToTestView(getDriver(), "testThemes");
+            if (!testViewNavigationResult.success) {
+                logger.error("Toolbar", `Failed to navigate: ${testViewNavigationResult.error}`);
             }
         });
 
@@ -361,8 +361,8 @@ describe("Toolbar Actions UI Tests", function () {
             }
 
             // Use the TestThemesPage clickOpenProjectsView method for reliable clicking
-            const clicked = await testThemesPage.clickOpenProjectsView();
-            if (!clicked) {
+            const isOpenProjectsViewClicked = await testThemesPage.clickOpenProjectsView();
+            if (!isOpenProjectsViewClicked) {
                 // Fallback: try clicking toolbar button by name
                 await clickToolbarButton(testThemesSection, "Open Projects View", driver);
             }

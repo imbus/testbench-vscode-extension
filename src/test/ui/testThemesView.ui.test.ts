@@ -2505,7 +2505,6 @@ describe("Test Themes View UI Tests", function () {
     describe("Test Generation Scenarios - Different Hierarchy Levels", function () {
         /**
          * Shared navigation function to ensure we're in Test Themes view.
-         * This is extracted to avoid code duplication across test cases.
          */
         async function ensureInTestThemesView(
             driver: WebDriver,

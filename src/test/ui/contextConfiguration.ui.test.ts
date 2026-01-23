@@ -21,10 +21,20 @@ import { ProjectsViewPage } from "./pages/ProjectsViewPage";
 
 const logger = getTestLogger();
 
+/**
+ * Gets the path to the ls.config.json file in the given workspace.
+ * @param workspacePath - The path to the workspace
+ * @return The full path to the ls.config.json file
+ */
 function getLsConfigPath(workspacePath: string): string {
     return path.join(workspacePath, ".testbench", "ls.config.json");
 }
 
+/**
+ * Reads the ls.config.json file from the given workspace.
+ * @param workspacePath - The path to the workspace
+ * @return The parsed config object, or null if not found or invalid
+ */
 function readLsConfig(workspacePath: string): { projectName?: string; tovName?: string } | null {
     const configPath = getLsConfigPath(workspacePath);
     if (!fs.existsSync(configPath)) {
@@ -37,6 +47,12 @@ function readLsConfig(workspacePath: string): { projectName?: string; tovName?: 
     }
 }
 
+/**
+ * Writes the ls.config.json file to the given workspace.
+ * @param workspacePath - The path to the workspace
+ * @param config - The config object to write
+ * @return True if write was successful, false otherwise
+ */
 function writeLsConfig(workspacePath: string, config: { projectName?: string; tovName?: string }): boolean {
     const configPath = getLsConfigPath(workspacePath);
     const configDir = path.dirname(configPath);
@@ -51,6 +67,11 @@ function writeLsConfig(workspacePath: string, config: { projectName?: string; to
     }
 }
 
+/**
+ * Deletes the ls.config.json file from the given workspace.
+ * @param workspacePath - The path to the workspace
+ * @return True if deletion was successful, false otherwise
+ */
 function deleteLsConfig(workspacePath: string): boolean {
     const configPath = getLsConfigPath(workspacePath);
     if (fs.existsSync(configPath)) {
@@ -64,10 +85,20 @@ function deleteLsConfig(workspacePath: string): boolean {
     return false;
 }
 
+/**
+ * Gets the path to the test workspace.
+ * @returns The absolute path to the test workspace
+ */
 function getWorkspacePath(): string {
     return path.resolve(__dirname, "../../../.test-resources/workspace");
 }
 
+/**
+ * Opens the context menu on a tree item.
+ * @param item - The tree item
+ * @param driver - The WebDriver instance
+ * @return The opened ContextMenu, or null if failed
+ */
 async function openContextMenu(item: any, driver: any): Promise<ContextMenu | null> {
     try {
         await item.click();
@@ -79,9 +110,16 @@ async function openContextMenu(item: any, driver: any): Promise<ContextMenu | nu
     }
 }
 
+/**
+ * Clicks a menu item in the context menu.
+ * @param contextMenu - The context menu
+ * @param itemLabel - The label of the menu item to click
+ * @param _driver - The WebDriver instance (optional)
+ * @return True if the item was clicked, false otherwise
+ */
 async function clickMenuItem(contextMenu: ContextMenu, itemLabel: string, _driver?: any): Promise<boolean> {
     try {
-        // First try exact match
+        // Try exact match
         const menuItem = await contextMenu.getItem(itemLabel);
         if (menuItem) {
             await menuItem.select();
@@ -104,6 +142,12 @@ async function clickMenuItem(contextMenu: ContextMenu, itemLabel: string, _drive
     }
 }
 
+/**
+ * Checks if a context menu has a specific menu item.
+ * @param contextMenu - The context menu
+ * @param itemLabel - The label of the menu item to check
+ * @return True if the menu item exists, false otherwise
+ */
 async function hasMenuItem(contextMenu: ContextMenu, itemLabel: string): Promise<boolean> {
     try {
         const items = await contextMenu.getItems();
@@ -119,6 +163,11 @@ async function hasMenuItem(contextMenu: ContextMenu, itemLabel: string): Promise
     }
 }
 
+/**
+ * Closes the context menu.
+ * @param contextMenu - The context menu to close
+ * @return Promise that resolves when the menu is closed
+ */
 async function closeContextMenu(contextMenu: ContextMenu): Promise<void> {
     try {
         await contextMenu.close();
@@ -166,8 +215,8 @@ describe("Context Configuration UI Tests", function () {
             const projectsPage = new ProjectsViewPage(driver);
 
             // Delete existing config to simulate first-time scenario
-            const deleted = deleteLsConfig(workspacePath);
-            if (deleted) {
+            const isConfigDeleted = deleteLsConfig(workspacePath);
+            if (isConfigDeleted) {
                 logger.info("Config", "Deleted existing ls.config.json");
             }
 
@@ -212,9 +261,9 @@ describe("Context Configuration UI Tests", function () {
 
                 // Use clickNotificationButton utility for better reliability
                 const { clickNotificationButton } = await import("./utils/testUtils");
-                const createClicked = await clickNotificationButton(driver, "Create");
+                const createButtonClicked = await clickNotificationButton(driver, "Create");
 
-                if (createClicked) {
+                if (createButtonClicked) {
                     logger.info("Config", "Clicked Create button in notification");
                     // Wait longer for config file to be written
                     await driver.sleep(3000);
@@ -370,8 +419,8 @@ describe("Context Configuration UI Tests", function () {
             }
 
             // Use the full menu item label "Set as Active Project"
-            const clicked = await clickMenuItem(contextMenu, "Set as Active Project", driver);
-            if (!clicked) {
+            const projectActivationClicked = await clickMenuItem(contextMenu, "Set as Active Project", driver);
+            if (!projectActivationClicked) {
                 logger.info("ContextMenu", "Could not click 'Set as Active Project' - trying partial match");
                 await closeContextMenu(contextMenu);
                 this.skip();
@@ -497,7 +546,6 @@ describe("Context Configuration UI Tests", function () {
 
             const hasPin = await hasPinIcon(activeTov, driver);
             logger.info("PinIcon", `Pin icon on TOV "${tovName}": ${hasPin}`);
-            // Don't assert - just log the result
         });
     });
 
@@ -507,7 +555,6 @@ describe("Context Configuration UI Tests", function () {
             const testConfig = getTestData();
             const projectsPage = new ProjectsViewPage(driver);
 
-            // Write invalid config
             const invalidConfig = {
                 projectName: "NonExistentProject_12345",
                 tovName: testConfig.versionName

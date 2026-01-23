@@ -330,7 +330,7 @@ describe("Search Feature UI Tests", function () {
             `);
 
             logger.info("Search", `Search options/filter icon exists: ${gearIconExists}`);
-            // This is informational - we log but don't fail if not found
+            // Log but don't fail if not found
             // as the gear icon may not exist in all VS Code versions
 
             await clearSearch(driver);
