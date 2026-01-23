@@ -2817,7 +2817,7 @@ export async function deleteFromLineOnwards(editor: TextEditor, driver: WebDrive
 
             logger.trace(
                 "Editor",
-                `✓ Verification passed: File has ${actualLineCount} line(s) (expected ≤${expectedLineCount})`
+                `Verification passed: File has ${actualLineCount} line(s) (expected ≤${expectedLineCount})`
             );
             return true;
         } catch (error) {
@@ -2869,7 +2869,7 @@ export async function deleteFromLineOnwards(editor: TextEditor, driver: WebDrive
 
                 const verified = await verifyDeletion();
                 if (verified) {
-                    logger.info("Editor", "✓ Content deleted successfully using TextEditor API");
+                    logger.info("Editor", "Content deleted successfully using TextEditor API");
                     await applySlowMotion(driver);
                     return true;
                 }
@@ -2930,7 +2930,7 @@ export async function deleteFromLineOnwards(editor: TextEditor, driver: WebDrive
         );
 
         if (verified) {
-            logger.info("Editor", "✓ Content deleted successfully using keyboard navigation");
+            logger.info("Editor", "Content deleted successfully using keyboard navigation");
             await applySlowMotion(driver);
             return true;
         }
@@ -2986,7 +2986,7 @@ export async function deleteFromLineOnwards(editor: TextEditor, driver: WebDrive
             );
 
             if (verified) {
-                logger.info("Editor", "✓ Content deleted successfully using JavaScript replacement");
+                logger.info("Editor", "Content deleted successfully using JavaScript replacement");
                 await applySlowMotion(driver);
                 return true;
             }
@@ -2999,11 +2999,11 @@ export async function deleteFromLineOnwards(editor: TextEditor, driver: WebDrive
     logger.trace("Editor", "All strategies failed, attempting final verification...");
     const finalCheck = await verifyDeletion();
     if (finalCheck) {
-        logger.info("Editor", "✓ Deletion verified on final check");
+        logger.info("Editor", "Deletion verified on final check");
         return true;
     }
 
-    logger.error("Editor", `✗ Failed to delete content from line ${fromLine} onwards after all strategies`);
+    logger.error("Editor", `Failed to delete content from line ${fromLine} onwards after all strategies`);
     return false;
 }
 
@@ -3209,7 +3209,7 @@ export async function verifyGeneratedFilesExist(
 
         logger.info("Filesystem", `Found ${result.totalCount} .robot file(s)`);
         if (result.hasInitFile) {
-            logger.info("Filesystem", "✓ __init__.robot file found (test suite folder structure)");
+            logger.info("Filesystem", "__init__.robot file found (test suite folder structure)");
         }
 
         // Log found files
@@ -3225,9 +3225,9 @@ export async function verifyGeneratedFilesExist(
                 const matchFound = robotFiles.some((f) => patternRegex.test(path.basename(f)));
                 if (!matchFound) {
                     result.missingFiles.push(pattern);
-                    logger.warn("Filesystem", `✗ No file matching pattern "${pattern}" found`);
+                    logger.warn("Filesystem", `No file matching pattern "${pattern}" found`);
                 } else {
-                    logger.info("Filesystem", `✓ File matching pattern "${pattern}" found`);
+                    logger.info("Filesystem", `File matching pattern "${pattern}" found`);
                 }
             }
         }
@@ -3235,7 +3235,7 @@ export async function verifyGeneratedFilesExist(
         result.success = result.totalCount > 0 && result.missingFiles.length === 0;
 
         if (result.success) {
-            logger.info("Filesystem", "✓ Filesystem verification passed");
+            logger.info("Filesystem", "Filesystem verification passed");
         } else if (result.totalCount === 0) {
             result.error = "No .robot files found in output directory";
             logger.warn("Filesystem", result.error);
@@ -3337,9 +3337,9 @@ export function verifyRobotFileMetadata(
     }
 
     if (result.valid) {
-        logger.info("Filesystem", `✓ Metadata verification passed for ${path.basename(filePath)}`);
+        logger.info("Filesystem", `Metadata verification passed for ${path.basename(filePath)}`);
     } else {
-        logger.warn("Filesystem", `✗ Metadata verification failed: ${result.errors.join("; ")}`);
+        logger.warn("Filesystem", `Metadata verification failed: ${result.errors.join("; ")}`);
     }
 
     return result;

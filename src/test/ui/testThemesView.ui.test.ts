@@ -836,9 +836,9 @@ async function verifyRobotFileOpensAndMetadata(
             const uniqueIDPattern = new RegExp(`Metadata\\s+UniqueID\\s+${escapeRegex(metadata.uniqueID)}`, "i");
             const hasUniqueID = uniqueIDPattern.test(fileContent);
             if (hasUniqueID) {
-                logger.info("Verification", `✓ Verified UniqueID in file: "${metadata.uniqueID}"`);
+                logger.info("Verification", `Verified UniqueID in file: "${metadata.uniqueID}"`);
             } else {
-                logger.warn("Verification", `✗ UniqueID "${metadata.uniqueID}" not found in file content`);
+                logger.warn("Verification", `UniqueID "${metadata.uniqueID}" not found in file content`);
                 // Don't fail, just warn - metadata format might vary
             }
         }
@@ -847,9 +847,9 @@ async function verifyRobotFileOpensAndMetadata(
             const namePattern = new RegExp(`Metadata\\s+Name\\s+${escapeRegex(metadata.name)}`, "i");
             const hasName = namePattern.test(fileContent);
             if (hasName) {
-                logger.info("Verification", `✓ Verified Name in file: "${metadata.name}"`);
+                logger.info("Verification", `Verified Name in file: "${metadata.name}"`);
             } else {
-                logger.warn("Verification", `✗ Name "${metadata.name}" not found in file content`);
+                logger.warn("Verification", `Name "${metadata.name}" not found in file content`);
             }
         }
 
@@ -857,9 +857,9 @@ async function verifyRobotFileOpensAndMetadata(
             const numberingPattern = new RegExp(`Metadata\\s+Numbering\\s+${escapeRegex(metadata.numbering)}`, "i");
             const hasNumbering = numberingPattern.test(fileContent);
             if (hasNumbering) {
-                logger.info("Verification", `✓ Verified Numbering in file: "${metadata.numbering}"`);
+                logger.info("Verification", `Verified Numbering in file: "${metadata.numbering}"`);
             } else {
-                logger.warn("Verification", `✗ Numbering "${metadata.numbering}" not found in file content`);
+                logger.warn("Verification", `Numbering "${metadata.numbering}" not found in file content`);
             }
         }
     } else {
@@ -1283,10 +1283,10 @@ async function verifyChildrenGenerated(
 
                 if (isGenerated) {
                     result.verified++;
-                    logger.debug("ChildVerification", `  ✓ "${childLabel}" is generated`);
+                    logger.debug("ChildVerification", `  "${childLabel}" is generated`);
                 } else {
                     result.failed++;
-                    logger.warn("ChildVerification", `  ✗ "${childLabel}" is NOT generated`);
+                    logger.warn("ChildVerification", `  "${childLabel}" is NOT generated`);
                 }
 
                 // If child has children, recursively verify (for nested test themes)
@@ -1376,7 +1376,7 @@ async function executeTestGenerationScenario(
     expect(testThemesTitle, "Test Themes title should contain version name").to.include(config.versionName);
     expect(testThemesTitle, "Test Themes title should contain cycle name").to.include(config.cycleName);
 
-    logger.info("Scenario", "✓ Title verification passed");
+    logger.info("Scenario", "Title verification passed");
 
     // ============================================
     // Step 2: Analyze tree structure and find target item
@@ -1409,7 +1409,7 @@ async function executeTestGenerationScenario(
 
     const itemLabel = await targetItem.getLabel();
     result.details.itemLabel = itemLabel;
-    logger.info("Scenario", `✓ Found target item: "${itemLabel}" at ${scenario.level} level`);
+    logger.info("Scenario", `Found target item: "${itemLabel}" at ${scenario.level} level`);
 
     // Get tooltip for metadata verification later
     const itemTooltip = await getTreeItemTooltip(targetItem, driver);
@@ -1431,7 +1431,7 @@ async function executeTestGenerationScenario(
         return result;
     }
 
-    logger.info("Scenario", "✓ Test generation completed");
+    logger.info("Scenario", "Test generation completed");
     await applySlowMotion(driver);
 
     // ============================================
@@ -1447,9 +1447,9 @@ async function executeTestGenerationScenario(
         if (!filesystemResult.success) {
             logger.warn("Scenario", `Filesystem verification failed: ${filesystemResult.error}`);
         } else {
-            logger.info("Scenario", `✓ Found ${filesystemResult.totalCount} .robot file(s) on filesystem`);
+            logger.info("Scenario", `Found ${filesystemResult.totalCount} .robot file(s) on filesystem`);
             if (filesystemResult.hasInitFile) {
-                logger.info("Scenario", "✓ __init__.robot file found (test suite folder structure)");
+                logger.info("Scenario", "__init__.robot file found (test suite folder structure)");
             }
         }
 
@@ -1458,7 +1458,7 @@ async function executeTestGenerationScenario(
         if (newFileCount <= initialFileCount) {
             logger.warn("Scenario", `File count did not increase: ${initialFileCount} -> ${newFileCount}`);
         } else {
-            logger.info("Scenario", `✓ File count increased: ${initialFileCount} -> ${newFileCount}`);
+            logger.info("Scenario", `File count increased: ${initialFileCount} -> ${newFileCount}`);
         }
     }
 
@@ -1484,7 +1484,7 @@ async function executeTestGenerationScenario(
             );
 
             if (verificationSuccess) {
-                logger.info("Scenario", "✓ Robot file verification passed");
+                logger.info("Scenario", "Robot file verification passed");
             } else {
                 logger.warn("Scenario", "Robot file verification failed (non-fatal)");
             }
@@ -1516,7 +1516,7 @@ async function executeTestGenerationScenario(
 
                 if (verifyResult.valid) {
                     metadataVerified = true;
-                    logger.info("Scenario", `✓ Metadata verified in ${path.basename(file)}`);
+                    logger.info("Scenario", `Metadata verified in ${path.basename(file)}`);
                     break;
                 } else {
                     logger.debug(
@@ -1550,7 +1550,7 @@ async function executeTestGenerationScenario(
                 result.details.childrenVerified = childResult.verified;
 
                 if (childResult.verified > 0) {
-                    logger.info("Scenario", `✓ ${childResult.verified} children verified as generated`);
+                    logger.info("Scenario", `${childResult.verified} children verified as generated`);
                 }
                 if (childResult.failed > 0) {
                     logger.warn("Scenario", `${childResult.failed} children are NOT generated`);
@@ -1583,7 +1583,7 @@ async function executeTestGenerationScenario(
             if (runSuccess) {
                 await waitForTestExecutionComplete(driver);
                 testsExecuted = true;
-                logger.info("Scenario", "✓ Tests executed successfully");
+                logger.info("Scenario", "Tests executed successfully");
             }
         }
 
@@ -1635,7 +1635,7 @@ async function executeTestGenerationScenario(
 
                     if (uploadNotificationAppeared) {
                         result.details.resultsUploaded = true;
-                        logger.info("Scenario", "✓ Results uploaded successfully");
+                        logger.info("Scenario", "Results uploaded successfully");
                     } else {
                         logger.warn("Scenario", "Upload notification did not appear");
                     }
@@ -1668,7 +1668,7 @@ async function executeTestGenerationScenario(
                 result.details.executionStatusVerified = tooltipVerified;
 
                 if (tooltipVerified) {
-                    logger.info("Scenario", "✓ Execution status verified in tooltip");
+                    logger.info("Scenario", "Execution status verified in tooltip");
                 } else {
                     logger.warn("Scenario", "Execution status not found in tooltip (non-fatal)");
                 }
@@ -2291,13 +2291,13 @@ describe("Test Themes View UI Tests", function () {
 
             // Verify metadata exists in file
             if (fileMetadata.uniqueID) {
-                logger.info("Phase5", `✓ Verified UniqueID in file: "${fileMetadata.uniqueID}"`);
+                logger.info("Phase5", `Verified UniqueID in file: "${fileMetadata.uniqueID}"`);
             } else {
                 logger.warn("Phase5", "UniqueID not found in file content");
             }
 
             if (fileMetadata.name) {
-                logger.info("Phase5", `✓ Verified Name in file: "${fileMetadata.name}"`);
+                logger.info("Phase5", `Verified Name in file: "${fileMetadata.name}"`);
                 // Verify the name matches the test case set label (case-insensitive)
                 if (fileMetadata.name.toLowerCase() !== testCaseSetLabel.toLowerCase()) {
                     logger.warn(
@@ -2310,7 +2310,7 @@ describe("Test Themes View UI Tests", function () {
             }
 
             if (fileMetadata.numbering) {
-                logger.info("Phase5", `✓ Verified Numbering in file: "${fileMetadata.numbering}"`);
+                logger.info("Phase5", `Verified Numbering in file: "${fileMetadata.numbering}"`);
             } else {
                 logger.warn("Phase5", "Numbering not found in file content");
             }

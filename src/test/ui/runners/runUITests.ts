@@ -197,7 +197,7 @@ async function main(): Promise<void> {
                 process.exit(1);
             }
 
-            logger.info("TestRunner", `✓ Test file found: ${compiledTestPath}`);
+            logger.info("TestRunner", `Test file found: ${compiledTestPath}`);
         } else {
             logger.info("TestRunner", "No specific file provided. Running all UI tests.");
             testFilesPattern = path.join(__dirname, "..", "**/*.ui.test.js").replace(/\\/g, "/");

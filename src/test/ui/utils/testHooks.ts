@@ -50,10 +50,10 @@ async function waitForVSCodeReady(driver: WebDriver, timeout: number = 60000): P
             await driver.sleep(1000);
         }
 
-        logger.info("VSCode", "✓ VS Code is ready");
+        logger.info("VSCode", "VS Code is ready");
         return true;
     } catch (error) {
-        logger.error("VSCode", `✗ Failed to wait for VS Code: ${error}`);
+        logger.error("VSCode", `Failed to wait for VS Code: ${error}`);
         return false;
     }
 }
@@ -731,7 +731,7 @@ export function createLoginWebviewBeforeEachHook(
                 const isClean = await verifyCleanWebviewState(driver);
                 if (isClean) {
                     cleanupSuccess = true;
-                    logger.info(opts.suiteName, "✓ Cleanup verified: webview is in clean state");
+                    logger.info(opts.suiteName, "Cleanup verified: webview is in clean state");
                     break;
                 } else {
                     logger.warn(

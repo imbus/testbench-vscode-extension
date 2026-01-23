@@ -328,7 +328,7 @@ describe("Resource Creation Flow UI Tests", function () {
             throw new Error(`Resource file "${expectedResourceFileName}" did not open in editor`);
         }
 
-        logger.info("Phase3", `✓ Resource file "${expectedResourceFileName}" opened in editor`);
+        logger.info("Phase3", `Resource file "${expectedResourceFileName}" opened in editor`);
 
         const newResourceName = config.subdivisionName;
 
@@ -396,10 +396,10 @@ describe("Resource Creation Flow UI Tests", function () {
 
                 contentDeleted = await deleteFromLineOnwards(resourceEditor, driver, 4);
                 if (contentDeleted) {
-                    logger.info("Phase4", `✓ Content deleted successfully on attempt ${attempt}`);
+                    logger.info("Phase4", `Content deleted successfully on attempt ${attempt}`);
                     break;
                 } else {
-                    logger.warn("Phase4", `✗ Deletion failed on attempt ${attempt}`);
+                    logger.warn("Phase4", `Deletion failed on attempt ${attempt}`);
                     if (attempt < maxRetries) {
                         try {
                             await resourceEditor.click();

@@ -94,12 +94,12 @@ async function main() {
 
     if (profileIndex === profiles.length) {
         runAllProfiles = true;
-        console.log("\n✓ Will run with ALL profiles");
+        console.log("\nWill run with ALL profiles");
     } else if (profileIndex >= 0 && profileIndex < profiles.length) {
         selectedProfile = profiles[profileIndex];
-        console.log(`\n✓ Selected profile: ${selectedProfile}`);
+        console.log(`\nSelected profile: ${selectedProfile}`);
     } else {
-        console.log("\n✗ Invalid selection");
+        console.log("\nInvalid selection");
         rl.close();
         process.exit(1);
     }
@@ -117,12 +117,12 @@ async function main() {
     let selectedFile = null;
 
     if (fileIndex === testFiles.length) {
-        console.log("\n✓ Will run ALL tests");
+        console.log("\nWill run ALL tests");
     } else if (fileIndex >= 0 && fileIndex < testFiles.length) {
         selectedFile = testFiles[fileIndex];
-        console.log(`\n✓ Selected test: ${selectedFile}`);
+        console.log(`\nSelected test: ${selectedFile}`);
     } else {
-        console.log("\n✗ Invalid selection");
+        console.log("\nInvalid selection");
         rl.close();
         process.exit(1);
     }
@@ -159,9 +159,9 @@ async function main() {
 
     try {
         execSync(command, { stdio: "inherit" });
-        console.log("\n✓ Tests completed successfully!");
+        console.log("\nTests completed successfully!");
     } catch (error) {
-        console.log("\n✗ Tests failed!");
+        console.log("\nTests failed!");
         process.exit(1);
     }
 }

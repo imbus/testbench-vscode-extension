@@ -45,8 +45,8 @@ async function withWebviewContext(
             throw new Error("Webview not available - user is logged in - test skipped");
         }
 
-        const webviewFound = await findAndSwitchToWebview(driver);
-        if (!webviewFound) {
+        const isWebviewPresent = await findAndSwitchToWebview(driver);
+        if (!isWebviewPresent) {
             logger.warn("Webview", "Webview not found");
             throw new Error("Webview not found - test skipped");
         }
@@ -61,7 +61,6 @@ async function withWebviewContext(
             const connectionCount = await connectionPage.getConnectionCount();
             if (connectionCount > 0) {
                 logger.warn("TestIsolation", `Found ${connectionCount} existing connection(s) - expected 0`);
-                // Don't fail
             }
         }
 
@@ -224,9 +223,10 @@ describe("Login Webview - Connection Management Tests", function () {
                         "Waiting for connection to be saved"
                     );
 
-                    const { found } = await connectionPage.findConnection(connectionLabel);
+                    const { found: isConnectionFound } = await connectionPage.findConnection(connectionLabel);
                     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-                    expect(found, `Connection '${connectionLabel}' should exist in the list after saving`).to.be.true;
+                    expect(isConnectionFound, `Connection '${connectionLabel}' should exist in the list after saving`)
+                        .to.be.true;
                 },
                 true
             ).catch((error) => {
@@ -246,7 +246,7 @@ describe("Login Webview - Connection Management Tests", function () {
                     const credentials = getTestCredentials();
 
                     const formData: ConnectionFormData = {
-                        connectionLabel: "",
+                        connectionLabel: "", // No label provided
                         serverName: credentials.serverName,
                         portNumber: credentials.portNumber,
                         username: credentials.username,
@@ -257,10 +257,10 @@ describe("Login Webview - Connection Management Tests", function () {
                     await connectionPage.save();
 
                     const expectedConnectionString = `${credentials.username}@${credentials.serverName}`;
-                    const { found } = await connectionPage.findConnection(expectedConnectionString);
+                    const { found: isConnectionFound } = await connectionPage.findConnection(expectedConnectionString);
                     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
                     expect(
-                        found,
+                        isConnectionFound,
                         `Connection '${expectedConnectionString}' should exist in the list when created without label`
                     ).to.be.true;
                 },
@@ -293,21 +293,22 @@ describe("Login Webview - Connection Management Tests", function () {
                     };
                     await connectionPage.createConnection(formData);
 
-                    const { element, found } = await connectionPage.findConnection(connectionLabel);
+                    const { element: foundConnectionElement, found: isConnectionFound } =
+                        await connectionPage.findConnection(connectionLabel);
                     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-                    expect(found, `Connection '${connectionLabel}' should exist before editing`).to.be.true;
+                    expect(isConnectionFound, `Connection '${connectionLabel}' should exist before editing`).to.be.true;
 
-                    if (found && element) {
-                        await connectionPage.clickEdit(element);
+                    if (isConnectionFound && foundConnectionElement) {
+                        await connectionPage.clickEdit(foundConnectionElement);
 
-                        const inEditMode = await connectionPage.isEditMode();
+                        const isInEditMode = await connectionPage.isEditMode();
                         // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-                        expect(inEditMode, "Form should be in edit mode after clicking edit button").to.be.true;
+                        expect(isInEditMode, "Form should be in edit mode after clicking edit button").to.be.true;
 
                         const cancelButton = await driver.findElement(By.id(ConnectionFormElements.CANCEL_EDIT_BUTTON));
-                        const isDisplayed = await cancelButton.isDisplayed();
+                        const isCancelButtonDisplayed = await cancelButton.isDisplayed();
                         // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-                        expect(isDisplayed, "Cancel button should be visible in edit mode").to.be.true;
+                        expect(isCancelButtonDisplayed, "Cancel button should be visible in edit mode").to.be.true;
                     }
                 },
                 true
@@ -338,12 +339,13 @@ describe("Login Webview - Connection Management Tests", function () {
                     };
                     await connectionPage.createConnection(formData);
 
-                    const { element, found } = await connectionPage.findConnection(originalLabel);
+                    const { element: foundConnection, found: isConnectionFound } =
+                        await connectionPage.findConnection(originalLabel);
                     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-                    expect(found, `Connection '${originalLabel}' should exist before updating`).to.be.true;
+                    expect(isConnectionFound, `Connection '${originalLabel}' should exist before updating`).to.be.true;
 
-                    if (found && element) {
-                        await connectionPage.clickEdit(element);
+                    if (isConnectionFound && foundConnection) {
+                        await connectionPage.clickEdit(foundConnection);
 
                         const labelInput = await driver.findElement(By.id(ConnectionFormElements.CONNECTION_LABEL));
                         await labelInput.clear();
@@ -356,16 +358,17 @@ describe("Login Webview - Connection Management Tests", function () {
                         // Wait for connection to be updated with new label
                         await driver.wait(
                             async () => {
-                                const { found } = await connectionPage.findConnection(updatedLabel);
-                                return found;
+                                const { found: foundConnection } = await connectionPage.findConnection(updatedLabel);
+                                return foundConnection;
                             },
                             UITimeouts.LONG,
                             "Waiting for connection to be updated with new label"
                         );
 
-                        const { found: updatedFound } = await connectionPage.findConnection(updatedLabel);
+                        const { found: updatedFoundConnection } = await connectionPage.findConnection(updatedLabel);
                         // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-                        expect(updatedFound, `Connection should have updated label '${updatedLabel}'`).to.be.true;
+                        expect(updatedFoundConnection, `Connection should have updated label '${updatedLabel}'`).to.be
+                            .true;
                     }
                 },
                 true
@@ -395,12 +398,14 @@ describe("Login Webview - Connection Management Tests", function () {
                     };
                     await connectionPage.createConnection(formData);
 
-                    const { element, found } = await connectionPage.findConnection(connectionLabel);
+                    const { element: connectionElement, found: isConnectionFound } =
+                        await connectionPage.findConnection(connectionLabel);
                     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-                    expect(found, `Connection '${connectionLabel}' should exist before testing cancel`).to.be.true;
+                    expect(isConnectionFound, `Connection '${connectionLabel}' should exist before testing cancel`).to
+                        .be.true;
 
-                    if (found && element) {
-                        await connectionPage.clickEdit(element);
+                    if (isConnectionFound && connectionElement) {
+                        await connectionPage.clickEdit(connectionElement);
 
                         const labelInput = await driver.findElement(By.id(ConnectionFormElements.CONNECTION_LABEL));
                         await labelInput.clear();
@@ -413,10 +418,11 @@ describe("Login Webview - Connection Management Tests", function () {
                         const titleText = await sectionTitle.getText();
                         expect(titleText).to.include("Add New Connection");
 
-                        const { found: originalFound } = await connectionPage.findConnection(connectionLabel);
+                        const { found: isOriginalConnectionFound } =
+                            await connectionPage.findConnection(connectionLabel);
                         // eslint-disable-next-line @typescript-eslint/no-unused-expressions
                         expect(
-                            originalFound,
+                            isOriginalConnectionFound,
                             `Original connection '${connectionLabel}' should still exist after canceling edit`
                         ).to.be.true;
                     }
@@ -450,34 +456,38 @@ describe("Login Webview - Connection Management Tests", function () {
                     };
                     await connectionPage.createConnection(formData);
 
-                    const initialCount = await connectionPage.getConnectionCount();
+                    const initialConnectionCount = await connectionPage.getConnectionCount();
 
-                    const { element, found } = await connectionPage.findConnection(connectionLabel);
+                    const { element, found: isConnectionFound } = await connectionPage.findConnection(connectionLabel);
                     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-                    expect(found, `Connection '${connectionLabel}' should exist before deletion`).to.be.true;
+                    expect(isConnectionFound, `Connection '${connectionLabel}' should exist before deletion`).to.be
+                        .true;
 
-                    if (found && element) {
+                    if (isConnectionFound && element) {
                         // Use the high-level delete method that handles the dialog
-                        const deleted = await connectionPage.deleteConnection(element);
+                        const isDeleted = await connectionPage.deleteConnection(element);
                         // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-                        expect(deleted, "Delete operation should complete successfully").to.be.true;
+                        expect(isDeleted, "Delete operation should complete successfully").to.be.true;
 
                         await driver.wait(
                             async () => {
                                 const count = await connectionPage.getConnectionCount();
-                                return count < initialCount;
+                                return count < initialConnectionCount;
                             },
                             UITimeouts.LONG,
                             "Waiting for connection to be deleted"
                         );
 
-                        const finalCount = await connectionPage.getConnectionCount();
-                        expect(finalCount).to.be.lessThan(initialCount);
+                        const finalConnectionCount = await connectionPage.getConnectionCount();
+                        expect(finalConnectionCount).to.be.lessThan(initialConnectionCount);
 
-                        const { found: deletedFound } = await connectionPage.findConnection(connectionLabel);
+                        const { found: isDeletedConnectionFound } =
+                            await connectionPage.findConnection(connectionLabel);
                         // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-                        expect(deletedFound, `Connection '${connectionLabel}' should not exist after deletion`).to.be
-                            .false;
+                        expect(
+                            isDeletedConnectionFound,
+                            `Connection '${connectionLabel}' should not exist after deletion`
+                        ).to.be.false;
                     }
                 },
                 true
@@ -509,12 +519,14 @@ describe("Login Webview - Connection Management Tests", function () {
                     };
                     await connectionPage.createConnection(formData);
 
-                    const { element, found } = await connectionPage.findConnection(connectionLabel);
+                    const { element: connectionElement, found: isConnectionFound } =
+                        await connectionPage.findConnection(connectionLabel);
                     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-                    expect(found, `Connection '${connectionLabel}' should exist before login attempt`).to.be.true;
+                    expect(isConnectionFound, `Connection '${connectionLabel}' should exist before login attempt`).to.be
+                        .true;
 
-                    if (found && element) {
-                        await connectionPage.clickLogin(element);
+                    if (isConnectionFound && connectionElement) {
+                        await connectionPage.clickLogin(connectionElement);
 
                         await driver.switchTo().defaultContent();
                         await handleAuthenticationModals(driver);
@@ -559,12 +571,13 @@ describe("Login Webview - Connection Management Tests", function () {
                     };
                     await connectionPage.createConnection(formData2);
 
-                    const { element, found } = await connectionPage.findConnection(connection1Label);
+                    const { element: connectionElement, found: isConnectionFound } =
+                        await connectionPage.findConnection(connection1Label);
                     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-                    expect(found, `First connection '${connection1Label}' should exist`).to.be.true;
+                    expect(isConnectionFound, `First connection '${connection1Label}' should exist`).to.be.true;
 
-                    if (found && element) {
-                        await connectionPage.clickEdit(element);
+                    if (isConnectionFound && connectionElement) {
+                        await connectionPage.clickEdit(connectionElement);
 
                         const { element: connection2Element } = await connectionPage.findConnection(connection2Label);
                         if (connection2Element) {
@@ -603,13 +616,16 @@ describe("Login Webview - Connection Management Tests", function () {
                     };
                     await connectionPage.createConnection(formData);
 
-                    const { element, found } = await connectionPage.findConnection(connectionLabel);
+                    const { element: connectionElement, found: isConnectionFound } =
+                        await connectionPage.findConnection(connectionLabel);
                     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-                    expect(found, `Connection '${connectionLabel}' should exist before checking button text`).to.be
-                        .true;
+                    expect(
+                        isConnectionFound,
+                        `Connection '${connectionLabel}' should exist before checking button text`
+                    ).to.be.true;
 
-                    if (found && element) {
-                        await connectionPage.clickEdit(element);
+                    if (isConnectionFound && connectionElement) {
+                        await connectionPage.clickEdit(connectionElement);
 
                         const buttonText = await connectionPage.getSaveButtonText();
                         expect(buttonText).to.include("Save Changes");

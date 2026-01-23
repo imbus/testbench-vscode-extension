@@ -296,7 +296,7 @@ describe("Context Configuration UI Tests", function () {
             await closeContextMenu(contextMenu);
 
             if (hasSetActive) {
-                logger.info("ContextMenu", "✓ 'Set as Active' menu item found on project");
+                logger.info("ContextMenu", "'Set as Active' menu item found on project");
             } else {
                 logger.info("ContextMenu", "Set as Active menu item not found (may have different label)");
             }
@@ -338,7 +338,7 @@ describe("Context Configuration UI Tests", function () {
             await closeContextMenu(contextMenu);
 
             if (hasSetActive) {
-                logger.info("ContextMenu", "✓ 'Set as Active TOV' menu item found on version");
+                logger.info("ContextMenu", "'Set as Active TOV' menu item found on version");
             } else {
                 logger.info("ContextMenu", "Set as Active TOV menu item not found (may have different label)");
             }
@@ -391,7 +391,7 @@ describe("Context Configuration UI Tests", function () {
                 if (refreshedProject) {
                     const hasPin = await hasPinIcon(refreshedProject, driver);
                     if (hasPin) {
-                        logger.info("ContextMenu", "✓ Pin icon visible on active project");
+                        logger.info("ContextMenu", "Pin icon visible on active project");
                     } else {
                         logger.info("ContextMenu", "Pin icon not detected (visual indicator may differ)");
                     }
@@ -402,7 +402,7 @@ describe("Context Configuration UI Tests", function () {
             const updatedConfig = readLsConfig(workspacePath);
             if (updatedConfig) {
                 expect(updatedConfig.projectName).to.equal(config.projectName);
-                logger.info("ContextMenu", "✓ Config updated with active project");
+                logger.info("ContextMenu", "Config updated with active project");
             } else {
                 logger.info("ContextMenu", "Config file not found - may need to check workspace path");
             }
@@ -526,7 +526,7 @@ describe("Context Configuration UI Tests", function () {
             const validationNotification = await waitForNotification(driver, "configuration", UITimeouts.MEDIUM);
 
             if (validationNotification) {
-                logger.info("Validation", "✓ Configuration validation notification appeared");
+                logger.info("Validation", "Configuration validation notification appeared");
             } else {
                 logger.info("Validation", "No immediate validation notification (validation may be deferred)");
             }

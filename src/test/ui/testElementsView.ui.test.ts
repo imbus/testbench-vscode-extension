@@ -76,7 +76,7 @@ describe("Test Elements View UI Tests", function () {
                 expect(title, "Title should contain project name").to.include(config.projectName);
                 expect(title, "Title should contain version name").to.include(config.versionName);
 
-                logger.info("TestElements", "✓ Test Elements view title verified");
+                logger.info("TestElements", "Test Elements view title verified");
             }
         });
 
@@ -179,9 +179,9 @@ describe("Test Elements View UI Tests", function () {
             expect(hasCreate || hasOpen, "Should have Create or Open Resource button").to.be.true;
 
             if (hasOpen) {
-                logger.info("TestElements", "✓ Resource already exists locally (Open Resource visible)");
+                logger.info("TestElements", "Resource already exists locally (Open Resource visible)");
             } else if (hasCreate) {
-                logger.info("TestElements", "✓ Resource not yet created (Create Resource visible)");
+                logger.info("TestElements", "Resource not yet created (Create Resource visible)");
             }
         });
     });
@@ -308,7 +308,7 @@ describe("Test Elements View UI Tests", function () {
             const fileOpened = await waitForFileInEditor(driver, ".resource", UITimeouts.MEDIUM);
 
             if (fileOpened) {
-                logger.info("TestElements", "✓ Resource file opened on keyword click");
+                logger.info("TestElements", "Resource file opened on keyword click");
 
                 const editorView = new EditorView();
                 const activeEditor = await editorView.getActiveTab();
@@ -364,7 +364,7 @@ describe("Test Elements View UI Tests", function () {
             const fileOpened = await waitForFileInEditor(driver, ".resource", UITimeouts.MEDIUM);
 
             if (fileOpened) {
-                logger.info("TestElements", "✓ Resource file opened on double-click");
+                logger.info("TestElements", "Resource file opened on double-click");
             } else {
                 logger.warn("TestElements", "Resource file did not open on double-click");
             }
@@ -444,7 +444,7 @@ describe("Test Elements View UI Tests", function () {
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
             expect(fileOpened, "Resource file should open").to.be.true;
 
-            logger.info("TestElements", "✓ Resource file opened via Open Resource button");
+            logger.info("TestElements", "Resource file opened via Open Resource button");
         });
     });
 });

@@ -77,7 +77,7 @@ describe("Search Feature UI Tests", function () {
                 return;
             }
 
-            logger.info("Search", "✓ Search activated successfully");
+            logger.info("Search", "Search activated successfully");
         });
 
         it("should filter tree items as user types in search", async function () {
@@ -117,7 +117,7 @@ describe("Search Feature UI Tests", function () {
             expect(filteredCount).to.be.at.least(0, "Filtered count should be valid");
 
             await clearSearch(driver);
-            logger.info("Search", "✓ Search filtering works correctly");
+            logger.info("Search", "Search filtering works correctly");
         });
 
         it("should restore all items when search is cleared", async function () {
@@ -152,7 +152,7 @@ describe("Search Feature UI Tests", function () {
             const restoredCount = await getVisibleItemCount(projectsSection);
             expect(restoredCount).to.equal(initialCount, "Items should be restored after clearing search");
 
-            logger.info("Search", "✓ Items restored after clearing search");
+            logger.info("Search", "Items restored after clearing search");
         });
 
         it("should find project by exact name match", async function () {
@@ -185,7 +185,7 @@ describe("Search Feature UI Tests", function () {
             if (project) {
                 const label = await project.getLabel();
                 expect(label).to.equal(config.projectName);
-                logger.info("Search", `✓ Found project: "${label}"`);
+                logger.info("Search", `Found project: "${label}"`);
             }
 
             await clearSearch(driver);
@@ -238,7 +238,7 @@ describe("Search Feature UI Tests", function () {
             }
 
             await clearSearch(driver);
-            logger.info("Search", "✓ Test Themes search filtering works");
+            logger.info("Search", "Test Themes search filtering works");
         });
 
         it("should find test theme by name", async function () {
@@ -270,7 +270,7 @@ describe("Search Feature UI Tests", function () {
             if (testTheme) {
                 const label = await testTheme.getLabel();
                 expect(label).to.equal(config.testThemeName);
-                logger.info("Search", `✓ Found test theme: "${label}"`);
+                logger.info("Search", `Found test theme: "${label}"`);
             }
 
             await clearSearch(driver);

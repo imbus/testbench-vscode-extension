@@ -60,7 +60,7 @@ export async function navigateToTestView(
     if (!loggedIn) {
         return { success: false, section: null, error: "Failed to log in" };
     }
-    logger.info(logPrefix, "✓ User is logged in");
+    logger.info(logPrefix, "User is logged in");
 
     const sideBar = new SideBarView();
     let content = sideBar.getContent();
@@ -89,7 +89,7 @@ export async function navigateToTestView(
 
         if (projectsSection) {
             await waitForTreeItems(projectsSection, driver);
-            logger.info(logPrefix, "✓ Successfully navigated to Projects View");
+            logger.info(logPrefix, "Successfully navigated to Projects View");
             return { success: true, section: projectsSection };
         }
         return { success: false, section: null, error: "Projects section not found" };
@@ -198,7 +198,7 @@ export async function navigateToTestView(
     const targetSection =
         target === "testThemes" ? await testThemesPage.getSection(content) : await testElementsPage.getSection(content);
 
-    logger.info(logPrefix, "✓ Successfully navigated");
+    logger.info(logPrefix, "Successfully navigated");
     return { success: true, section: targetSection };
 }
 

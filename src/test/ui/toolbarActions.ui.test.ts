@@ -87,7 +87,7 @@ describe("Toolbar Actions UI Tests", function () {
             // Don't fail test if button detection is unreliable - just log the result
             logger.info("Toolbar", `Logout button found: ${hasLogout}`);
             if (hasLogout) {
-                logger.info("Toolbar", "✓ Logout button found in Projects View toolbar");
+                logger.info("Toolbar", "Logout button found in Projects View toolbar");
             }
         });
 
@@ -105,7 +105,7 @@ describe("Toolbar Actions UI Tests", function () {
             logger.info("Toolbar", `Refresh button found: ${hasRefresh}`);
 
             if (hasRefresh) {
-                logger.info("Toolbar", "✓ Refresh button found in Projects View toolbar");
+                logger.info("Toolbar", "Refresh button found in Projects View toolbar");
             }
         });
 
@@ -123,7 +123,7 @@ describe("Toolbar Actions UI Tests", function () {
             logger.info("Toolbar", `Search button found: ${hasSearch}`);
 
             if (hasSearch) {
-                logger.info("Toolbar", "✓ Search button found in Projects View toolbar");
+                logger.info("Toolbar", "Search button found in Projects View toolbar");
             }
         });
 
@@ -180,7 +180,7 @@ describe("Toolbar Actions UI Tests", function () {
             logger.info("Toolbar", `Items before: ${initialCount}, after: ${afterCount}`);
 
             expect(afterCount).to.be.at.least(0, "Tree should have items after refresh");
-            logger.info("Toolbar", "✓ Refresh completed successfully");
+            logger.info("Toolbar", "Refresh completed successfully");
         });
     });
 
@@ -220,7 +220,7 @@ describe("Toolbar Actions UI Tests", function () {
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
             expect(hasOpen, "TOV should have Open/Test Themes button").to.be.true;
 
-            logger.info("Toolbar", "✓ Open action button found on TOV");
+            logger.info("Toolbar", "Open action button found on TOV");
         });
 
         it("should have 'Generate' action button on TOV", async function () {
@@ -255,7 +255,7 @@ describe("Toolbar Actions UI Tests", function () {
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
             expect(hasGenerate, "TOV should have Generate button").to.be.true;
 
-            logger.info("Toolbar", "✓ Generate action button found on TOV");
+            logger.info("Toolbar", "Generate action button found on TOV");
         });
 
         it("should have action buttons on Cycle", async function () {
@@ -294,7 +294,7 @@ describe("Toolbar Actions UI Tests", function () {
 
             expect(actions.length).to.be.greaterThan(0, "Cycle should have action buttons");
 
-            logger.info("Toolbar", "✓ Action buttons found on Cycle");
+            logger.info("Toolbar", "Action buttons found on Cycle");
         });
     });
 
@@ -327,7 +327,7 @@ describe("Toolbar Actions UI Tests", function () {
             logger.info("Toolbar", `Open Projects View button found: ${hasOpenProjects}`);
 
             if (hasOpenProjects) {
-                logger.info("Toolbar", "✓ Open Projects View button found");
+                logger.info("Toolbar", "Open Projects View button found");
             }
         });
 
@@ -345,7 +345,7 @@ describe("Toolbar Actions UI Tests", function () {
             logger.info("Toolbar", `Refresh button found: ${hasRefresh}`);
 
             if (hasRefresh) {
-                logger.info("Toolbar", "✓ Refresh button found in Test Themes toolbar");
+                logger.info("Toolbar", "Refresh button found in Test Themes toolbar");
             }
         });
 
@@ -379,7 +379,7 @@ describe("Toolbar Actions UI Tests", function () {
                 const projectsSection = await projectsPage.getSection(content);
 
                 if (projectsSection) {
-                    logger.info("Toolbar", "✓ Navigated back to Projects View");
+                    logger.info("Toolbar", "Navigated back to Projects View");
                 }
             }
         });
@@ -417,7 +417,7 @@ describe("Toolbar Actions UI Tests", function () {
             );
 
             if (webviewAppeared) {
-                logger.info("Toolbar", "✓ Logged out successfully - login page visible");
+                logger.info("Toolbar", "Logged out successfully - login page visible");
             } else {
                 logger.warn("Toolbar", "Login page did not appear after logout");
             }

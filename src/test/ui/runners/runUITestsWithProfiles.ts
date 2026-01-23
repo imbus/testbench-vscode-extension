@@ -143,7 +143,7 @@ async function runSingleTestFile(
         });
 
         const duration = Date.now() - startTime;
-        logger.info("TestRunner", `  ✓ ${testFile} passed (${formatDuration(duration)})`);
+        logger.info("TestRunner", `  ${testFile} passed (${formatDuration(duration)})`);
         return {
             testFile,
             profile: profile.name,
@@ -152,7 +152,7 @@ async function runSingleTestFile(
         };
     } catch (error) {
         const duration = Date.now() - startTime;
-        logger.error("TestRunner", `  ✗ ${testFile} failed (${formatDuration(duration)})`);
+        logger.error("TestRunner", `  ${testFile} failed (${formatDuration(duration)})`);
         return {
             testFile,
             profile: profile.name,
@@ -293,12 +293,12 @@ async function runAllTestsForProfile(profile: any, testFiles: string[], projectR
             if (passed) {
                 logger.info(
                     "ProfileRunner",
-                    `\n✓ Profile "${profile.name}" completed successfully (${formatDuration(duration)})\n`
+                    `\nProfile "${profile.name}" completed successfully (${formatDuration(duration)})\n`
                 );
             } else {
                 logger.error(
                     "ProfileRunner",
-                    `\n✗ Profile "${profile.name}" failed with exit code ${code} (${formatDuration(duration)})`
+                    `\nProfile "${profile.name}" failed with exit code ${code} (${formatDuration(duration)})`
                 );
             }
 
@@ -313,7 +313,7 @@ async function runAllTestsForProfile(profile: any, testFiles: string[], projectR
 
         child.on("error", (err) => {
             const duration = Date.now() - startTime;
-            logger.error("ProfileRunner", `\n✗ Profile "${profile.name}" failed to start: ${err.message}`);
+            logger.error("ProfileRunner", `\nProfile "${profile.name}" failed to start: ${err.message}`);
 
             resolve({
                 profile: profile.name,
@@ -445,7 +445,7 @@ function printSummaryMatrix(results: TestFileResult[], profiles: string[], testF
         logger.info("Summary", "");
         logger.info("Summary", `Failed tests (${failures.length}):`);
         for (const failure of failures) {
-            logger.info("Summary", `  ✗ ${failure.profile} / ${failure.testFile}`);
+            logger.info("Summary", `  ${failure.profile} / ${failure.testFile}`);
             if (failure.error) {
                 // Truncate long error messages
                 const shortError = failure.error.length > 100 ? failure.error.substring(0, 100) + "..." : failure.error;
@@ -472,7 +472,7 @@ function printProfileSummary(results: ProfileResult[]): void {
     const failedProfiles = results.filter((r) => !r.passed).length;
 
     for (const result of results) {
-        const status = result.passed ? "✓ PASSED" : "✗ FAILED";
+        const status = result.passed ? "PASSED" : "FAILED";
         const duration = formatDuration(result.duration);
         logger.info("Summary", `  ${status.padEnd(10)} ${result.profile.padEnd(25)} (${duration})`);
     }
@@ -487,7 +487,7 @@ function printProfileSummary(results: ProfileResult[]): void {
         logger.info("Summary", "");
         logger.info("Summary", `Failed profiles (${failedProfiles}):`);
         for (const result of results.filter((r) => !r.passed)) {
-            logger.info("Summary", `  ✗ ${result.profile}`);
+            logger.info("Summary", `  ${result.profile}`);
             if (result.error) {
                 const shortError = result.error.length > 100 ? result.error.substring(0, 100) + "..." : result.error;
                 logger.info("Summary", `      Error: ${shortError}`);
@@ -710,11 +710,11 @@ async function main(): Promise<void> {
             const allPassed = allResults.every((r) => r.passed);
 
             if (allPassed) {
-                logger.info("Summary", "✓ All tests passed successfully!");
+                logger.info("Summary", "All tests passed successfully!");
                 logger.close();
                 process.exit(0);
             } else {
-                logger.error("Summary", "✗ Some tests failed. See details above.");
+                logger.error("Summary", "Some tests failed. See details above.");
                 logger.close();
                 process.exit(1);
             }
@@ -739,11 +739,11 @@ async function main(): Promise<void> {
             const allPassed = profileResults.every((r) => r.passed);
 
             if (allPassed) {
-                logger.info("Summary", "✓ All tests passed successfully!");
+                logger.info("Summary", "All tests passed successfully!");
                 logger.close();
                 process.exit(0);
             } else {
-                logger.error("Summary", "✗ Some tests failed. See details above.");
+                logger.error("Summary", "Some tests failed. See details above.");
                 logger.close();
                 process.exit(1);
             }

@@ -237,7 +237,7 @@ export class TestLogger {
      */
     public testPass(testName: string, durationMs?: number): void {
         const duration = durationMs ? ` (${durationMs}ms)` : "";
-        this.info("Test", `✓ Passed: ${testName}${duration}`);
+        this.info("Test", `Passed: ${testName}${duration}`);
     }
 
     /**
@@ -245,7 +245,7 @@ export class TestLogger {
      */
     public testFail(testName: string, error?: Error | string, durationMs?: number): void {
         const duration = durationMs ? ` (${durationMs}ms)` : "";
-        this.error("Test", `✗ Failed: ${testName}${duration}`);
+        this.error("Test", `Failed: ${testName}${duration}`);
         if (error) {
             const errorMessage = error instanceof Error ? error.message : error;
             this.error("Test", `  Error: ${errorMessage}`);
