@@ -51,9 +51,8 @@ import * as path from "path";
 const logger = getTestLogger();
 
 /**
- * Module-level flag to track if tree structure has been logged in this test session.
- * This prevents redundant tree analysis since the tree structure doesn't change
- * during the test run (only item states like "Generated" may change).
+ * Track if tree structure has been logged in this test session.
+ * Used to avoid redundant logging in cases where tree structure is not expected to change.
  */
 let treeStructureLoggedForSession = false;
 
@@ -84,7 +83,6 @@ async function logTreeStructureOnce(
 
 /**
  * Resets the tree structure logging flag.
- * Call this at the start of a new test suite if needed.
  */
 function resetTreeStructureLoggingFlag(): void {
     treeStructureLoggedForSession = false;
@@ -173,7 +171,7 @@ async function getTreeItemTooltip(item: TreeItem, driver: WebDriver): Promise<st
         }
 
         // Use JavaScript to find the tree row and hover over the label area
-        // This is more reliable than using the TreeItem element directly
+        // More reliable than using the TreeItem element directly
         const treeRowElement = await driver.executeScript(`
             const rows = document.querySelectorAll(".monaco-list-row");
             for (const row of rows) {
@@ -197,10 +195,10 @@ async function getTreeItemTooltip(item: TreeItem, driver: WebDriver): Promise<st
 
         const tooltipText = await waitForTooltip(driver, UITimeouts.MEDIUM);
         if (tooltipText) {
-            // Verify this is the item tooltip, not an action button tooltip
-            // Also verify the tooltip is for the correct item by checking the Name field
+            // Verify the tooltip is for the correct item by checking the Name field
             const nameMatch = tooltipText.match(/Name:\s*(.+)/);
             const tooltipName = nameMatch ? nameMatch[1].trim() : null;
+            // Verify this is the item tooltip, not an action button tooltip
             const isItemTooltip =
                 tooltipText.includes("Execution Status") ||
                 tooltipText.includes("Type:") ||
@@ -209,7 +207,6 @@ async function getTreeItemTooltip(item: TreeItem, driver: WebDriver): Promise<st
                     !tooltipText.includes("Delete"));
 
             if (isItemTooltip) {
-                // Log a warning if the tooltip doesn't seem to match the item
                 if (tooltipName && tooltipName !== itemLabel) {
                     logger.warn(
                         "Tooltip",
@@ -389,12 +386,9 @@ async function verifyTooltipContains(item: TreeItem, driver: WebDriver, expected
     return containsExpected;
 }
 
-// Tree navigation functions are now imported from treeViewUtils.ts
-
 /**
  * Clicks the Generate button for a tree item using JavaScript to avoid stale element issues.
- * This function does not use the TreeItem reference to avoid stale element errors.
- * Instead, it finds the row by label and clicks the Generate button in one atomic operation.
+ * Finds the row by label and clicks the Generate button in one atomic operation.
  *
  * @param driver - The WebDriver instance
  * @param itemLabel - The label of the item
@@ -411,8 +405,7 @@ async function clickGenerateButton(driver: WebDriver, itemLabel: string): Promis
                 `Looking for Generate button near item: "${itemLabel}" (attempt ${attempt}/${maxRetries})`
             );
 
-            // First, scroll the item into view and hover over it using JavaScript
-            // This ensures the action buttons appear
+            // Scroll the item into view and hover over it using JavaScript
             const scrollAndHoverSucceeded = (await driver.executeScript(`
                 function scrollAndHoverItem(itemLabel) {
                     const rows = document.querySelectorAll('.monaco-list-row');
@@ -498,7 +491,6 @@ async function clickGenerateButton(driver: WebDriver, itemLabel: string): Promis
             logger.debug("TestGeneration", `Button not found or click failed on attempt ${attempt}`);
 
             if (attempt < maxRetries) {
-                // Wait before retrying
                 await driver.sleep(500);
             }
         } catch (error: any) {
@@ -525,7 +517,7 @@ async function clickGenerateButton(driver: WebDriver, itemLabel: string): Promis
 
 /**
  * Generates tests for a specific tree item.
- * This function uses JavaScript-based approach to avoid stale element issues.
+ * Uses JavaScript-based approach to avoid stale element issues.
  *
  * @param driver - The WebDriver instance
  * @param itemLabel - The label of the item (for logging)
@@ -534,7 +526,6 @@ async function clickGenerateButton(driver: WebDriver, itemLabel: string): Promis
 async function generateTestsForItem(driver: WebDriver, itemLabel: string): Promise<boolean> {
     logger.info("TestGeneration", `Generating tests for item: "${itemLabel}"...`);
 
-    // Use JavaScript-based approach to click Generate button to avoid stale element issues
     logger.info("TestGeneration", 'Clicking "Generate Robot Framework Test Suites" button...');
     const generateButtonClicked = await clickGenerateButton(driver, itemLabel);
 
@@ -805,7 +796,7 @@ async function verifyRobotFileOpensAndMetadata(
         return false;
     }
 
-    // Use the last opened .robot file (most recent)
+    // Use the last opened .robot file
     openedFileName = robotFileTitles[robotFileTitles.length - 1];
     robotEditor = (await editorView.openEditor(openedFileName)) as TextEditor;
     await applySlowMotion(driver);
@@ -817,7 +808,6 @@ async function verifyRobotFileOpensAndMetadata(
 
     logger.info("Verification", `Opened file: "${openedFileName}"`);
 
-    // Verify the file title contains .robot extension
     expect(openedFileName, "Opened file should be a .robot file").to.include(".robot");
 
     // Read the file content
@@ -968,7 +958,6 @@ async function runTestsFromTestingView(driver: WebDriver): Promise<boolean> {
         await driver.switchTo().defaultContent();
         logger.info("TestingView", "Looking for Run Tests button...");
 
-        // Wait for the Testing View to fully load
         await waitForTestingViewReady(driver, UITimeouts.MEDIUM);
 
         // Look for the "Run All Tests" button in the Testing View toolbar
@@ -1213,8 +1202,6 @@ async function executeRobotTestsViaTerminal(driver: WebDriver, _config: { testTh
         return false;
     }
 }
-
-// canExecuteScenario is now imported from treeViewUtils.ts
 
 /**
  * Result of executing a test generation scenario.

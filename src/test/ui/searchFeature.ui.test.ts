@@ -66,12 +66,12 @@ describe("Search Feature UI Tests", function () {
 
             await waitForTreeItems(projectsSection, driver);
 
-            const initialCount = await getVisibleItemCount(projectsSection);
-            logger.info("Search", `Initial visible items: ${initialCount}`);
-            expect(initialCount).to.be.greaterThan(0, "Should have at least one project");
+            const initialProjectsItemCount = await getVisibleItemCount(projectsSection);
+            logger.info("Search", `Initial visible items: ${initialProjectsItemCount}`);
+            expect(initialProjectsItemCount).to.be.greaterThan(0, "Should have at least one project");
 
-            const searchActivated = await clickSearchButton(projectsSection, driver);
-            if (!searchActivated) {
+            const isSearchActivated = await clickSearchButton(projectsSection, driver);
+            if (!isSearchActivated) {
                 logger.warn("Search", "Could not activate search button");
                 this.skip();
                 return;
@@ -92,10 +92,10 @@ describe("Search Feature UI Tests", function () {
 
             await waitForTreeItems(projectsSection, driver);
 
-            const initialCount = await getVisibleItemCount(projectsSection);
+            const initialProjectsItemCount = await getVisibleItemCount(projectsSection);
 
-            const searchActivated = await clickSearchButton(projectsSection, driver);
-            if (!searchActivated) {
+            const isSearchActivated = await clickSearchButton(projectsSection, driver);
+            if (!isSearchActivated) {
                 this.skip();
                 return;
             }
@@ -111,10 +111,13 @@ describe("Search Feature UI Tests", function () {
 
             await driver.sleep(500);
 
-            const filteredCount = await getVisibleItemCount(projectsSection);
-            logger.info("Search", `Filtered visible items: ${filteredCount} (was ${initialCount})`);
+            const filteredProjectsItemCount = await getVisibleItemCount(projectsSection);
+            logger.info(
+                "Search",
+                `Filtered visible items: ${filteredProjectsItemCount} (was ${initialProjectsItemCount})`
+            );
 
-            expect(filteredCount).to.be.at.least(0, "Filtered count should be valid");
+            expect(filteredProjectsItemCount).to.be.at.least(0, "Filtered count should be valid");
 
             await clearSearch(driver);
             logger.info("Search", "Search filtering works correctly");
@@ -131,10 +134,10 @@ describe("Search Feature UI Tests", function () {
 
             await waitForTreeItems(projectsSection, driver);
 
-            const initialCount = await getVisibleItemCount(projectsSection);
+            const initialProjectsItemCount = await getVisibleItemCount(projectsSection);
 
-            const searchActivated = await clickSearchButton(projectsSection, driver);
-            if (!searchActivated) {
+            const isSearchActivated = await clickSearchButton(projectsSection, driver);
+            if (!isSearchActivated) {
                 this.skip();
                 return;
             }
@@ -143,14 +146,17 @@ describe("Search Feature UI Tests", function () {
             await enterSearchText(driver, "ZZZZNONEXISTENT");
             await driver.sleep(500);
 
-            const filteredCount = await getVisibleItemCount(projectsSection);
-            expect(filteredCount).to.be.lessThan(initialCount, "Search should filter items");
+            const filteredProjectsItemCount = await getVisibleItemCount(projectsSection);
+            expect(filteredProjectsItemCount).to.be.lessThan(initialProjectsItemCount, "Search should filter items");
 
             await clearSearch(driver);
             await driver.sleep(500);
 
-            const restoredCount = await getVisibleItemCount(projectsSection);
-            expect(restoredCount).to.equal(initialCount, "Items should be restored after clearing search");
+            const restoredProjectsItemCount = await getVisibleItemCount(projectsSection);
+            expect(restoredProjectsItemCount).to.equal(
+                initialProjectsItemCount,
+                "Items should be restored after clearing search"
+            );
 
             logger.info("Search", "Items restored after clearing search");
         });
@@ -169,8 +175,8 @@ describe("Search Feature UI Tests", function () {
 
             await waitForTreeItems(projectsSection, driver);
 
-            const searchActivated = await clickSearchButton(projectsSection, driver);
-            if (!searchActivated) {
+            const isSearchActivated = await clickSearchButton(projectsSection, driver);
+            if (!isSearchActivated) {
                 this.skip();
                 return;
             }
@@ -178,12 +184,12 @@ describe("Search Feature UI Tests", function () {
             await enterSearchText(driver, config.projectName);
             await driver.sleep(500);
 
-            const project = await projectsPage.getProject(projectsSection, config.projectName);
+            const targetProject = await projectsPage.getProject(projectsSection, config.projectName);
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-            expect(project, `Project "${config.projectName}" should be found in search results`).to.not.be.null;
+            expect(targetProject, `Project "${config.projectName}" should be found in search results`).to.not.be.null;
 
-            if (project) {
-                const label = await project.getLabel();
+            if (targetProject) {
+                const label = await targetProject.getLabel();
                 expect(label).to.equal(config.projectName);
                 logger.info("Search", `Found project: "${label}"`);
             }
@@ -196,9 +202,9 @@ describe("Search Feature UI Tests", function () {
         // Navigate to Test Themes view before tests
         before(async function () {
             logger.info("Search", "Navigating to Test Themes View...");
-            const result = await navigateToTestView(getDriver(), "testThemes");
-            if (!result.success) {
-                logger.error("Search", `Failed to navigate: ${result.error}`);
+            const testViewNavigationSuccess = await navigateToTestView(getDriver(), "testThemes");
+            if (!testViewNavigationSuccess.success) {
+                logger.error("Search", `Failed to navigate: ${testViewNavigationSuccess.error}`);
             }
         });
 
@@ -215,11 +221,11 @@ describe("Search Feature UI Tests", function () {
 
             await waitForTreeItems(testThemesSection, driver);
 
-            const initialCount = await getVisibleItemCount(testThemesSection);
-            logger.info("Search", `Initial test theme items: ${initialCount}`);
+            const initialTestThemesItemCount = await getVisibleItemCount(testThemesSection);
+            logger.info("Search", `Initial test theme items: ${initialTestThemesItemCount}`);
 
-            const searchActivated = await clickSearchButton(testThemesSection, driver);
-            if (!searchActivated) {
+            const isSearchActivated = await clickSearchButton(testThemesSection, driver);
+            if (!isSearchActivated) {
                 logger.warn("Search", "Could not activate search in Test Themes");
                 this.skip();
                 return;
@@ -230,11 +236,11 @@ describe("Search Feature UI Tests", function () {
             await enterSearchText(driver, searchText);
             await driver.sleep(500);
 
-            const filteredCount = await getVisibleItemCount(testThemesSection);
-            logger.info("Search", `Filtered count: ${filteredCount}`);
+            const filteredTestThemesItemCount = await getVisibleItemCount(testThemesSection);
+            logger.info("Search", `Filtered count: ${filteredTestThemesItemCount}`);
 
-            if (initialCount > 1) {
-                expect(filteredCount).to.be.at.most(initialCount);
+            if (initialTestThemesItemCount > 1) {
+                expect(filteredTestThemesItemCount).to.be.at.most(initialTestThemesItemCount);
             }
 
             await clearSearch(driver);
@@ -254,8 +260,8 @@ describe("Search Feature UI Tests", function () {
 
             await waitForTreeItems(testThemesSection, driver);
 
-            const searchActivated = await clickSearchButton(testThemesSection, driver);
-            if (!searchActivated) {
+            const isSearchActivated = await clickSearchButton(testThemesSection, driver);
+            if (!isSearchActivated) {
                 this.skip();
                 return;
             }
@@ -263,14 +269,14 @@ describe("Search Feature UI Tests", function () {
             await enterSearchText(driver, config.testThemeName);
             await driver.sleep(500);
 
-            const testTheme = await testThemesPage.getItem(testThemesSection, config.testThemeName);
+            const targetTestTheme = await testThemesPage.getItem(testThemesSection, config.testThemeName);
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-            expect(testTheme, `Test theme "${config.testThemeName}" should be found`).to.not.be.undefined;
+            expect(targetTestTheme, `Test theme "${config.testThemeName}" should be found`).to.not.be.undefined;
 
-            if (testTheme) {
-                const label = await testTheme.getLabel();
-                expect(label).to.equal(config.testThemeName);
-                logger.info("Search", `Found test theme: "${label}"`);
+            if (targetTestTheme) {
+                const testThemeLabel = await targetTestTheme.getLabel();
+                expect(testThemeLabel).to.equal(config.testThemeName);
+                logger.info("Search", `Found test theme: "${testThemeLabel}"`);
             }
 
             await clearSearch(driver);
@@ -281,9 +287,9 @@ describe("Search Feature UI Tests", function () {
         // Navigate back to Projects view before tests
         before(async function () {
             logger.info("Search", "Navigating back to Projects View for Search Options tests...");
-            const result = await navigateToTestView(getDriver(), "projects");
-            if (!result.success) {
-                logger.error("Search", `Failed to navigate to Projects: ${result.error}`);
+            const projectNavigationResult = await navigateToTestView(getDriver(), "projects");
+            if (!projectNavigationResult.success) {
+                logger.error("Search", `Failed to navigate to Projects: ${projectNavigationResult.error}`);
             }
         });
 
@@ -299,8 +305,8 @@ describe("Search Feature UI Tests", function () {
 
             await waitForTreeItems(projectsSection, driver);
 
-            const searchActivated = await clickSearchButton(projectsSection, driver);
-            if (!searchActivated) {
+            const isSearchActivated = await clickSearchButton(projectsSection, driver);
+            if (!isSearchActivated) {
                 logger.warn("Search", "Could not activate search for gear icon test");
                 this.skip();
                 return;

@@ -153,6 +153,7 @@ export abstract class BasePage {
      * Clicks an action button on a tree item.
      * @param item - The tree item
      * @param buttonLabel - The label/tooltip of the button
+     * @return True if the action was successful, false otherwise
      */
     public async clickTreeItemAction(item: TreeItem, buttonLabel: string): Promise<boolean> {
         try {

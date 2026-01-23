@@ -52,9 +52,9 @@ describe("Test Elements View UI Tests", function () {
 
     before(async function () {
         logger.info("Setup", "Navigating to Test Elements View...");
-        const result = await navigateToTestView(getDriver(), "testElements");
-        if (!result.success) {
-            logger.error("Setup", `Failed to navigate: ${result.error}`);
+        const navigationResult = await navigateToTestView(getDriver(), "testElements");
+        if (!navigationResult.success) {
+            logger.error("Setup", `Failed to navigate: ${navigationResult.error}`);
         }
     });
 
@@ -91,14 +91,14 @@ describe("Test Elements View UI Tests", function () {
 
             await waitForTreeItems(elementsSection, driver);
 
-            const items = await elementsSection.getVisibleItems();
-            expect(items.length, "Should have at least one subdivision").to.be.greaterThan(0);
+            const visibleTestElementsItems = await elementsSection.getVisibleItems();
+            expect(visibleTestElementsItems.length, "Should have at least one subdivision").to.be.greaterThan(0);
 
-            logger.info("TestElements", `Found ${items.length} subdivision(s) in tree`);
+            logger.info("TestElements", `Found ${visibleTestElementsItems.length} subdivision(s) in tree`);
 
             // Log first few items for debugging
-            const labels = await collectTreeItemLabels(items.slice(0, 3) as TreeItem[]);
-            labels.forEach((label, i) => logger.debug("TestElements", `  [${i}] ${label}`));
+            const collectedTestLabels = await collectTreeItemLabels(visibleTestElementsItems.slice(0, 3) as TreeItem[]);
+            collectedTestLabels.forEach((label, i) => logger.debug("TestElements", `  [${i}] ${label}`));
         });
     });
 
@@ -116,18 +116,18 @@ describe("Test Elements View UI Tests", function () {
 
             await waitForTreeItems(elementsSection, driver);
 
-            const subdivision = await testElementsPage.getItem(elementsSection, config.subdivisionName);
+            const targetSubdivision = await testElementsPage.getItem(elementsSection, config.subdivisionName);
 
-            if (!subdivision) {
+            if (!targetSubdivision) {
                 logger.warn("TestElements", `Subdivision "${config.subdivisionName}" not found`);
                 this.skip();
                 return;
             }
 
-            const label = await subdivision.getLabel();
-            logger.info("TestElements", `Found subdivision: "${label}"`);
+            const subdivisionLabel = await targetSubdivision.getLabel();
+            logger.info("TestElements", `Found subdivision: "${subdivisionLabel}"`);
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-            expect(subdivision, "Subdivision should exist").to.not.be.undefined;
+            expect(targetSubdivision, "Subdivision should exist").to.not.be.undefined;
         });
 
         it("should show Create Resource or Open Resource button on resource subdivision", async function () {
@@ -144,43 +144,47 @@ describe("Test Elements View UI Tests", function () {
             await waitForTreeItems(elementsSection, driver);
 
             // Try configured subdivision first
-            let subdivision = await testElementsPage.getItem(elementsSection, config.subdivisionName);
-            let hasCreate = false;
-            let hasOpen = false;
+            let subdivisionItem = await testElementsPage.getItem(elementsSection, config.subdivisionName);
+            let hasCreateButton = false;
+            let hasOpenButton = false;
 
-            if (subdivision) {
-                await subdivision.click();
+            if (subdivisionItem) {
+                await subdivisionItem.click();
                 await applySlowMotion(driver);
-                hasCreate = await hasActionButton(subdivision, "Create Resource", driver);
-                hasOpen = await hasActionButton(subdivision, "Open Resource", driver);
+                hasCreateButton = await hasActionButton(subdivisionItem, "Create Resource", driver);
+                hasOpenButton = await hasActionButton(subdivisionItem, "Open Resource", driver);
             }
 
             // If no buttons found, search for any resource subdivision
-            if (!hasCreate && !hasOpen) {
+            if (!hasCreateButton && !hasOpenButton) {
                 logger.info("TestElements", "Configured subdivision has no resource buttons, searching...");
-                const result = await findResourceSubdivision(driver, elementsSection, testElementsPage);
-                subdivision = result.subdivision;
+                const subdivisionSearchResult = await findResourceSubdivision(
+                    driver,
+                    elementsSection,
+                    testElementsPage
+                );
+                subdivisionItem = subdivisionSearchResult.subdivision;
 
-                if (subdivision) {
-                    hasCreate = await hasActionButton(subdivision, "Create Resource", driver);
-                    hasOpen = await hasActionButton(subdivision, "Open Resource", driver);
+                if (subdivisionItem) {
+                    hasCreateButton = await hasActionButton(subdivisionItem, "Create Resource", driver);
+                    hasOpenButton = await hasActionButton(subdivisionItem, "Open Resource", driver);
                 }
             }
 
-            logger.info("TestElements", `Create Resource: ${hasCreate}, Open Resource: ${hasOpen}`);
+            logger.info("TestElements", `Create Resource: ${hasCreateButton}, Open Resource: ${hasOpenButton}`);
 
             // Virtual subdivisions don't have these buttons - that's expected
-            if (!hasCreate && !hasOpen) {
+            if (!hasCreateButton && !hasOpenButton) {
                 logger.info("TestElements", "No resource buttons found - subdivision may be virtual");
                 return;
             }
 
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-            expect(hasCreate || hasOpen, "Should have Create or Open Resource button").to.be.true;
+            expect(hasCreateButton || hasOpenButton, "Should have Create or Open Resource button").to.be.true;
 
-            if (hasOpen) {
+            if (hasOpenButton) {
                 logger.info("TestElements", "Resource already exists locally (Open Resource visible)");
-            } else if (hasCreate) {
+            } else if (hasCreateButton) {
                 logger.info("TestElements", "Resource not yet created (Create Resource visible)");
             }
         });
@@ -198,10 +202,10 @@ describe("Test Elements View UI Tests", function () {
 
             await waitForTreeItems(elementsSection, driver);
 
-            const items = await elementsSection.getVisibleItems();
+            const visibleTestElementsItems = await elementsSection.getVisibleItems();
             const iconInfos: { label: string; iconInfo: Awaited<ReturnType<typeof getItemIconInfo>> }[] = [];
 
-            for (const item of items.slice(0, 5) as TreeItem[]) {
+            for (const item of visibleTestElementsItems.slice(0, 5) as TreeItem[]) {
                 try {
                     const label = await item.getLabel();
                     const iconInfo = await getItemIconInfo(item, driver);
@@ -234,33 +238,33 @@ describe("Test Elements View UI Tests", function () {
 
             await waitForTreeItems(elementsSection, driver);
 
-            const subdivision = await testElementsPage.getItem(elementsSection, config.subdivisionName);
-            if (!subdivision) {
+            const targetSubdivision = await testElementsPage.getItem(elementsSection, config.subdivisionName);
+            if (!targetSubdivision) {
                 this.skip();
                 return;
             }
 
-            const hasChildren = await subdivision.hasChildren();
-            if (!hasChildren) {
+            const hasSubdivisionChildren = await targetSubdivision.hasChildren();
+            if (!hasSubdivisionChildren) {
                 logger.info("TestElements", "Subdivision has no keyword children");
                 this.skip();
                 return;
             }
 
             // Expand to reveal keywords
-            if (!(await subdivision.isExpanded())) {
-                await subdivision.expand();
+            if (!(await targetSubdivision.isExpanded())) {
+                await targetSubdivision.expand();
                 await applySlowMotion(driver);
             }
 
-            const children = await subdivision.getChildren();
-            expect(children.length, "Should have at least one keyword").to.be.greaterThan(0);
+            const subdivisionChildren = await targetSubdivision.getChildren();
+            expect(subdivisionChildren.length, "Should have at least one keyword").to.be.greaterThan(0);
 
-            logger.info("TestElements", `Found ${children.length} keyword(s) under subdivision`);
+            logger.info("TestElements", `Found ${subdivisionChildren.length} keyword(s) under subdivision`);
 
             // Log first few keywords
-            const labels = await collectTreeItemLabels(children.slice(0, 3));
-            labels.forEach((label) => logger.debug("TestElements", `  Keyword: ${label}`));
+            const collectedSubdivisionLabels = await collectTreeItemLabels(subdivisionChildren.slice(0, 3));
+            collectedSubdivisionLabels.forEach((label) => logger.debug("TestElements", `  Keyword: ${label}`));
         });
 
         it("should open resource file when clicking a keyword (single-click)", async function () {
@@ -278,36 +282,36 @@ describe("Test Elements View UI Tests", function () {
 
             await waitForTreeItems(elementsSection, driver);
 
-            const subdivision = await testElementsPage.getItem(elementsSection, config.subdivisionName);
-            if (!subdivision) {
+            const subdivisionItem = await testElementsPage.getItem(elementsSection, config.subdivisionName);
+            if (!subdivisionItem) {
                 this.skip();
                 return;
             }
 
             // Ensure subdivision is expanded
-            if (!(await subdivision.isExpanded())) {
-                await subdivision.expand();
+            if (!(await subdivisionItem.isExpanded())) {
+                await subdivisionItem.expand();
                 await applySlowMotion(driver);
             }
 
-            const children = await subdivision.getChildren();
-            if (children.length === 0) {
+            const subdivisionChildren = await subdivisionItem.getChildren();
+            if (subdivisionChildren.length === 0) {
                 logger.info("TestElements", "No keywords to click");
                 this.skip();
                 return;
             }
 
-            const keyword = children[0];
-            const keywordLabel = await keyword.getLabel();
+            const firstKeywordOfSubdivision = subdivisionChildren[0];
+            const keywordLabel = await firstKeywordOfSubdivision.getLabel();
             logger.info("TestElements", `Clicking keyword: "${keywordLabel}"`);
 
-            await keyword.click();
+            await firstKeywordOfSubdivision.click();
             await applySlowMotion(driver);
 
             // Single-click should open resource file and jump to keyword definition
-            const fileOpened = await waitForFileInEditor(driver, ".resource", UITimeouts.MEDIUM);
+            const isResourceFileOpened = await waitForFileInEditor(driver, ".resource", UITimeouts.MEDIUM);
 
-            if (fileOpened) {
+            if (isResourceFileOpened) {
                 logger.info("TestElements", "Resource file opened on keyword click");
 
                 const editorView = new EditorView();
@@ -336,34 +340,34 @@ describe("Test Elements View UI Tests", function () {
 
             await waitForTreeItems(elementsSection, driver);
 
-            const subdivision = await testElementsPage.getItem(elementsSection, config.subdivisionName);
-            if (!subdivision) {
+            const subdivisionItem = await testElementsPage.getItem(elementsSection, config.subdivisionName);
+            if (!subdivisionItem) {
                 this.skip();
                 return;
             }
 
-            if (!(await subdivision.isExpanded())) {
-                await subdivision.expand();
+            if (!(await subdivisionItem.isExpanded())) {
+                await subdivisionItem.expand();
                 await applySlowMotion(driver);
             }
 
-            const children = await subdivision.getChildren();
-            if (children.length === 0) {
+            const subdivisionChildren = await subdivisionItem.getChildren();
+            if (subdivisionChildren.length === 0) {
                 this.skip();
                 return;
             }
 
-            const keyword = children[0];
-            const keywordLabel = await keyword.getLabel();
+            const firstKeywordOfSubdivision = subdivisionChildren[0];
+            const keywordLabel = await firstKeywordOfSubdivision.getLabel();
             logger.info("TestElements", `Double-clicking keyword: "${keywordLabel}"`);
 
-            await doubleClickTreeItem(keyword, driver);
+            await doubleClickTreeItem(firstKeywordOfSubdivision, driver);
             await applySlowMotion(driver);
 
             // Double-click should open file, jump to definition, AND reveal in Explorer
-            const fileOpened = await waitForFileInEditor(driver, ".resource", UITimeouts.MEDIUM);
+            const isResourceFileOpened = await waitForFileInEditor(driver, ".resource", UITimeouts.MEDIUM);
 
-            if (fileOpened) {
+            if (isResourceFileOpened) {
                 logger.info("TestElements", "Resource file opened on double-click");
             } else {
                 logger.warn("TestElements", "Resource file did not open on double-click");
@@ -402,11 +406,11 @@ describe("Test Elements View UI Tests", function () {
             // Search for any subdivision with Open Resource button if needed
             if (!hasOpenButton) {
                 logger.info("TestElements", "Searching for subdivision with Open Resource button...");
-                const result = await findResourceSubdivision(driver, elementsSection, testElementsPage);
+                const resourceSearchResult = await findResourceSubdivision(driver, elementsSection, testElementsPage);
 
-                if (result.subdivision) {
-                    subdivision = result.subdivision;
-                    subdivisionLabel = result.label;
+                if (resourceSearchResult.subdivision) {
+                    subdivision = resourceSearchResult.subdivision;
+                    subdivisionLabel = resourceSearchResult.label;
                     hasOpenButton = await hasActionButton(subdivision, "Open Resource", driver);
                 }
             }
@@ -433,16 +437,16 @@ describe("Test Elements View UI Tests", function () {
             }
 
             // Click Open Resource button
-            const openClicked = await testElementsPage.clickOpenResource(subdivision);
-            if (!openClicked) {
+            const isOpenClicked = await testElementsPage.clickOpenResource(subdivision);
+            if (!isOpenClicked) {
                 logger.warn("TestElements", "Could not click Open Resource button");
                 this.skip();
                 return;
             }
 
-            const fileOpened = await waitForFileInEditor(driver, ".resource", UITimeouts.MEDIUM);
+            const isResourceFileOpened = await waitForFileInEditor(driver, ".resource", UITimeouts.MEDIUM);
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-            expect(fileOpened, "Resource file should open").to.be.true;
+            expect(isResourceFileOpened, "Resource file should open").to.be.true;
 
             logger.info("TestElements", "Resource file opened via Open Resource button");
         });

@@ -56,6 +56,7 @@ export class TestElementsPage extends BasePage {
     /**
      * Clicks the "Open Resource" button on a tree item.
      * @param item - The tree item
+     * @return True if the action was successful, false otherwise
      */
     public async clickOpenResource(item: TreeItem): Promise<boolean> {
         return await this.clickTreeItemAction(item, "Open Resource");

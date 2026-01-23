@@ -51,7 +51,7 @@ describe("Resource Creation Flow UI Tests", function () {
 
     const getDriver = () => ctx.driver;
 
-    it("should navigate to a Test Theme and create a new Test Element", async function () {
+    it("should navigate to Test Elements view and create a resource", async function () {
         const driver = getDriver();
         const config = getTestData();
         logTestDataConfig();
