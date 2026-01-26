@@ -10,7 +10,6 @@ import * as fs from "fs";
 import {
     VSBrowser,
     WebDriver,
-    Workbench,
     By,
     ActivityBar,
     SideBarView,
@@ -43,7 +42,8 @@ export const ModalButtonSelectors = {
 
 /**
  * Logs out from TestBench if a session is active.
- * Uses the command palette to execute the logout command.
+ * Uses the logout toolbar button in the Projects view.
+ * If currently in Test Themes or Test Elements view, navigates back to Projects view first.
  * Waits for logout to complete and verifies the webview is available.
  *
  * @param driver - The WebDriver instance
@@ -58,63 +58,100 @@ export async function attemptLogout(driver: WebDriver): Promise<boolean> {
             return true;
         }
 
-        logger.trace("Logout", "Attempting to logout...");
-        const workbench = new Workbench();
-        const commandPalette = await workbench.openCommandPrompt();
+        logger.trace("Logout", "Attempting to logout via toolbar button...");
+        await driver.switchTo().defaultContent();
 
-        // Search for logout command - ">" symbol must be at the beginning
-        await commandPalette.setText(">TestBench: Logout");
+        const sideBar = new SideBarView();
+        let content = sideBar.getContent();
+        let sections = await content.getSections();
 
-        // Wait for command palette to filter results and for quick picks to be available
-        await driver.wait(
-            async () => {
-                const picks = await commandPalette.getQuickPicks();
-                return picks.length > 0;
-            },
-            UITimeouts.MEDIUM,
-            "Waiting for command palette to filter results"
-        );
+        // Check if we're in Test Themes or Test Elements view (need to navigate to Projects first)
+        let inTestView = false;
+        let testThemesSection: any = null;
 
-        const picks = await commandPalette.getQuickPicks();
-
-        // Check if logout command is available (indicates active session)
-        let logoutCommandFound = false;
-        for (const pick of picks) {
-            const text = await pick.getText();
-            if (text.includes("Logout") || text.includes("testbenchExtension.logout")) {
-                logoutCommandFound = true;
-                logger.trace("Logout", `Found logout command: ${text}`);
-                await pick.select();
-
-                // Wait for logout to complete and webview to become available
-                try {
-                    await driver.wait(
-                        async () => {
-                            return await isWebviewAvailable(driver);
-                        },
-                        UITimeouts.LONG,
-                        "Waiting for logout to complete (webview to become available)"
-                    );
-                    logger.trace("Logout", "Logout successful - webview is now available");
-                    return true;
-                } catch {
-                    logger.warn("Logout", "Logout command executed but webview still not available");
-                    return false;
+        for (const section of sections) {
+            const title = await section.getTitle();
+            if (title.includes("Test Themes")) {
+                inTestView = true;
+                testThemesSection = section;
+                logger.trace("Logout", "Currently in Test Themes view, navigating to Projects view first...");
+                break;
+            } else if (title.includes("Test Elements")) {
+                inTestView = true;
+                logger.trace("Logout", "Currently in Test Elements view, looking for Test Themes section...");
+                // Test Elements and Test Themes are shown together, find Test Themes to click its toolbar
+                for (const s of sections) {
+                    const t = await s.getTitle();
+                    if (t.includes("Test Themes")) {
+                        testThemesSection = s;
+                        break;
+                    }
                 }
+                break;
             }
         }
 
-        if (!logoutCommandFound) {
-            logger.trace("Logout", "Logout command not found - user may already be logged out");
-            await commandPalette.cancel();
-            // Check if webview is available (might already be logged out)
-            const webviewAvailable = await isWebviewAvailable(driver);
-            return webviewAvailable;
+        // Navigate back to Projects view if needed
+        if (inTestView && testThemesSection) {
+            const { clickToolbarButton } = await import("./toolbarUtils");
+            const clicked = await clickToolbarButton(testThemesSection, "Open Projects View", driver);
+            if (clicked) {
+                logger.trace("Logout", "Clicked 'Open Projects View' button");
+                // Wait for Projects view to appear
+                await waitForProjectsView(driver, UITimeouts.LONG);
+                await driver.sleep(500);
+            } else {
+                logger.warn("Logout", "Failed to click 'Open Projects View' button");
+            }
+
+            // Refresh sidebar content
+            content = sideBar.getContent();
+            sections = await content.getSections();
         }
 
-        return false;
+        // Find Projects section
+        let projectsSection: any = null;
+        for (const section of sections) {
+            const title = await section.getTitle();
+            if (title.includes("Projects")) {
+                projectsSection = section;
+                break;
+            }
+        }
+
+        if (!projectsSection) {
+            logger.warn("Logout", "Projects section not found, cannot logout");
+            return false;
+        }
+
+        // Click the logout toolbar button in Projects view
+        const { clickToolbarButton } = await import("./toolbarUtils");
+        const logoutClicked = await clickToolbarButton(projectsSection, "logout", driver);
+
+        if (!logoutClicked) {
+            logger.warn("Logout", "Failed to click logout toolbar button");
+            return false;
+        }
+
+        logger.trace("Logout", "Clicked logout toolbar button, waiting for logout to complete...");
+
+        // Wait for logout to complete and webview to become available
+        try {
+            await driver.wait(
+                async () => {
+                    return await isWebviewAvailable(driver);
+                },
+                UITimeouts.LONG,
+                "Waiting for logout to complete (webview to become available)"
+            );
+            logger.trace("Logout", "Logout successful - webview is now available");
+            return true;
+        } catch {
+            logger.warn("Logout", "Logout button clicked but webview still not available");
+            return false;
+        }
     } catch (error) {
-        // If command palette fails, log error but don't fail the test
+        // If logout fails, log error but don't fail the test
         logger.error("Logout", "Error during logout attempt:", error);
         // Check if we're already logged out
         try {

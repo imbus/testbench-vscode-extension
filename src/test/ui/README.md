@@ -75,7 +75,8 @@ src/test/ui/
 ├── resourceCreationFlow.ui.test.ts    # End-to-end resource creation flow tests
 ├── searchFeature.ui.test.ts           # Search functionality UI tests
 ├── contextConfiguration.ui.test.ts    # Context configuration and active project/TOV tests
-└── toolbarActions.ui.test.ts          # Toolbar button actions UI tests
+├── toolbarActions.ui.test.ts          # Toolbar button actions UI tests
+└── treeExpansionPersistence.ui.test.ts # Tree item expansion state persistence tests
 ```
 
 ## Test Fixtures
@@ -139,6 +140,7 @@ npm run test:ui-single -- resourceCreationFlow.ui.test.ts
 npm run test:ui-single -- searchFeature.ui.test.ts
 npm run test:ui-single -- contextConfiguration.ui.test.ts
 npm run test:ui-single -- toolbarActions.ui.test.ts
+npm run test:ui-single -- treeExpansionPersistence.ui.test.ts
 ```
 
 ### Run Tests with Multiple Configuration Profiles

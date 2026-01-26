@@ -48,7 +48,8 @@ const UI_TEST_FILES = [
     "searchFeature.ui.test.ts",
     "testElementsView.ui.test.ts",
     "contextConfiguration.ui.test.ts",
-    "toolbarActions.ui.test.ts"
+    "toolbarActions.ui.test.ts",
+    "treeExpansionPersistence.ui.test.ts"
 ];
 
 /**
@@ -62,7 +63,8 @@ const TEST_FILE_SHORT_NAMES: Record<string, string> = {
     "searchFeature.ui.test.ts": "search",
     "testElementsView.ui.test.ts": "elements",
     "contextConfiguration.ui.test.ts": "config",
-    "toolbarActions.ui.test.ts": "toolbar"
+    "toolbarActions.ui.test.ts": "toolbar",
+    "treeExpansionPersistence.ui.test.ts": "persistence"
 };
 
 /**
