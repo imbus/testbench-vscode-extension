@@ -49,7 +49,8 @@ const UI_TEST_FILES = [
     "testElementsView.ui.test.ts",
     "contextConfiguration.ui.test.ts",
     "toolbarActions.ui.test.ts",
-    "treeExpansionPersistence.ui.test.ts"
+    "treeExpansionPersistence.ui.test.ts",
+    "subdivisionMarkingPersistence.ui.test.ts"
 ];
 
 /**
@@ -64,7 +65,8 @@ const TEST_FILE_SHORT_NAMES: Record<string, string> = {
     "testElementsView.ui.test.ts": "elements",
     "contextConfiguration.ui.test.ts": "config",
     "toolbarActions.ui.test.ts": "toolbar",
-    "treeExpansionPersistence.ui.test.ts": "persistence"
+    "treeExpansionPersistence.ui.test.ts": "persistence",
+    "subdivisionMarkingPersistence.ui.test.ts": "marking"
 };
 
 /**
