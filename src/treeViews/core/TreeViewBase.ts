@@ -29,6 +29,15 @@ export interface RefreshOptions {
     skipDataReload?: boolean;
 }
 
+/**
+ * Options for preparing a tree view when switching to a different context.
+ * preserveUiState = true keeps expansion/filtering/marking state while clearing only visible data.
+ * Set preserveUiState to false to perform a full clear/reset of tree state before loading.
+ */
+export interface ContextSwitchLoadingOptions {
+    preserveUiState?: boolean;
+}
+
 export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.TreeDataProvider<T> {
     protected readonly _onDidChangeTreeData = new vscode.EventEmitter<T | undefined | null | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -585,6 +594,25 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
         this.rootItemsCache.clearCache();
         this._intentionallyCleared = true;
         this._onDidChangeTreeData.fire(undefined);
+        this.updateTreeViewMessage();
+    }
+
+    /**
+     * Prepares the tree for loading data for a new context by clearing currently shown items and
+     * activating the loading state immediately.
+     * @param options Configuration for how much state should be preserved while clearing
+     */
+    public prepareForContextSwitchLoading(options?: ContextSwitchLoadingOptions): void {
+        const preserveUiState = options?.preserveUiState ?? true;
+
+        if (preserveUiState) {
+            this.clearTreeDataOnly();
+        } else {
+            this.clearTree();
+        }
+
+        this.stateManager.setError(null);
+        this.stateManager.setLoading(true);
         this.updateTreeViewMessage();
     }
 
