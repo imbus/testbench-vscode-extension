@@ -859,9 +859,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             this.logger.trace(
                 `[TestThemesTreeView] Loading Test Cycle '${cycleLabel}' from project '${projectName}' to get Test Theme information...`
             );
-            this.stateManager.setLoading(true);
-            // Clear old tree items immediately to prevent showing stale data during loading
-            this.clearTree();
+            // Clear currently shown tree items immediately on context switch to avoid stale data.
+            this.prepareForContextSwitchLoading();
             this.dataProvider.clearCache();
 
             // Set context before fetching data so filters can be applied correctly
@@ -984,9 +983,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     public async loadTov(projectKey: string, tovKey: string, projectName: string, tovName: string): Promise<void> {
         try {
             this.logger.debug(`[TestThemesTreeView] Loading TOV ${tovKey} for project ${projectKey}`);
-            this.stateManager.setLoading(true);
-            // Clear old tree items immediately to prevent showing stale data during loading
-            this.clearTree();
+            // Clear currently shown tree items immediately on context switch to avoid stale data.
+            this.prepareForContextSwitchLoading();
             this.dataProvider.clearCache();
 
             // Set context BEFORE fetching data so filters can be applied correctly
