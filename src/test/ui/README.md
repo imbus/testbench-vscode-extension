@@ -75,6 +75,7 @@ src/test/ui/
 ├── resourceCreationFlow.ui.test.ts    # End-to-end resource creation flow tests
 ├── searchFeature.ui.test.ts           # Search functionality UI tests
 ├── contextConfiguration.ui.test.ts    # Context configuration and active project/TOV tests
+├── clearTreeOnContextSwitch.ui.test.ts # Context switch tree-clearing regression test
 ├── toolbarActions.ui.test.ts          # Toolbar button actions UI tests
 ├── treeExpansionPersistence.ui.test.ts # Tree item expansion state persistence tests
 └── subdivisionMarkingPersistence.ui.test.ts # Subdivision marking state persistence tests
@@ -140,6 +141,7 @@ npm run test:ui-single -- testElementsView.ui.test.ts
 npm run test:ui-single -- resourceCreationFlow.ui.test.ts
 npm run test:ui-single -- searchFeature.ui.test.ts
 npm run test:ui-single -- contextConfiguration.ui.test.ts
+npm run test:ui-single -- clearTreeOnContextSwitch.ui.test.ts
 npm run test:ui-single -- toolbarActions.ui.test.ts
 npm run test:ui-single -- treeExpansionPersistence.ui.test.ts
 npm run test:ui-single -- subdivisionMarkingPersistence.ui.test.ts
