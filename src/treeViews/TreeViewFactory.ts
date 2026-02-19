@@ -681,8 +681,8 @@ export class TreeViewFactory {
     ): Promise<boolean> {
         try {
             this.logger.debug(`[TreeViewFactory] Performing deferred view restoration for: ${savedViewId}`);
-            treeViews.testThemesTree.stateManager.setLoading(true);
-            treeViews.testElementsTree.stateManager.setLoading(true);
+            treeViews.testThemesTree.prepareForContextSwitchLoading();
+            treeViews.testElementsTree.prepareForContextSwitchLoading();
             await displayTestThemeTreeView();
             await displayTestElementsTreeView();
             await hideProjectManagementTreeView();

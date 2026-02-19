@@ -626,6 +626,60 @@ suite("TreeViewBase", function () {
 
             assert.ok(clearSpy.called);
         });
+
+        test("should prepare context switch loading with UI state preserved by default", async () => {
+            await treeView.initialize();
+
+            const mockItem = new TestTreeItem(
+                "Test",
+                "Description",
+                "test",
+                vscode.TreeItemCollapsibleState.None,
+                mockContext
+            );
+            treeView.setRootItems([mockItem]);
+
+            const stateManager = treeView.getProtectedStateManager();
+            stateManager.setError(new Error("existing error"));
+
+            const clearTreeDataOnlySpy = testEnv.sandbox.spy(treeView, "clearTreeDataOnly");
+            const clearTreeSpy = testEnv.sandbox.spy(treeView, "clearTree");
+            const clearStateSpy = testEnv.sandbox.spy(stateManager, "clear");
+
+            treeView.prepareForContextSwitchLoading();
+
+            assert.ok(clearTreeDataOnlySpy.calledOnce);
+            assert.ok(clearTreeSpy.notCalled);
+            assert.ok(clearStateSpy.notCalled);
+            assert.strictEqual(treeView.getRootItemsArray().length, 0);
+            assert.strictEqual(stateManager.getState().loading, true);
+            assert.strictEqual(stateManager.getState().error, null);
+        });
+
+        test("should prepare context switch loading with full clear when preserveUiState is false", async () => {
+            await treeView.initialize();
+
+            const mockItem = new TestTreeItem(
+                "Test",
+                "Description",
+                "test",
+                vscode.TreeItemCollapsibleState.None,
+                mockContext
+            );
+            treeView.setRootItems([mockItem]);
+
+            const stateManager = treeView.getProtectedStateManager();
+            const clearTreeSpy = testEnv.sandbox.spy(treeView, "clearTree");
+            const clearStateSpy = testEnv.sandbox.spy(stateManager, "clear");
+
+            treeView.prepareForContextSwitchLoading({ preserveUiState: false });
+
+            assert.ok(clearTreeSpy.calledOnce);
+            assert.ok(clearStateSpy.calledOnce);
+            assert.strictEqual(treeView.getRootItemsArray().length, 0);
+            assert.strictEqual(stateManager.getState().loading, true);
+            assert.strictEqual(stateManager.getState().error, null);
+        });
     });
 
     suite("Configuration Updates", () => {

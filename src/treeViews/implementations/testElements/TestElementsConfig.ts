@@ -92,7 +92,7 @@ export const testElementsConfig: TreeViewConfig = {
 
     ui: {
         emptyMessage: "No test elements to display.",
-        loadingMessage: "Loading test elements...",
+        loadingMessage: "Loading test elements view items...",
         errorMessage: "Failed to load test elements",
         showTooltips: true,
         tooltipFormat: "detailed"

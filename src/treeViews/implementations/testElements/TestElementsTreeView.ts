@@ -713,13 +713,14 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this.logger.debug(
                 `[TestElementsTreeView] Loading Test Element information for Test Object Version '${tovName}' from project '${projectName}'...`
             );
-            this.stateManager.setLoading(true);
-
-            if (clearFirst || this.currentTovKey !== tovKey) {
-                // Preserve UI state (expansion, marking, etc.) during data reload
-                this.clearTreeDataOnly();
-                // Only clear cache when TOV actually changes
+            const isContextSwitch = this.currentTovKey !== tovKey;
+            if (clearFirst || isContextSwitch) {
+                // Clear old tree items on context switch
+                this.prepareForContextSwitchLoading();
                 this.dataProvider.clearCache(tovKey);
+            } else {
+                this.stateManager.setError(null);
+                this.stateManager.setLoading(true);
             }
 
             this.currentTovKey = tovKey;
