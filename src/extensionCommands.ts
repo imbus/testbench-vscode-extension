@@ -255,7 +255,14 @@ const handleOpenTOV = async (tovItem: ProjectsTreeItem) => {
         }
         await treeViews.testThemesTree.loadTov(projectKey, tovKey, projectName, tovName);
         if (treeViews.testElementsTree) {
-            await treeViews.testElementsTree.loadTov(tovKey, tovItem.label?.toString(), projectName, tovName);
+            await treeViews.testElementsTree.loadTov(
+                tovKey,
+                tovItem.label?.toString(),
+                projectName,
+                tovName,
+                true,
+                projectKey
+            );
         }
         getLogger().info(
             `[extensionCommands] Successfully opened Test Object Version '${tovName}' in project '${projectName}'.`
@@ -697,6 +704,14 @@ const handleOpenAvailableResource = (item: TestElementsTreeItem) => {
 
 const handleCreateMissingResource = (item: TestElementsTreeItem) => {
     treeViews?.testElementsTree.createMissingResource(item);
+};
+
+const handleCreateSubdivision = (item?: TestElementsTreeItem) => {
+    treeViews?.testElementsTree.promptAndCreateRobotResourceSubdivision(item);
+};
+
+const handleCreateRootSubdivision = () => {
+    treeViews?.testElementsTree.promptAndCreateRobotResourceSubdivision();
 };
 
 const handleOpenFolderInExplorer = (item: TestElementsTreeItem) => {
@@ -1177,6 +1192,14 @@ export async function registerExtensionCommands(context: vscode.ExtensionContext
         {
             id: allExtensionCommands.openMissingSubdivisionInTestElementsView,
             handler: handleCreateMissingResource
+        },
+        {
+            id: allExtensionCommands.createSubdivisionInTestElementsView,
+            handler: handleCreateSubdivision
+        },
+        {
+            id: allExtensionCommands.createRootSubdivisionInTestElementsView,
+            handler: handleCreateRootSubdivision
         },
         {
             id: allExtensionCommands.openSubdivisionFolderInExplorer,

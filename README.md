@@ -5,6 +5,7 @@ The **TestBench Extension** enables seamless synchronization between [TestBench]
 ## Key Features
 
 - **Project Navigation**: Browse TestBench projects, including Subdivisions, keywords, and Test Theme Trees
+- **Subdivision Management**: Create Robot Resource subdivisions directly from the Test Elements tree view
 - **Keyword Synchronization**: Bidirectionally synchronize Robot Framework keywords with TestBench keywords
 - **Test Generation**: Automatically generate Robot Framework test suites from TestBench test case sets
 - **Result Import**: Upload Robot Framework execution results directly back to TestBench
@@ -42,6 +43,8 @@ To link a TestBench Project to the currently opened workspace/folder, simply rig
 ### Create a Robot Framework Resource File from a TestBench Subdivision
 
 For a TestBench Subdivision to be visible in the TestBench extension, the Subdivision name must end with the suffix `[Robot-Resource]`. Subdivisions that do not follow this naming convention are ignored by the extension.
+
+When you create subdivisions from the `Test Elements` view (root or child), the extension creates Robot Resource subdivisions and appends the configured resource marker automatically if it is missing. You do not need to type the suffix manually.
 
 ![Edit Subdivision Suffix to display it in the extension](userGuideImages/subdivision_suffix.png)
 

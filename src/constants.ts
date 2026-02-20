@@ -260,6 +260,8 @@ export const allExtensionCommands = {
     // Test elements tree item commands
     openAvailableSubdivisionInTestElementsView: `${baseKeyOfExtension}.openAvailableSubdivisionInTestElementsView`,
     openMissingSubdivisionInTestElementsView: `${baseKeyOfExtension}.openMissingSubdivisionInTestElementsView`,
+    createSubdivisionInTestElementsView: `${baseKeyOfExtension}.createSubdivisionInTestElementsView`,
+    createRootSubdivisionInTestElementsView: `${baseKeyOfExtension}.createRootSubdivisionInTestElementsView`,
     openSubdivisionFolderInExplorer: `${baseKeyOfExtension}.openSubdivisionFolderInExplorer`,
     openKeywordInTestElementsView: `${baseKeyOfExtension}.openKeywordInTestElementsView`,
     createMissingParentResourceForKeyword: `${baseKeyOfExtension}.createMissingParentResourceForKeyword`,

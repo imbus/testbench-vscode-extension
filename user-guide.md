@@ -143,6 +143,12 @@ Example `ls.config.json`
 
 - **Creating resources:** Use the 'Create Resource' button on a subdivision to create a local `.resource` file. Created resource files will be located according to the 'Resource Directory Path' setting and the subdivision's hierarchy under the 'Resource Root Regex' cut point. After creation, the file is revealed in the VS Code Explorer and opened in the editor
 
+- **Creating subdivisions:**
+    - Use the **Create Root Subdivision** button in the Test Elements view title bar to create a Robot Resource subdivision at the TOV root
+    - Right-click a subdivision and choose **Create Subdivision** to create a Robot Resource child subdivision under that selected parent
+    - The extension appends the configured Resource Marker suffix automatically if it is missing, so you do not need to type the marker manually
+    - After successful creation, the tree is refreshed and the new subdivision appears according to your active resource marker filters
+
 - **Visual indicators:** Subdivision tree items that are locally available as resource files show differently colored icons to indicate their availability. The 'Create Resource' button changes to 'Open Resource' for existing resource files
 
 - **Keyword navigation:**

@@ -9,7 +9,7 @@ import { TestElementData, TestElementItemData, TestElementsTreeItem, TestElement
 import { TreeViewConfig } from "../../core/TreeViewConfig";
 import { TestElementsDataProvider } from "./TestElementsDataProvider";
 import { testElementsConfig } from "./TestElementsConfig";
-import { PlayServerConnection } from "../../../testBenchConnection";
+import { PlayServerConnection, PlayServerHttpError } from "../../../testBenchConnection";
 import { ResourceFileService } from "./ResourceFileService";
 import { ContextKeys, TestElementItemTypes } from "../../../constants";
 import { treeViews } from "../../../extension";
@@ -24,6 +24,7 @@ import {
 import { hasLsConfig } from "../../../languageServer/lsConfig";
 import { getExtensionSetting } from "../../../configuration";
 import { ConfigKeys } from "../../../constants";
+import { v4 as uuidv4 } from "uuid";
 
 /**
  * Local interface for configuring the generic resource handler.
@@ -56,6 +57,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private currentTovKey: string | null = null;
     private currentTovLabel: string | null = null;
     private currentProjectName: string | null = null;
+    private currentProjectKey: string | null = null;
     private currentTovName: string | null = null;
     private resourceFiles: Map<string, string[]> = new Map();
     private resourceFileService: ResourceFileService;
@@ -622,7 +624,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         tovKey: string,
         tovLabel?: string,
         projectName?: string,
-        tovName?: string
+        tovName?: string,
+        projectKey?: string
     ): Promise<void> {
         const startTime = Date.now();
         this.logger.debug(`[TestElementsTreeView] Loading Test Object Version '${tovName}'...`);
@@ -638,6 +641,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this.currentTovKey = tovKey;
             this.currentTovLabel = tovLabel || null;
             this.currentProjectName = projectName || null;
+            this.currentProjectKey = projectKey ?? this.currentProjectKey;
             this.currentTovName = tovName || null;
             this.resourceFiles.clear();
 
@@ -707,7 +711,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         tovLabel?: string,
         projectName?: string,
         tovName?: string,
-        clearFirst: boolean = true
+        clearFirst: boolean = true,
+        projectKey?: string
     ): Promise<void> {
         try {
             this.logger.debug(
@@ -726,6 +731,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this.currentTovKey = tovKey;
             this.currentTovLabel = tovLabel || null;
             this.currentProjectName = projectName || null;
+            this.currentProjectKey = projectKey ?? this.currentProjectKey;
             this.currentTovName = tovName || null;
             this.resourceFiles.clear();
 
@@ -799,9 +805,18 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         this.currentTovKey = null;
         this.currentTovLabel = null;
         this.currentProjectName = null;
+        this.currentProjectKey = null;
         this.currentTovName = null;
         this.resourceFiles.clear();
         this.resetTitle();
+    }
+
+    /**
+     * Gets the current project key.
+     * @returns The current project key or null if not set
+     */
+    public getCurrentProjectKey(): string | null {
+        return this.currentProjectKey;
     }
 
     /**
@@ -1419,6 +1434,316 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
+     * Creates a Robot Resource subdivision either under the selected subdivision item
+     * or at root level when no item is provided. User is prompted to enter the subdivision name
+     * and an optional description. The configured resource marker suffix is appended
+     * automatically to the subdivision name if missing.
+     *
+     * @param item Optional parent subdivision tree item.
+     */
+    public async promptAndCreateRobotResourceSubdivision(item?: TestElementsTreeItem): Promise<void> {
+        const resourceMarkers = this.getConfiguredResourceMarkers();
+        const autoAppendedMarker = resourceMarkers[0];
+        const autoAppendHintInPrompt = autoAppendedMarker
+            ? ` Resource suffix '${autoAppendedMarker}' is appended automatically if missing.`
+            : "";
+
+        const subdivisionName = await vscode.window.showInputBox({
+            title: item ? "Create Subdivision" : "Create Root Subdivision",
+            prompt: item
+                ? `Enter Robot Resource subdivision name under '${item.label?.toString() || "selected parent"}'. ${autoAppendHintInPrompt}`
+                : `Enter Robot Resource root subdivision name. ${autoAppendHintInPrompt}`,
+            placeHolder: autoAppendedMarker ? "Subdivision name (suffix will be auto-appended)" : "Subdivision name",
+            validateInput: (value) => this.validateSubdivisionName(value)
+        });
+
+        if (subdivisionName === undefined) {
+            return;
+        }
+
+        const trimmedName = subdivisionName.trim();
+        const normalizedName = this.ensureSubdivisionNameHasResourceMarker(trimmedName);
+        const normalizedNameValidationError = this.validateSubdivisionName(normalizedName);
+        if (normalizedNameValidationError) {
+            vscode.window.showErrorMessage(normalizedNameValidationError);
+            return;
+        }
+
+        if (normalizedName !== trimmedName) {
+            this.logger.trace(
+                `[TestElementsTreeView] Auto-appended resource marker to subdivision name: original='${trimmedName}', normalized='${normalizedName}'.`
+            );
+        }
+
+        const promptDescriptionText = await vscode.window.showInputBox({
+            title: "Create Subdivision",
+            prompt: "Optional description (plain text)",
+            placeHolder: "Description (optional)",
+            value: ""
+        });
+
+        if (promptDescriptionText === undefined) {
+            return;
+        }
+
+        const connection = this.getConnection();
+        if (!connection) {
+            vscode.window.showErrorMessage("No active TestBench connection available.");
+            return;
+        }
+
+        const projectKey = this.currentProjectKey;
+        const tovKey = this.currentTovKey;
+        if (!projectKey || !tovKey) {
+            vscode.window.showErrorMessage("Cannot create subdivision: missing project or TOV context.");
+            return;
+        }
+
+        const parentKey = this.resolveParentKeyForSubdivisionCreation(item);
+        if (parentKey === undefined) {
+            vscode.window.showErrorMessage("Cannot create subdivision: selected parent has no valid key.");
+            return;
+        }
+
+        const generatedSubdivisionUid = this.generateSubdivisionUid();
+        const subdivisionCreationRequestBody = this.buildSubdivisionCreationRequestPayload(
+            parentKey,
+            normalizedName,
+            generatedSubdivisionUid,
+            promptDescriptionText
+        );
+
+        try {
+            await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: item ? "Creating subdivision" : "Creating root subdivision",
+                    cancellable: false
+                },
+                async () => {
+                    this.logger.trace(
+                        `[TestElementsTreeView] Creating subdivision (projectKey=${projectKey}, tovKey=${tovKey}, parentKey='${parentKey}', name='${normalizedName}', uid='${generatedSubdivisionUid}', uidLength=${generatedSubdivisionUid.length}).`
+                    );
+                    await connection.createSubdivisionOnServer(projectKey, tovKey, subdivisionCreationRequestBody);
+                }
+            );
+
+            this.refresh();
+            vscode.window.showInformationMessage(`Subdivision '${normalizedName}' created successfully.`);
+        } catch (error) {
+            if (error instanceof PlayServerHttpError) {
+                this.handleSubdivisionCreationHttpError(error);
+                return;
+            }
+
+            this.logger.error("[TestElementsTreeView] Unexpected error while creating subdivision:", error);
+            vscode.window.showErrorMessage(
+                `Failed to create subdivision: ${error instanceof Error ? error.message : "Unknown error"}`
+            );
+        }
+    }
+
+    /**
+     * Resolves the parent key for subdivision creation.
+     * Root subdivisions use null, child subdivisions use the selected item's key.
+     *
+     * @param treeItem Optional selected subdivision item.
+     * @returns null for root creation, subdivision key for child creation, or undefined for invalid parent item.
+     */
+    private resolveParentKeyForSubdivisionCreation(treeItem?: TestElementsTreeItem): string | null | undefined {
+        if (!treeItem) {
+            return null;
+        }
+
+        if (treeItem.data.testElementType !== TestElementType.Subdivision) {
+            return undefined;
+        }
+
+        const parentKey = this.extractSubdivisionKey(treeItem);
+        return parentKey && parentKey.trim().length > 0 ? parentKey : undefined;
+    }
+
+    /**
+     * Builds the create subdivision request body payload sent to the server.
+     * @param parentKey The parent subdivision key or null for root subdivisions.
+     * @param name The name of the new subdivision.
+     * @param uid The unique identifier for the new subdivision.
+     * @param descriptionText The plain text description entered by the user.
+     * @returns The request body object for subdivision creation API call.
+     */
+    private buildSubdivisionCreationRequestPayload(
+        parentKey: string | null,
+        name: string,
+        uid: string,
+        descriptionText: string
+    ) {
+        return {
+            parentKey,
+            name,
+            uid,
+            description: {
+                html: this.buildDescriptionHtml(descriptionText),
+                images: []
+            }
+        };
+    }
+
+    /**
+     * Generates a short UID format that fits TestBench server constraints.
+     * @returns A compact, foreign-style UID for subdivision creation.
+     */
+    private generateSubdivisionUid(): string {
+        const compactUID = uuidv4().replace(/-/g, "").slice(0, 16);
+        return `vsc-${compactUID}`;
+    }
+
+    /**
+     * Ensures newly created subdivision names end with one of the configured resource markers.
+     * If no marker is configured, the name is returned unchanged.
+     *
+     * @param subdivisionName Raw user-entered subdivision name.
+     * @returns Name with resource marker suffix when needed.
+     */
+    private ensureSubdivisionNameHasResourceMarker(subdivisionName: string): string {
+        const resourceMarkers = this.getConfiguredResourceMarkers();
+
+        if (resourceMarkers.length === 0) {
+            return subdivisionName;
+        }
+
+        const nameAlreadyHasSuffix = resourceMarkers.some((marker) => subdivisionName.endsWith(marker));
+        if (nameAlreadyHasSuffix) {
+            return subdivisionName;
+        }
+
+        const markerToAppend = resourceMarkers[0];
+        const separator = subdivisionName.endsWith(" ") ? "" : " ";
+        return `${subdivisionName}${separator}${markerToAppend}`;
+    }
+
+    /**
+     * Returns non-empty configured resource markers.
+     */
+    private getConfiguredResourceMarkers(): string[] {
+        return (
+            getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER)?.filter(
+                (marker) => typeof marker === "string" && marker.trim().length > 0
+            ) || []
+        );
+    }
+
+    /**
+     * Extracts the subdivision key expected by the create subdivision endpoint.
+     *
+     * @param subdivisionTreeItem The subdivision tree item.
+     * @returns The subdivision key, if available.
+     */
+    private extractSubdivisionKey(subdivisionTreeItem: TestElementsTreeItem): string | undefined {
+        const subdivisionDetails = subdivisionTreeItem.data.details as {
+            key?: string;
+            Subdivision_key?: { serial?: string };
+        };
+
+        const keyFromDetails = subdivisionDetails?.key;
+        if (keyFromDetails && keyFromDetails.trim().length > 0) {
+            return keyFromDetails;
+        }
+
+        const serialFromDetails = subdivisionDetails?.Subdivision_key?.serial;
+        if (serialFromDetails && serialFromDetails.trim().length > 0) {
+            return serialFromDetails;
+        }
+
+        if (typeof subdivisionTreeItem.data.id === "string" && subdivisionTreeItem.data.id.includes("_")) {
+            const [prefix] = subdivisionTreeItem.data.id.split("_", 1);
+            if (prefix && prefix.trim().length > 0) {
+                return prefix;
+            }
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Validates subdivision names against server-side constraints.
+     *
+     * @param nameToValidate The name to validate.
+     * @returns Validation message or undefined when valid.
+     */
+    private validateSubdivisionName(nameToValidate: string): string | undefined {
+        const trimmedName = nameToValidate.trim();
+        if (trimmedName.length < 1) {
+            return "Subdivision name must not be empty.";
+        }
+
+        if (trimmedName.length > 255) {
+            return "Subdivision name must be at most 255 characters.";
+        }
+
+        if (/[/.',<;>&]/.test(trimmedName)) {
+            return "Subdivision name contains invalid characters: / . ' , < ; > &";
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Builds safe HTML for subdivision description from plain text.
+     *
+     * @param descriptionText Plain text entered by the user.
+     * @returns HTML content for API payload.
+     */
+    private buildDescriptionHtml(descriptionText: string): string {
+        const sanitizedDescription = descriptionText
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+
+        return `<html><body>${sanitizedDescription}</body></html>`;
+    }
+
+    /**
+     * Maps subdivision creation API errors to user-facing messages based on TestBench API specifications.
+     *
+     * @param error The API error.
+     */
+    private handleSubdivisionCreationHttpError(error: PlayServerHttpError): void {
+        this.logger.error(
+            `[TestElementsTreeView] createSubdivision HTTP error status=${error.statusCode}, message='${error.message}', response=${JSON.stringify(error.responseData)}`
+        );
+
+        switch (error.statusCode) {
+            case 400:
+                vscode.window.showErrorMessage(`Subdivision creation failed (400): ${error.message || "Bad request."}`);
+                return;
+            case 403:
+                vscode.window.showErrorMessage(
+                    "Subdivision creation failed (403): You need administrator, manager, or designer rights in this project."
+                );
+                return;
+            case 404:
+                vscode.window.showErrorMessage(
+                    "Subdivision creation failed (404): Project, TOV, or parent subdivision was not found."
+                );
+                return;
+            case 409:
+                vscode.window.showErrorMessage(
+                    "Subdivision creation failed (409): Name/UID conflict or parent subdivision is not lockable."
+                );
+                return;
+            case 422:
+                vscode.window.showErrorMessage(
+                    "Subdivision creation failed (422): Name must be 1-255 chars and must not contain / . ' , < ; > &."
+                );
+                return;
+            default:
+                vscode.window.showErrorMessage(`Subdivision creation failed (${error.statusCode}): ${error.message}`);
+        }
+    }
+
+    /**
      * Disposes of all resources and cleans up the tree view.
      */
     public async dispose(): Promise<void> {
@@ -1465,7 +1790,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 this.currentTovKey,
                 this.currentTovLabel || undefined,
                 this.currentProjectName || undefined,
-                this.currentTovName || undefined
+                this.currentTovName || undefined,
+                this.currentProjectKey || undefined
             );
         } else {
             this.logger.trace("[TestElementsTreeView] No TOV key available while refreshing, clearing tree");

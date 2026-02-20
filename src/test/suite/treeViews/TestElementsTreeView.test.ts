@@ -10,7 +10,7 @@ import {
     TestElementsTreeItem,
     TestElementType
 } from "../../../treeViews/implementations/testElements/TestElementsTreeItem";
-import { PlayServerConnection } from "../../../testBenchConnection";
+import { PlayServerConnection, PlayServerHttpError } from "../../../testBenchConnection";
 import { TestBenchLogger } from "../../../testBenchLogger";
 import { EventBus } from "../../../treeViews/utils/EventBus";
 import { StateManager } from "../../../treeViews/state/StateManager";
@@ -134,6 +134,117 @@ suite("TestElementsTreeView", function () {
                 assert.ok(eventTypes.includes(expectedType), `Should handle ${expectedType}`);
             }
         }
+    });
+
+    suite("Subdivision Creation", function () {
+        test("createSubdivision should use null parentKey for root subdivision", async function () {
+            (treeView as any).currentProjectKey = "PROJ-1";
+            (treeView as any).currentTovKey = "TOV-1";
+
+            const showInputBoxStub = testEnv.sandbox.stub(vscode.window, "showInputBox");
+            showInputBoxStub.onFirstCall().resolves("Root Subdivision");
+            showInputBoxStub.onSecondCall().resolves("");
+
+            mockConnection.createSubdivisionOnServer.resolves({
+                key: "SUB-ROOT",
+                name: "Root Subdivision",
+                uniqueID: "UID-ROOT",
+                locker: { key: "", name: "" },
+                description: "",
+                parentUniqueID: "",
+                libraryKey: "",
+                path: "",
+                references: []
+            } as any);
+
+            const refreshStub = testEnv.sandbox.stub(treeView, "refresh");
+
+            await treeView.promptAndCreateRobotResourceSubdivision();
+
+            assert.ok(mockConnection.createSubdivisionOnServer.calledOnce, "Should call createSubdivision API");
+            const [projectKeyArg, tovKeyArg, payloadArg] = mockConnection.createSubdivisionOnServer.firstCall.args;
+            assert.strictEqual(projectKeyArg, "PROJ-1");
+            assert.strictEqual(tovKeyArg, "TOV-1");
+            assert.strictEqual(payloadArg.parentKey, null);
+            assert.ok(refreshStub.calledOnce, "Should refresh tree after successful creation");
+        });
+
+        test("createSubdivision should create subdivision in testbench server and refresh tree", async function () {
+            const parentItem = createMockTestElementItem(
+                createMockTestElementData({
+                    details: {
+                        Subdivision_key: {
+                            serial: "PARENT-123"
+                        }
+                    }
+                })
+            );
+
+            (treeView as any).currentProjectKey = "PROJ-1";
+            (treeView as any).currentTovKey = "TOV-1";
+
+            const showInputBoxStub = testEnv.sandbox.stub(vscode.window, "showInputBox");
+            showInputBoxStub.onFirstCall().resolves("Child Subdivision");
+            showInputBoxStub.onSecondCall().resolves("My description");
+
+            mockConnection.createSubdivisionOnServer.resolves({
+                key: "SUB-NEW",
+                name: "Child Subdivision",
+                uniqueID: "UID-NEW",
+                locker: { key: "", name: "" },
+                description: "",
+                parentUniqueID: "",
+                libraryKey: "",
+                path: "",
+                references: []
+            } as any);
+
+            const refreshStub = testEnv.sandbox.stub(treeView, "refresh");
+
+            await treeView.promptAndCreateRobotResourceSubdivision(parentItem);
+
+            assert.ok(mockConnection.createSubdivisionOnServer.calledOnce, "Should call createSubdivision API");
+            const [projectKeyArg, tovKeyArg, payloadArg] = mockConnection.createSubdivisionOnServer.firstCall.args;
+            assert.strictEqual(projectKeyArg, "PROJ-1");
+            assert.strictEqual(tovKeyArg, "TOV-1");
+            assert.strictEqual(payloadArg.parentKey, "PARENT-123");
+            assert.strictEqual(payloadArg.name, "Child Subdivision");
+            assert.ok(typeof payloadArg.uid === "string" && payloadArg.uid.length > 0, "Should generate UID");
+            assert.ok(refreshStub.calledOnce, "Should refresh tree after successful creation");
+            assert.ok(testEnv.vscodeMocks.showInformationMessageStub.calledOnce, "Should show success message");
+        });
+
+        test("createSubdivision should show conflict error message on status 409", async function () {
+            const parentItem = createMockTestElementItem(
+                createMockTestElementData({
+                    details: {
+                        Subdivision_key: {
+                            serial: "PARENT-123"
+                        }
+                    }
+                })
+            );
+
+            (treeView as any).currentProjectKey = "PROJ-1";
+            (treeView as any).currentTovKey = "TOV-1";
+
+            const showInputBoxStub = testEnv.sandbox.stub(vscode.window, "showInputBox");
+            showInputBoxStub.onFirstCall().resolves("Existing Name");
+            showInputBoxStub.onSecondCall().resolves("");
+
+            mockConnection.createSubdivisionOnServer.rejects(
+                new PlayServerHttpError("Conflict", 409, { message: "Name exists" })
+            );
+
+            await treeView.promptAndCreateRobotResourceSubdivision(parentItem);
+
+            assert.ok(testEnv.vscodeMocks.showErrorMessageStub.called, "Should show error message");
+            const firstErrorMessageArg = testEnv.vscodeMocks.showErrorMessageStub.firstCall.args[0];
+            assert.ok(
+                typeof firstErrorMessageArg === "string" && firstErrorMessageArg.includes("409"),
+                "Should include 409 status in error message"
+            );
+        });
     });
 
     suite("Resource File Operations", function () {

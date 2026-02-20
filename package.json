@@ -457,6 +457,18 @@
                 "icon": "$(new-file)"
             },
             {
+                "command": "testbenchExtension.createSubdivisionInTestElementsView",
+                "title": "Create Subdivision Under This Item",
+                "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\./",
+                "icon": "$(new-folder)"
+            },
+            {
+                "command": "testbenchExtension.createRootSubdivisionInTestElementsView",
+                "title": "Create Root Subdivision",
+                "when": "view == testbench.testElements",
+                "icon": "$(new-folder)"
+            },
+            {
                 "command": "testbenchExtension.openSubdivisionFolderInExplorer",
                 "title": "Open in Explorer View",
                 "when": "view == testbench.testElements && viewItem == 'testElement.subdivision.folder'",
@@ -634,6 +646,14 @@
                     "when": "false"
                 },
                 {
+                    "command": "testbenchExtension.createSubdivisionInTestElementsView",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.createRootSubdivisionInTestElementsView",
+                    "when": "false"
+                },
+                {
                     "command": "testbenchExtension.openSubdivisionFolderInExplorer",
                     "when": "false"
                 },
@@ -799,6 +819,12 @@
                     }
                 },
                 {
+                    "command": "testbenchExtension.createRootSubdivisionInTestElementsView",
+                    "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable",
+                    "group": "navigation@2",
+                    "icon": "$(new-folder)"
+                },
+                {
                     "command": "testbenchExtension.searchInTestElementsTreeOff",
                     "when": "view == testbench.testElements && !testbenchExtension.testElementsTreeHasSearchFilter",
                     "group": "navigation@3",
@@ -871,6 +897,11 @@
                     "command": "testbenchExtension.openMissingSubdivisionInTestElementsView",
                     "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable && viewItem == 'testElement.subdivision.resource.missing'",
                     "group": "inline@1"
+                },
+                {
+                    "command": "testbenchExtension.createSubdivisionInTestElementsView",
+                    "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\./",
+                    "group": "inline@2"
                 },
                 {
                     "command": "testbenchExtension.openSubdivisionFolderInExplorer",

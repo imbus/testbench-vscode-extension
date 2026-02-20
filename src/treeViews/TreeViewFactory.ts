@@ -402,10 +402,10 @@ export class TreeViewFactory {
 
         // Projects to Test Elements: When version is selected
         const versionSelectionDisposable = projectsTree.eventBus.on("version:selected", async (event) => {
-            const { tovKey, tovLabel, projectName, tovName } = event.data;
+            const { tovKey, tovLabel, projectName, tovName, projectKey } = event.data;
             this.logger.debug(`[TreeViewFactory] Selected Test Object Version '${tovLabel}' in projects tree.`);
 
-            await testElementsTree.loadTov(tovKey, tovLabel, projectName, tovName);
+            await testElementsTree.loadTov(tovKey, tovLabel, projectName, tovName, true, projectKey);
         });
 
         // Test Themes to Projects: When test generation completes
@@ -709,7 +709,9 @@ export class TreeViewFactory {
                 savedContext.tovKey,
                 savedContext.tovName,
                 savedContext.projectName,
-                savedContext.tovName
+                savedContext.tovName,
+                true,
+                savedContext.projectKey
             );
 
             this.logger.trace(
