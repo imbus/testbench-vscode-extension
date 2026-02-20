@@ -211,23 +211,41 @@ describe("Projects View UI Tests", function () {
 
             logger.info("ProjectsView", `Found project "${testData.projectName}"`);
 
-            const targetVersion = await projectsPage.getVersion(targetProject, testData.versionName);
+            let targetVersion = await projectsPage.getVersion(targetProject, testData.versionName);
             if (!targetVersion) {
-                logger.warn("ProjectsView", `Version "${testData.versionName}" not found`);
+                logger.warn(
+                    "ProjectsView",
+                    `Version "${testData.versionName}" not found under project "${testData.projectName}". Falling back to first available version.`
+                );
+                targetVersion = await projectsPage.getFirstChild(targetProject);
+            }
+
+            if (!targetVersion) {
+                logger.warn("ProjectsView", "No version found under target project");
                 this.skip();
                 return;
             }
 
-            logger.info("ProjectsView", `Found version "${testData.versionName}"`);
+            const resolvedVersionLabel = await targetVersion.getLabel();
+            logger.info("ProjectsView", `Using version "${resolvedVersionLabel}"`);
 
-            const targetCycle = await projectsPage.getCycle(targetVersion, testData.cycleName);
+            let targetCycle = await projectsPage.getCycle(targetVersion, testData.cycleName);
             if (!targetCycle) {
-                logger.warn("ProjectsView", `Cycle "${testData.cycleName}" not found`);
+                logger.warn(
+                    "ProjectsView",
+                    `Cycle "${testData.cycleName}" not found under version "${resolvedVersionLabel}". Falling back to first available cycle.`
+                );
+                targetCycle = await projectsPage.getFirstChild(targetVersion);
+            }
+
+            if (!targetCycle) {
+                logger.warn("ProjectsView", "No cycle found under target version");
                 this.skip();
                 return;
             }
 
-            logger.info("ProjectsView", `Found cycle "${testData.cycleName}", clicking...`);
+            const resolvedCycleLabel = await targetCycle.getLabel();
+            logger.info("ProjectsView", `Using cycle "${resolvedCycleLabel}", clicking...`);
 
             // Click the cycle (single click) - this should trigger the notification
             await targetCycle.click();

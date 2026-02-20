@@ -562,9 +562,16 @@ export async function waitForTreeItemChildren(
                         return false;
                     }
 
-                    // Check that children are available
+                    // Check that children are available.
+                    // If the item reports children, wait for at least one child to appear.
+                    // If it has no children, an empty array is valid.
+                    const hasChildren = await item.hasChildren();
                     const children = await item.getChildren();
-                    return children !== null && children.length >= 0; // Allow empty children array (item might have no children)
+                    if (!children) {
+                        return false;
+                    }
+
+                    return hasChildren ? children.length > 0 : children.length === 0;
                 } catch {
                     return false;
                 }

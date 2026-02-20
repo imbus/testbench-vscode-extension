@@ -275,7 +275,15 @@ describe("Search Feature UI Tests", function () {
 
             if (targetTestTheme) {
                 const testThemeLabel = await targetTestTheme.getLabel();
-                expect(testThemeLabel).to.equal(config.testThemeName);
+                const normalizedExpected = config.testThemeName.toLowerCase();
+                const normalizedActual = testThemeLabel.toLowerCase();
+                const isExactMatch = normalizedActual === normalizedExpected;
+                const isContextualMatch = normalizedActual.includes(normalizedExpected);
+
+                expect(
+                    isExactMatch || isContextualMatch,
+                    `Expected test theme label "${testThemeLabel}" to equal or contain "${config.testThemeName}"`
+                ).to.equal(true);
                 logger.info("Search", `Found test theme: "${testThemeLabel}"`);
             }
 

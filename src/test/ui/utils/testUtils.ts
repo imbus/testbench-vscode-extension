@@ -290,7 +290,7 @@ export async function ensureWorkspaceIsOpen(config: WorkspaceConfig = {}): Promi
     const driver = browser.driver;
 
     // Resolve path relative to project root
-    const projectRoot = path.resolve(__dirname, "../../../");
+    const projectRoot = path.resolve(__dirname, "../../../../");
     const workspacePath = path.join(projectRoot, TEST_PATHS.BASE_STORAGE, TEST_PATHS.WORKSPACE);
 
     if (cleanStart && fs.existsSync(workspacePath)) {
@@ -381,7 +381,7 @@ export async function getCurrentWorkspacePath(driver: WebDriver): Promise<string
         }
 
         // Try to extract workspace path from title
-        const projectRoot = path.resolve(__dirname, "../../../");
+        const projectRoot = path.resolve(__dirname, "../../../../");
         const workspaceRelativePath = `${TEST_PATHS.BASE_STORAGE}/${TEST_PATHS.WORKSPACE}`;
         const possibleWorkspaceNames = [workspaceRelativePath, TEST_PATHS.WORKSPACE];
 
@@ -435,7 +435,7 @@ export async function cleanupWorkspace(
 
         if (!targetPath) {
             // Fallback to default workspace
-            const projectRoot = path.resolve(__dirname, "../../../");
+            const projectRoot = path.resolve(__dirname, "../../../../");
             targetPath = path.join(projectRoot, TEST_PATHS.BASE_STORAGE, TEST_PATHS.WORKSPACE);
         }
 

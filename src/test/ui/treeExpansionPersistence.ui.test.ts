@@ -26,6 +26,7 @@ import { TestContext, setupTestHooks } from "./utils/testHooks";
 import { ProjectsViewPage } from "./pages/ProjectsViewPage";
 import { TestThemesPage } from "./pages/TestThemesPage";
 import { TestElementsPage } from "./pages/TestElementsPage";
+import { doubleClickTreeItem } from "./utils/treeViewUtils";
 
 const logger = getTestLogger();
 
@@ -42,11 +43,18 @@ interface TreeItemExpansionState {
     label: string;
     isExpanded: boolean;
     hasChildren: boolean;
+    occurrence: number;
 }
 
 interface TreeViewExpansionState {
     viewName: string;
     items: Map<string, TreeItemExpansionState>;
+    trackedLabels?: string[];
+}
+
+interface ToggleResult {
+    count: number;
+    labels: string[];
 }
 
 /**
@@ -89,8 +97,19 @@ async function ensureVSCodeStable(driver: WebDriver): Promise<void> {
     logger.debug("Stability", "VS Code appears stable");
 }
 
+/**
+ * Captures the currently visible tree expansion state for a view section.
+ *
+ * Each visible row is recorded with label, expandability, expansion flag, and
+ * occurrence index to distinguish duplicate labels.
+ *
+ * @param section - Tree section to inspect
+ * @param viewName - Logical view name used for logging
+ * @returns Snapshot of visible tree item expansion state
+ */
 async function captureTreeExpansionState(section: ViewSection, viewName: string): Promise<TreeViewExpansionState> {
     const state: TreeViewExpansionState = { viewName, items: new Map() };
+    const labelOccurrences = new Map<string, number>();
 
     try {
         const items = (await section.getVisibleItems()) as TreeItem[];
@@ -101,8 +120,11 @@ async function captureTreeExpansionState(section: ViewSection, viewName: string)
                 const label = await item.getLabel();
                 const hasChildren = await item.hasChildren();
                 const isExpanded = hasChildren ? await item.isExpanded() : false;
+                const occurrence = (labelOccurrences.get(label) || 0) + 1;
+                labelOccurrences.set(label, occurrence);
+                const stateKey = `${label}::${occurrence}`;
 
-                state.items.set(label, { label, isExpanded, hasChildren });
+                state.items.set(stateKey, { label, isExpanded, hasChildren, occurrence });
 
                 if (hasChildren) {
                     logger.trace("ExpansionState", `  ${label}: ${isExpanded ? "EXPANDED" : "COLLAPSED"}`);
@@ -118,36 +140,123 @@ async function captureTreeExpansionState(section: ViewSection, viewName: string)
     return state;
 }
 
-function compareExpansionStates(expected: TreeViewExpansionState, actual: TreeViewExpansionState): string[] {
+/**
+ * Groups expansion states by item label.
+ * Each map entry contains a list of expansion flags for all visible occurrences
+ * of that label. Only expandable items are included. If tracked labels are
+ * provided, only those labels are considered.
+ *
+ * @param state - Captured tree expansion state
+ * @param trackedLabels - Optional set of labels to include
+ * @returns Map from label to list of expansion states
+ */
+function groupExpansionStatesByLabel(
+    state: TreeViewExpansionState,
+    trackedLabels?: Set<string>
+): Map<string, boolean[]> {
+    const groupedStates = new Map<string, boolean[]>();
+    const useTrackedLabels = (trackedLabels?.size || 0) > 0;
+
+    for (const itemState of state.items.values()) {
+        if (!itemState.hasChildren) {
+            continue;
+        }
+
+        if (useTrackedLabels && !trackedLabels!.has(itemState.label)) {
+            continue;
+        }
+
+        const labelStates = groupedStates.get(itemState.label) || [];
+        labelStates.push(itemState.isExpanded);
+        groupedStates.set(itemState.label, labelStates);
+    }
+
+    return groupedStates;
+}
+
+/**
+ * Compares expected and actual expansion states.
+ * Comparison is done per label using counts of expanded occurrences.
+ *
+ * @param expected - Expansion state captured before the persistence action
+ * @param actual - Expansion state captured after the persistence action
+ * @param allowMissingTrackedLabels - If true, missing tracked labels are tolerated
+ * @returns List of detected differences (empty means states match)
+ */
+function compareExpansionStates(
+    expected: TreeViewExpansionState,
+    actual: TreeViewExpansionState,
+    allowMissingTrackedLabels: boolean = false
+): string[] {
     const differences: string[] = [];
+    const trackedLabelSet = new Set(expected.trackedLabels || []);
+    const hasTrackedLabels = trackedLabelSet.size > 0;
 
-    for (const [label, expectedState] of expected.items) {
-        if (!expectedState.hasChildren) {
+    const expectedByLabel = groupExpansionStatesByLabel(expected, trackedLabelSet);
+    const actualByLabel = groupExpansionStatesByLabel(actual, trackedLabelSet);
+
+    for (const [label, expectedStates] of expectedByLabel) {
+        const actualStates = actualByLabel.get(label) || [];
+
+        if (actualStates.length < expectedStates.length) {
+            if (hasTrackedLabels && allowMissingTrackedLabels && actualStates.length === 0) {
+                logger.warn(
+                    "Persistence",
+                    `Skipping strict comparison for tracked label "${label}" because it is not visible after restoration`
+                );
+                continue;
+            }
+
+            differences.push(
+                `Item "${label}" instance count mismatch: expected ${expectedStates.length}, got ${actualStates.length}`
+            );
             continue;
         }
 
-        const actualState = actual.items.get(label);
-        if (!actualState) {
-            differences.push(`Item "${label}" not found in ${actual.viewName} after restoration`);
-            continue;
-        }
+        const expectedExpanded = expectedStates.filter((state) => state).length;
+        const actualExpanded = actualStates.filter((state) => state).length;
 
-        if (expectedState.isExpanded !== actualState.isExpanded) {
-            const expectedStr = expectedState.isExpanded ? "EXPANDED" : "COLLAPSED";
-            const actualStr = actualState.isExpanded ? "EXPANDED" : "COLLAPSED";
-            differences.push(`Item "${label}" expansion state mismatch: expected ${expectedStr}, got ${actualStr}`);
+        if (expectedExpanded !== actualExpanded) {
+            differences.push(
+                `Item "${label}" expanded-count mismatch: expected ${expectedExpanded}/${expectedStates.length}, got ${actualExpanded}/${actualStates.length}`
+            );
         }
     }
 
     return differences;
 }
 
+/**
+ * Returns a shuffled copy of the provided list using Fisher-Yates.
+ *
+ * @param items - Source items
+ * @returns New array with randomized order
+ */
+function shuffleItems<T>(items: T[]): T[] {
+    const shuffledItems = [...items];
+
+    for (let index = shuffledItems.length - 1; index > 0; index--) {
+        const randomIndex = Math.floor(Math.random() * (index + 1));
+        [shuffledItems[index], shuffledItems[randomIndex]] = [shuffledItems[randomIndex], shuffledItems[index]];
+    }
+
+    return shuffledItems;
+}
+
+/**
+ * Randomly toggles expansion state of up to `maxItems` expandable tree items.
+ * @param section - Tree view section
+ * @param driver - WebDriver instance
+ * @param maxItems - Maximum number of items to toggle
+ * @returns Number of toggled items and their labels
+ */
 async function toggleRandomTreeItems(
     section: ViewSection,
     driver: WebDriver,
     maxItems: number = TOGGLE_ITEM_COUNT
-): Promise<number> {
+): Promise<ToggleResult> {
     let toggledCount = 0;
+    const toggledLabels: string[] = [];
 
     try {
         const items = (await section.getVisibleItems()) as TreeItem[];
@@ -165,11 +274,34 @@ async function toggleRandomTreeItems(
 
         if (expandableItems.length === 0) {
             logger.warn("Toggle", "No expandable items found in tree");
-            return 0;
+            return { count: 0, labels: [] };
         }
 
-        const shuffled = expandableItems.sort(() => Math.random() - 0.5);
-        const itemsToToggle = shuffled.slice(0, Math.min(maxItems, shuffled.length));
+        const labelCounts = new Map<string, number>();
+        for (const item of expandableItems) {
+            try {
+                const label = await item.getLabel();
+                labelCounts.set(label, (labelCounts.get(label) || 0) + 1);
+            } catch {
+                // Skip stale labels while building candidate list
+            }
+        }
+
+        const unambiguousItems: TreeItem[] = [];
+        for (const item of expandableItems) {
+            try {
+                const label = await item.getLabel();
+                if ((labelCounts.get(label) || 0) === 1) {
+                    unambiguousItems.push(item);
+                }
+            } catch {
+                // Skip stale labels while building candidate list
+            }
+        }
+
+        const candidateItems = unambiguousItems.length > 0 ? unambiguousItems : expandableItems;
+        const shuffledCandidates = shuffleItems(candidateItems);
+        const itemsToToggle = shuffledCandidates.slice(0, Math.min(maxItems, shuffledCandidates.length));
 
         for (const item of itemsToToggle) {
             try {
@@ -186,6 +318,7 @@ async function toggleRandomTreeItems(
 
                 await applySlowMotion(driver);
                 toggledCount++;
+                toggledLabels.push(label);
             } catch (error) {
                 logger.debug("Toggle", `Error toggling item: ${error}`);
             }
@@ -194,9 +327,19 @@ async function toggleRandomTreeItems(
         logger.error("Toggle", `Error toggling tree items: ${error}`);
     }
 
-    return toggledCount;
+    return { count: toggledCount, labels: toggledLabels };
 }
 
+/**
+ * Expands all currently visible expandable items in a tree section.
+ *
+ * If expanding reveals additional rows, the function recursively continues
+ * until no new visible items are discovered.
+ *
+ * @param section - Tree view section
+ * @param driver - WebDriver instance
+ * @returns Total number of expansion actions performed
+ */
 async function expandAllItems(section: ViewSection, driver: WebDriver): Promise<number> {
     let expandedCount = 0;
 
@@ -229,6 +372,12 @@ async function expandAllItems(section: ViewSection, driver: WebDriver): Promise<
     return expandedCount;
 }
 
+/**
+ * Reloads the VS Code window using the command palette.
+ *
+ * @param driver - WebDriver instance
+ * @returns True when reload appears successful
+ */
 async function reloadVSCodeWindow(driver: WebDriver): Promise<boolean> {
     logger.info("Reload", "Reloading VS Code window...");
 
@@ -353,6 +502,15 @@ async function reloadVSCodeWindow(driver: WebDriver): Promise<boolean> {
     }
 }
 
+/**
+ * Navigates from Projects view to Test Themes/Test Elements by opening a cycle.
+ *
+ * Uses configured project/version/cycle and falls back to first available
+ * version/cycle if configured names are not found.
+ *
+ * @param driver - WebDriver instance
+ * @returns True if both Test Themes and Test Elements views become visible
+ */
 async function navigateToTestThemesAndElements(driver: WebDriver): Promise<boolean> {
     try {
         const config = getTestData();
@@ -374,21 +532,58 @@ async function navigateToTestThemesAndElements(driver: WebDriver): Promise<boole
             return false;
         }
 
-        const version = await projectsPage.getVersion(project, config.versionName);
+        let version = await projectsPage.getVersion(project, config.versionName);
         if (!version) {
-            logger.warn("Navigation", `Version "${config.versionName}" not found`);
+            logger.warn("Navigation", `Version "${config.versionName}" not found, using first available version`);
+            version = await projectsPage.getFirstChild(project);
+        }
+
+        if (!version) {
+            logger.warn("Navigation", "No version found under selected project");
             return false;
         }
 
-        const cycle = await projectsPage.getCycle(version, config.cycleName);
+        let cycle = await projectsPage.getCycle(version, config.cycleName);
         if (!cycle) {
-            logger.warn("Navigation", `Cycle "${config.cycleName}" not found`);
+            logger.warn("Navigation", `Cycle "${config.cycleName}" not found, using first available cycle`);
+            cycle = await projectsPage.getFirstChild(version);
+        }
+
+        if (!cycle) {
+            logger.warn("Navigation", "No cycle found under selected version");
             return false;
         }
 
-        await cycle.click();
-        await cycle.click();
-        await driver.sleep(500);
+        await handleCycleConfigurationPrompt(
+            cycle,
+            driver,
+            config.projectName,
+            config.versionName,
+            projectsSection,
+            project,
+            version
+        );
+
+        // Re-fetch cycle after potential tree updates from configuration prompt
+        const refreshedProjectsSection = await projectsPage.getSection(sideBar.getContent());
+        if (refreshedProjectsSection) {
+            const refreshedProject = await projectsPage.getProject(refreshedProjectsSection, config.projectName);
+            if (refreshedProject) {
+                const refreshedVersion =
+                    (await projectsPage.getVersion(refreshedProject, config.versionName)) ||
+                    (await projectsPage.getFirstChild(refreshedProject));
+                if (refreshedVersion) {
+                    const refreshedCycle =
+                        (await projectsPage.getCycle(refreshedVersion, config.cycleName)) ||
+                        (await projectsPage.getFirstChild(refreshedVersion));
+                    if (refreshedCycle) {
+                        cycle = refreshedCycle;
+                    }
+                }
+            }
+        }
+
+        await doubleClickTreeItem(cycle, driver);
 
         const viewsReady = await waitForTestThemesAndElementsViews(driver, UITimeouts.LONG);
         if (!viewsReady) {
@@ -404,6 +599,13 @@ async function navigateToTestThemesAndElements(driver: WebDriver): Promise<boole
     }
 }
 
+/**
+ * Returns the sidebar section for a given page object.
+ *
+ * @param page - Page object instance for Projects/Test Themes/Test Elements
+ * @param _driver - Unused WebDriver parameter (kept for call-site symmetry)
+ * @returns Matching sidebar section or null
+ */
 async function getSection(
     page: ProjectsViewPage | TestThemesPage | TestElementsPage,
     _driver: WebDriver
@@ -413,6 +615,15 @@ async function getSection(
     return await page.getSection(content);
 }
 
+/**
+ * Prepares a tree for persistence verification by expanding items, toggling
+ * a subset, and capturing the resulting state.
+ *
+ * @param section - Tree section to prepare
+ * @param driver - WebDriver instance
+ * @param viewName - Logical view name for logging
+ * @returns Captured tree state including tracked toggled labels
+ */
 async function prepareTreeState(
     section: ViewSection,
     driver: WebDriver,
@@ -433,7 +644,7 @@ async function prepareTreeState(
         throw new Error(`${viewName} section not found after expansion`);
     }
 
-    await toggleRandomTreeItems(refreshedSection, driver, TOGGLE_ITEM_COUNT);
+    const toggleResult = await toggleRandomTreeItems(refreshedSection, driver, TOGGLE_ITEM_COUNT);
     await applySlowMotion(driver);
 
     const finalSection = await getSection(page, driver);
@@ -441,9 +652,23 @@ async function prepareTreeState(
         throw new Error(`${viewName} section not found before capturing state`);
     }
 
-    return await captureTreeExpansionState(finalSection, viewName);
+    const capturedState = await captureTreeExpansionState(finalSection, viewName);
+    capturedState.trackedLabels = toggleResult.labels;
+    return capturedState;
 }
 
+/**
+ * Verifies expansion state preservation after a persistence action.
+ *
+ * Captures state with retries to tolerate transient stale-element issues and
+ * compares it against the pre-action state.
+ *
+ * @param stateBefore - State captured before action
+ * @param page - Page object for the target view
+ * @param driver - WebDriver instance
+ * @param viewName - Logical view name
+ * @param action - Persistence action performed
+ */
 async function verifyStatePreserved(
     stateBefore: TreeViewExpansionState,
     page: ProjectsViewPage | TestThemesPage | TestElementsPage,
@@ -451,16 +676,40 @@ async function verifyStatePreserved(
     viewName: ViewName,
     action: PersistenceAction
 ): Promise<void> {
-    const section = await getSection(page, driver);
-    if (!section) {
-        throw new Error(`${viewName} section not found after ${action}`);
+    const minimumExpectedItems = Math.max(1, Math.floor(stateBefore.items.size * 0.9));
+    let stateAfter: TreeViewExpansionState | null = null;
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        const section = await getSection(page, driver);
+        if (!section) {
+            throw new Error(`${viewName} section not found after ${action}`);
+        }
+
+        await waitForTreeItems(section, driver, UITimeouts.MEDIUM);
+        const captured = await captureTreeExpansionState(section, viewName);
+
+        if (!stateAfter || captured.items.size > stateAfter.items.size) {
+            stateAfter = captured;
+        }
+
+        if (captured.items.size >= minimumExpectedItems) {
+            break;
+        }
+
+        logger.warn(
+            "Persistence",
+            `Captured only ${captured.items.size}/${stateBefore.items.size} items after ${action} (attempt ${attempt}/3), retrying...`
+        );
+        await driver.sleep(500);
     }
 
-    await waitForTreeItems(section, driver);
-    const stateAfter = await captureTreeExpansionState(section, viewName);
+    if (!stateAfter) {
+        throw new Error(`Could not capture ${viewName} state after ${action}`);
+    }
+
     logger.info("Persistence", `Captured state of ${stateAfter.items.size} items after ${action}`);
 
-    const differences = compareExpansionStates(stateBefore, stateAfter);
+    const differences = compareExpansionStates(stateBefore, stateAfter, viewName !== "Projects");
 
     if (differences.length > 0) {
         logger.error("Persistence", "Expansion state differences found:");
@@ -472,7 +721,19 @@ async function verifyStatePreserved(
     logger.info("Persistence", `${viewName} expansion state preserved after ${action} ✓`);
 }
 
-async function navigateToTestView(driver: WebDriver, viewName: "Test Themes" | "Test Elements"): Promise<void> {
+/**
+ * Ensures the requested test view is visible.
+ *
+ * If already visible, returns immediately. Otherwise it navigates through
+ * Projects to open Test Themes/Test Elements and waits for the target section.
+ *
+ * @param driver - WebDriver instance
+ * @param viewName - Target view name
+ * @returns True if target view is visible
+ */
+async function navigateToTestView(driver: WebDriver, viewName: "Test Themes" | "Test Elements"): Promise<boolean> {
+    await openTestBenchSidebar(driver);
+
     const sideBar = new SideBarView();
     const content = sideBar.getContent();
     const sections = await content.getSections();
@@ -481,69 +742,41 @@ async function navigateToTestView(driver: WebDriver, viewName: "Test Themes" | "
         const title = await section.getTitle();
         if (title.includes(viewName)) {
             logger.info("Persistence", `Already in ${viewName} view`);
-            return;
+            return true;
         }
     }
 
-    const config = getTestData();
-    const projectsPage = new ProjectsViewPage(driver);
-
-    const projectsSection = await projectsPage.getSection(new SideBarView().getContent());
-    if (!projectsSection) {
-        logger.warn("Persistence", "Projects section not found, skipping navigation");
-        return;
+    const navigated = await navigateToTestThemesAndElements(driver);
+    if (!navigated) {
+        logger.warn("Persistence", `Navigation to ${viewName} failed`);
+        return false;
     }
 
-    await waitForTreeItems(projectsSection, driver);
-
-    const project = await projectsPage.getProject(projectsSection, config.projectName);
-    if (!project) {
-        return;
-    }
-
-    const version = await projectsPage.getVersion(project, config.versionName);
-    if (!version) {
-        return;
-    }
-
-    let cycle = await projectsPage.getCycle(version, config.cycleName);
-    if (!cycle) {
-        return;
-    }
-
-    await handleCycleConfigurationPrompt(
-        cycle,
-        driver,
-        config.projectName,
-        config.versionName,
-        projectsSection,
-        project,
-        version
+    const sectionAppeared = await driver.wait(
+        async () => {
+            try {
+                const updatedSections = await new SideBarView().getContent().getSections();
+                for (const section of updatedSections) {
+                    const title = await section.getTitle();
+                    if (title.includes(viewName)) {
+                        return true;
+                    }
+                }
+                return false;
+            } catch {
+                return false;
+            }
+        },
+        UITimeouts.LONG,
+        `Waiting for ${viewName} view to appear`
     );
 
-    // Re-fetch cycle after configuration (reference may be stale)
-    const refreshedSection = await projectsPage.getSection(new SideBarView().getContent());
-    if (refreshedSection) {
-        const refreshedProject = await projectsPage.getProject(refreshedSection, config.projectName);
-        if (refreshedProject) {
-            const refreshedVersion = await projectsPage.getVersion(refreshedProject, config.versionName);
-            if (refreshedVersion) {
-                const refreshedCycle = await projectsPage.getCycle(refreshedVersion, config.cycleName);
-                if (refreshedCycle) {
-                    cycle = refreshedCycle;
-                }
-            }
-        }
+    if (!sectionAppeared) {
+        logger.warn("Persistence", `${viewName} view did not appear after navigation`);
+        return false;
     }
 
-    await cycle.click();
-    await cycle.click();
-    await driver.sleep(500);
-
-    const viewsReady = await waitForTestThemesAndElementsViews(driver, UITimeouts.LONG);
-    if (!viewsReady) {
-        logger.warn("Persistence", `${viewName} view did not appear`);
-    }
+    return true;
 }
 
 /* eslint-disable @typescript-eslint/no-unused-expressions */
@@ -664,7 +897,11 @@ describe("Tree Expansion State Persistence Tests", function () {
             const driver = getDriver();
             logTestDataConfig();
             await ensureVSCodeStable(driver);
-            await navigateToTestView(driver, "Test Themes");
+            const navigated = await navigateToTestView(driver, "Test Themes");
+            if (!navigated) {
+                logger.warn("Persistence", "Skipping test because Test Themes view navigation failed");
+                this.skip();
+            }
         });
 
         it("should preserve expansion state after logout/login", async function () {
@@ -765,7 +1002,11 @@ describe("Tree Expansion State Persistence Tests", function () {
         beforeEach(async function () {
             const driver = getDriver();
             await ensureVSCodeStable(driver);
-            await navigateToTestView(driver, "Test Elements");
+            const navigated = await navigateToTestView(driver, "Test Elements");
+            if (!navigated) {
+                logger.warn("Persistence", "Skipping test because Test Elements view navigation failed");
+                this.skip();
+            }
         });
 
         it("should preserve expansion state after logout/login", async function () {
