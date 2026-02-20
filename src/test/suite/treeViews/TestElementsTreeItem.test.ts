@@ -8,18 +8,29 @@ import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
 import { EventBus } from "../../../treeViews/utils/EventBus";
 import { UserSessionManager } from "../../../userSessionManager";
 import * as extension from "../../../extension";
+import { getExtensionSetting } from "../../../configuration";
+import { ConfigKeys } from "../../../constants";
 
 suite("TestElementsTreeItem", function () {
     let testEnv: TestEnvironment;
     let mockEventBus: sinon.SinonStubbedInstance<EventBus>;
     let userSessionManager: UserSessionManager;
 
+    const getPrimaryResourceMarker = (): string => {
+        const configuredResourceMarker = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER)?.find(
+            (marker) => typeof marker === "string" && marker.trim().length > 0
+        );
+
+        return configuredResourceMarker ?? "[Robot-Resource]";
+    };
+    const withResourceMarker = (name: string): string => `${name} ${getPrimaryResourceMarker()}`;
+
     const createMockTestElementData = (overrides: Partial<any> = {}) => ({
         id: "test-item-1",
         parentId: null,
-        displayName: "TestResource [Robot-Resource]",
-        originalName: "TestResource [Robot-Resource]",
-        hierarchicalName: "TestFolder/TestResource [Robot-Resource]",
+        displayName: withResourceMarker("TestResource"),
+        originalName: withResourceMarker("TestResource"),
+        hierarchicalName: `TestFolder/${withResourceMarker("TestResource")}`,
         testElementType: TestElementType.Subdivision,
         uniqueID: "test-uid-123",
         libraryKey: null,
@@ -73,7 +84,7 @@ suite("TestElementsTreeItem", function () {
     suite("Context Value Management", function () {
         test("should set correct context value for subdivision resource", function () {
             const data = createMockTestElementData({
-                displayName: "TestResource [Robot-Resource]",
+                displayName: withResourceMarker("TestResource"),
                 testElementType: TestElementType.Subdivision,
                 isLocallyAvailable: true
             });
@@ -84,7 +95,7 @@ suite("TestElementsTreeItem", function () {
 
         test("should set correct context value for missing subdivision resource", function () {
             const data = createMockTestElementData({
-                displayName: "TestResource [Robot-Resource]",
+                displayName: withResourceMarker("TestResource"),
                 testElementType: TestElementType.Subdivision,
                 isLocallyAvailable: false
             });
@@ -106,7 +117,7 @@ suite("TestElementsTreeItem", function () {
 
         test("should set correct context value for keyword with available parent", function () {
             const parentData = createMockTestElementData({
-                displayName: "ParentResource [Robot-Resource]",
+                displayName: withResourceMarker("ParentResource"),
                 testElementType: TestElementType.Subdivision,
                 isLocallyAvailable: true
             });
@@ -124,7 +135,7 @@ suite("TestElementsTreeItem", function () {
 
         test("should set correct context value for keyword with missing parent", function () {
             const parentData = createMockTestElementData({
-                displayName: "ParentResource [Robot-Resource]",
+                displayName: withResourceMarker("ParentResource"),
                 testElementType: TestElementType.Subdivision,
                 isLocallyAvailable: false
             });
@@ -145,8 +156,8 @@ suite("TestElementsTreeItem", function () {
         test("should update keyword context value when parent resource becomes available", function () {
             const parentResource = createMockTestElementItem(
                 createMockTestElementData({
-                    displayName: "ParentResource [Robot-Resource]",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]",
+                    displayName: withResourceMarker("ParentResource"),
+                    hierarchicalName: `TestFolder/${withResourceMarker("ParentResource")}`,
                     testElementType: TestElementType.Subdivision,
                     isLocallyAvailable: false
                 })
@@ -155,7 +166,7 @@ suite("TestElementsTreeItem", function () {
             const keyword = createMockTestElementItem(
                 createMockTestElementData({
                     displayName: "TestKeyword",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestKeyword",
+                    hierarchicalName: `TestFolder/${withResourceMarker("ParentResource")}/TestKeyword`,
                     testElementType: TestElementType.Keyword,
                     isLocallyAvailable: false
                 }),
@@ -170,8 +181,8 @@ suite("TestElementsTreeItem", function () {
         test("should update keyword context value when parent resource becomes unavailable", function () {
             const parentResource = createMockTestElementItem(
                 createMockTestElementData({
-                    displayName: "ParentResource [Robot-Resource]",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]",
+                    displayName: withResourceMarker("ParentResource"),
+                    hierarchicalName: `TestFolder/${withResourceMarker("ParentResource")}`,
                     testElementType: TestElementType.Subdivision,
                     isLocallyAvailable: true
                 })
@@ -180,7 +191,7 @@ suite("TestElementsTreeItem", function () {
             const keyword = createMockTestElementItem(
                 createMockTestElementData({
                     displayName: "TestKeyword",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestKeyword",
+                    hierarchicalName: `TestFolder/${withResourceMarker("ParentResource")}/TestKeyword`,
                     testElementType: TestElementType.Keyword,
                     isLocallyAvailable: true
                 }),
@@ -197,7 +208,7 @@ suite("TestElementsTreeItem", function () {
     suite("Availability Updates", function () {
         test("should update local availability and trigger child updates", function () {
             const parentData = createMockTestElementData({
-                displayName: "ParentResource [Robot-Resource]",
+                displayName: withResourceMarker("ParentResource"),
                 testElementType: TestElementType.Subdivision,
                 isLocallyAvailable: false
             });
