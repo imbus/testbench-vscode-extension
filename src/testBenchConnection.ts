@@ -1173,7 +1173,8 @@ export async function withRetry<T>(
     maxAllowedRetryCount: number = 3,
     delayMs: number = 2000,
     shouldRetry?: (error: any) => boolean,
-    showProgressBar: boolean = true
+    showProgressBar: boolean = true,
+    forceLogoutOnNetworkError: boolean = true
 ): Promise<T> {
     let retryCount: number = 0;
 
@@ -1188,8 +1189,10 @@ export async function withRetry<T>(
             const status = error.response?.status;
             const isNetworkError = !error.response;
             const isAuthEndpoint = error.config?.url?.includes("/2/login/session");
+            const shouldForceLogoutForError =
+                !isAuthEndpoint && (status === 401 || status === 403 || (isNetworkError && forceLogoutOnNetworkError));
 
-            if (!isAuthEndpoint && (status === 401 || status === 403 || isNetworkError)) {
+            if (shouldForceLogoutForError) {
                 logger.warn(
                     `[testBenchConnection] Unrecoverable API error detected (status: ${status}, networkError: ${isNetworkError}). Forcing a local logout.`
                 );
