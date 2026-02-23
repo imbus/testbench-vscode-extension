@@ -702,18 +702,11 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 return;
             }
 
-            // Determine which UID to use for the import
-            // If this is a descendant of a marked hierarchy, use the root UID
-            const rootId = markingModule.getRootIDForDescendant(item.id!);
-            let reportRootUID = itemUID;
+            const { reportRootUID, rootId } = this.resolveImportRootUid(item, itemUID, markingModule);
 
-            if (rootId) {
-                // This item is a descendant, get the root's UID
-                const rootMarkingInfo = markingModule.getMarkingInfo(rootId);
-                if (rootMarkingInfo && rootMarkingInfo.metadata?.uniqueID) {
-                    reportRootUID = rootMarkingInfo.metadata.uniqueID;
-                }
-            }
+            this.logger.debug(
+                `[TestThemesTreeView] Import scope resolved for '${itemLabel}': itemUID='${itemUID}', reportRootUID='${reportRootUID}', rootId='${rootId ?? "none"}', elementType='${item.data.elementType}'`
+            );
 
             const importSuccessful = await reportHandler.fetchTestResultsAndCreateResultsAndImportToTestbench(
                 this.extensionContext,
@@ -761,6 +754,35 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             this.logger.error(importErrorMessage);
             vscode.window.showErrorMessage(importErrorMessageForUser);
         }
+    }
+
+    /**
+     * Resolves the UID scope used for importing execution results.
+     *
+     * Import always stays item-scoped and uses the clicked item's UID.
+     *
+     * We still resolve an optional hierarchy root ID for UI state handling
+     * (e.g., unmark fallback when persistent import buttons are disabled),
+     * but it does not influence server-side import scope.
+     */
+    private resolveImportRootUid(
+        item: TestThemesTreeItem,
+        itemUID: string,
+        markingModule: MarkingModule
+    ): { reportRootUID: string; rootId: string | null } {
+        const rootId = markingModule.getRootIDForDescendant(item.id!);
+
+        this.logger.trace(
+            `[TestThemesTreeView] resolveImportRootUid: item='${item.label?.toString() || "Unknown"}', itemId='${item.id}', itemUID='${itemUID}', elementType='${item.data.elementType}', hierarchyRootId='${rootId ?? "none"}'`
+        );
+
+        if (rootId) {
+            this.logger.trace(
+                `[TestThemesTreeView] Import remains item-scoped despite hierarchy root '${rootId}'. Using clicked item UID '${itemUID}'.`
+            );
+        }
+
+        return { reportRootUID: itemUID, rootId: rootId ?? null };
     }
 
     /**
