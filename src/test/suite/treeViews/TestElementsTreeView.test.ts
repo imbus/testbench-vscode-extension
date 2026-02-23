@@ -460,6 +460,11 @@ suite("TestElementsTreeView", function () {
             await (treeView as any).handleKeywordSingleClick(mockKeyword);
 
             assert.ok(!mockResourceFileService.ensureFileExists.called, "Should not create file on single click");
+            assert.ok(testEnv.vscodeMocks.showInformationMessageStub.called, "Should show info message");
+            assert.ok(
+                testEnv.vscodeMocks.showInformationMessageStub.calledWithMatch("Resource file does not exist inside"),
+                "Should include resource directory information in info message"
+            );
         });
 
         test("handleKeywordDoubleClick should create file and reveal in explorer", async function () {
