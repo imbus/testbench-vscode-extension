@@ -705,7 +705,7 @@ suite("TestElementsTreeView", function () {
     });
 
     suite("Parent Icon Updates", function () {
-        test("updateParentIcons should update parent folder icons when resource file is created", async function () {
+        test("updateParentIcons should keep non-resource parent folders as missing", async function () {
             const mockParent = createMockTestElementItem(
                 createMockTestElementData({
                     name: "TestFolder",
@@ -721,14 +721,16 @@ suite("TestElementsTreeView", function () {
                 mockParent
             );
 
-            mockResourceFileService.directoryExists.resolves(true);
-            mockResourceFileService.constructAbsolutePath.resolves("/test/path/TestFolder");
-
             const result = await (treeView as any).updateParentIcons(mockChild);
 
             assert.strictEqual(result, true, "updateParentIcons should return true");
-            assert.strictEqual(mockParent.data.isLocallyAvailable, true);
-            assert.strictEqual(mockParent.data.localPath, "/test/path/TestFolder");
+            assert.strictEqual(mockParent.data.isLocallyAvailable, false);
+            assert.strictEqual(mockParent.data.localPath, undefined);
+            assert.ok(!mockResourceFileService.directoryExists.called, "Should not check folder existence");
+            assert.ok(
+                !mockResourceFileService.constructAbsolutePath.called,
+                "Should not construct folder path for non-resource parent"
+            );
         });
     });
 });
