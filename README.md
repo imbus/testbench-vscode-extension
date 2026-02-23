@@ -42,9 +42,17 @@ To link a TestBench Project to the currently opened workspace/folder, simply rig
 
 ### Create a Robot Framework Resource File from a TestBench Subdivision
 
-For a TestBench Subdivision to be visible in the TestBench extension, the Subdivision name must end with the suffix `[Robot-Resource]`. Subdivisions that do not follow this naming convention are ignored by the extension.
+Visibility in the `Test Elements` view is controlled by the `testbenchExtension.testElementsVisibilityMode` setting:
 
-When you create subdivisions from the `Test Elements` view (root or child), the extension creates Robot Resource subdivisions and appends the configured resource marker automatically if it is missing. You do not need to type the suffix manually.
+- `resourceOnly` (default): Resource-marker based visibility is used and non-matching subdivisions are hidden.
+- `allSubdivisions`: All subdivisions and their keywords are shown, even without resource markers. This mode is useful for creating new subdivisions which are not marked with the resource marker.
+
+When creating subdivisions from the `Test Elements` view (root or child), the extension now asks which type to create:
+
+- `Create Subdivision`: Creates the subdivision name as entered (no marker auto-append)
+- `Create Resource Subdivision`: Auto-appends the configured resource marker if missing
+
+For selected subdivisions, the Test Elements actions also provide explicit child creation commands (with marker and without marker).
 
 ![Edit Subdivision Suffix to display it in the extension](userGuideImages/subdivision_suffix.png)
 

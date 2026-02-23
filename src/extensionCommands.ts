@@ -706,12 +706,69 @@ const handleCreateMissingResource = (item: TestElementsTreeItem) => {
     treeViews?.testElementsTree.createMissingResource(item);
 };
 
-const handleCreateSubdivision = (item?: TestElementsTreeItem) => {
-    treeViews?.testElementsTree.promptAndCreateRobotResourceSubdivision(item);
+type SubdivisionCreationMode = "regular" | "resource";
+
+const promptSubdivisionCreationMode = async (): Promise<SubdivisionCreationMode | undefined> => {
+    const selectedMode = await vscode.window.showQuickPick(
+        [
+            {
+                label: "Create Subdivision",
+                description: "No resource marker auto-append",
+                mode: "regular" as const
+            },
+            {
+                label: "Create Resource Subdivision",
+                description: "Auto-append configured resource marker when missing",
+                mode: "resource" as const
+            }
+        ],
+        {
+            title: "Choose subdivision type",
+            placeHolder: "Select how the subdivision should be created"
+        }
+    );
+
+    return selectedMode?.mode;
 };
 
-const handleCreateRootSubdivision = () => {
-    treeViews?.testElementsTree.promptAndCreateRobotResourceSubdivision();
+const createSubdivisionWithMode = async (mode: SubdivisionCreationMode, item?: TestElementsTreeItem) => {
+    await treeViews?.testElementsTree.promptAndCreateRobotResourceSubdivision(item, {
+        autoAppendResourceMarker: mode === "resource"
+    });
+};
+
+const handleCreateSubdivision = async (item?: TestElementsTreeItem) => {
+    const mode = await promptSubdivisionCreationMode();
+    if (!mode) {
+        return;
+    }
+
+    await createSubdivisionWithMode(mode, item);
+};
+
+const handleCreateRootSubdivision = async () => {
+    const mode = await promptSubdivisionCreationMode();
+    if (!mode) {
+        return;
+    }
+
+    await createSubdivisionWithMode(mode);
+};
+
+const handleCreateSubdivisionWithMarker = async (item?: TestElementsTreeItem) => {
+    await createSubdivisionWithMode("resource", item);
+};
+
+const handleCreateSubdivisionWithoutMarker = async (item?: TestElementsTreeItem) => {
+    await createSubdivisionWithMode("regular", item);
+};
+
+const handleCreateRootSubdivisionWithMarker = async () => {
+    await createSubdivisionWithMode("resource");
+};
+
+const handleCreateRootSubdivisionWithoutMarker = async () => {
+    await createSubdivisionWithMode("regular");
 };
 
 const handleOpenFolderInExplorer = (item: TestElementsTreeItem) => {
@@ -728,6 +785,25 @@ const handleCreateMissingParentResourceForKeyword = (item: TestElementsTreeItem)
 
 const handleKeywordClick = (item: TestElementsTreeItem) => {
     treeViews?.testElementsTree.handleKeywordClick(item);
+};
+
+const setTestElementsVisibilityMode = async (mode: "resourceOnly" | "allSubdivisions") => {
+    const config = getExtensionConfiguration();
+    const currentMode = config.get<string>(ConfigKeys.TEST_ELEMENTS_VISIBILITY_MODE) || "resourceOnly";
+
+    if (currentMode === mode) {
+        return;
+    }
+
+    await config.update(ConfigKeys.TEST_ELEMENTS_VISIBILITY_MODE, mode, vscode.ConfigurationTarget.Workspace);
+};
+
+const handleSetTestElementsVisibilityModeResourceOnly = async () => {
+    await setTestElementsVisibilityMode("resourceOnly");
+};
+
+const handleSetTestElementsVisibilityModeAllSubdivisions = async () => {
+    await setTestElementsVisibilityMode("allSubdivisions");
 };
 
 /* =============================================================================
@@ -1202,6 +1278,22 @@ export async function registerExtensionCommands(context: vscode.ExtensionContext
             handler: handleCreateRootSubdivision
         },
         {
+            id: allExtensionCommands.createSubdivisionWithMarkerInTestElementsView,
+            handler: handleCreateSubdivisionWithMarker
+        },
+        {
+            id: allExtensionCommands.createSubdivisionWithoutMarkerInTestElementsView,
+            handler: handleCreateSubdivisionWithoutMarker
+        },
+        {
+            id: allExtensionCommands.createRootSubdivisionWithMarkerInTestElementsView,
+            handler: handleCreateRootSubdivisionWithMarker
+        },
+        {
+            id: allExtensionCommands.createRootSubdivisionWithoutMarkerInTestElementsView,
+            handler: handleCreateRootSubdivisionWithoutMarker
+        },
+        {
             id: allExtensionCommands.openSubdivisionFolderInExplorer,
             handler: handleOpenFolderInExplorer
         },
@@ -1235,6 +1327,14 @@ export async function registerExtensionCommands(context: vscode.ExtensionContext
         { id: allExtensionCommands.searchInTestThemesTreeOff, handler: handleSearchInTestThemesTree },
         { id: allExtensionCommands.searchInTestElementsTreeOn, handler: handleSearchInTestElementsTree },
         { id: allExtensionCommands.searchInTestElementsTreeOff, handler: handleSearchInTestElementsTree },
+        {
+            id: allExtensionCommands.setTestElementsVisibilityModeResourceOnly,
+            handler: handleSetTestElementsVisibilityModeResourceOnly
+        },
+        {
+            id: allExtensionCommands.setTestElementsVisibilityModeAllSubdivisions,
+            handler: handleSetTestElementsVisibilityModeAllSubdivisions
+        },
         { id: allExtensionCommands.setActiveProject, handler: handleSetActiveProject },
         { id: allExtensionCommands.setActiveTOV, handler: handleSetActiveTOV },
         { id: allExtensionCommands.validateAndFixLsConfig, handler: handleValidateAndFixLsConfig }

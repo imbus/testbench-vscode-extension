@@ -287,7 +287,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         if (item.data.testElementType !== TestElementType.Subdivision || item.data.isVirtual) {
             return false;
         }
-        return ResourceFileService.hasResourceMarker(item.data.hierarchicalName || item.data.displayName || "");
+        const subdivisionName = item.data.displayName || item.data.originalName || "";
+        return ResourceFileService.hasResourceMarker(subdivisionName);
     }
 
     private collectSubdivisionItems(
@@ -346,7 +347,12 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                             return;
                         }
 
-                        const isResourceFile = ResourceFileService.hasResourceMarker(hierarchicalName);
+                        const isResourceFile = this.isResourceSubdivision(subdivisionItem);
+                        if (!isResourceFile) {
+                            subdivisionItem.updateLocalAvailability(false, undefined);
+                            return;
+                        }
+
                         const cleanName = this.removeResourceMarkersFromHierarchicalName(hierarchicalName).trim();
                         let resourcePath = await this.resourceFileService.constructAbsolutePath(cleanName);
 
@@ -1003,7 +1009,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 }
                 if (parent.data.testElementType === TestElementType.Subdivision) {
                     const hierarchicalName = parent.data.hierarchicalName;
-                    const isResourceFile = hierarchicalName && ResourceFileService.hasResourceMarker(hierarchicalName);
+                    const isResourceFile = this.isResourceSubdivision(parent);
                     if (hierarchicalName && isResourceFile) {
                         const cleanName = this.removeResourceMarkersFromHierarchicalName(hierarchicalName).trim();
                         let resourcePath = await this.resourceFileService.constructAbsolutePath(cleanName);
@@ -1016,14 +1022,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                             updated = true;
                         }
                     } else {
-                        const parentHierarchicalName = parent.data.hierarchicalName || parent.data.displayName;
-                        const cleanName = this.removeResourceMarkersFromHierarchicalName(parentHierarchicalName).trim();
-                        const folderPath = await this.resourceFileService.constructAbsolutePath(cleanName);
-                        if (folderPath) {
-                            const exists = await this.resourceFileService.directoryExists(folderPath);
-                            parent.updateLocalAvailability(exists, folderPath);
-                            updated = true;
-                        }
+                        parent.updateLocalAvailability(false, undefined);
+                        updated = true;
                     }
                 }
                 parent = parent.parent as TestElementsTreeItem | null;
@@ -1441,19 +1441,28 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      *
      * @param item Optional parent subdivision tree item.
      */
-    public async promptAndCreateRobotResourceSubdivision(item?: TestElementsTreeItem): Promise<void> {
+    public async promptAndCreateRobotResourceSubdivision(
+        item?: TestElementsTreeItem,
+        options?: { autoAppendResourceMarker?: boolean }
+    ): Promise<void> {
         const resourceMarkers = this.getConfiguredResourceMarkers();
         const autoAppendedMarker = resourceMarkers[0];
-        const autoAppendHintInPrompt = autoAppendedMarker
-            ? ` Resource suffix '${autoAppendedMarker}' is appended automatically if missing.`
-            : "";
+        const shouldAutoAppendResourceMarker =
+            options?.autoAppendResourceMarker ?? this.shouldAutoAppendResourceMarker();
+        const autoAppendHintInPrompt =
+            shouldAutoAppendResourceMarker && autoAppendedMarker
+                ? ` Resource suffix '${autoAppendedMarker}' is appended automatically if missing.`
+                : "";
 
         const subdivisionName = await vscode.window.showInputBox({
             title: item ? "Create Subdivision" : "Create Root Subdivision",
             prompt: item
-                ? `Enter Robot Resource subdivision name under '${item.label?.toString() || "selected parent"}'. ${autoAppendHintInPrompt}`
-                : `Enter Robot Resource root subdivision name. ${autoAppendHintInPrompt}`,
-            placeHolder: autoAppendedMarker ? "Subdivision name (suffix will be auto-appended)" : "Subdivision name",
+                ? `Enter subdivision name under '${item.label?.toString() || "selected parent"}'.${autoAppendHintInPrompt}`
+                : `Enter root subdivision name.${autoAppendHintInPrompt}`,
+            placeHolder:
+                shouldAutoAppendResourceMarker && autoAppendedMarker
+                    ? "Subdivision name (resource suffix will be auto-appended)"
+                    : "Subdivision name",
             validateInput: (value) => this.validateSubdivisionName(value)
         });
 
@@ -1462,7 +1471,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         }
 
         const trimmedName = subdivisionName.trim();
-        const normalizedName = this.ensureSubdivisionNameHasResourceMarker(trimmedName);
+        const normalizedName = shouldAutoAppendResourceMarker
+            ? this.ensureSubdivisionNameHasResourceMarker(trimmedName)
+            : trimmedName;
         const normalizedNameValidationError = this.validateSubdivisionName(normalizedName);
         if (normalizedNameValidationError) {
             vscode.window.showErrorMessage(normalizedNameValidationError);
@@ -1522,7 +1533,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 },
                 async () => {
                     this.logger.trace(
-                        `[TestElementsTreeView] Creating subdivision (projectKey=${projectKey}, tovKey=${tovKey}, parentKey='${parentKey}', name='${normalizedName}', uid='${generatedSubdivisionUid}', uidLength=${generatedSubdivisionUid.length}).`
+                        `[TestElementsTreeView] Creating subdivision (projectKey=${projectKey}, tovKey=${tovKey}, parentKey='${parentKey}', name='${normalizedName}', uid='${generatedSubdivisionUid}', uidLength=${generatedSubdivisionUid.length}, autoAppendResourceMarker=${shouldAutoAppendResourceMarker}).`
                     );
                     await connection.createSubdivisionOnServer(projectKey, tovKey, subdivisionCreationRequestBody);
                 }
@@ -1630,6 +1641,15 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 (marker) => typeof marker === "string" && marker.trim().length > 0
             ) || []
         );
+    }
+
+    /**
+     * Determines whether subdivision creation should auto-append the configured resource marker.
+     * Marker appending is enabled only in resource-only visibility mode to preserve legacy behavior.
+     */
+    private shouldAutoAppendResourceMarker(): boolean {
+        const configuredMode = getExtensionSetting<string>(ConfigKeys.TEST_ELEMENTS_VISIBILITY_MODE);
+        return configuredMode !== "allSubdivisions";
     }
 
     /**

@@ -232,6 +232,51 @@ suite("TestElementsTreeView", function () {
             assert.ok(testEnv.vscodeMocks.showInformationMessageStub.calledOnce, "Should show success message");
         });
 
+        test("createSubdivision should not auto-append marker when marker auto-append is disabled", async function () {
+            const parentItem = createMockTestElementItem(
+                createMockTestElementData({
+                    details: {
+                        Subdivision_key: {
+                            serial: "PARENT-123"
+                        }
+                    }
+                })
+            );
+
+            (treeView as any).currentProjectKey = "PROJ-1";
+            (treeView as any).currentTovKey = "TOV-1";
+
+            const showInputBoxStub = testEnv.sandbox.stub(vscode.window, "showInputBox");
+            showInputBoxStub.onFirstCall().resolves("Child Subdivision");
+            showInputBoxStub.onSecondCall().resolves("My description");
+
+            testEnv.sandbox.stub(treeView as any, "shouldAutoAppendResourceMarker").returns(false);
+
+            mockConnection.createSubdivisionOnServer.resolves({
+                key: "SUB-NEW",
+                name: "Child Subdivision",
+                uniqueID: "UID-NEW",
+                locker: { key: "", name: "" },
+                description: "",
+                parentUniqueID: "",
+                libraryKey: "",
+                path: "",
+                references: []
+            } as any);
+
+            const refreshStub = testEnv.sandbox.stub(treeView, "refresh");
+
+            await treeView.promptAndCreateRobotResourceSubdivision(parentItem);
+
+            assert.ok(mockConnection.createSubdivisionOnServer.calledOnce, "Should call createSubdivision API");
+            const [projectKeyArg, tovKeyArg, payloadArg] = mockConnection.createSubdivisionOnServer.firstCall.args;
+            assert.strictEqual(projectKeyArg, "PROJ-1");
+            assert.strictEqual(tovKeyArg, "TOV-1");
+            assert.strictEqual(payloadArg.parentKey, "PARENT-123");
+            assert.strictEqual(payloadArg.name, "Child Subdivision");
+            assert.ok(refreshStub.calledOnce, "Should refresh tree after successful creation");
+        });
+
         test("createSubdivision should show conflict error message on status 409", async function () {
             const parentItem = createMockTestElementItem(
                 createMockTestElementData({
@@ -266,6 +311,37 @@ suite("TestElementsTreeView", function () {
     });
 
     suite("Resource File Operations", function () {
+        test("updateSubdivisionAvailability should keep non-resource subdivision as missing", async function () {
+            const nonResourceSubdivision = createMockTestElementItem(
+                createMockTestElementData({
+                    displayName: "Plain Subdivision",
+                    originalName: "Plain Subdivision",
+                    hierarchicalName: "Root/Plain Subdivision",
+                    directRegexMatch: false,
+                    isLocallyAvailable: true
+                })
+            );
+
+            testEnv.sandbox.stub(treeView as any, "ensureLanguageServerReadyForAvailabilityChecks").resolves(undefined);
+
+            mockResourceFileService.constructAbsolutePath.resolves("/workspace/Root/Plain Subdivision");
+            mockResourceFileService.pathExists.resolves(true);
+
+            await (treeView as any).updateSubdivisionAvailability([nonResourceSubdivision], {
+                updateParentMarkingOnAvailableResource: false
+            });
+
+            assert.strictEqual(nonResourceSubdivision.data.isLocallyAvailable, false);
+            assert.ok(
+                !mockResourceFileService.constructAbsolutePath.called,
+                "Should not resolve resource path for non-resource subdivisions"
+            );
+            assert.ok(
+                !mockResourceFileService.pathExists.called,
+                "Should not check file existence for non-resource subdivisions"
+            );
+        });
+
         test("openAvailableResource should create file when it doesn't exist", async function () {
             const mockItem = createMockTestElementItem(createMockTestElementData());
 
