@@ -76,6 +76,9 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         this.setupRobotFilesWatcher();
     }
 
+    /**
+     * Initializes the tree view, including setting up the marking module context resolver.
+     */
     public override async initialize(): Promise<void> {
         await super.initialize();
 
@@ -85,6 +88,11 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         }
     }
 
+    /**
+     * Gets the current marking context based on the active tree view context (project, cycle, TOV).
+     * @param overrides Optional partial context to override specific values for the returned marking context
+     * @returns The current marking context with any provided overrides applied
+     */
     private getCurrentMarkingContext(overrides?: Partial<MarkingContext>): MarkingContext {
         const base: MarkingContext = {
             projectKey: this.currentProjectKey ?? undefined,
@@ -102,6 +110,11 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         return { ...base, ...overrides };
     }
 
+    /**
+     * Builds the marking context for a generation operation based on the provided context.
+     * @param context The generation context containing project, cycle, and TOV information
+     * @returns The marking context for the generation operation
+     */
     private buildGenerationMarkingContext(context: GenerationContext): MarkingContext {
         return this.getCurrentMarkingContext(
             context.isOpenedFromCycle
@@ -757,13 +770,18 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Resolves the UID scope used for importing execution results.
+     * Determines which UID is used as the server-side import scope.
+     * Import scope is always the clicked item's UID.
      *
-     * Import always stays item-scoped and uses the clicked item's UID.
+     * If the item belongs to a marked hierarchy, we also resolve its hierarchy root ID.
+     * That root ID is returned only for local UI state handling.
      *
-     * We still resolve an optional hierarchy root ID for UI state handling
-     * (e.g., unmark fallback when persistent import buttons are disabled),
-     * but it does not influence server-side import scope.
+     * @param item The tree item the user clicked for import.
+     * @param itemUID The unique ID of the clicked item, used as `reportRootUID`.
+     * @param markingModule Marking module used to resolve optional hierarchy root mapping.
+     * @returns Object containing:
+     * - `reportRootUID`: the UID used for server import scope
+     * - `rootId`: optional hierarchy root item ID for UI-only fallback handling
      */
     private resolveImportRootUid(
         item: TestThemesTreeItem,
@@ -771,9 +789,11 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         markingModule: MarkingModule
     ): { reportRootUID: string; rootId: string | null } {
         const rootId = markingModule.getRootIDForDescendant(item.id!);
+        const itemLabel = item.label?.toString() || "Unknown";
+        const elementType = item.data.elementType;
 
         this.logger.trace(
-            `[TestThemesTreeView] resolveImportRootUid: item='${item.label?.toString() || "Unknown"}', itemId='${item.id}', itemUID='${itemUID}', elementType='${item.data.elementType}', hierarchyRootId='${rootId ?? "none"}'`
+            `[TestThemesTreeView] resolveImportRootUid: item='${itemLabel}', itemId='${item.id}', itemUID='${itemUID}', elementType='${elementType}', hierarchyRootId='${rootId ?? "none"}'`
         );
 
         if (rootId) {
@@ -1550,6 +1570,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         }
         await super.dispose();
     }
+
     /**
      * Fetches the root items of the tree
      * @return Promise resolving to array of root tree items
@@ -1573,6 +1594,11 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         this.updateTestThemesFilterContextKey();
     }
 
+    /**
+     * Overrides the base refresh method to add cache clearing and data reloading logic when refreshing the entire tree.
+     * @param item The tree item to refresh
+     * @param options Optional refresh options
+     */
     public override refresh(item?: TestThemesTreeItem, options?: RefreshOptions): void {
         if (item || options?.skipDataReload) {
             super.refresh(item, options);
@@ -1614,6 +1640,10 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         return false;
     }
 
+    /**
+     * Refreshes the entire tree view by clearing the cache and reloading data from the server.
+     * @param options Optional refresh options
+     */
     public async refreshWithCacheClear(options?: RefreshOptions): Promise<void> {
         this.logger.debug("[TestThemesTreeView] Refreshing with cache clear to fetch latest data from server");
         this.dataProvider.clearCache();
@@ -1911,6 +1941,11 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * - If marked with a different type, upgrade when appropriate and never
      *   downgrade from 'import' to 'generation'.
      * - If no content exists, unmark the item.
+     * @param treeItem The tree item to bind the marking state to
+     * @param contentExistsForTreeItem Whether content exists for the tree item
+     * @param markingModule The marking module to use for marking operations
+     * @param desiredType The desired marking type
+     * @param markingContext The marking context
      */
     private async bindMarkForItemToItsExistence(
         treeItem: TestThemesTreeItem,
