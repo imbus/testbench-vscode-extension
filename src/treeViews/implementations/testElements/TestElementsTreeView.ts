@@ -24,6 +24,7 @@ import {
 import { hasLsConfig } from "../../../languageServer/lsConfig";
 import { getExtensionSetting } from "../../../configuration";
 import { ConfigKeys } from "../../../constants";
+import { validateAndReturnWorkspaceLocation } from "../../../utils";
 
 /**
  * Local interface for configuring the generic resource handler.
@@ -582,8 +583,13 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     /**
      * Returns the configured Resource Directory Path label for user-facing messages.
      */
-    private getResourceDirectoryPathLabel(): string {
-        const configuredPath = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR)?.trim();
+    private async getResourceDirectoryPathLabel(): Promise<string> {
+        const workspaceLocation = await validateAndReturnWorkspaceLocation();
+        const configurationScope = workspaceLocation ? vscode.Uri.file(workspaceLocation) : undefined;
+        const configuredPath = getExtensionSetting<string>(
+            ConfigKeys.TB2ROBOT_RESOURCE_DIR,
+            configurationScope
+        )?.trim();
         return configuredPath && configuredPath.length > 0 ? configuredPath : "workspace";
     }
 
@@ -1381,7 +1387,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         this.logger.debug(
             `[TestElementsTreeView] handleKeywordSingleClick called for keyword: ${item.label}, type: ${item.data.testElementType}, uid: ${item.data.uniqueID}`
         );
-        const resourceDirectoryPath = this.getResourceDirectoryPathLabel();
+        const resourceDirectoryPath = await this.getResourceDirectoryPathLabel();
         const parentResource = item.parent as TestElementsTreeItem;
         if (!parentResource) {
             this.logger.error(`[TestElementsTreeView] Could not find parent resource for keyword ${item.label}`);

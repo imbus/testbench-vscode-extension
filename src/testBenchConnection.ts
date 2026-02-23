@@ -222,7 +222,9 @@ async function createHttpsAgent(insecure: boolean = false): Promise<HttpsProxyAg
         agentOptions.checkServerIdentity = () => undefined;
     } else {
         const defaultCAs = tls.rootCertificates.map((cert) => Buffer.from(cert));
-        const certificatePathSetting = getExtensionSetting<string>(ConfigKeys.CERTIFICATE_PATH);
+        const workspaceLocation = await utils.validateAndReturnWorkspaceLocation();
+        const configurationScope = workspaceLocation ? vscode.Uri.file(workspaceLocation) : undefined;
+        const certificatePathSetting = getExtensionSetting<string>(ConfigKeys.CERTIFICATE_PATH, configurationScope);
         let absoluteCertPath: string | null = null;
         if (certificatePathSetting) {
             if (path.isAbsolute(certificatePathSetting)) {
@@ -234,7 +236,11 @@ async function createHttpsAgent(insecure: boolean = false): Promise<HttpsProxyAg
                     );
                 }
             } else {
-                absoluteCertPath = await utils.constructAbsolutePathFromRelativePath(certificatePathSetting, true);
+                absoluteCertPath = await utils.constructAbsolutePathFromRelativePath(
+                    certificatePathSetting,
+                    true,
+                    workspaceLocation
+                );
             }
         } else {
             const certPath = process.env.NODE_EXTRA_CA_CERTS;

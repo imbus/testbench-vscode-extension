@@ -21,29 +21,58 @@ export class tb2robotLib {
      */
     public static async startTb2robotframeworkTestGeneration(reportPath: string): Promise<boolean> {
         let isGenerateTestsCommandSuccessful: boolean = false;
+        const configurationScope = reportPath ? vscode.Uri.file(reportPath) : undefined;
         // use_config_file temporarily disabled (tbe-162)
         const use_config_file: boolean | undefined = false; // getExtensionSetting<boolean>(ConfigKeys.USE_CONFIG_FILE_SETTING);
-        const clean: boolean | undefined = getExtensionSetting<boolean>(ConfigKeys.TB2ROBOT_CLEAN);
+        const clean: boolean | undefined = getExtensionSetting<boolean>(ConfigKeys.TB2ROBOT_CLEAN, configurationScope);
         const compound_keyword_logging: string | undefined = getExtensionSetting<string>(
-            ConfigKeys.TB2ROBOT_COMPOUND_LOGGING
+            ConfigKeys.TB2ROBOT_COMPOUND_LOGGING,
+            configurationScope
         );
-        const fully_qualified: boolean | undefined = getExtensionSetting<boolean>(ConfigKeys.TB2ROBOT_FULLY_QUALIFIED);
-        const libraryMapping: string[] | undefined = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_LIBRARY_MAPPING);
-        const libraryMarker: string | undefined = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_LIBRARY_MARKER);
-        const libraryRoot: string[] | undefined = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_LIBRARY_ROOT);
+        const fully_qualified: boolean | undefined = getExtensionSetting<boolean>(
+            ConfigKeys.TB2ROBOT_FULLY_QUALIFIED,
+            configurationScope
+        );
+        const libraryMapping: string[] | undefined = getExtensionSetting<string[]>(
+            ConfigKeys.TB2ROBOT_LIBRARY_MAPPING,
+            configurationScope
+        );
+        const libraryMarker: string | undefined = getExtensionSetting<string>(
+            ConfigKeys.TB2ROBOT_LIBRARY_MARKER,
+            configurationScope
+        );
+        const libraryRoot: string[] | undefined = getExtensionSetting<string[]>(
+            ConfigKeys.TB2ROBOT_LIBRARY_ROOT,
+            configurationScope
+        );
         const logSuiteNumbering: boolean | undefined = getExtensionSetting<boolean>(
-            ConfigKeys.TB2ROBOT_LOG_SUITE_NUMBERING
+            ConfigKeys.TB2ROBOT_LOG_SUITE_NUMBERING,
+            configurationScope
         );
-        const outputDirectory: string | undefined = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
+        const outputDirectory: string | undefined = getExtensionSetting<string>(
+            ConfigKeys.TB2ROBOT_OUTPUT_DIR,
+            configurationScope
+        );
         const resourceDirectoryRegex: string | undefined = getExtensionSetting<string>(
-            ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER
+            ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER,
+            configurationScope
         );
-        const resourceDirectory: string | undefined = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR);
+        const resourceDirectory: string | undefined = getExtensionSetting<string>(
+            ConfigKeys.TB2ROBOT_RESOURCE_DIR,
+            configurationScope
+        );
         const resourceMapping: string[] | undefined = getExtensionSetting<string[]>(
-            ConfigKeys.TB2ROBOT_RESOURCE_MAPPING
+            ConfigKeys.TB2ROBOT_RESOURCE_MAPPING,
+            configurationScope
         );
-        const resourceMarker: string | undefined = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER);
-        const resourceRoot: string[] | undefined = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_ROOT);
+        const resourceMarker: string | undefined = getExtensionSetting<string>(
+            ConfigKeys.TB2ROBOT_RESOURCE_MARKER,
+            configurationScope
+        );
+        const resourceRoot: string[] | undefined = getExtensionSetting<string[]>(
+            ConfigKeys.TB2ROBOT_RESOURCE_ROOT,
+            configurationScope
+        );
         isGenerateTestsCommandSuccessful = await vscode.commands.executeCommand("testbench_ls.generateTestSuites", {
             use_config_file: use_config_file,
             clean: clean,

@@ -47,7 +47,11 @@ export class RobotFileService {
                 return { exists: false };
             }
 
-            const generatedRobotFilesOutputDirectory = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
+            const configurationScope = vscode.Uri.file(workspaceLocation);
+            const generatedRobotFilesOutputDirectory = getExtensionSetting<string>(
+                ConfigKeys.TB2ROBOT_OUTPUT_DIR,
+                configurationScope
+            );
             if (!generatedRobotFilesOutputDirectory) {
                 this.logger.warn(
                     "[RobotFileService] Output directory is not configured while checking robot file existence"
@@ -55,7 +59,11 @@ export class RobotFileService {
                 return { exists: false };
             }
 
-            const robotFileName = this.generateRobotFileName(item.data.base.name, item.data.base.numbering);
+            const robotFileName = this.generateRobotFileName(
+                item.data.base.name,
+                item.data.base.numbering,
+                configurationScope
+            );
             const outputPath = path.join(workspaceLocation, generatedRobotFilesOutputDirectory);
 
             // this.logger.trace(`[RobotFileService] Searching for robot file "${robotFileName}" in output directory: ${outputPath}`);
@@ -252,9 +260,14 @@ export class RobotFileService {
      * @param treeItemNumbering The numbering prefix for the tree item
      * @returns The generated robot file name
      */
-    private generateRobotFileName(treeItemName: string, treeItemNumbering: string): string {
+    private generateRobotFileName(
+        treeItemName: string,
+        treeItemNumbering: string,
+        configurationScope?: vscode.Uri
+    ): string {
         const lastNumberingPart = treeItemNumbering ? treeItemNumbering.split(".")?.pop() || treeItemNumbering : "";
-        const logSuiteNumbering = getExtensionSetting<boolean>(ConfigKeys.TB2ROBOT_LOG_SUITE_NUMBERING) ?? true;
+        const logSuiteNumbering =
+            getExtensionSetting<boolean>(ConfigKeys.TB2ROBOT_LOG_SUITE_NUMBERING, configurationScope) ?? true;
         // When logSuiteNumbering is disabled, an extra underscore is added
         const separator = logSuiteNumbering ? "_" : "__";
         const prefixOfFileName = lastNumberingPart ? `${lastNumberingPart}${separator}` : "";
@@ -372,7 +385,11 @@ export class RobotFileService {
                 return { exists: false };
             }
 
-            const generatedRobotFilesOutputDirectory = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
+            const configurationScope = vscode.Uri.file(workspaceLocation);
+            const generatedRobotFilesOutputDirectory = getExtensionSetting<string>(
+                ConfigKeys.TB2ROBOT_OUTPUT_DIR,
+                configurationScope
+            );
             if (!generatedRobotFilesOutputDirectory) {
                 this.logger.warn(
                     "[RobotFileService] Output directory is not configured while checking folder existence"
@@ -380,7 +397,11 @@ export class RobotFileService {
                 return { exists: false };
             }
 
-            const folderName = this.generateFolderName(item.data.base.name, item.data.base.numbering);
+            const folderName = this.generateFolderName(
+                item.data.base.name,
+                item.data.base.numbering,
+                configurationScope
+            );
             const generationOutputPath = path.join(workspaceLocation, generatedRobotFilesOutputDirectory);
             const foundFoldersInOutputPath = await this.findAllFolders(generationOutputPath, folderName);
 
@@ -464,9 +485,14 @@ export class RobotFileService {
      * @param treeItemNumbering The numbering prefix for the tree item
      * @returns The generated folder name
      */
-    private generateFolderName(treeItemName: string, treeItemNumbering: string): string {
+    private generateFolderName(
+        treeItemName: string,
+        treeItemNumbering: string,
+        configurationScope?: vscode.Uri
+    ): string {
         const lastNumberingPart = treeItemNumbering ? treeItemNumbering.split(".")?.pop() || treeItemNumbering : "";
-        const logSuiteNumbering = getExtensionSetting<boolean>(ConfigKeys.TB2ROBOT_LOG_SUITE_NUMBERING) ?? true;
+        const logSuiteNumbering =
+            getExtensionSetting<boolean>(ConfigKeys.TB2ROBOT_LOG_SUITE_NUMBERING, configurationScope) ?? true;
         // When logSuiteNumbering is disabled, an extra underscore is added
         const separator = logSuiteNumbering ? "_" : "__";
         const prefixOfFolderName = lastNumberingPart ? `${lastNumberingPart}${separator}` : "";

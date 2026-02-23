@@ -149,9 +149,11 @@ export class ResourceFileService {
             return undefined;
         }
 
-        const resourceDirRelativeToWorkspace = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR) || "";
+        const configurationScope = vscode.Uri.file(workspaceRootPath);
+        const resourceDirRelativeToWorkspace =
+            getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR, configurationScope) || "";
         const resourceDirectoryMarker =
-            getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER) || "";
+            getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER, configurationScope) || "";
 
         const cleanedHierarchical = this.removeResourceMarkersFromPathString(hierarchicalName);
         const splitPathComponents = cleanedHierarchical.split("/");

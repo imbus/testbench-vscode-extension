@@ -100,21 +100,21 @@
                         "default": true,
                         "description": "Deletes all files present in the output directory before new test suites are created.",
                         "order": 11,
-                        "scope": "window"
+                        "scope": "resource"
                     },
                     "testbenchExtension.fullyQualifiedKeywords": {
                         "type": "boolean",
                         "default": false,
                         "description": "Option to call Robot Framework keywords by their fully qualified name in the generated test suites.",
                         "order": 12,
-                        "scope": "window"
+                        "scope": "resource"
                     },
                     "testbenchExtension.outputDirectory": {
                         "type": "string",
                         "description": "Directory or ZIP archive where the generated test suites will be created. The path is relative to the workspace location.",
                         "default": "tests",
                         "order": 13,
-                        "scope": "window"
+                        "scope": "resource"
                     },
                     "testbenchExtension.compoundKeywordLogging": {
                         "type": "string",
@@ -131,21 +131,21 @@
                             "Comment",
                             "None"
                         ],
-                        "scope": "window"
+                        "scope": "resource"
                     },
                     "testbenchExtension.logSuiteNumbering": {
                         "type": "boolean",
                         "default": true,
                         "description": "Enables logging of the test suite numbering.",
                         "order": 15,
-                        "scope": "window"
+                        "scope": "resource"
                     },
                     "testbenchExtension.resourceDirectoryPath": {
                         "type": "string",
                         "description": "Directory containing the Robot Framework resource files. The path is relative to the workspace location. Import paths of Robot Framework resources will be prefixed with this path.",
                         "order": 16,
                         "default": "",
-                        "scope": "window"
+                        "scope": "resource"
                     },
                     "testbenchExtension.libraryMarker": {
                         "type": "array",
@@ -157,7 +157,7 @@
                             "[Robot-Library]"
                         ],
                         "order": 17,
-                        "scope": "window"
+                        "scope": "resource"
                     },
                     "testbenchExtension.libraryRoot": {
                         "type": "array",
@@ -170,14 +170,14 @@
                             "RF-Library"
                         ],
                         "order": 18,
-                        "scope": "window"
+                        "scope": "resource"
                     },
                     "testbenchExtension.resourceRootRegex": {
                         "type": "string",
                         "description": "A regular expression used to identify the TestBench subdivision that corresponds to the subdivision containing all Robot Framework keywords. This matching subdivision becomes the anchor point when creating the folder structure and import paths for resources in the generated Robot files. Any subdivisions above and including the matched subdivision are ignored.",
                         "default": ".*",
                         "order": 19,
-                        "scope": "window"
+                        "scope": "resource"
                     },
                     "testbenchExtension.resourceMarker": {
                         "type": "array",
@@ -189,7 +189,7 @@
                             "[Robot-Resource]"
                         ],
                         "order": 20,
-                        "scope": "window"
+                        "scope": "resource"
                     },
                     "testbenchExtension.resourceRoot": {
                         "type": "array",
@@ -201,7 +201,7 @@
                             "RF-Resource"
                         ],
                         "order": 21,
-                        "scope": "window"
+                        "scope": "resource"
                     },
                     "testbenchExtension.libraryMapping": {
                         "type": "array",
@@ -211,7 +211,7 @@
                         },
                         "default": [],
                         "order": 22,
-                        "scope": "window"
+                        "scope": "resource"
                     },
                     "testbenchExtension.resourceMapping": {
                         "type": "array",
@@ -221,14 +221,14 @@
                         },
                         "default": [],
                         "order": 23,
-                        "scope": "window"
+                        "scope": "resource"
                     },
                     "testbenchExtension.outputXmlFilePath": {
                         "type": "string",
                         "description": "The relative file path where the output XML file (Robotframework test results) is stored. If not set, the extension will prompt the user to select a output.xml file location when importing results to testbench server. The path is relative to the workspace location. Used for importing the test results to the TestBench Server.",
                         "default": "results/output.xml",
                         "order": 24,
-                        "scope": "window"
+                        "scope": "resource"
                     }
                 }
             },

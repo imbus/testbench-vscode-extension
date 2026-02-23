@@ -4,6 +4,7 @@
  */
 
 import * as vscode from "vscode";
+import * as path from "path";
 import { RefreshOptions, TreeViewBase } from "../../core/TreeViewBase";
 import { TestThemesTreeItem, TestThemeData, TestThemeType } from "./TestThemesTreeItem";
 import { TreeViewConfig } from "../../core/TreeViewConfig";
@@ -1752,15 +1753,30 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * @returns True if the change is relevant to test theme folders
      */
     private isRelevantWorkspaceChange(files: readonly vscode.Uri[]): boolean {
-        const outputDirectory = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
-        if (!outputDirectory || files.length === 0) {
+        if (files.length === 0) {
             return false;
         }
 
-        // Check if any of the changed files are within the output directory
         return files.some((uri) => {
-            const relativePath = vscode.workspace.asRelativePath(uri, false);
-            return relativePath.startsWith(outputDirectory);
+            const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
+            if (!workspaceFolder) {
+                return false;
+            }
+
+            const outputDirectory = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR, workspaceFolder.uri);
+            if (!outputDirectory) {
+                return false;
+            }
+
+            const relativePath = path.relative(workspaceFolder.uri.fsPath, uri.fsPath).replace(/\\/g, "/");
+            if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+                return false;
+            }
+
+            const normalizedOutputDirectory = outputDirectory.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+            return (
+                relativePath === normalizedOutputDirectory || relativePath.startsWith(`${normalizedOutputDirectory}/`)
+            );
         });
     }
 

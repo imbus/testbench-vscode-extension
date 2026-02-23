@@ -54,18 +54,21 @@ export async function isAbsolutePath(filePath: string, verifyExistenceOfFile: bo
  *
  * @param {string | undefined} relativePath - The relative path.
  * @param {boolean} verifyExistenceOfFile - If true, verifies that the constructed path exists.
+ * @param {string} workspaceLocationOverride - Optional workspace location that should be used instead of auto-detection.
  * @returns {Promise<string | null>} A promise that resolves to the absolute path string, or null if the relative path or workspace location is not set or invalid.
  */
 export async function constructAbsolutePathFromRelativePath(
     relativePath: string | undefined,
-    verifyExistenceOfFile: boolean = false
+    verifyExistenceOfFile: boolean = false,
+    workspaceLocationOverride?: string
 ): Promise<string | null> {
     if (!relativePath) {
         logger.error("[utils] Relative path is not set while constructing an absolute path.");
         return null;
     }
 
-    const workspaceLocation: string | undefined = await validateAndReturnWorkspaceLocation();
+    const workspaceLocation: string | undefined =
+        workspaceLocationOverride || (await validateAndReturnWorkspaceLocation());
     if (!workspaceLocation) {
         return null;
     }

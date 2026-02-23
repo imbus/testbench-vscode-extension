@@ -25,7 +25,7 @@ import {
 } from "./constants";
 import { extractDataFromReport, PlayServerConnection, withRetry, RetryPredicateFactory } from "./testBenchConnection";
 import { ExecutionMode } from "./testBenchTypes";
-import { getExtensionConfiguration } from "./configuration";
+import { getExtensionConfiguration, getExtensionSetting } from "./configuration";
 import { TestThemesTreeItem } from "./treeViews/implementations/testThemes/TestThemesTreeItem";
 import { ProjectsTreeItem } from "./treeViews/implementations/projects/ProjectsTreeItem";
 import { TreeItemBase } from "./treeViews/core/TreeItemBase";
@@ -827,12 +827,15 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
 
     // To use relative paths to the workspace root,
     // get the workspace location to construct the full path of outputXmlFilePath.
-    const outputXMLFileRelativePathInExtensionSettings: string | undefined = getExtensionConfiguration().get<string>(
-        ConfigKeys.TB2ROBOT_OUTPUT_XML_PATH
+    const configurationScope = workingDirectoryPath ? vscode.Uri.file(workingDirectoryPath) : undefined;
+    const outputXMLFileRelativePathInExtensionSettings: string | undefined = getExtensionSetting<string>(
+        ConfigKeys.TB2ROBOT_OUTPUT_XML_PATH,
+        configurationScope
     );
     const outputXMLFileAbsolutePath: string | null = await utils.constructAbsolutePathFromRelativePath(
         outputXMLFileRelativePathInExtensionSettings,
-        true
+        true,
+        workingDirectoryPath
     );
     if (outputXMLFileAbsolutePath) {
         logger.debug(`[reportHandler] Using output XML file from extension settings: ${outputXMLFileAbsolutePath}`);
