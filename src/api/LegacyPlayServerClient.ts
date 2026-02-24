@@ -89,7 +89,8 @@ export class LegacyPlayServerClient {
                 2, // maxRetries
                 1000, // delayMs
                 RetryPredicateFactory.createDefaultPredicate(),
-                false // Don't show progress bar for fallback attempts
+                false, // Don't show progress bar for fallback attempts
+                false // Never force logout from background legacy-port discovery
             );
 
             if (serverLocationsResponse.status === 200 && serverLocationsResponse.data) {
@@ -265,6 +266,16 @@ export class LegacyPlayServerClient {
     }
 
     /**
+     * Shows a user-facing warning for legacy API failures while clarifying that
+     * the current TestBench session remains active.
+     *
+     * @param operationName The operation that failed (e.g., "test elements", "filters")
+     */
+    private showLegacyApiFailureWarning(operationName: string): void {
+        vscode.window.showWarningMessage(`Could not fetch ${operationName} from the legacy TestBench API.`);
+    }
+
+    /**
      * Fetches test elements using the Test Object Version (TOV) key from the legacy Play Server.
      * Uses the port discovered during initialization.
      *
@@ -291,26 +302,53 @@ export class LegacyPlayServerClient {
             );
 
             const session = this.createLegacyServerSession();
-            const response: AxiosResponse = await withRetry(
-                () => session.get(getTestElementsURL),
-                3, // maxRetries
-                2000, // delayMs
-                RetryPredicateFactory.createDefaultPredicate()
-            );
+            let getTestElementsResponse: AxiosResponse;
+            try {
+                getTestElementsResponse = await withRetry(
+                    () => session.get(getTestElementsURL),
+                    3, // maxRetries
+                    2000, // delayMs
+                    RetryPredicateFactory.createDefaultPredicate(),
+                    true,
+                    false // Legacy endpoint network issues must not trigger global logout
+                );
+            } catch (error) {
+                const isNetworkError = axios.isAxiosError(error) && !error.response;
+                if (!isNetworkError) {
+                    throw error;
+                }
 
-            if (response.data) {
+                logger.warn(
+                    `[LegacyPlayServerClient] Network error while fetching test elements on port ${this.currentLegacyPort}. Attempting legacy port rediscovery and one final retry.`
+                );
+
+                await this.clearPortCache();
+                await this.initialize();
+
+                const retryLegacyServerSession = this.createLegacyServerSession();
+                getTestElementsResponse = await withRetry(
+                    () => retryLegacyServerSession.get(getTestElementsURL),
+                    1, // maxRetries
+                    1000, // delayMs
+                    RetryPredicateFactory.createDefaultPredicate(),
+                    true,
+                    false // Legacy endpoint network issues must not trigger global logout
+                );
+            }
+
+            if (getTestElementsResponse.data) {
                 logger.trace(
                     `[LegacyPlayServerClient] Successfully fetched test elements data for TOV ${tovKey}:`,
-                    response.data
+                    getTestElementsResponse.data
                 );
-                return response.data;
+                return getTestElementsResponse.data;
             } else {
                 logger.error(`[LegacyPlayServerClient] Test elements data is not available for TOV key ${tovKey}.`);
                 return null;
             }
         } catch (error) {
             logger.error(`[LegacyPlayServerClient] Error fetching test elements for TOV key ${tovKey}: ${error}`);
-            vscode.window.showErrorMessage("Error fetching test elements. Please check the logs for details.");
+            this.showLegacyApiFailureWarning("test elements");
             return null;
         }
     }
@@ -334,12 +372,39 @@ export class LegacyPlayServerClient {
             );
 
             const session = this.createLegacyServerSession();
-            const response: AxiosResponse = await withRetry(
-                () => session.get(getFiltersPath),
-                3, // maxRetries
-                2000, // delayMs
-                RetryPredicateFactory.createDefaultPredicate()
-            );
+            let response: AxiosResponse;
+            try {
+                response = await withRetry(
+                    () => session.get(getFiltersPath),
+                    3, // maxRetries
+                    2000, // delayMs
+                    RetryPredicateFactory.createDefaultPredicate(),
+                    true,
+                    false // Legacy endpoint network issues must not trigger global logout
+                );
+            } catch (error) {
+                const isNetworkError = axios.isAxiosError(error) && !error.response;
+                if (!isNetworkError) {
+                    throw error;
+                }
+
+                logger.warn(
+                    `[LegacyPlayServerClient] Network error while fetching filters on port ${this.currentLegacyPort}. Attempting legacy port rediscovery and one final retry.`
+                );
+
+                await this.clearPortCache();
+                await this.initialize();
+
+                const retrySession = this.createLegacyServerSession();
+                response = await withRetry(
+                    () => retrySession.get(getFiltersPath),
+                    1, // maxRetries
+                    1000, // delayMs
+                    RetryPredicateFactory.createDefaultPredicate(),
+                    true,
+                    false // Legacy endpoint network issues must not trigger global logout
+                );
+            }
 
             if (response.data) {
                 logger.trace(`[LegacyPlayServerClient] Successfully fetched filters data:`, response.data);
@@ -350,7 +415,7 @@ export class LegacyPlayServerClient {
             }
         } catch (error) {
             logger.error(`[LegacyPlayServerClient] Error fetching filters: ${error}`);
-            vscode.window.showErrorMessage("Error fetching filters. Please check the logs for details.");
+            this.showLegacyApiFailureWarning("filters");
             return null;
         }
     }

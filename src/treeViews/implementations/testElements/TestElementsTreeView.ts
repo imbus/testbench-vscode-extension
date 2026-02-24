@@ -499,9 +499,14 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         errorMessages: ResourceOperationConfig["errorMessages"]
     ): Promise<boolean> {
         if (!createMissing) {
-            vscode.window.showWarningMessage(
-                resourcePath.isResourceFile ? errorMessages.fileNotFound : errorMessages.folderNotFound
-            );
+            const message = resourcePath.isResourceFile ? errorMessages.fileNotFound : errorMessages.folderNotFound;
+            if (message) {
+                if (resourcePath.isResourceFile) {
+                    vscode.window.showInformationMessage(message);
+                } else {
+                    vscode.window.showWarningMessage(message);
+                }
+            }
             return false;
         }
 
@@ -580,6 +585,14 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             return `tb:context:${this.currentProjectName}/${this.currentTovName}\n`;
         }
         return "";
+    }
+
+    /**
+     * Returns the configured Resource Directory Path label for user-facing messages.
+     */
+    private getResourceDirectoryPathLabel(): string {
+        const configuredPath = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR)?.trim();
+        return configuredPath && configuredPath.length > 0 ? configuredPath : "workspace";
     }
 
     /**
@@ -1383,6 +1396,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         this.logger.debug(
             `[TestElementsTreeView] handleKeywordSingleClick called for keyword: ${item.label}, type: ${item.data.testElementType}, uid: ${item.data.uniqueID}`
         );
+        const resourceDirectoryPath = this.getResourceDirectoryPathLabel();
         const parentResource = item.parent as TestElementsTreeItem;
         if (!parentResource) {
             this.logger.error(`[TestElementsTreeView] Could not find parent resource for keyword ${item.label}`);
@@ -1400,8 +1414,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 noPath: "Cannot construct resource path: workspace location not found.",
                 noParent: "Cannot find parent resource for keyword.",
                 noUid: "Parent resource {label} has no UID.",
-                fileNotFound:
-                    "Resource file does not exist. Use double-click or 'Create Resource' button to create it.",
+                fileNotFound: `Resource file does not exist inside "${resourceDirectoryPath}". Use double-click or 'Create Resource' button to create it.`,
                 folderNotFound: "Parent resource folder does not exist: {path}."
             }
         });
