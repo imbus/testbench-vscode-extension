@@ -797,7 +797,7 @@
                 },
                 {
                     "command": "testbenchExtension.displayAllProjects",
-                    "group": "navigation@2",
+                    "group": "navigation@4",
                     "when": "view == testbench.testThemes",
                     "icon": {
                         "light": "resources/icons/menu-light.svg",
@@ -806,7 +806,7 @@
                 },
                 {
                     "command": "testbenchExtension.displayAllProjects",
-                    "group": "navigation@2",
+                    "group": "navigation@4",
                     "when": "view == testbench.testElements",
                     "icon": {
                         "light": "resources/icons/menu-light.svg",
@@ -900,7 +900,7 @@
                 {
                     "command": "testbenchExtension.searchInTestElementsTreeOff",
                     "when": "view == testbench.testElements && !testbenchExtension.testElementsTreeHasSearchFilter",
-                    "group": "navigation@3",
+                    "group": "navigation@4",
                     "icon": {
                         "light": "resources/icons/search-off-light.svg",
                         "dark": "resources/icons/search-off-dark.svg"
@@ -909,7 +909,7 @@
                 {
                     "command": "testbenchExtension.searchInTestElementsTreeOn",
                     "when": "view == testbench.testElements && testbenchExtension.testElementsTreeHasSearchFilter",
-                    "group": "navigation@3",
+                    "group": "navigation@4",
                     "icon": {
                         "light": "resources/icons/search-on-light.svg",
                         "dark": "resources/icons/search-on-dark.svg"
@@ -918,13 +918,13 @@
                 {
                     "command": "testbenchExtension.setTestElementsVisibilityModeAllSubdivisions",
                     "when": "view == testbench.testElements && config.testbenchExtension.testElementsVisibilityMode == 'resourceOnly'",
-                    "group": "navigation@4",
+                    "group": "navigation@3",
                     "icon": "$(eye)"
                 },
                 {
                     "command": "testbenchExtension.setTestElementsVisibilityModeResourceOnly",
                     "when": "view == testbench.testElements && config.testbenchExtension.testElementsVisibilityMode == 'allSubdivisions'",
-                    "group": "navigation@4",
+                    "group": "navigation@3",
                     "icon": "$(eye-closed)"
                 }
             ],
