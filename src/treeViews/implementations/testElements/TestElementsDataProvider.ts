@@ -258,30 +258,24 @@ export class TestElementsDataProvider {
         map: { [id: string]: TestElementData };
     } {
         const roots: TestElementData[] = [];
-        Object.values(testElementIdToDataMap).forEach((testElementData) => {
+        const testElements = Object.values(testElementIdToDataMap);
+        const serialToElementMap = new Map<string, TestElementData>();
+
+        for (const element of testElements) {
+            const serial = this._extractElementSerialFromDetails(element);
+            if (serial && !serialToElementMap.has(serial)) {
+                serialToElementMap.set(serial, element);
+            }
+        }
+
+        testElements.forEach((testElementData) => {
             if (testElementData.parentId) {
                 let foundParentTestElementData: TestElementData | undefined =
                     testElementIdToDataMap[testElementData.parentId];
 
                 // Fallback linking logic for cases where parentId might just be the serial
                 if (!foundParentTestElementData && !testElementData.parentId.includes("_")) {
-                    const serialToFind = testElementData.parentId;
-                    for (const potentialParent of Object.values(testElementIdToDataMap)) {
-                        let parentSerialFromDetails: string | undefined;
-                        if (potentialParent.details?.Subdivision_key?.serial) {
-                            parentSerialFromDetails = String(potentialParent.details.Subdivision_key.serial);
-                        } else if (potentialParent.details?.Keyword_key?.serial) {
-                            parentSerialFromDetails = String(potentialParent.details.Keyword_key.serial);
-                        } else if (potentialParent.details?.Interaction_key?.serial) {
-                            // TODO: Replace API v1 (Interaction_key usage) with API v2 (Keyword_key) if no longer needed
-                            parentSerialFromDetails = String(potentialParent.details.Interaction_key.serial);
-                        }
-
-                        if (parentSerialFromDetails === serialToFind) {
-                            foundParentTestElementData = potentialParent;
-                            break;
-                        }
-                    }
+                    foundParentTestElementData = serialToElementMap.get(testElementData.parentId);
                 }
 
                 if (foundParentTestElementData) {
@@ -295,6 +289,25 @@ export class TestElementsDataProvider {
             }
         });
         return { roots, map: testElementIdToDataMap };
+    }
+
+    /**
+     * Extracts the serial from element details for fallback parent linking.
+     * @param testElementData The element to inspect.
+     * @returns The element serial if available.
+     */
+    private _extractElementSerialFromDetails(testElementData: TestElementData): string | undefined {
+        if (testElementData.details?.Subdivision_key?.serial) {
+            return String(testElementData.details.Subdivision_key.serial);
+        }
+        if (testElementData.details?.Keyword_key?.serial) {
+            return String(testElementData.details.Keyword_key.serial);
+        }
+        if (testElementData.details?.Interaction_key?.serial) {
+            // Note: Interaction was renamed to keyword in GUI but Interaction_key is used in API v1 for keywords.
+            return String(testElementData.details.Interaction_key.serial);
+        }
+        return undefined;
     }
 
     /**
