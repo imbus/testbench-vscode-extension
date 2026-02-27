@@ -235,7 +235,7 @@ export class TestElementsDataProvider {
                 originalName: originalName,
                 uniqueID: testElementOwnUniqueID,
                 libraryKey,
-                jsonString: JSON.stringify(jsonTestElement, null, 2),
+                jsonString: jsonTestElement.jsonString,
                 details: jsonTestElement || {},
                 testElementType: testElementType,
                 directRegexMatch: directRegexMatch,

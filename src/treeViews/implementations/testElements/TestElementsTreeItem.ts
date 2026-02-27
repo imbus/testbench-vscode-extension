@@ -25,7 +25,7 @@ export interface TestElementData {
     originalName: string;
     uniqueID: string;
     libraryKey: string | null;
-    jsonString: string;
+    jsonString?: string;
     details: any;
     testElementType: TestElementType;
     directRegexMatch: boolean;
