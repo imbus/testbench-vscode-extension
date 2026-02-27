@@ -773,21 +773,16 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
             this.rootItems = fetchedHierarchicalTestElements.map((element) => this._buildTreeItems(element));
 
-            // Only check icons for visible/expanded items initially for better performance
-            // Remaining items will be checked when expanded
-            await this.updateSubdivisionIcons(this.rootItems, true);
-
-            // Compute availability for all resource subdivisions and recompute parent markings
-            await this.updateResourceSubdivisionAvailability(this.rootItems);
-            await this.updateAllParentMarkings();
-
             // Set the last data fetch timestamp to prevent infinite loading
             // This is important even for empty results to prevent the tree from continuously trying to load data
             (this as any)._lastDataFetch = Date.now();
             (this as any)._intentionallyCleared = false;
             this.stateManager.setLoading(false);
-            this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
+
+            // Render tree immediately with structural data, then update availability/icons in background
+            this._onDidChangeTreeData.fire(undefined);
+            void this.runPostFetchAvailabilityUpdates(this.rootItems);
 
             this.eventBus.emit({
                 type: "tov:loaded",
