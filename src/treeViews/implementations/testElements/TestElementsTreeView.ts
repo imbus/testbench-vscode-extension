@@ -889,15 +889,18 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
     /**
      * Post-fetch background updates:
-     * - refresh visible subdivision availability
-     * - compute availability for all resource subdivisions (even under collapsed branches)
-     * - recompute parent markings
+     * - compute availability once for the union of visible/expanded subdivisions and
+     *   all resource subdivisions (including collapsed branches)
+     * - recompute parent markings once
      * Always triggers a final tree refresh.
      */
     private async runPostFetchAvailabilityUpdates(rootItems: TestElementsTreeItem[]): Promise<void> {
         try {
-            await this.updateSubdivisionIcons(rootItems, true);
-            await this.updateResourceSubdivisionAvailability(rootItems);
+            const postFetchAvailabilityItems = this.collectPostFetchVisibleAndResourceItems(rootItems);
+            await this.updateSubdivisionAvailability(postFetchAvailabilityItems, {
+                // Parent marking is recomputed in a separate pass.
+                updateParentMarkingOnAvailableResource: false
+            });
             await this.updateAllParentMarkings();
         } catch (error) {
             this.logger.error("[TestElementsTreeView] Error during post-fetch availability updates:", error);
@@ -907,19 +910,26 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Makes sure local availability is computed for all resource subdivisions in the tree.
-     * This is required so parent marking/icon state is correct even when resource subdivisions
-     * are under collapsed branches (i.e., not "visible" yet).
+     * Collects subdivision targets for post-fetch availability checks.
+     * Includes visible/expanded subdivisions and all resource
+     * subdivisions to keep parent marking accurate under collapsed branches.
      */
-    private async updateResourceSubdivisionAvailability(items: TestElementsTreeItem[]): Promise<void> {
+    private collectPostFetchVisibleAndResourceItems(items: TestElementsTreeItem[]): TestElementsTreeItem[] {
+        const visibleSubdivisionItems = this.collectSubdivisionItems(items, { onlyVisible: true });
         const resourceSubdivisionItems = this.collectSubdivisionItems(items, {
             onlyVisible: false,
             filter: (item) => this.isResourceSubdivision(item)
         });
-        await this.updateSubdivisionAvailability(resourceSubdivisionItems, {
-            // Parent marking is recomputed in a separate full pass (updateAllParentMarkings)
-            updateParentMarkingOnAvailableResource: false
-        });
+
+        const targetItemsById = new Map<string, TestElementsTreeItem>();
+        for (const item of visibleSubdivisionItems) {
+            targetItemsById.set(item.data.id, item);
+        }
+        for (const item of resourceSubdivisionItems) {
+            targetItemsById.set(item.data.id, item);
+        }
+
+        return Array.from(targetItemsById.values());
     }
 
     /**
