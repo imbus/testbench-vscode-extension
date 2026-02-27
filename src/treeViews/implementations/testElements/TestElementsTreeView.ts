@@ -223,28 +223,51 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         }
 
         try {
-            const subdivisionItems: TestElementsTreeItem[] = [];
-            const collectSubdivisions = (currentItems: TestElementsTreeItem[]) => {
-                for (const item of currentItems) {
-                    if (item.data.testElementType === TestElementType.Subdivision) {
-                        subdivisionItems.push(item);
-                    }
-                    if (item.children) {
-                        collectSubdivisions(item.children as TestElementsTreeItem[]);
-                    }
-                }
-            };
-            collectSubdivisions(this.rootItems);
-
-            for (const item of subdivisionItems) {
-                // Only non-resource folders (virtual folders) need the hasLocalChildren flag
-                if (!item.data.directRegexMatch) {
-                    const allChildrenAvailable = await this.hasAllChildResourcesAvailable(item);
-                    item.hasLocalChildren = allChildrenAvailable;
-                }
-            }
+            this.recomputeAllParentMarkingsBottomUp(this.rootItems);
         } catch (error) {
             this.logger.error("[TestElementsTreeView] Error updating all parent markings:", error);
+        }
+    }
+
+    /**
+     * Recomputes parent marking flags bottom-up (post-order) for the provided subtree roots.
+     * @param rootItems The root items of the subtree to recompute markings for.
+     */
+    private recomputeAllParentMarkingsBottomUp(rootItems: TestElementsTreeItem[]): void {
+        const postOrderStack: Array<{ item: TestElementsTreeItem; visited: boolean }> = [];
+
+        for (const rootItem of rootItems) {
+            if (rootItem.data.testElementType === TestElementType.Subdivision) {
+                postOrderStack.push({ item: rootItem, visited: false });
+            }
+        }
+
+        while (postOrderStack.length > 0) {
+            const stackEntry = postOrderStack.pop();
+            if (!stackEntry) {
+                continue;
+            }
+
+            const { item, visited } = stackEntry;
+            if (!visited) {
+                // Re-add current node as visited so it is evaluated after its children.
+                postOrderStack.push({ item, visited: true });
+
+                const children = item.children as TestElementsTreeItem[] | undefined;
+                if (children && children.length > 0) {
+                    for (const child of children) {
+                        if (child.data.testElementType === TestElementType.Subdivision) {
+                            postOrderStack.push({ item: child, visited: false });
+                        }
+                    }
+                }
+                continue;
+            }
+
+            if (!item.data.directRegexMatch) {
+                // Only folders/non-resource subdivisions derive marking from descendants.
+                item.hasLocalChildren = this.computeAllChildResourcesAvailableFromCachedState(item);
+            }
         }
     }
 
@@ -949,31 +972,36 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Checks if all child resource subdivisions of an item are locally available.
-     * A parent should only be marked if all its resource descendants are available.
-     * Non-resource folders (virtual) are checked recursively for their descendants.
-     * @param item The subdivision item to check
-     * @returns True if all child resource subdivisions are locally available, false otherwise
+     * Computes whether all descendant resource subdivisions are available using cached child states.
+     * Returns true when there are no descendant resource subdivisions.
      */
-    private async hasAllChildResourcesAvailable(item: TestElementsTreeItem): Promise<boolean> {
-        if (!item.children || item.children.length === 0) {
-            // Leaf
-            return item.data.directRegexMatch ? item.data.isLocallyAvailable === true : true;
+    private computeAllChildResourcesAvailableFromCachedState(parentSubdivision: TestElementsTreeItem): boolean {
+        const childSubdivisions = parentSubdivision.children as TestElementsTreeItem[] | undefined;
+        if (!childSubdivisions || childSubdivisions.length === 0) {
+            return true;
         }
 
-        for (const child of item.children as TestElementsTreeItem[]) {
-            if (child.data.testElementType === TestElementType.Subdivision) {
-                if (child.data.directRegexMatch) {
-                    if (!child.data.isLocallyAvailable) {
-                        return false;
-                    }
-                } else {
-                    // Folder, recursively check all its children
-                    const allChildrenAvailable = await this.hasAllChildResourcesAvailable(child);
-                    if (!allChildrenAvailable) {
-                        return false;
-                    }
+        for (const childSubdivision of childSubdivisions) {
+            if (childSubdivision.data.testElementType !== TestElementType.Subdivision) {
+                continue;
+            }
+
+            // Direct resource subdivision: its own availability decides the branch.
+            if (childSubdivision.data.directRegexMatch) {
+                if (!childSubdivision.data.isLocallyAvailable) {
+                    return false;
                 }
+                continue;
+            }
+
+            // Pure structural folder without resource descendants does not affect marking.
+            if (!childSubdivision.data.hasResourceDescendant) {
+                continue;
+            }
+
+            // Folder with resource descendants must already be marked as locally complete.
+            if (!childSubdivision.hasLocalChildren) {
+                return false;
             }
         }
 
@@ -995,11 +1023,17 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             let parent = item.parent as TestElementsTreeItem | null;
             while (parent) {
                 if (parent.data.testElementType === TestElementType.Subdivision) {
-                    const allChildrenAvailable = await this.hasAllChildResourcesAvailable(parent);
+                    const allChildrenAvailable = this.computeAllChildResourcesAvailableFromCachedState(parent);
+                    const previousHasLocalChildren = parent.hasLocalChildren;
                     parent.hasLocalChildren = allChildrenAvailable;
                     this.logger.trace(
                         `[TestElementsTreeView] Parent '${parent.label}' marking updated: ${allChildrenAvailable}`
                     );
+
+                    // Stop climbing when state no longer changes, higher ancestors remain unaffected.
+                    if (previousHasLocalChildren === allChildrenAvailable) {
+                        break;
+                    }
                 }
                 parent = parent.parent as TestElementsTreeItem | null;
             }
