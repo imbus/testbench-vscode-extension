@@ -351,6 +351,54 @@ suite("ResourceFileService", function () {
                 `Expected full folder hierarchy to be preserved when no marker is configured: "${expectedPath}", got "${result}"`
             );
         });
+
+        test("should reuse cached path for identical input and settings", async function () {
+            const workspaceLocationStub = testEnv.sandbox
+                .stub(utils, "validateAndReturnWorkspaceLocation")
+                .resolves("/test/workspace");
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns(undefined);
+
+            const first = await resourceFileService.constructAbsolutePath("Folder/SubFolder/Resource");
+            const second = await resourceFileService.constructAbsolutePath("Folder/SubFolder/Resource");
+
+            assert.strictEqual(first, second, "Expected cached and recomputed paths to match");
+            assert.strictEqual(
+                workspaceLocationStub.callCount,
+                1,
+                "Expected workspace lookup to run only once due to path cache hit"
+            );
+        });
+
+        test("should recompute path when path-relevant settings change", async function () {
+            let resourceDirectoryPath = "rf_resources_v1";
+            const workspaceLocationStub = testEnv.sandbox
+                .stub(utils, "validateAndReturnWorkspaceLocation")
+                .resolves("/test/workspace");
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").callsFake((key: string) => {
+                if (key === "resourceDirectoryPath") {
+                    return resourceDirectoryPath as any;
+                }
+                if (key === "resourceRootRegex") {
+                    return undefined as any;
+                }
+                if (key === "resourceMarker") {
+                    return undefined as any;
+                }
+                return undefined as any;
+            });
+
+            const firstCall = await resourceFileService.constructAbsolutePath("Project/MyResource");
+            resourceDirectoryPath = "rf_resources_v2";
+            const secondCall = await resourceFileService.constructAbsolutePath("Project/MyResource");
+
+            assert.strictEqual(firstCall, path.join("/test/workspace", "rf_resources_v1", "Project", "MyResource"));
+            assert.strictEqual(secondCall, path.join("/test/workspace", "rf_resources_v2", "Project", "MyResource"));
+            assert.strictEqual(
+                workspaceLocationStub.callCount,
+                2,
+                "Expected path recomputation for changed settings (cache key should differ)"
+            );
+        });
     });
 
     suite("ensureFileExists", function () {

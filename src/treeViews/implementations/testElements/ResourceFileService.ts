@@ -33,7 +33,76 @@ export interface ResourceOperationConfig {
 }
 
 export class ResourceFileService {
+    private static readonly MAX_CONSTRUCTED_PATH_CACHE_ENTRIES = 5000;
+    private readonly constructedPathCache = new Map<string, string>();
+
     constructor(private readonly logger: TestBenchLogger) {}
+
+    /**
+     * Clears the cached absolute path resolutions.
+     */
+    public clearConstructedPathCache(): void {
+        this.constructedPathCache.clear();
+    }
+
+    /**
+     * Reads and normalizes all path-resolution related settings.
+     * @returns {{resourceDirRelativeToWorkspace: string; resourceDirectoryMarker: string; resourceMarkers: string[]}}
+     * An object containing resource directory path, marker regex, and configured resource markers.
+     */
+    private getPathResolutionSettings(): {
+        resourceDirRelativeToWorkspace: string;
+        resourceDirectoryMarker: string;
+        resourceMarkers: string[];
+    } {
+        const resourceDirRelativeToWorkspace = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR) || "";
+        const resourceDirectoryMarker =
+            getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER) || "";
+        const resourceMarkers = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER) || [];
+
+        return {
+            resourceDirRelativeToWorkspace,
+            resourceDirectoryMarker,
+            resourceMarkers: resourceMarkers.filter((marker): marker is string => typeof marker === "string")
+        };
+    }
+
+    /**
+     * Builds a stable cache key for an absolute-path resolution request.
+     * @param hierarchicalName The hierarchical resource name to resolve.
+     * @param settings The normalized path-resolution settings used for this resolution.
+     * @returns {string} A serialized cache key.
+     */
+    private buildConstructedPathCacheKey(
+        hierarchicalName: string,
+        settings: {
+            resourceDirRelativeToWorkspace: string;
+            resourceDirectoryMarker: string;
+            resourceMarkers: string[];
+        }
+    ): string {
+        return JSON.stringify({
+            hierarchicalName,
+            resourceDirRelativeToWorkspace: settings.resourceDirRelativeToWorkspace,
+            resourceDirectoryMarker: settings.resourceDirectoryMarker,
+            resourceMarkers: settings.resourceMarkers
+        });
+    }
+
+    /**
+     * Prunes the absolute path cache to its maximum configured size.
+     * Removes oldest entries first.
+     * @returns {void}
+     */
+    private pruneConstructedPathCache(): void {
+        while (this.constructedPathCache.size > ResourceFileService.MAX_CONSTRUCTED_PATH_CACHE_ENTRIES) {
+            const oldestKey = this.constructedPathCache.keys().next().value;
+            if (!oldestKey) {
+                return;
+            }
+            this.constructedPathCache.delete(oldestKey);
+        }
+    }
 
     /**
      * Normalizes a path by replacing these file path characters with underscores:
@@ -89,10 +158,12 @@ export class ResourceFileService {
     /**
      * Removes all occurrences of configured resource markers from a given path string.
      * @param pathStr The path string to clean
+     * @param configuredResourceMarkers Optional marker list to use instead of reading settings.
      * @returns The cleaned path string with resource markers removed
      */
-    private removeResourceMarkersFromPathString(pathStr: string): string {
-        const resourceMarkers = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER);
+    private removeResourceMarkersFromPathString(pathStr: string, configuredResourceMarkers?: string[]): string {
+        const resourceMarkers =
+            configuredResourceMarkers ?? getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER);
         if (!resourceMarkers || resourceMarkers.length === 0) {
             return pathStr;
         }
@@ -178,21 +249,27 @@ export class ResourceFileService {
      * @returns {Promise<string | undefined>} The absolute path or undefined if workspace root is not found.
      */
     public async constructAbsolutePath(hierarchicalName: string): Promise<string | undefined> {
-        const workspaceRootPath = await validateAndReturnWorkspaceLocation();
-        if (!workspaceRootPath) {
-            return undefined;
-        }
-
         if (!hierarchicalName.trim()) {
             this.logger.error("[ResourceFileService] Hierarchical name is empty. Cannot construct absolute path.");
             return undefined;
         }
 
-        const resourceDirRelativeToWorkspace = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR) || "";
-        const resourceDirectoryMarker =
-            getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER) || "";
+        const settings = this.getPathResolutionSettings();
+        const cacheKey = this.buildConstructedPathCacheKey(hierarchicalName, settings);
+        const cachedPath = this.constructedPathCache.get(cacheKey);
+        if (cachedPath) {
+            return cachedPath;
+        }
 
-        const cleanedHierarchical = this.removeResourceMarkersFromPathString(hierarchicalName);
+        const workspaceRootPath = await validateAndReturnWorkspaceLocation();
+        if (!workspaceRootPath) {
+            return undefined;
+        }
+
+        const cleanedHierarchical = this.removeResourceMarkersFromPathString(
+            hierarchicalName,
+            settings.resourceMarkers
+        );
         const splitPathComponents = cleanedHierarchical.split("/");
         const normalizedPathComponents = splitPathComponents.map((component) =>
             ResourceFileService.normalizePath(component)
@@ -200,13 +277,13 @@ export class ResourceFileService {
 
         let relativePathComponents: string[];
 
-        if (!resourceDirectoryMarker) {
+        if (!settings.resourceDirectoryMarker) {
             // No marker configured, preserve full folder hierarchy
             relativePathComponents = normalizedPathComponents;
         } else {
             const resourceDirectoryMarkerIndex = ResourceFileService.findResourceDirectoryMarkerIndex(
                 normalizedPathComponents,
-                resourceDirectoryMarker
+                settings.resourceDirectoryMarker
             );
 
             if (resourceDirectoryMarkerIndex !== -1) {
@@ -223,12 +300,15 @@ export class ResourceFileService {
 
         const absolutePathOfResourceFile = path.join(
             workspaceRootPath,
-            resourceDirRelativeToWorkspace, // Will be empty if no resource directory is configured
+            settings.resourceDirRelativeToWorkspace, // Will be empty if no resource directory is configured
             ...relativePathComponents
         );
 
+        this.constructedPathCache.set(cacheKey, absolutePathOfResourceFile);
+        this.pruneConstructedPathCache();
+
         this.logger.trace(
-            `[ResourceFileService] Constructed absolute path for '${hierarchicalName}' with marker='${resourceDirectoryMarker}' and resourceDir='${resourceDirRelativeToWorkspace}' -> ${absolutePathOfResourceFile}`
+            `[ResourceFileService] Constructed absolute path for '${hierarchicalName}' with marker='${settings.resourceDirectoryMarker}' and resourceDir='${settings.resourceDirRelativeToWorkspace}' -> ${absolutePathOfResourceFile}`
         );
         return absolutePathOfResourceFile;
     }

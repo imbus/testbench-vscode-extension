@@ -153,6 +153,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
         this.eventBus.on("testElements:configurationChanged", () => {
             this.logger.debug("[TestElementsTreeView] Resource marker configuration changed, refreshing tree view");
+            this.resourceFileService.clearConstructedPathCache();
             // Clear filtered cache and refresh to apply new filtering
             if (this.currentTovKey) {
                 this.refresh(undefined, { clearRawCache: false, immediate: true });
@@ -741,6 +742,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 // Clear old tree items on context switch
                 this.prepareForContextSwitchLoading();
                 this.dataProvider.clearCache(tovKey);
+                this.resourceFileService.clearConstructedPathCache();
             } else {
                 this.stateManager.setError(null);
                 this.stateManager.setLoading(true);
@@ -815,6 +817,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      */
     public clearTree(): void {
         super.clearTree();
+        this.resourceFileService.clearConstructedPathCache();
         this.currentTovKey = null;
         this.currentTovLabel = null;
         this.currentProjectName = null;
