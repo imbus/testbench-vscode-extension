@@ -38,6 +38,7 @@ type TestElementsVisibilityMode = "resourceOnly" | "allSubdivisions";
 
 export class TestElementsDataProvider {
     private elementsCache = new FrameworkCache<TestElementData[]>();
+    private rawElementsCache = new FrameworkCache<RawTestElement[]>();
     private disposables: vscode.Disposable[] = [];
 
     constructor(
@@ -71,7 +72,7 @@ export class TestElementsDataProvider {
                 );
                 this.logger.debug(`[TestElementsDataProvider] New Test Elements visibility mode: ${visibilityMode}`);
 
-                this.clearCache();
+                this.clearFilteredCache();
                 this.eventBus.emit({
                     type: "testElements:configurationChanged",
                     source: "testElements",
@@ -140,9 +141,18 @@ export class TestElementsDataProvider {
         }
 
         try {
-            const rawTestElementsData = await connection.getTestElementsWithTovKeyUsingOldPlayServer(tovKey);
-            if (!rawTestElementsData || !Array.isArray(rawTestElementsData)) {
-                return [];
+            let rawTestElementsData = this.rawElementsCache.get(tovKey);
+            if (!rawTestElementsData) {
+                this.logger.debug(
+                    `[TestElementsDataProvider] Fetching raw test elements from server for TOV: ${tovKey}`
+                );
+                rawTestElementsData = await connection.getTestElementsWithTovKeyUsingOldPlayServer(tovKey);
+                if (!rawTestElementsData || !Array.isArray(rawTestElementsData)) {
+                    return [];
+                }
+                this.rawElementsCache.set(tovKey, rawTestElementsData);
+            } else {
+                this.logger.debug(`[TestElementsDataProvider] Using cached raw test elements for TOV: ${tovKey}`);
             }
 
             const hierarchicalTestElemData = await this._buildAndFilterHierarchy(rawTestElementsData);
@@ -629,6 +639,21 @@ export class TestElementsDataProvider {
      * @param tovKey Optional TOV key to clear cache for. If not provided, clears all cache.
      */
     public clearCache(tovKey?: string): void {
+        if (tovKey) {
+            this.elementsCache.clear(tovKey);
+            this.rawElementsCache.clear(tovKey);
+        } else {
+            this.elementsCache.clear();
+            this.rawElementsCache.clear();
+        }
+    }
+
+    /**
+     * Clears only the filtered elements cache, keeping the raw data from the server.
+     * Useful when only the visibility configuration changes.
+     * @param tovKey Optional TOV key to clear cache for. If not provided, clears all filtered cache.
+     */
+    public clearFilteredCache(tovKey?: string): void {
         if (tovKey) {
             this.elementsCache.clear(tovKey);
         } else {

@@ -795,7 +795,15 @@ const setTestElementsVisibilityMode = async (mode: "resourceOnly" | "allSubdivis
         return;
     }
 
-    await config.update(ConfigKeys.TEST_ELEMENTS_VISIBILITY_MODE, mode, vscode.ConfigurationTarget.Workspace);
+    if (treeViews?.testElementsTree) {
+        treeViews.testElementsTree.prepareForContextSwitchLoading({ preserveUiState: true });
+    }
+
+    const target = vscode.workspace.workspaceFolders
+        ? vscode.ConfigurationTarget.Workspace
+        : vscode.ConfigurationTarget.Global;
+
+    await config.update(ConfigKeys.TEST_ELEMENTS_VISIBILITY_MODE, mode, target);
 };
 
 const handleSetTestElementsVisibilityModeResourceOnly = async () => {

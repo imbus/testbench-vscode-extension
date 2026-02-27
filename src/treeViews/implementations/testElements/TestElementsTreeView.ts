@@ -153,10 +153,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
         this.eventBus.on("testElements:configurationChanged", () => {
             this.logger.debug("[TestElementsTreeView] Resource marker configuration changed, refreshing tree view");
-            // Clear cache and refresh to apply new filtering
+            // Clear filtered cache and refresh to apply new filtering
             if (this.currentTovKey) {
-                this.dataProvider.clearCache(this.currentTovKey);
-                this.refresh();
+                this.refresh(undefined, { clearRawCache: false, immediate: true });
             }
         });
 
@@ -1817,7 +1816,11 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         }
 
         if (this.currentTovKey) {
-            this.dataProvider.clearCache(this.currentTovKey);
+            if (options?.clearRawCache === false) {
+                this.dataProvider.clearFilteredCache(this.currentTovKey);
+            } else {
+                this.dataProvider.clearCache(this.currentTovKey);
+            }
 
             this.loadTovWithProgress(
                 this.currentTovKey,
