@@ -64,6 +64,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private keywordClickHandler: ClickHandler<TestElementsTreeItem>;
     private resourceFilesWatcher: vscode.FileSystemWatcher | undefined;
     private resourceAvailabilityRefreshDebounceHandle: NodeJS.Timeout | undefined;
+    private deferredPostFetchAvailabilityHandle: NodeJS.Timeout | undefined;
+    private postFetchAvailabilityRunId: number = 0;
 
     constructor(
         extensionContext: vscode.ExtensionContext,
@@ -213,6 +215,32 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
+     * Cancels any pending or ongoing post-fetch availability work.
+     */
+    private cancelPostFetchAvailabilityWork(): void {
+        this.postFetchAvailabilityRunId += 1;
+        if (this.deferredPostFetchAvailabilityHandle) {
+            clearTimeout(this.deferredPostFetchAvailabilityHandle);
+            this.deferredPostFetchAvailabilityHandle = undefined;
+        }
+    }
+
+    /**
+     * Starts a new post-fetch availability run and returns its run id.
+     */
+    private beginPostFetchAvailabilityRun(): number {
+        this.cancelPostFetchAvailabilityWork();
+        return this.postFetchAvailabilityRunId;
+    }
+
+    /**
+     * Determines whether the given post-fetch availability run is stale.
+     */
+    private isPostFetchAvailabilityRunCancelled(runId: number, rootItems: TestElementsTreeItem[]): boolean {
+        return runId !== this.postFetchAvailabilityRunId || rootItems !== this.rootItems;
+    }
+
+    /**
      * Updates parent marking flags for all subdivision items in the tree.
      * This is called after file system changes to ensure parent markings are accurate.
      * Parents are only marked if all their child resources are locally available.
@@ -350,16 +378,33 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         subdivisionItems: TestElementsTreeItem[],
         options: {
             updateParentMarkingOnAvailableResource: boolean;
+            cancelCheck?: () => boolean;
         }
     ): Promise<void> {
+        if (options.cancelCheck?.()) {
+            return;
+        }
+
         await this.ensureLanguageServerReadyForAvailabilityChecks();
+
+        if (options.cancelCheck?.()) {
+            return;
+        }
 
         // Process file checks in batches to yield to UI thread
         const BATCH_SIZE = 20;
         for (let i = 0; i < subdivisionItems.length; i += BATCH_SIZE) {
+            if (options.cancelCheck?.()) {
+                return;
+            }
+
             const batch = subdivisionItems.slice(i, i + BATCH_SIZE);
             await Promise.all(
                 batch.map(async (subdivisionItem) => {
+                    if (options.cancelCheck?.()) {
+                        return;
+                    }
+
                     try {
                         if (subdivisionItem.data.isVirtual) {
                             return;
@@ -671,6 +716,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     ): Promise<void> {
         const startTime = Date.now();
         this.logger.debug(`[TestElementsTreeView] Loading Test Object Version '${tovName}'...`);
+        this.cancelPostFetchAvailabilityWork();
 
         try {
             this.stateManager.setLoading(true);
@@ -760,6 +806,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this.logger.debug(
                 `[TestElementsTreeView] Loading Test Element information for Test Object Version '${tovName}' from project '${projectName}'...`
             );
+            this.cancelPostFetchAvailabilityWork();
             const isContextSwitch = this.currentTovKey !== tovKey;
             if (clearFirst || isContextSwitch) {
                 // Clear old tree items on context switch
@@ -839,6 +886,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * Clears the tree view and resets all associated state.
      */
     public clearTree(): void {
+        this.cancelPostFetchAvailabilityWork();
         super.clearTree();
         this.resourceFileService.clearConstructedPathCache();
         this.currentTovKey = null;
@@ -914,48 +962,106 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Post-fetch background updates:
-     * - compute availability once for the union of visible/expanded subdivisions and
-     *   all resource subdivisions (including collapsed branches)
-     * - recompute parent markings once
-     * Always triggers a final tree refresh.
+     * Post-fetch availability updates:
+     * - fast pass for visible/expanded subdivisions
+     * - deferred background pass for remaining resource subdivisions
+     * - cancellation checks prevent stale runs from updating current context
      */
     private async runPostFetchAvailabilityUpdates(rootItems: TestElementsTreeItem[]): Promise<void> {
+        const runId = this.beginPostFetchAvailabilityRun();
+
         try {
-            const postFetchAvailabilityItems = this.collectPostFetchVisibleAndResourceItems(rootItems);
-            await this.updateSubdivisionAvailability(postFetchAvailabilityItems, {
-                // Parent marking is recomputed in a separate pass.
-                updateParentMarkingOnAvailableResource: false
+            const visibleSubdivisionItems = this.collectSubdivisionItems(rootItems, { onlyVisible: true });
+            await this.updateSubdivisionAvailability(visibleSubdivisionItems, {
+                updateParentMarkingOnAvailableResource: false,
+                cancelCheck: () => this.isPostFetchAvailabilityRunCancelled(runId, rootItems)
             });
+
+            if (this.isPostFetchAvailabilityRunCancelled(runId, rootItems)) {
+                return;
+            }
+
             await this.updateAllParentMarkings();
+
+            if (this.isPostFetchAvailabilityRunCancelled(runId, rootItems)) {
+                return;
+            }
+
+            this._onDidChangeTreeData.fire(undefined);
+
+            const deferredSubdivisionItems = this.collectDeferredResourceSubdivisionItems(
+                rootItems,
+                visibleSubdivisionItems
+            );
+
+            if (deferredSubdivisionItems.length === 0) {
+                return;
+            }
+
+            this.deferredPostFetchAvailabilityHandle = setTimeout(() => {
+                void this.runDeferredPostFetchAvailabilityUpdates(runId, rootItems, deferredSubdivisionItems);
+            }, 0);
         } catch (error) {
             this.logger.error("[TestElementsTreeView] Error during post-fetch availability updates:", error);
-        } finally {
-            this._onDidChangeTreeData.fire(undefined);
         }
     }
 
     /**
-     * Collects subdivision targets for post-fetch availability checks.
-     * Includes visible/expanded subdivisions and all resource
-     * subdivisions to keep parent marking accurate under collapsed branches.
+     * Runs deferred background availability updates for non-visible resource subdivisions.
      */
-    private collectPostFetchVisibleAndResourceItems(items: TestElementsTreeItem[]): TestElementsTreeItem[] {
-        const visibleSubdivisionItems = this.collectSubdivisionItems(items, { onlyVisible: true });
+    private async runDeferredPostFetchAvailabilityUpdates(
+        runId: number,
+        rootItems: TestElementsTreeItem[],
+        deferredSubdivisionItems: TestElementsTreeItem[]
+    ): Promise<void> {
+        this.deferredPostFetchAvailabilityHandle = undefined;
+
+        if (this.isPostFetchAvailabilityRunCancelled(runId, rootItems)) {
+            return;
+        }
+
+        try {
+            await this.updateSubdivisionAvailability(deferredSubdivisionItems, {
+                updateParentMarkingOnAvailableResource: false,
+                cancelCheck: () => this.isPostFetchAvailabilityRunCancelled(runId, rootItems)
+            });
+
+            if (this.isPostFetchAvailabilityRunCancelled(runId, rootItems)) {
+                return;
+            }
+
+            await this.updateAllParentMarkings();
+
+            if (this.isPostFetchAvailabilityRunCancelled(runId, rootItems)) {
+                return;
+            }
+
+            this._onDidChangeTreeData.fire(undefined);
+        } catch (error) {
+            if (!this.isPostFetchAvailabilityRunCancelled(runId, rootItems)) {
+                this.logger.error(
+                    "[TestElementsTreeView] Error during deferred post-fetch availability updates:",
+                    error
+                );
+            }
+        }
+    }
+
+    /**
+     * Collects resource subdivision targets for deferred post-fetch availability checks.
+     * Excludes items already processed in the fast pass.
+     */
+    private collectDeferredResourceSubdivisionItems(
+        items: TestElementsTreeItem[],
+        alreadyProcessedItems: TestElementsTreeItem[]
+    ): TestElementsTreeItem[] {
+        const processedIds = new Set(alreadyProcessedItems.map((item) => item.data.id));
         const resourceSubdivisionItems = this.collectSubdivisionItems(items, {
             onlyVisible: false,
             filter: (item) => this.isResourceSubdivision(item)
         });
 
-        const targetItemsById = new Map<string, TestElementsTreeItem>();
-        for (const item of visibleSubdivisionItems) {
-            targetItemsById.set(item.data.id, item);
-        }
-        for (const item of resourceSubdivisionItems) {
-            targetItemsById.set(item.data.id, item);
-        }
-
-        return Array.from(targetItemsById.values());
+        return resourceSubdivisionItems.filter((item) => !processedIds.has(item.data.id));
     }
 
     /**
@@ -1853,6 +1959,13 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * Disposes of all resources and cleans up the tree view.
      */
     public async dispose(): Promise<void> {
+        this.cancelPostFetchAvailabilityWork();
+
+        if (this.resourceAvailabilityRefreshDebounceHandle) {
+            clearTimeout(this.resourceAvailabilityRefreshDebounceHandle);
+            this.resourceAvailabilityRefreshDebounceHandle = undefined;
+        }
+
         for (const disposable of this.disposables) {
             disposable.dispose();
         }
