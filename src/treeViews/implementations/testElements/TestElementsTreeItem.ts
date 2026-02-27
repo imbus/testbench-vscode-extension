@@ -33,6 +33,7 @@ export interface TestElementData {
     hierarchicalName: string;
     parent?: TestElementData;
     isVirtual?: boolean;
+    hasResourceDescendant?: boolean;
 }
 
 // Extended interface for tree item specific data
@@ -79,6 +80,9 @@ export class TestElementsTreeItem extends TreeItemBase {
             parent.addChild(this);
         }
 
+        // Re-evaluate context after parent linkage so keyword context can use actual tree ancestry.
+        this.updateContextValue();
+
         if (this.data.testElementType === TestElementType.Keyword) {
             this.command = {
                 command: allExtensionCommands.handleKeywordClick,
@@ -113,11 +117,19 @@ export class TestElementsTreeItem extends TreeItemBase {
                 if (data.isVirtual) {
                     return "testElement.subdivision.virtualFolder";
                 }
-                return "testElement.subdivision.folder";
+
+                if (data.hasResourceDescendant) {
+                    return "testElement.subdivision.folder";
+                }
+
+                return "testElement.subdivision.plain";
             }
         }
 
         if (elementType === TestElementType.Keyword) {
+            if (!this.hasResourceSubdivisionInDataHierarchy(data)) {
+                return "testElement.keyword";
+            }
             const parentResource = this.getParentResourceAvailability(data);
             return parentResource ? "testElement.keyword.resource.available" : "testElement.keyword.resource.missing";
         }
@@ -132,6 +144,30 @@ export class TestElementsTreeItem extends TreeItemBase {
      */
     private static getParentResourceAvailability(data: TestElementItemData): boolean {
         return data.isLocallyAvailable || false;
+    }
+
+    /**
+     * Checks whether the keyword belongs to a hierarchy that contains a resource-marked subdivision.
+     * @param data The keyword data.
+     * @returns True when any ancestor subdivision is marked as resource, otherwise false.
+     */
+    private static hasResourceSubdivisionInDataHierarchy(data: TestElementItemData): boolean {
+        let currentParent = data.parent;
+
+        while (currentParent) {
+            const subdivisionName = TestElementsTreeItem.resolveSubdivisionName(currentParent);
+            if (
+                currentParent.testElementType === TestElementType.Subdivision &&
+                (currentParent.directRegexMatch ||
+                    (subdivisionName ? ResourceFileService.hasResourceMarker(subdivisionName) : false))
+            ) {
+                return true;
+            }
+
+            currentParent = currentParent.parent;
+        }
+
+        return false;
     }
 
     /**
@@ -343,6 +379,11 @@ export class TestElementsTreeItem extends TreeItemBase {
      */
     public updateContextValue(): void {
         if (this.data.testElementType === TestElementType.Keyword) {
+            if (!this.isKeywordUnderResourceHierarchy()) {
+                this.contextValue = "testElement.keyword";
+                return;
+            }
+
             const parent = this.parent as TestElementsTreeItem | null;
             const parentAvailable = parent?.data.isLocallyAvailable || false;
             this.contextValue = parentAvailable
@@ -351,6 +392,56 @@ export class TestElementsTreeItem extends TreeItemBase {
         } else {
             this.contextValue = TestElementsTreeItem.getInitialContextValue(this.data);
         }
+    }
+
+    /**
+     * Checks whether this keyword item is under a resource-marked subdivision hierarchy.
+     * @returns True if this is a keyword and at least one ancestor subdivision is resource-marked.
+     */
+    public isKeywordUnderResourceHierarchy(): boolean {
+        if (this.data.testElementType !== TestElementType.Keyword) {
+            return false;
+        }
+
+        return this.hasResourceSubdivisionInItemHierarchy();
+    }
+
+    /**
+     * Checks whether this item is inside a hierarchy containing a resource-marked subdivision.
+     */
+    private hasResourceSubdivisionInItemHierarchy(): boolean {
+        let currentParent: TestElementsTreeItem | null = this.parent as TestElementsTreeItem | null;
+
+        while (currentParent) {
+            const subdivisionName = TestElementsTreeItem.resolveSubdivisionName(currentParent.data);
+            if (
+                currentParent.data.testElementType === TestElementType.Subdivision &&
+                (currentParent.data.directRegexMatch ||
+                    (subdivisionName ? ResourceFileService.hasResourceMarker(subdivisionName) : false))
+            ) {
+                return true;
+            }
+
+            currentParent = currentParent.parent as TestElementsTreeItem | null;
+        }
+
+        return false;
+    }
+
+    /**
+     * Resolves a subdivision name for marker checks.
+     * @param data The test element data to resolve the name from.
+     * @returns The resolved name if valid, otherwise undefined.
+     */
+    private static resolveSubdivisionName(data: Partial<TestElementData> & { name?: unknown }): string | undefined {
+        const nameCandidates = [data.displayName, data.originalName, data.name];
+        for (const candidate of nameCandidates) {
+            if (typeof candidate === "string" && candidate.trim().length > 0) {
+                return candidate;
+            }
+        }
+
+        return undefined;
     }
 
     /**

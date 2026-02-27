@@ -474,7 +474,12 @@ export class TestElementsDataProvider {
             const isSubdivision = node.testElementType === TestElementType.Subdivision;
             const isResource = node.directRegexMatch;
 
+            if (isSubdivision) {
+                node.hasResourceDescendant = hasResourceDescendant;
+            }
+
             if (isSubdivision && isResource) {
+                node.hasResourceDescendant = true;
                 return true;
             }
 
