@@ -718,7 +718,7 @@ const promptSubdivisionCreationMode = async (): Promise<SubdivisionCreationMode 
             },
             {
                 label: "Create Resource Subdivision",
-                description: "Auto-append configured resource marker when missing",
+                description: "Auto-append configured resource marker if missing",
                 mode: "resource" as const
             }
         ],

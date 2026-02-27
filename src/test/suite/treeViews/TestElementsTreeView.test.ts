@@ -516,7 +516,7 @@ suite("TestElementsTreeView", function () {
         });
     });
     suite("Keyword Resource Operations", function () {
-        test("goToKeywordResource should create parent resource when missing", async function () {
+        test("goToKeywordResource should create parent resource if missing", async function () {
             const mockParent = createMockTestElementItem(
                 createMockTestElementData({
                     name: withResourceMarker("ParentResource"),
