@@ -12,7 +12,6 @@ import { getExtensionSetting } from "../../../configuration";
 import { ConfigKeys } from "../../../constants";
 import * as vscode from "vscode";
 import { ResourceFileService } from "./ResourceFileService";
-import { ensureLanguageServerReady } from "../../../languageServer/server";
 
 interface RawTestElement {
     id: string;
@@ -178,7 +177,7 @@ export class TestElementsDataProvider {
         const { roots } = this._linkParentChildRelationships(testElementIdToDataMap);
         const filteredRoots = this._filterElementTree(roots);
         this._assignHierarchicalNames(filteredRoots);
-        await this._markVirtualFolders(filteredRoots);
+        this._markVirtualFolders(filteredRoots);
         this._checkForNestedResources(filteredRoots);
 
         return filteredRoots;
@@ -404,51 +403,33 @@ export class TestElementsDataProvider {
      *
      * @param roots The root elements of the tree.
      */
-    private async _markVirtualFolders(roots: TestElementData[]): Promise<void> {
+    private _markVirtualFolders(roots: TestElementData[]): void {
         const resourceDirectoryMarker =
             getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER) || "";
-
-        // Ensure language server is ready before attempting to call LS commands
-        let lsCommandUnavailable = false;
-        if (resourceDirectoryMarker) {
-            lsCommandUnavailable = !(await ensureLanguageServerReady());
-        }
 
         /**
          * Checks if a folder should be marked as virtual based on marker position.
          * Returns false (not virtual) only if the folder is below the marker position.
+         * @param node The subdivision node being evaluated.
+         * @param descendantResource A resource descendant used to determine marker position.
+         * @returns True if the folder should be virtual, false if it maps to a real directory.
          */
-        const checkVirtualStatus = async (
-            node: TestElementData,
-            descendantResource: TestElementData
-        ): Promise<boolean> => {
-            if (!resourceDirectoryMarker || lsCommandUnavailable) {
+        const checkVirtualStatus = (node: TestElementData, descendantResource: TestElementData): boolean => {
+            if (!resourceDirectoryMarker) {
                 return true;
             }
 
-            try {
-                const markerPosition: number | undefined = await vscode.commands.executeCommand(
-                    "testbench_ls.get_resource_directory_subdivision_index",
-                    {
-                        resource_directory_regex: resourceDirectoryMarker,
-                        subdivision_parts: descendantResource.hierarchicalName.split("/")
-                    }
-                );
+            const markerPosition = ResourceFileService.findResourceDirectoryMarkerIndex(
+                descendantResource.hierarchicalName.split("/"),
+                resourceDirectoryMarker
+            );
 
-                // Folder is not virtual if it's after the marker position (maps to a real subdirectory)
-                if (markerPosition !== undefined && markerPosition !== -1) {
-                    const folderDepth = node.hierarchicalName.split("/").length;
-                    return folderDepth <= markerPosition + 1;
-                }
-                return true; // Entire hierarchy is virtual
-            } catch (error) {
-                lsCommandUnavailable = true;
-                this.logger.warn(
-                    "[TestElementsDataProvider] LS command failed. Command: testbench_ls.get_resource_directory_subdivision_index. Marking ancestor folders of resources as virtual.",
-                    error
-                );
-                return true;
+            // Folder is not virtual if it's after the marker position (maps to a real subdirectory)
+            if (markerPosition !== -1) {
+                const folderDepth = node.hierarchicalName.split("/").length;
+                return folderDepth <= markerPosition + 1;
             }
+            return true; // Entire hierarchy is virtual
         };
 
         /**
@@ -456,10 +437,8 @@ export class TestElementsDataProvider {
          * resource descendants as virtual.
          * @returns True if this node or any descendant is a resource.
          */
-        const markVirtualFolders = async (node: TestElementData): Promise<boolean> => {
-            const childMarkingResults = await Promise.all(
-                node.children?.map((child) => markVirtualFolders(child)) || []
-            );
+        const markVirtualFolders = (node: TestElementData): boolean => {
+            const childMarkingResults = node.children?.map((child) => markVirtualFolders(child)) || [];
             const hasResourceDescendant = childMarkingResults.some(Boolean);
             const isSubdivision = node.testElementType === TestElementType.Subdivision;
             const isResource = node.directRegexMatch;
@@ -471,7 +450,7 @@ export class TestElementsDataProvider {
             if (isSubdivision && hasResourceDescendant) {
                 const descendantResource = this._findFirstResourceDescendant(node);
                 if (descendantResource) {
-                    node.isVirtual = await checkVirtualStatus(node, descendantResource);
+                    node.isVirtual = checkVirtualStatus(node, descendantResource);
                 } else {
                     node.isVirtual = true;
                 }
@@ -481,7 +460,7 @@ export class TestElementsDataProvider {
             return hasResourceDescendant;
         };
 
-        await Promise.all(roots.map(markVirtualFolders));
+        roots.forEach(markVirtualFolders);
     }
 
     /**

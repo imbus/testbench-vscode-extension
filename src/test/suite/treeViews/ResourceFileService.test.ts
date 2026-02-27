@@ -60,6 +60,7 @@ suite("ResourceFileService", function () {
     suite("constructAbsolutePath", function () {
         test("should normalize single component names with special characters correctly", async function () {
             testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns(undefined);
 
             const testCases = [
                 {

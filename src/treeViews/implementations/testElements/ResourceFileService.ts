@@ -3,7 +3,6 @@
  * @description Service for managing resource files related to Test Elements Tree.
  */
 
-import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { TestBenchLogger } from "../../../testBenchLogger";
@@ -45,6 +44,46 @@ export class ResourceFileService {
      */
     public static normalizePath(path: string): string {
         return path.replace(/[<>:"/\\|?*]/g, "_");
+    }
+
+    /**
+     * Finds the index of the first subdivision part that matches the resource directory regex.
+     * Replicates the behavior of the language server command
+     * `testbench_ls.get_resource_directory_subdivision_index` in TypeScript to avoid overhead.
+     *
+     * @example
+     * subdivisionParts: ["Project", "Module", "[Robot-Resources]", "Login"]
+     * resourceDirectoryRegex: ".*\\[Robot-Resources\\].*"
+     * returns 2 (the index of "[Robot-Resources]").
+     * Everything before index 2 is ignored, everything after (["Login"]) becomes
+     * the relative path under the configured resource directory.
+     *
+     * @param subdivisionParts Array of path components to search through
+     * @param resourceDirectoryRegex The regex pattern string to match against each part
+     * @returns The index of the first matching part, or -1 if no match is found
+     */
+    public static findResourceDirectoryMarkerIndex(subdivisionParts: string[], resourceDirectoryRegex: string): number {
+        if (!subdivisionParts || subdivisionParts.length === 0) {
+            return -1;
+        }
+        if (!resourceDirectoryRegex) {
+            return -1;
+        }
+        try {
+            // Anchor at start, matches from beginning of string
+            const pattern = resourceDirectoryRegex.startsWith("^")
+                ? resourceDirectoryRegex
+                : `^(?:${resourceDirectoryRegex})`;
+            const regex = new RegExp(pattern, "i");
+            for (let i = 0; i < subdivisionParts.length; i++) {
+                if (regex.test(subdivisionParts[i])) {
+                    return i;
+                }
+            }
+        } catch {
+            // Invalid regex pattern — treat as no match
+        }
+        return -1;
     }
 
     /**
@@ -161,20 +200,22 @@ export class ResourceFileService {
 
         let relativePathComponents: string[];
 
-        const resourceDirectoryMarkerIndex: number = await vscode.commands.executeCommand(
-            "testbench_ls.get_resource_directory_subdivision_index",
-            {
-                subdivision_parts: normalizedPathComponents,
-                resource_directory_regex: resourceDirectoryMarker
-            }
-        );
-
-        if (resourceDirectoryMarkerIndex !== -1) {
-            // Marker is found, ignore everything up to and including the marker itself
-            relativePathComponents = normalizedPathComponents.slice(resourceDirectoryMarkerIndex + 1);
+        if (!resourceDirectoryMarker) {
+            // No marker configured, preserve full folder hierarchy
+            relativePathComponents = normalizedPathComponents;
         } else {
-            // No marker match, create resource file directly under resource directory without subdivision folder hierarchy
-            relativePathComponents = [normalizedPathComponents[normalizedPathComponents.length - 1]];
+            const resourceDirectoryMarkerIndex = ResourceFileService.findResourceDirectoryMarkerIndex(
+                normalizedPathComponents,
+                resourceDirectoryMarker
+            );
+
+            if (resourceDirectoryMarkerIndex !== -1) {
+                // Marker is found, ignore everything up to and including the marker itself
+                relativePathComponents = normalizedPathComponents.slice(resourceDirectoryMarkerIndex + 1);
+            } else {
+                // Marker configured but not found, create resource file directly under resource directory
+                relativePathComponents = [normalizedPathComponents[normalizedPathComponents.length - 1]];
+            }
         }
 
         // Filter out empty components that might result from normalization
