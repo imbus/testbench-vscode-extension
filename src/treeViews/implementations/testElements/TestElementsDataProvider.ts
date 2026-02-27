@@ -191,6 +191,7 @@ export class TestElementsDataProvider {
      */
     private _transformRawElements(flatJsonTestElements: RawTestElement[]): { [id: string]: TestElementData } {
         const testElementIdToDataMap: { [id: string]: TestElementData } = {};
+        const currentPatterns = this._getResourceRegexPatternsFromSettings();
 
         flatJsonTestElements.forEach((jsonTestElement) => {
             let libraryKey: string | null = null;
@@ -206,7 +207,6 @@ export class TestElementsDataProvider {
             const compositeId: string = this._generateElementId(jsonTestElement);
             const parentIdString: string | null = this._getParentId(jsonTestElement);
 
-            const currentPatterns = this._getResourceRegexPatternsFromSettings();
             const directRegexMatch =
                 currentPatterns.length > 0 ? this._matchesRegex(jsonTestElement.name, currentPatterns) : true;
 
