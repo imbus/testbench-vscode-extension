@@ -104,15 +104,28 @@ suite("TestElementsTreeItem", function () {
             assert.strictEqual(item.contextValue, "testElement.subdivision.resource.missing");
         });
 
-        test("should set correct context value for subdivision folder", function () {
+        test("should set folder context for non-resource subdivision with resource descendants", function () {
             const data = createMockTestElementData({
                 displayName: "TestFolder",
                 testElementType: TestElementType.Subdivision,
+                hasResourceDescendant: true,
                 isLocallyAvailable: false
             });
             const item = new TestElementsTreeItem(data, testEnv.mockContext, undefined, mockEventBus);
 
             assert.strictEqual(item.contextValue, "testElement.subdivision.folder");
+        });
+
+        test("should set plain context for non-resource subdivision without resource descendants", function () {
+            const data = createMockTestElementData({
+                displayName: "Plain Subdivision",
+                testElementType: TestElementType.Subdivision,
+                hasResourceDescendant: false,
+                isLocallyAvailable: false
+            });
+            const item = new TestElementsTreeItem(data, testEnv.mockContext, undefined, mockEventBus);
+
+            assert.strictEqual(item.contextValue, "testElement.subdivision.plain");
         });
 
         test("should set correct context value for keyword with available parent", function () {
@@ -149,6 +162,26 @@ suite("TestElementsTreeItem", function () {
             const keyword = new TestElementsTreeItem(keywordData, testEnv.mockContext, parent, mockEventBus);
 
             assert.strictEqual(keyword.contextValue, "testElement.keyword.resource.missing");
+        });
+
+        test("should set neutral context value for keyword under non-resource subdivision", function () {
+            const parentData = createMockTestElementData({
+                displayName: "Plain Subdivision",
+                testElementType: TestElementType.Subdivision,
+                directRegexMatch: false,
+                isLocallyAvailable: false
+            });
+            const parent = new TestElementsTreeItem(parentData, testEnv.mockContext, undefined, mockEventBus);
+
+            const keywordData = createMockTestElementData({
+                displayName: "Plain Keyword",
+                testElementType: TestElementType.Keyword,
+                directRegexMatch: false,
+                isLocallyAvailable: false
+            });
+            const keyword = new TestElementsTreeItem(keywordData, testEnv.mockContext, parent, mockEventBus);
+
+            assert.strictEqual(keyword.contextValue, "testElement.keyword");
         });
     });
 

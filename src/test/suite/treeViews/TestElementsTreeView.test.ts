@@ -652,6 +652,45 @@ suite("TestElementsTreeView", function () {
             assert.ok(handleClickStub.calledWith(mockKeyword, mockKeyword.id, mockLogger), "Should call click handler");
         });
 
+        test("handleKeywordClick should ignore keyword under non-resource subdivision", async function () {
+            const nonResourceParent = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "Plain Subdivision",
+                    displayName: "Plain Subdivision",
+                    hierarchicalName: "Root/Plain Subdivision",
+                    testElementType: TestElementType.Subdivision,
+                    directRegexMatch: false
+                })
+            );
+
+            const mockKeyword = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "Plain Keyword",
+                    displayName: "Plain Keyword",
+                    hierarchicalName: "Root/Plain Subdivision/Plain Keyword",
+                    testElementType: TestElementType.Keyword,
+                    directRegexMatch: false
+                }),
+                nonResourceParent
+            );
+
+            const handleClickStub = testEnv.sandbox
+                .stub((treeView as any).keywordClickHandler, "handleClick")
+                .resolves();
+
+            await treeView.handleKeywordClick(mockKeyword);
+
+            assert.ok(!handleClickStub.called, "Should not call click handler for non-resource keyword");
+            assert.ok(
+                !testEnv.vscodeMocks.showWarningMessageStub.called,
+                "Should not show warning for non-resource keyword click"
+            );
+            assert.ok(
+                !testEnv.vscodeMocks.showErrorMessageStub.called,
+                "Should not show error for non-resource keyword click"
+            );
+        });
+
         test("handleKeywordSingleClick should not create file if it does not exist", async function () {
             const mockParent = createMockTestElementItem(createMockTestElementData());
             const mockKeyword = createMockTestElementItem(

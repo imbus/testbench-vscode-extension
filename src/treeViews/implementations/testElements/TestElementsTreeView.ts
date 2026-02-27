@@ -1342,6 +1342,10 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param item The tree item representing an keyword.
      */
     public async goToKeywordResource(item: TestElementsTreeItem): Promise<void> {
+        if (this.shouldIgnoreNonResourceKeywordAction(item, "goToKeywordResource")) {
+            return;
+        }
+
         const parentResource = item.parent as TestElementsTreeItem;
         if (!parentResource) {
             vscode.window.showErrorMessage(`Could not find the parent resource for keyword ${item.label}`);
@@ -1371,6 +1375,10 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param item The keyword tree item
      */
     public async createMissingParentResourceForKeyword(item: TestElementsTreeItem): Promise<void> {
+        if (this.shouldIgnoreNonResourceKeywordAction(item, "createMissingParentResourceForKeyword")) {
+            return;
+        }
+
         const parentResource = item.parent as TestElementsTreeItem;
         if (!parentResource) {
             vscode.window.showErrorMessage(`Could not find the parent resource for keyword ${item.label}`);
@@ -1445,12 +1453,36 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         this.logger.debug(
             `[TestElementsTreeView] handleKeywordClick called for item: ${item.label}, type: ${item.data.testElementType}, id: ${item.id}, uid: ${item.data.uniqueID}`
         );
+
+        if (this.shouldIgnoreNonResourceKeywordAction(item, "handleKeywordClick")) {
+            return;
+        }
+
         if (!item.id) {
             this.logger.warn(`[TestElementsTreeView] handleKeywordClick called for item without ID: ${item.label}`);
             return;
         }
 
         await this.keywordClickHandler.handleClick(item, item.id, this.logger);
+    }
+
+    /**
+     * Determines whether an operation on a keyword should be ignored because the keyword
+     * is not under a resource subdivision hierarchy.
+     *
+     * @param item The keyword tree item that triggered the action.
+     * @param actionName The action name used for trace logging.
+     * @returns True when the action should be ignored, otherwise false.
+     */
+    private shouldIgnoreNonResourceKeywordAction(item: TestElementsTreeItem, actionName: string): boolean {
+        if (item.parent && !item.isKeywordUnderResourceHierarchy()) {
+            this.logger.debug(
+                `[TestElementsTreeView] Ignoring ${actionName} for non-resource keyword: ${item.label} (id: ${item.id})`
+            );
+            return true;
+        }
+
+        return false;
     }
 
     /**
