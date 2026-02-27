@@ -552,9 +552,11 @@ export class TestElementsDataProvider {
         // TODO: Replace API v1 support when no longer needed
         // Check both Keyword_key and Interaction_key (API v1)
         if (item.Keyword_key?.serial || item.Interaction_key?.serial) {
-            this.logger.trace(
-                `[TestElementsDataProvider] Identified element "${item.name}" as Keyword (Keyword_key: ${!!item.Keyword_key?.serial}, Interaction_key: ${!!item.Interaction_key?.serial})`
-            );
+            if (this.logger.isLevelEnabled("Trace")) {
+                this.logger.trace(
+                    `[TestElementsDataProvider] Identified element "${item.name}" as Keyword (Keyword_key: ${!!item.Keyword_key?.serial}, Interaction_key: ${!!item.Interaction_key?.serial})`
+                );
+            }
             return TestElementType.Keyword;
         }
         if (item.Condition_key?.serial) {
@@ -563,9 +565,11 @@ export class TestElementsDataProvider {
         if (item.DataType_key?.serial) {
             return TestElementType.DataType;
         }
-        this.logger.trace(
-            `[TestElementsDataProvider] Element "${item.name}" could not be typed (no matching key found), defaulting to Other`
-        );
+        if (this.logger.isLevelEnabled("Trace")) {
+            this.logger.trace(
+                `[TestElementsDataProvider] Element "${item.name}" could not be typed (no matching key found), defaulting to Other`
+            );
+        }
         return TestElementType.Other;
     }
 
