@@ -49,7 +49,7 @@ export class TestElementsTreeItem extends TreeItemBase {
     public readonly data: TestElementItemData;
     private _resourceStatus: "none" | "available" | "missing" | "partial" = "none";
     private _hasLocalChildren: boolean = false;
-    private eventBus: EventBus;
+    private readonly eventBus: EventBus;
 
     constructor(
         data: TestElementItemData,
@@ -74,7 +74,6 @@ export class TestElementsTreeItem extends TreeItemBase {
         this.eventBus = eventBus || new EventBus();
         this.id = this.generateUniqueId();
         this.tooltip = this.generateTooltip();
-        this.registerEventHandlers();
 
         if (parent && addToParent) {
             parent.addChild(this);
@@ -168,44 +167,6 @@ export class TestElementsTreeItem extends TreeItemBase {
         }
 
         return false;
-    }
-
-    /**
-     * Registers event handlers for resource file updates and availability changes.
-     * Listens for events from the event bus and updates the tree item accordingly.
-     */
-    private registerEventHandlers(): void {
-        // Listen for resource file updates
-        this.eventBus.on("resourceFiles:updated", (event) => {
-            const { elementId, files } = event.data;
-            if (elementId === this.data.id) {
-                this.updateResourceFiles(files);
-                this.updateResourceStatus();
-                this.tooltip = this.generateTooltip();
-                this.eventBus.emit({
-                    type: "testElement:updated",
-                    source: "testElement",
-                    data: { id: this.id },
-                    timestamp: Date.now()
-                });
-            }
-        });
-
-        // Listen for availability updates
-        this.eventBus.on("resource:availabilityChanged", (event) => {
-            const { elementId, isAvailable, localPath } = event.data;
-            if (elementId === this.data.id) {
-                this.updateAvailability(isAvailable, localPath);
-                this.updateResourceStatus();
-                this.tooltip = this.generateTooltip();
-                this.eventBus.emit({
-                    type: "testElement:updated",
-                    source: "testElement",
-                    data: { id: this.id },
-                    timestamp: Date.now()
-                });
-            }
-        });
     }
 
     /**

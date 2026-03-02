@@ -66,6 +66,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private resourceAvailabilityRefreshDebounceHandle: NodeJS.Timeout | undefined;
     private deferredPostFetchAvailabilityHandle: NodeJS.Timeout | undefined;
     private postFetchAvailabilityRunId: number = 0;
+    private testElementIndexByDataId: Map<string, TestElementsTreeItem[]> = new Map();
+    private testElementIndexByTreeItemId: Map<string, TestElementsTreeItem> = new Map();
 
     constructor(
         extensionContext: vscode.ExtensionContext,
@@ -145,10 +147,47 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             }
         });
 
+        this.eventBus.on("resourceFiles:updated", (event) => {
+            const { elementId, files } = event.data || {};
+            if (typeof elementId !== "string") {
+                return;
+            }
+
+            const matchingItems = this.testElementIndexByDataId.get(elementId);
+            if (!matchingItems || matchingItems.length === 0) {
+                return;
+            }
+
+            const normalizedFiles = Array.isArray(files) ? files : [];
+            matchingItems.forEach((item) => item.updateResourceFiles(normalizedFiles));
+        });
+
+        this.eventBus.on("resource:availabilityChanged", (event) => {
+            const { elementId, isAvailable, localPath } = event.data || {};
+            if (typeof elementId !== "string") {
+                return;
+            }
+
+            const matchingItems = this.testElementIndexByDataId.get(elementId);
+            if (!matchingItems || matchingItems.length === 0) {
+                return;
+            }
+
+            matchingItems.forEach((item) => item.updateAvailability(Boolean(isAvailable), localPath));
+        });
+
         this.eventBus.on("testElement:updated", (event) => {
-            const { item } = event.data;
+            const { item, id } = event.data || {};
             if (item) {
                 this.refreshItemWithParents(item);
+                return;
+            }
+
+            if (typeof id === "string") {
+                const indexedItem = this.testElementIndexByTreeItemId.get(id);
+                if (indexedItem) {
+                    this.refreshItemWithParents(indexedItem);
+                }
             }
         });
 
@@ -833,6 +872,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         this.cancelPostFetchAvailabilityWork();
         super.clearTree();
         this.resourceFileService.clearConstructedPathCache();
+        this.testElementIndexByDataId.clear();
+        this.testElementIndexByTreeItemId.clear();
         this.currentTovKey = null;
         this.currentTovLabel = null;
         this.currentProjectName = null;
@@ -884,6 +925,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 this.logger.debug(
                     `[TestElementsTreeView] Returning cached root items for TOV with key ${this.currentTovKey}`
                 );
+                if (this.testElementIndexByDataId.size === 0) {
+                    this.rebuildTestElementIndex(this.rootItems);
+                }
                 return this.rootItems;
             }
         }
@@ -891,6 +935,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         try {
             const hierarchicalTestElementsData = await this.dataProvider.fetchTestElements(this.currentTovKey);
             const rootTestElementItems = hierarchicalTestElementsData.map((data) => this._buildTreeItems(data));
+            this.rebuildTestElementIndex(rootTestElementItems);
 
             this.rootItems = rootTestElementItems;
             (this as any)._lastDataFetch = Date.now();
@@ -1006,6 +1051,40 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         });
 
         return resourceSubdivisionItems.filter((item) => !processedIds.has(item.data.id));
+    }
+
+    /**
+     * Rebuilds the lookup index used for centralized EventBus dispatch.
+     * @param rootItems The root items of the tree to index
+     */
+    private rebuildTestElementIndex(rootItems: TestElementsTreeItem[]): void {
+        this.testElementIndexByDataId.clear();
+        this.testElementIndexByTreeItemId.clear();
+
+        /**
+         * Recursively indexes tree items by their data ID and tree item ID.
+         * @param treeItems The tree items to index
+         */
+        const indexTestElements = (treeItems: TestElementsTreeItem[]) => {
+            for (const item of treeItems) {
+                const existingItems = this.testElementIndexByDataId.get(item.data.id);
+                if (existingItems) {
+                    existingItems.push(item);
+                } else {
+                    this.testElementIndexByDataId.set(item.data.id, [item]);
+                }
+
+                if (item.id) {
+                    this.testElementIndexByTreeItemId.set(item.id, item);
+                }
+
+                if (item.children && item.children.length > 0) {
+                    indexTestElements(item.children as TestElementsTreeItem[]);
+                }
+            }
+        };
+
+        indexTestElements(rootItems);
     }
 
     /**
@@ -1904,6 +1983,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      */
     public async dispose(): Promise<void> {
         this.cancelPostFetchAvailabilityWork();
+        this.testElementIndexByDataId.clear();
+        this.testElementIndexByTreeItemId.clear();
 
         if (this.resourceAvailabilityRefreshDebounceHandle) {
             clearTimeout(this.resourceAvailabilityRefreshDebounceHandle);
