@@ -165,4 +165,63 @@ suite("TestElementsDataProvider", function () {
         assert.strictEqual(marker.isVirtual, true, "marker level should stay virtual");
         assert.strictEqual(belowMarker.isVirtual, false, "subdivision below marker boundary should not be virtual");
     });
+
+    test("fetchTestElements should reuse processed cache for repeated requests", async function () {
+        testEnv.sandbox.stub(configuration, "getExtensionSetting").returns(undefined);
+
+        const rawElements = [
+            {
+                id: "1",
+                name: "Root",
+                uniqueID: "uid-1",
+                hierarchicalName: "Root",
+                parent: { serial: "0", uniqueID: "" },
+                Subdivision_key: { serial: "100" },
+                details: {}
+            }
+        ];
+
+        const fetchStub = testEnv.sandbox.stub().resolves(rawElements);
+        const provider = new TestElementsDataProvider(
+            mockLogger,
+            () => ({ getTestElementsWithTovKeyUsingOldPlayServer: fetchStub }) as any,
+            new EventBus()
+        );
+
+        await provider.fetchTestElements("tov-1");
+        await provider.fetchTestElements("tov-1"); // Fetching again with the same TOV key should use cache
+
+        assert.strictEqual(fetchStub.callCount, 1);
+        provider.dispose();
+    });
+
+    test("fetchTestElements should refetch raw data after clearing filtered cache", async function () {
+        testEnv.sandbox.stub(configuration, "getExtensionSetting").returns(undefined);
+
+        const rawElements = [
+            {
+                id: "1",
+                name: "Root",
+                uniqueID: "uid-1",
+                hierarchicalName: "Root",
+                parent: { serial: "0", uniqueID: "" },
+                Subdivision_key: { serial: "100" },
+                details: {}
+            }
+        ];
+
+        const fetchStub = testEnv.sandbox.stub().resolves(rawElements);
+        const provider = new TestElementsDataProvider(
+            mockLogger,
+            () => ({ getTestElementsWithTovKeyUsingOldPlayServer: fetchStub }) as any,
+            new EventBus()
+        );
+
+        await provider.fetchTestElements("tov-2");
+        provider.clearFilteredCache("tov-2");
+        await provider.fetchTestElements("tov-2");
+
+        assert.strictEqual(fetchStub.callCount, 2);
+        provider.dispose();
+    });
 });

@@ -9,7 +9,7 @@ import { EventBus } from "../../utils/EventBus";
 import { TestBenchLogger } from "../../../testBenchLogger";
 import { FrameworkCache } from "../../utils/FrameworkCache";
 import { getExtensionSetting } from "../../../configuration";
-import { ConfigKeys } from "../../../constants";
+import { ConfigKeys, TreeViewTiming } from "../../../constants";
 import * as vscode from "vscode";
 import { ResourceFileService } from "./ResourceFileService";
 
@@ -36,8 +36,7 @@ interface RawTestElement {
 type TestElementsVisibilityMode = "resourceOnly" | "allSubdivisions";
 
 export class TestElementsDataProvider {
-    private elementsCache = new FrameworkCache<TestElementData[]>();
-    private rawElementsCache = new FrameworkCache<RawTestElement[]>();
+    private elementsCache = new FrameworkCache<TestElementData[]>(TreeViewTiming.TREE_DATA_FRESHNESS_THRESHOLD_MS);
     private disposables: vscode.Disposable[] = [];
 
     constructor(
@@ -140,18 +139,10 @@ export class TestElementsDataProvider {
         }
 
         try {
-            let rawTestElementsData = this.rawElementsCache.get(tovKey);
-            if (!rawTestElementsData) {
-                this.logger.debug(
-                    `[TestElementsDataProvider] Fetching raw test elements from server for TOV: ${tovKey}`
-                );
-                rawTestElementsData = await connection.getTestElementsWithTovKeyUsingOldPlayServer(tovKey);
-                if (!rawTestElementsData || !Array.isArray(rawTestElementsData)) {
-                    return [];
-                }
-                this.rawElementsCache.set(tovKey, rawTestElementsData);
-            } else {
-                this.logger.debug(`[TestElementsDataProvider] Using cached raw test elements for TOV: ${tovKey}`);
+            this.logger.debug(`[TestElementsDataProvider] Fetching raw test elements for TOV: ${tovKey}`);
+            const rawTestElementsData = await connection.getTestElementsWithTovKeyUsingOldPlayServer(tovKey);
+            if (!rawTestElementsData || !Array.isArray(rawTestElementsData)) {
+                return [];
             }
 
             const hierarchicalTestElemData = await this._buildAndFilterHierarchy(rawTestElementsData);
@@ -630,16 +621,14 @@ export class TestElementsDataProvider {
     }
 
     /**
-     * Clears the test elements cache for a specific TOV or all TOVs.
+     * Clears the filtered test elements cache for a specific TOV or all TOVs.
      * @param tovKey Optional TOV key to clear cache for. If not provided, clears all cache.
      */
     public clearCache(tovKey?: string): void {
         if (tovKey) {
             this.elementsCache.clear(tovKey);
-            this.rawElementsCache.clear(tovKey);
         } else {
             this.elementsCache.clear();
-            this.rawElementsCache.clear();
         }
     }
 
