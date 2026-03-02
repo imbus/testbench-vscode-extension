@@ -186,9 +186,7 @@ export class TestElementsDataProvider {
         const testElementIdToDataMap = this._transformRawElements(flatJsonTestElements);
         const { roots } = this._linkParentChildRelationships(testElementIdToDataMap);
         const filteredRoots = this._filterElementTree(roots);
-        this._assignHierarchicalNames(filteredRoots);
-        this._markVirtualFolders(filteredRoots);
-        this._checkForNestedResources(filteredRoots);
+        this._finalizeFilteredTree(filteredRoots);
 
         return filteredRoots;
     }
@@ -401,43 +399,37 @@ export class TestElementsDataProvider {
     }
 
     /**
-     * Recursively assigns a full hierarchical name to each element in the tree.
-     * @param roots The root elements of the tree.
-     */
-    private _assignHierarchicalNames(roots: TestElementData[]): void {
-        const assign = (testElementData: TestElementData, parentPath: string): void => {
-            const currentPath = parentPath
-                ? `${parentPath}/${testElementData.displayName}`
-                : testElementData.displayName;
-            testElementData.hierarchicalName = currentPath;
-            testElementData.children?.forEach((child) => assign(child, currentPath));
-        };
-        roots.forEach((rootTestElementData) => assign(rootTestElementData, ""));
-    }
-
-    /**
-     * Traverses the tree to mark subdivisions that are virtual containers for resources.
-     * A folder is "virtual" if it is a non-resource subdivision that has resource descendants.
-     * Virtual folders don't have a direct 1:1 mapping to local directories and should not
-     * show file system action buttons (like "Create Resource" or "Open in Explorer").
+     * Performs post-filter tree finalization by traversing the filtered tree.
      *
-     * If a `resourceDirectoryMarker` is configured, additional logic determines which folders
-     * map to local directories based on the marker position in the path.
+     * Traversal assigns hierarchical names, computes virtual folder markers,
+     * and gathers nested resource warnings.
      *
-     * @param roots The root elements of the tree.
+     * @param roots The filtered root elements.
      */
-    private _markVirtualFolders(roots: TestElementData[]): void {
+    private _finalizeFilteredTree(roots: TestElementData[]): void {
         const resourceDirectoryMarker =
             getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER) || "";
+        const nestedResourceWarnings: string[] = [];
 
         /**
-         * Checks if a folder should be marked as virtual based on marker position.
-         * Returns false (not virtual) only if the folder is below the marker position.
-         * @param node The subdivision node being evaluated.
-         * @param descendantResource A resource descendant used to determine marker position.
-         * @returns True if the folder should be virtual, false if it maps to a real directory.
+         * Resource information computed for a processed subtree.
+         * - containsResourceSubdivision: whether this subtree contains any resource subdivision.
+         * - firstResourceSubdivision: first encountered resource subdivision in Depth First Search order,
+         *   used to derive virtual-folder status for ancestor subdivisions.
          */
-        const checkVirtualStatus = (node: TestElementData, descendantResource: TestElementData): boolean => {
+        type SubtreeResourceAnalysis = {
+            containsResourceSubdivision: boolean;
+            firstResourceSubdivision: TestElementData | null;
+        };
+
+        /**
+         * Determines if a node should be marked as virtual based on the presence of a resource directory marker
+         * and the relative position of the resource descendant in the hierarchy.
+         * @param node The subdivision node being evaluated for virtual status.
+         * @param descendantResource The resource descendant node used to determine virtual status.
+         * @returns A boolean indicating whether the node should be marked as virtual.
+         */
+        const isVirtualContainerSubdivision = (node: TestElementData, descendantResource: TestElementData): boolean => {
             if (!resourceDirectoryMarker) {
                 return true;
             }
@@ -447,89 +439,91 @@ export class TestElementsDataProvider {
                 resourceDirectoryMarker
             );
 
-            // Folder is not virtual if it's after the marker position (maps to a real subdirectory)
             if (markerPosition !== -1) {
                 const folderDepth = node.hierarchicalName.split("/").length;
                 return folderDepth <= markerPosition + 1;
             }
-            return true; // Entire hierarchy is virtual
+
+            return true;
         };
 
         /**
-         * Recursively traverses the test elements tree and marks non-resource folders with
-         * resource descendants as virtual.
-         * @returns True if this node or any descendant is a resource.
+         * Finalizes one node subtree in depth first order.
+         *
+         * 1) assign hierarchicalName based on parent path and current display name
+         * 2) detect nested resource warnings
+         * 3) compute hasResourceDescendant
+         * 4) compute isVirtual for non-resource subdivisions with resource descendants
+         * 5) return subtree resource analysis for parent computation
+         *
+         * @param node The current node being processed.
+         * @param parentPath The hierarchical path of the parent node.
+         * @param parentIsResource A boolean indicating if the parent node is a resource.
+         * @returns Subtree resource analysis used by parent recursion level.
          */
-        const markVirtualFolders = (node: TestElementData): boolean => {
-            const childMarkingResults = node.children?.map((child) => markVirtualFolders(child)) || [];
-            const hasResourceDescendant = childMarkingResults.some(Boolean);
+        const finalizeNodeSubtree = (
+            node: TestElementData,
+            parentPath: string,
+            parentIsResource: boolean
+        ): SubtreeResourceAnalysis => {
+            const currentPath = parentPath ? `${parentPath}/${node.displayName}` : node.displayName;
+            node.hierarchicalName = currentPath;
+
             const isSubdivision = node.testElementType === TestElementType.Subdivision;
             const isResource = node.directRegexMatch;
 
+            if (parentIsResource && isResource) {
+                nestedResourceWarnings.push(
+                    `Robot resource '${node.parent?.displayName ?? "Unknown"}' contains another resource '${node.displayName}'.`
+                );
+            }
+
+            let hasResourceSubdivisionInChildren = false;
+            let firstResourceSubdivisionFromChildren: TestElementData | null = null;
+
+            for (const child of node.children || []) {
+                const childSubtreeAnalysis = finalizeNodeSubtree(child, currentPath, isResource);
+                if (childSubtreeAnalysis.containsResourceSubdivision) {
+                    hasResourceSubdivisionInChildren = true;
+                    if (!firstResourceSubdivisionFromChildren) {
+                        firstResourceSubdivisionFromChildren = childSubtreeAnalysis.firstResourceSubdivision;
+                    }
+                }
+            }
+
             if (isSubdivision) {
-                node.hasResourceDescendant = hasResourceDescendant;
+                node.hasResourceDescendant = hasResourceSubdivisionInChildren;
             }
 
             if (isSubdivision && isResource) {
                 node.hasResourceDescendant = true;
-                return true;
+                return {
+                    containsResourceSubdivision: true,
+                    firstResourceSubdivision: node
+                };
             }
 
-            if (isSubdivision && hasResourceDescendant) {
-                const descendantResource = this._findFirstResourceDescendant(node);
-                if (descendantResource) {
-                    node.isVirtual = checkVirtualStatus(node, descendantResource);
+            if (isSubdivision && hasResourceSubdivisionInChildren) {
+                if (firstResourceSubdivisionFromChildren) {
+                    node.isVirtual = isVirtualContainerSubdivision(node, firstResourceSubdivisionFromChildren);
                 } else {
                     node.isVirtual = true;
                 }
-                return true;
+
+                return {
+                    containsResourceSubdivision: true,
+                    firstResourceSubdivision: firstResourceSubdivisionFromChildren
+                };
             }
 
-            return hasResourceDescendant;
+            return {
+                containsResourceSubdivision: hasResourceSubdivisionInChildren,
+                firstResourceSubdivision: firstResourceSubdivisionFromChildren
+            };
         };
 
-        roots.forEach(markVirtualFolders);
-    }
+        roots.forEach((rootNode) => finalizeNodeSubtree(rootNode, "", false));
 
-    /**
-     * Finds the first resource descendant of a node.
-     * @param node The node to search from.
-     * @returns The first resource descendant, or undefined if none found.
-     */
-    private _findFirstResourceDescendant(node: TestElementData): TestElementData | undefined {
-        for (const child of node.children || []) {
-            if (child.testElementType === TestElementType.Subdivision && child.directRegexMatch) {
-                return child;
-            }
-            const descendant = this._findFirstResourceDescendant(child);
-            if (descendant) {
-                return descendant;
-            }
-        }
-        return undefined;
-    }
-
-    /**
-     * Traverses the tree to find and log warnings for nested resource files.
-     * @param roots The root elements of the final tree.
-     */
-    private _checkForNestedResources(roots: TestElementData[]): void {
-        const nestedResourceWarnings: string[] = [];
-        const check = (testElementData: TestElementData): void => {
-            if (testElementData.directRegexMatch) {
-                testElementData.children?.forEach((child) => {
-                    if (child.directRegexMatch) {
-                        nestedResourceWarnings.push(
-                            `Robot resource '${testElementData.displayName}' contains another resource '${child.displayName}'.`
-                        );
-                    }
-                    check(child);
-                });
-            } else {
-                testElementData.children?.forEach(check);
-            }
-        };
-        roots.forEach(check);
         if (nestedResourceWarnings.length > 0) {
             this.logger.warn("[TestElementsDataProvider] Nested robot resources found:", nestedResourceWarnings);
         }
@@ -554,8 +548,8 @@ export class TestElementsDataProvider {
         if (item.Subdivision_key?.serial) {
             return TestElementType.Subdivision;
         }
-        // TODO: Replace API v1 support when no longer needed
-        // Check both Keyword_key and Interaction_key (API v1)
+        // TODO: Replace API v1 support when no longer needed;
+        // API v1 uses Interaction_key for Keywords, Keyword_key is not used.
         if (item.Keyword_key?.serial || item.Interaction_key?.serial) {
             if (this.logger.isLevelEnabled("Trace")) {
                 this.logger.trace(

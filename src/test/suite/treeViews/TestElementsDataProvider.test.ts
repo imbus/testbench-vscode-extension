@@ -92,4 +92,53 @@ suite("TestElementsDataProvider", function () {
         assert.strictEqual(filtered.length, 1);
         assert.strictEqual(filtered[0].children?.length, 2, "Both plain and marker subdivisions should remain");
     });
+
+    test("finalization pass should assign hierarchical names and virtual markers", function () {
+        testEnv.sandbox.stub(configuration, "getExtensionSetting").callsFake((key: string) => {
+            if (key === ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER) {
+                return "";
+            }
+            return undefined;
+        });
+
+        const resource = createSubdivision("resource", "Resource", true);
+        const folder = createSubdivision("folder", "Folder", false, [resource]);
+        const root = createSubdivision("root", "Root", false, [folder]);
+
+        folder.parent = root;
+        resource.parent = folder;
+
+        (dataProvider as any)._finalizeFilteredTree([root]);
+
+        assert.strictEqual(root.hierarchicalName, "Root");
+        assert.strictEqual(folder.hierarchicalName, "Root/Folder");
+        assert.strictEqual(resource.hierarchicalName, "Root/Folder/Resource");
+
+        assert.strictEqual(root.hasResourceDescendant, true);
+        assert.strictEqual(folder.hasResourceDescendant, true);
+        assert.strictEqual(resource.hasResourceDescendant, true);
+
+        assert.strictEqual(root.isVirtual, true);
+        assert.strictEqual(folder.isVirtual, true);
+    });
+
+    test("finalization pass should warn about nested resources", function () {
+        testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("");
+
+        const childResource = createSubdivision("child-resource", "ChildResource", true);
+        const parentResource = createSubdivision("parent-resource", "ParentResource", true, [childResource]);
+
+        childResource.parent = parentResource;
+
+        (dataProvider as any)._finalizeFilteredTree([parentResource]);
+
+        assert.strictEqual(mockLogger.warn.calledOnce, true);
+        const warningArgs = mockLogger.warn.getCall(0).args;
+        assert.strictEqual(warningArgs[0], "[TestElementsDataProvider] Nested robot resources found:");
+        assert.strictEqual(Array.isArray(warningArgs[1]), true);
+        assert.strictEqual(
+            warningArgs[1][0],
+            "Robot resource 'ParentResource' contains another resource 'ChildResource'."
+        );
+    });
 });
