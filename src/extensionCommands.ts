@@ -255,14 +255,13 @@ const handleOpenTOV = async (tovItem: ProjectsTreeItem) => {
         }
         await treeViews.testThemesTree.loadTov(projectKey, tovKey, projectName, tovName);
         if (treeViews.testElementsTree) {
-            await treeViews.testElementsTree.loadTov(
-                tovKey,
-                tovItem.label?.toString(),
+            await treeViews.testElementsTree.loadTov(tovKey, {
+                tovLabel: tovItem.label?.toString(),
                 projectName,
                 tovName,
-                true,
+                clearFirst: true,
                 projectKey
-            );
+            });
         }
         getLogger().info(
             `[extensionCommands] Successfully opened Test Object Version '${tovName}' in project '${projectName}'.`

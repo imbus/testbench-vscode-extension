@@ -405,7 +405,13 @@ export class TreeViewFactory {
             const { tovKey, tovLabel, projectName, tovName, projectKey } = event.data;
             this.logger.debug(`[TreeViewFactory] Selected Test Object Version '${tovLabel}' in projects tree.`);
 
-            await testElementsTree.loadTov(tovKey, tovLabel, projectName, tovName, true, projectKey);
+            await testElementsTree.loadTov(tovKey, {
+                tovLabel,
+                projectName,
+                tovName,
+                clearFirst: true,
+                projectKey
+            });
         });
 
         // Test Themes to Projects: When test generation completes
@@ -705,14 +711,13 @@ export class TreeViewFactory {
                 );
             }
 
-            await treeViews.testElementsTree.loadTov(
-                savedContext.tovKey,
-                savedContext.tovName,
-                savedContext.projectName,
-                savedContext.tovName,
-                true,
-                savedContext.projectKey
-            );
+            await treeViews.testElementsTree.loadTov(savedContext.tovKey, {
+                tovLabel: savedContext.tovName,
+                projectName: savedContext.projectName,
+                tovName: savedContext.tovName,
+                clearFirst: true,
+                projectKey: savedContext.projectKey
+            });
 
             this.logger.trace(
                 `[TreeViewFactory] Successfully restored view to context of TOV: ${savedContext.tovName}`

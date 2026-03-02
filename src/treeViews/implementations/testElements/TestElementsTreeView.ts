@@ -128,12 +128,11 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             const { tovKey, tovLabel } = event.data;
             if (tovKey && tovKey !== this.currentTovKey) {
                 this.logger.debug(`[TestElementsTreeView] Received TOV loaded event for TOV ${tovKey}`);
-                await this.loadTov(
-                    tovKey,
+                await this.loadTov(tovKey, {
                     tovLabel,
-                    this.currentProjectName || undefined,
-                    this.currentTovName || undefined
-                );
+                    projectName: this.currentProjectName || undefined,
+                    tovName: this.currentTovName || undefined
+                });
             }
         });
 
@@ -698,124 +697,80 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Loads test elements data.
+     * Updates the Test Elements view title based on the current project/TOV context.
      *
-     * @param tovKey - The unique identifier for the TOV to load.
-     * @param tovLabel - Optional label for the TOV to display in the title.
-     * @param projectName - The name of the project containing the TOV.
-     * @param tovName - The name of the TOV.
-     * @param preserveExistingData - Whether to preserve existing data during loading.
-     * @returns Promise that resolves when the TOV data is loaded.
+     * @param projectName Optional project name to include in the title.
+     * @param tovName Optional Test Object Version name to include in the title.
+     * @returns {void}
      */
-    private async loadTovWithProgress(
-        tovKey: string,
-        tovLabel?: string,
-        projectName?: string,
-        tovName?: string,
-        projectKey?: string
-    ): Promise<void> {
-        const startTime = Date.now();
-        this.logger.debug(`[TestElementsTreeView] Loading Test Object Version '${tovName}'...`);
-        this.cancelPostFetchAvailabilityWork();
+    private updateTitleForContext(projectName?: string, tovName?: string): void {
+        const titleParts = ["Test Elements"];
+        if (projectName) {
+            titleParts.push(projectName);
+        }
+        if (tovName) {
+            titleParts.push(tovName);
+        }
 
-        try {
-            this.stateManager.setLoading(true);
-            (this as any).updateTreeViewMessage();
-
-            const fetchedHierarchicalTestElements = await this.dataProvider.fetchTestElements(tovKey);
-            const newRootItems = fetchedHierarchicalTestElements.map((element) => this._buildTreeItems(element));
-
-            this.rootItems = newRootItems;
-            this.currentTovKey = tovKey;
-            this.currentTovLabel = tovLabel || null;
-            this.currentProjectName = projectName || null;
-            this.currentProjectKey = projectKey ?? this.currentProjectKey;
-            this.currentTovName = tovName || null;
-            this.resourceFiles.clear();
-
-            // Update title with format: Test Elements (Project Name, TOV Name)
-            const titleParts = ["Test Elements"];
-            if (projectName) {
-                titleParts.push(projectName);
-            }
-            if (tovName) {
-                titleParts.push(tovName);
-            }
-
-            if (titleParts.length > 1) {
-                this.updateTitle(`${titleParts[0]} (${titleParts.slice(1).join(", ")})`);
-            } else {
-                this.updateTitle(titleParts[0]);
-            }
-
-            (this as any)._lastDataFetch = Date.now();
-            (this as any)._intentionallyCleared = false;
-            this.stateManager.setLoading(false);
-            (this as any).updateTreeViewMessage();
-
-            // Publish new data immediately, then update availability/marking in the background.
-            this._onDidChangeTreeData.fire(undefined);
-            void this.runPostFetchAvailabilityUpdates(newRootItems);
-
-            const loadTime = Date.now() - startTime;
-            this.logger.debug(
-                `[TestElementsTreeView] Successfully loaded ${newRootItems.length} test elements of Test Object Version '${tovName}'.`
-            );
-
-            this.eventBus.emit({
-                type: "tov:loaded",
-                source: this.config.id,
-                data: {
-                    tovKey,
-                    tovLabel: this.currentTovLabel,
-                    loadTime
-                },
-                timestamp: Date.now()
-            });
-        } catch (error) {
-            this.logger.error(
-                `[TestElementsTreeView] Error loading test elements of Test Object Version '${tovName}':`,
-                error
-            );
-            this.stateManager.setLoading(false);
-            this.stateManager.setError(error as Error);
-            (this as any).updateTreeViewMessage();
-            throw error;
+        if (titleParts.length > 1) {
+            this.updateTitle(`${titleParts[0]} (${titleParts.slice(1).join(", ")})`);
+        } else {
+            this.updateTitle(titleParts[0]);
         }
     }
 
     /**
-     * Loads test elements for a specific TOV (Test Object Version).
+     * Loads test elements for a specific Test Object Version (TOV), updates the tree state,
+     * and triggers deferred availability/icon updates.
      *
-     * @param tovKey - The unique identifier for the TOV to load.
-     * @param tovLabel - Optional label for the TOV to display in the title.
-     * @param projectName - The name of the project containing the TOV.
-     * @param tovName - The name of the TOV.
-     * @param clearFirst - Whether to clear the tree before loading new data. Defaults to true.
-     * @returns Promise that resolves when the TOV is loaded.
+     * @param tovKey The unique identifier of the TOV to load.
+     * @param options Optional loading options.
+     * @param options.tovLabel Optional label used for event payload/context display.
+     * @param options.projectName Optional project name associated with the TOV.
+     * @param options.tovName Optional TOV name for title/context metadata.
+     * @param options.clearFirst Whether to clear and prepare loading state before fetching. Defaults to true.
+     * @param options.projectKey Optional project key stored as current context.
+     * @param options.includeLoadTimeInEvent Whether to include load duration in emitted `tov:loaded` event data.
+     * @returns A promise that resolves when structural loading and event emission complete.
      */
     public async loadTov(
         tovKey: string,
-        tovLabel?: string,
-        projectName?: string,
-        tovName?: string,
-        clearFirst: boolean = true,
-        projectKey?: string
+        options?: {
+            tovLabel?: string;
+            projectName?: string;
+            tovName?: string;
+            clearFirst?: boolean;
+            projectKey?: string;
+            includeLoadTimeInEvent?: boolean;
+        }
     ): Promise<void> {
+        const {
+            tovLabel,
+            projectName,
+            tovName,
+            clearFirst = true,
+            projectKey,
+            includeLoadTimeInEvent = false
+        } = options ?? {};
+
+        const startTime = includeLoadTimeInEvent ? Date.now() : 0;
+
+        this.logger.debug(
+            `[TestElementsTreeView] Loading Test Element information for Test Object Version '${tovName}' from project '${projectName}'...`
+        );
+
+        this.cancelPostFetchAvailabilityWork();
+
         try {
-            this.logger.debug(
-                `[TestElementsTreeView] Loading Test Element information for Test Object Version '${tovName}' from project '${projectName}'...`
-            );
-            this.cancelPostFetchAvailabilityWork();
             const isContextSwitch = this.currentTovKey !== tovKey;
             if (clearFirst || isContextSwitch) {
-                // Clear old tree items on context switch
                 this.prepareForContextSwitchLoading();
                 this.dataProvider.clearCache(tovKey);
                 this.resourceFileService.clearConstructedPathCache();
             } else {
                 this.stateManager.setError(null);
                 this.stateManager.setLoading(true);
+                (this as any).updateTreeViewMessage();
             }
 
             this.currentTovKey = tovKey;
@@ -824,46 +779,35 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this.currentProjectKey = projectKey ?? this.currentProjectKey;
             this.currentTovName = tovName || null;
             this.resourceFiles.clear();
-
-            // Update title with format: Test Elements (Project Name, TOV Name)
-            const titleParts = ["Test Elements"];
-            if (projectName) {
-                titleParts.push(projectName);
-            }
-            if (tovName) {
-                titleParts.push(tovName);
-            }
-
-            if (titleParts.length > 1) {
-                this.updateTitle(`${titleParts[0]} (${titleParts.slice(1).join(", ")})`);
-            } else {
-                this.updateTitle(titleParts[0]);
-            }
+            this.updateTitleForContext(projectName, tovName);
 
             const fetchedHierarchicalTestElements = await this.dataProvider.fetchTestElements(tovKey);
+            const newRootItems = fetchedHierarchicalTestElements.map((element) => this._buildTreeItems(element));
 
-            this.rootItems = fetchedHierarchicalTestElements.map((element) => this._buildTreeItems(element));
-
-            // Set the last data fetch timestamp to prevent infinite loading
-            // This is important even for empty results to prevent the tree from continuously trying to load data
+            this.rootItems = newRootItems;
             (this as any)._lastDataFetch = Date.now();
             (this as any)._intentionallyCleared = false;
             this.stateManager.setLoading(false);
             (this as any).updateTreeViewMessage();
 
-            // Render tree immediately with structural data, then update availability/icons in background
             this._onDidChangeTreeData.fire(undefined);
-            void this.runPostFetchAvailabilityUpdates(this.rootItems);
+            void this.runPostFetchAvailabilityUpdates(newRootItems);
+
+            const eventData: { tovKey: string; tovLabel: string | null; loadTime?: number } = {
+                tovKey,
+                tovLabel: this.currentTovLabel
+            };
+            if (includeLoadTimeInEvent) {
+                eventData.loadTime = Date.now() - startTime;
+            }
 
             this.eventBus.emit({
                 type: "tov:loaded",
                 source: this.config.id,
-                data: {
-                    tovKey,
-                    tovLabel: this.currentTovLabel
-                },
+                data: eventData,
                 timestamp: Date.now()
             });
+
             this.logger.info(
                 `[TestElementsTreeView] Successfully loaded Test Element information for '${tovName}' from project '${projectName}'.`
             );
@@ -2009,13 +1953,14 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 this.dataProvider.clearCache(this.currentTovKey);
             }
 
-            this.loadTovWithProgress(
-                this.currentTovKey,
-                this.currentTovLabel || undefined,
-                this.currentProjectName || undefined,
-                this.currentTovName || undefined,
-                this.currentProjectKey || undefined
-            );
+            this.loadTov(this.currentTovKey, {
+                tovLabel: this.currentTovLabel || undefined,
+                projectName: this.currentProjectName || undefined,
+                tovName: this.currentTovName || undefined,
+                clearFirst: false,
+                projectKey: this.currentProjectKey || undefined,
+                includeLoadTimeInEvent: true
+            });
         } else {
             this.logger.trace("[TestElementsTreeView] No TOV key available while refreshing, clearing tree");
             this.clearTree();
