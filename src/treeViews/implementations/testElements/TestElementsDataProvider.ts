@@ -414,37 +414,36 @@ export class TestElementsDataProvider {
         /**
          * Resource information computed for a processed subtree.
          * - containsResourceSubdivision: whether this subtree contains any resource subdivision.
-         * - firstResourceSubdivision: first encountered resource subdivision in Depth First Search order,
+         * - firstResourceBoundaryDepth: first boundary depth encountered in this subtree,
          *   used to derive virtual-folder status for ancestor subdivisions.
          */
         type SubtreeResourceAnalysis = {
             containsResourceSubdivision: boolean;
-            firstResourceSubdivision: TestElementData | null;
+            firstResourceBoundaryDepth: number | null;
         };
 
         /**
-         * Determines if a node should be marked as virtual based on the presence of a resource directory marker
-         * and the relative position of the resource descendant in the hierarchy.
-         * @param node The subdivision node being evaluated for virtual status.
-         * @param descendantResource The resource descendant node used to determine virtual status.
-         * @returns A boolean indicating whether the node should be marked as virtual.
+         * Resolves the virtual-folder boundary depth for a resource path.
+         * If no marker is configured (or no marker is found in the path), returns null,
+         * which means ancestor subdivisions should stay virtual.
+         *
+         * @param pathParts Path segments of the current resource subdivision.
+         * @returns Boundary depth (root level is 1), or null if boundary is not defined.
          */
-        const isVirtualContainerSubdivision = (node: TestElementData, descendantResource: TestElementData): boolean => {
+        const resolveVirtualBoundaryDepth = (pathParts: string[]): number | null => {
             if (!resourceDirectoryMarker) {
-                return true;
+                return null;
             }
 
             const markerPosition = ResourceFileService.findResourceDirectoryMarkerIndex(
-                descendantResource.hierarchicalName.split("/"),
+                pathParts,
                 resourceDirectoryMarker
             );
-
             if (markerPosition !== -1) {
-                const folderDepth = node.hierarchicalName.split("/").length;
-                return folderDepth <= markerPosition + 1;
+                return markerPosition + 1;
             }
 
-            return true;
+            return null;
         };
 
         /**
@@ -458,12 +457,14 @@ export class TestElementsDataProvider {
          *
          * @param node The current node being processed.
          * @param parentPath The hierarchical path of the parent node.
+         * @param currentDepth Depth of the current node in the hierarchy (root level is 1).
          * @param parentIsResource A boolean indicating if the parent node is a resource.
          * @returns Subtree resource analysis used by parent recursion level.
          */
         const finalizeNodeSubtree = (
             node: TestElementData,
             parentPath: string,
+            currentDepth: number,
             parentIsResource: boolean
         ): SubtreeResourceAnalysis => {
             const currentPath = parentPath ? `${parentPath}/${node.displayName}` : node.displayName;
@@ -479,14 +480,15 @@ export class TestElementsDataProvider {
             }
 
             let hasResourceSubdivisionInChildren = false;
-            let firstResourceSubdivisionFromChildren: TestElementData | null = null;
+            let firstResourceBoundaryDepthFromChildren: number | null = null;
 
             for (const child of node.children || []) {
-                const childSubtreeAnalysis = finalizeNodeSubtree(child, currentPath, isResource);
+                const childSubtreeAnalysis = finalizeNodeSubtree(child, currentPath, currentDepth + 1, isResource);
                 if (childSubtreeAnalysis.containsResourceSubdivision) {
                     hasResourceSubdivisionInChildren = true;
-                    if (!firstResourceSubdivisionFromChildren) {
-                        firstResourceSubdivisionFromChildren = childSubtreeAnalysis.firstResourceSubdivision;
+                    if (firstResourceBoundaryDepthFromChildren === null) {
+                        // Keep the first boundary discovered in DFS order for deterministic behavior.
+                        firstResourceBoundaryDepthFromChildren = childSubtreeAnalysis.firstResourceBoundaryDepth;
                     }
                 }
             }
@@ -499,30 +501,28 @@ export class TestElementsDataProvider {
                 node.hasResourceDescendant = true;
                 return {
                     containsResourceSubdivision: true,
-                    firstResourceSubdivision: node
+                    firstResourceBoundaryDepth: resolveVirtualBoundaryDepth(currentPath.split("/"))
                 };
             }
 
             if (isSubdivision && hasResourceSubdivisionInChildren) {
-                if (firstResourceSubdivisionFromChildren) {
-                    node.isVirtual = isVirtualContainerSubdivision(node, firstResourceSubdivisionFromChildren);
-                } else {
-                    node.isVirtual = true;
-                }
+                const boundaryDepth = firstResourceBoundaryDepthFromChildren;
+                // Without a boundary, all ancestors remain virtual (legacy behavior).
+                node.isVirtual = boundaryDepth === null ? true : currentDepth <= boundaryDepth;
 
                 return {
                     containsResourceSubdivision: true,
-                    firstResourceSubdivision: firstResourceSubdivisionFromChildren
+                    firstResourceBoundaryDepth: firstResourceBoundaryDepthFromChildren
                 };
             }
 
             return {
                 containsResourceSubdivision: hasResourceSubdivisionInChildren,
-                firstResourceSubdivision: firstResourceSubdivisionFromChildren
+                firstResourceBoundaryDepth: firstResourceBoundaryDepthFromChildren
             };
         };
 
-        roots.forEach((rootNode) => finalizeNodeSubtree(rootNode, "", false));
+        roots.forEach((rootNode) => finalizeNodeSubtree(rootNode, "", 1, false));
 
         if (nestedResourceWarnings.length > 0) {
             this.logger.warn("[TestElementsDataProvider] Nested robot resources found:", nestedResourceWarnings);

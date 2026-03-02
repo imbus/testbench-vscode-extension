@@ -141,4 +141,28 @@ suite("TestElementsDataProvider", function () {
             "Robot resource 'ParentResource' contains another resource 'ChildResource'."
         );
     });
+
+    test("finalization pass should stop virtual marking below configured resource-directory marker", function () {
+        testEnv.sandbox.stub(configuration, "getExtensionSetting").callsFake((key: string) => {
+            if (key === ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER) {
+                return "^Marker$";
+            }
+            return undefined;
+        });
+
+        const resource = createSubdivision("resource", "Resource", true);
+        const belowMarker = createSubdivision("below-marker", "BelowMarker", false, [resource]);
+        const marker = createSubdivision("marker", "Marker", false, [belowMarker]);
+        const root = createSubdivision("root", "Root", false, [marker]);
+
+        marker.parent = root;
+        belowMarker.parent = marker;
+        resource.parent = belowMarker;
+
+        (dataProvider as any)._finalizeFilteredTree([root]);
+
+        assert.strictEqual(root.isVirtual, true, "ancestor before marker should stay virtual");
+        assert.strictEqual(marker.isVirtual, true, "marker level should stay virtual");
+        assert.strictEqual(belowMarker.isVirtual, false, "subdivision below marker boundary should not be virtual");
+    });
 });
