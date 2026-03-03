@@ -474,7 +474,7 @@
             {
                 "command": "testbenchExtension.createSubdivisionInTestElementsView",
                 "title": "Create Subdivision Under This Item",
-                "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\./",
+                "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\.(folder|virtualFolder|plain)$/",
                 "icon": "$(new-folder)"
             },
             {
@@ -486,13 +486,13 @@
             {
                 "command": "testbenchExtension.createSubdivisionWithMarkerInTestElementsView",
                 "title": "Create Resource Subdivision Under This Item",
-                "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\./",
+                "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\.(folder|virtualFolder|plain)$/",
                 "icon": "$(new-file)"
             },
             {
                 "command": "testbenchExtension.createSubdivisionWithoutMarkerInTestElementsView",
                 "title": "Create Subdivision Under This Item",
-                "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\./",
+                "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\.(folder|virtualFolder|plain)$/",
                 "icon": "$(new-folder)"
             },
             {
@@ -985,17 +985,17 @@
                 },
                 {
                     "command": "testbenchExtension.createSubdivisionInTestElementsView",
-                    "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\./",
+                    "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\.(folder|virtualFolder|plain)$/",
                     "group": "inline@2"
                 },
                 {
                     "command": "testbenchExtension.createSubdivisionWithMarkerInTestElementsView",
-                    "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\./",
+                    "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\.(folder|virtualFolder|plain)$/",
                     "group": "navigation@3"
                 },
                 {
                     "command": "testbenchExtension.createSubdivisionWithoutMarkerInTestElementsView",
-                    "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\./",
+                    "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\.(folder|virtualFolder|plain)$/",
                     "group": "navigation@4"
                 },
                 {
