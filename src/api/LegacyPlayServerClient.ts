@@ -337,10 +337,9 @@ export class LegacyPlayServerClient {
             }
 
             if (getTestElementsResponse.data) {
-                logger.trace(
-                    `[LegacyPlayServerClient] Successfully fetched test elements data for TOV ${tovKey}:`,
-                    getTestElementsResponse.data
-                );
+                logger.trace(`[LegacyPlayServerClient] Successfully fetched test elements data for TOV ${tovKey}:`, {
+                    response: getTestElementsResponse.data
+                });
                 return getTestElementsResponse.data;
             } else {
                 logger.error(`[LegacyPlayServerClient] Test elements data is not available for TOV key ${tovKey}.`);
@@ -407,7 +406,9 @@ export class LegacyPlayServerClient {
             }
 
             if (response.data) {
-                logger.trace(`[LegacyPlayServerClient] Successfully fetched filters data:`, response.data);
+                logger.trace(`[LegacyPlayServerClient] Successfully fetched filters data:`, {
+                    response: response.data
+                });
                 return response.data;
             } else {
                 logger.error(`[LegacyPlayServerClient] Filters data is not available.`);

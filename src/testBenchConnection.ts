@@ -447,10 +447,9 @@ export class PlayServerConnection {
                 `[testBenchConnection] Response status of project list request for URL ${projectsURL}: ${projectsResponse.status}`
             );
             if (projectsResponse.data) {
-                logger.trace(
-                    `[testBenchConnection] Fetched project list for request ${projectsURL}:`,
-                    projectsResponse.data
-                );
+                logger.trace(`[testBenchConnection] Fetched project list for request ${projectsURL}:`, {
+                    response: projectsResponse.data
+                });
                 return projectsResponse.data;
             } else {
                 logger.error("[testBenchConnection] Project list data is not available.");
@@ -517,10 +516,9 @@ export class PlayServerConnection {
                 `[testBenchConnection] Response status of project tree request for URL ${projectTreeURL}: ${projectTreeResponse.status}`
             );
             if (projectTreeResponse.data) {
-                logger.trace(
-                    `[testBenchConnection] Fetched project tree for request ${projectTreeURL}:`,
-                    projectTreeResponse.data
-                );
+                logger.trace(`[testBenchConnection] Fetched project tree for request ${projectTreeURL}:`, {
+                    response: projectTreeResponse.data
+                });
                 return projectTreeResponse.data;
             } else {
                 logger.error("[testBenchConnection] Project tree data is not available.");
@@ -610,10 +608,9 @@ export class PlayServerConnection {
                 `[testBenchConnection] Response status of TOV report job ID request for URL ${tovReportUrl}: ${tovReportJobResponse.status}`
             );
             if (tovReportJobResponse.data.jobID) {
-                logger.trace(
-                    `[testBenchConnection] Received TOV report Job ID for URL ${tovReportUrl}:`,
-                    tovReportJobResponse.data
-                );
+                logger.trace(`[testBenchConnection] Received TOV report Job ID for URL ${tovReportUrl}:`, {
+                    response: tovReportJobResponse.data
+                });
                 return tovReportJobResponse.data.jobID;
             } else {
                 logger.error(
@@ -782,7 +779,9 @@ export class PlayServerConnection {
             );
 
             if (response.data) {
-                logger.trace(`[testBenchConnection] Received ${structureType} structure:`, response.data);
+                logger.trace(`[testBenchConnection] Received ${structureType} structure:`, {
+                    response: response.data
+                });
                 this.testStructureCache.setEntryInCache(cacheKey, response.data);
                 return response.data;
             } else {
