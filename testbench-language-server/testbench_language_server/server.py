@@ -812,8 +812,8 @@ def keyword_section_edit(
     missing_line_breaks = max(
         0, required_line_breaks_before_section - existing_trailing_newline_count
     )
-    if missing_line_breaks > 0 and not keyword_section_text.startswith("\n" * missing_line_breaks):
-        keyword_section_text = f"{'\n' * missing_line_breaks}{keyword_section_text}"
+    if missing_line_breaks > 0:
+        keyword_section_text = "\n" * missing_line_breaks + keyword_section_text
     return [
         AnnotatedTextEdit(
             change_identifier,
