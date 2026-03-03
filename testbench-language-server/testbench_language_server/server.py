@@ -423,7 +423,13 @@ def show_testbench_diff(ls: LanguageServer, kwargs):
             _, _, kw_section_start, _ = get_variables_section_position(existing_resource.file)
         else:
             _, _, kw_section_start, _ = get_setting_section_position(existing_resource.file)
-        edits.extend(keyword_section_edit(kw_section_start, change_identifier))
+        edits.extend(
+            keyword_section_edit(
+                kw_section_start,
+                change_identifier,
+                existing_trailing_newline_count=_count_trailing_newline_characters(document.source),
+            )
+        )
     else:
         _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
     for new_keyword in new_resource.keyword_section.body:
@@ -504,7 +510,13 @@ def attempt_push_subdivision(ls: LanguageServer, *args):
             _, _, kw_section_start, _ = get_variables_section_position(existing_resource.file)
         else:
             _, _, kw_section_start, _ = get_setting_section_position(existing_resource.file)
-        edits.extend(keyword_section_edit(kw_section_start, change_identifier))
+        edits.extend(
+            keyword_section_edit(
+                kw_section_start,
+                change_identifier,
+                existing_trailing_newline_count=_count_trailing_newline_characters(document.source),
+            )
+        )
     else:
         _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
     if new_resource and new_resource.keyword_section:
@@ -678,13 +690,22 @@ def pull_testbench_subdivision(ls: LanguageServer, *args):
     edits = []
     create_kw_section = not bool(get_keyword_section(existing_resource.file))
     if create_kw_section:
+        minimum_empty_lines_before_section = 0
         if get_variables_section(existing_resource.file):
             kw_section_start = get_variables_section_position(existing_resource.file)[-2]
         elif get_setting_section(existing_resource.file):
             kw_section_start = get_setting_section_position(existing_resource.file)[-2]
         else:
             kw_section_start = get_testbench_context_position(existing_resource.file)[-2]
-        edits.extend(keyword_section_edit(kw_section_start, change_identifier))
+            minimum_empty_lines_before_section = 1
+        edits.extend(
+            keyword_section_edit(
+                kw_section_start,
+                change_identifier,
+                minimum_empty_lines_before_section=minimum_empty_lines_before_section,
+                existing_trailing_newline_count=_count_trailing_newline_characters(document.source),
+            )
+        )
     else:
         _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
     visited_keywords = []
@@ -769,7 +790,30 @@ def new_keyword_edit(new_keyword, kw_section_start_row, change_identifier):
     )
 
 
-def keyword_section_edit(keyword_section_line, change_identifier):
+def _count_trailing_newline_characters(source_text: str) -> int:
+    trailing_newline_count = 0
+    for character in reversed(source_text):
+        if character != "\n":
+            break
+        trailing_newline_count += 1
+    return trailing_newline_count
+
+
+def keyword_section_edit(
+    keyword_section_line,
+    change_identifier,
+    minimum_empty_lines_before_section: int = 0,
+    existing_trailing_newline_count: int = 0,
+):
+    keyword_section_text = robot_model_to_string(
+        KeywordSection(SectionHeader.from_params(Token.KEYWORD_HEADER))
+    )
+    required_line_breaks_before_section = minimum_empty_lines_before_section + 1
+    missing_line_breaks = max(
+        0, required_line_breaks_before_section - existing_trailing_newline_count
+    )
+    if missing_line_breaks > 0 and not keyword_section_text.startswith("\n" * missing_line_breaks):
+        keyword_section_text = f"{'\n' * missing_line_breaks}{keyword_section_text}"
     return [
         AnnotatedTextEdit(
             change_identifier,
@@ -777,9 +821,7 @@ def keyword_section_edit(keyword_section_line, change_identifier):
                 start=Position(keyword_section_line + 3, 0),
                 end=Position(keyword_section_line + 3, 0),
             ),
-            new_text=robot_model_to_string(
-                KeywordSection(SectionHeader.from_params(Token.KEYWORD_HEADER))
-            ),
+            new_text=keyword_section_text,
         )
     ]
 
