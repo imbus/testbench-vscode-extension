@@ -279,7 +279,9 @@ export async function getJobIdOfCycleReport(
         );
 
         logger.trace(`[reportHandler] Job ID response status for URL: ${getJobIDUrl}:`, jobIdResponse.status);
-        logger.trace(`[reportHandler] Job ID response data for URL: ${getJobIDUrl}:`, jobIdResponse.data);
+        logger.trace(`[reportHandler] Job ID response data for URL: ${getJobIDUrl}:`, {
+            response: jobIdResponse.data
+        });
 
         if (jobIdResponse.status !== 200) {
             const errorMsg: string = `[reportHandler] Failed to fetch job ID, status code: ${jobIdResponse.status}`;
@@ -331,7 +333,9 @@ export async function getJobStatus(
     );
 
     logger.trace(`[reportHandler] Job status response status for URL: ${getJobStatusUrl}:`, jobStatusResponse.status);
-    logger.trace(`[reportHandler] Job status response data for URL: ${getJobStatusUrl}:`, jobStatusResponse.data);
+    logger.trace(`[reportHandler] Job status response data for URL: ${getJobStatusUrl}:`, {
+        response: jobStatusResponse.data
+    });
     if (jobStatusResponse.status !== 200) {
         const errorMsg: string = `[reportHandler] Failed to fetch job status, status code: ${jobStatusResponse.status}`;
         logger.error(errorMsg);
