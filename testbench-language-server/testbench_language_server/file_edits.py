@@ -1,4 +1,5 @@
 import re
+from typing import Any
 
 from lsprotocol.types import (
     AnnotatedTextEdit,
@@ -49,6 +50,27 @@ def get_documentation_values(documentation: Documentation) -> list[str]:
     ]
 
 
+def _has_real_line_terminator(parsed_statement: Any) -> bool:
+    if not parsed_statement:
+        return False
+    statement_tokens = getattr(parsed_statement, "tokens", None)
+    if not statement_tokens:
+        return False
+    return any(token.type == Token.EOL and "\n" in token.value for token in statement_tokens)
+
+
+def _ensure_leading_newline_for_eof_insertion(
+    text_to_insert: str, insertion_anchor_statement: Any
+) -> str:
+    if not text_to_insert:
+        return text_to_insert
+    if text_to_insert.startswith("\n"):
+        return text_to_insert
+    if _has_real_line_terminator(insertion_anchor_statement):
+        return text_to_insert
+    return f"\n{text_to_insert}"
+
+
 def get_kw_tags_edit(
     existing_keyword: Keyword, new_keyword: Keyword, change_identifier: str
 ) -> AnnotatedTextEdit | None:
@@ -77,6 +99,13 @@ def get_kw_tags_edit(
         existing_keyword
     )
     new_tags_txt = robot_model_to_string(all_tags)
+    if not get_keyword_tags(existing_keyword):
+        insertion_anchor_statement = (
+            get_keyword_documentation(existing_keyword) or existing_keyword.header
+        )
+        new_tags_txt = _ensure_leading_newline_for_eof_insertion(
+            new_tags_txt, insertion_anchor_statement
+        )
     tags_edit = AnnotatedTextEdit(
         change_identifier,
         range=Range(
@@ -127,6 +156,15 @@ def get_kw_arguments_edit(
         existing_keyword
     )
     new_args_txt = robot_model_to_string(get_keyword_arguments(new_keyword))
+    if not get_keyword_arguments(existing_keyword):
+        insertion_anchor_statement = (
+            get_keyword_tags(existing_keyword)
+            or get_keyword_documentation(existing_keyword)
+            or existing_keyword.header
+        )
+        new_args_txt = _ensure_leading_newline_for_eof_insertion(
+            new_args_txt, insertion_anchor_statement
+        )
     return AnnotatedTextEdit(
         change_identifier,
         range=Range(
