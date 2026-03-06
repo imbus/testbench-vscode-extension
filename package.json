@@ -203,6 +203,21 @@
                         "order": 21,
                         "scope": "window"
                     },
+                    "testbenchExtension.testElementsVisibilityMode": {
+                        "type": "string",
+                        "description": "Controls which TestBench subdivisions are visible in the Test Elements view. 'resourceOnly' keeps marker-based visibility, 'allSubdivisions' shows all subdivisions and their keywords regardless of resource marker.",
+                        "default": "resourceOnly",
+                        "enum": [
+                            "resourceOnly",
+                            "allSubdivisions"
+                        ],
+                        "enumDescriptions": [
+                            "Show only resource-marker subdivisions (plus required ancestors).",
+                            "Show all subdivisions and keywords regardless of resource marker."
+                        ],
+                        "order": 22,
+                        "scope": "window"
+                    },
                     "testbenchExtension.libraryMapping": {
                         "type": "array",
                         "markdownDescription": "Optional mapping of TestBench Subdivisions to Robot Framework libraries. Must be specified in the format:\n`<TestBench Subdivision Name>:<Robot Framework Library import>`",
@@ -210,7 +225,7 @@
                             "type": "string"
                         },
                         "default": [],
-                        "order": 22,
+                        "order": 23,
                         "scope": "window"
                     },
                     "testbenchExtension.resourceMapping": {
@@ -220,14 +235,14 @@
                             "type": "string"
                         },
                         "default": [],
-                        "order": 23,
+                        "order": 24,
                         "scope": "window"
                     },
                     "testbenchExtension.outputXmlFilePath": {
                         "type": "string",
                         "description": "The relative file path where the output XML file (Robotframework test results) is stored. If not set, the extension will prompt the user to select a output.xml file location when importing results to testbench server. The path is relative to the workspace location. Used for importing the test results to the TestBench Server.",
                         "default": "results/output.xml",
-                        "order": 24,
+                        "order": 25,
                         "scope": "window"
                     }
                 }
@@ -457,6 +472,42 @@
                 "icon": "$(new-file)"
             },
             {
+                "command": "testbenchExtension.createSubdivisionInTestElementsView",
+                "title": "Create Subdivision Under This Item",
+                "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\.(folder|virtualFolder|plain)$/",
+                "icon": "$(new-folder)"
+            },
+            {
+                "command": "testbenchExtension.createRootSubdivisionInTestElementsView",
+                "title": "Create Root Subdivision",
+                "when": "view == testbench.testElements",
+                "icon": "$(new-folder)"
+            },
+            {
+                "command": "testbenchExtension.createSubdivisionWithMarkerInTestElementsView",
+                "title": "Create Resource Subdivision Under This Item",
+                "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\.(folder|virtualFolder|plain)$/",
+                "icon": "$(new-file)"
+            },
+            {
+                "command": "testbenchExtension.createSubdivisionWithoutMarkerInTestElementsView",
+                "title": "Create Subdivision Under This Item",
+                "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\.(folder|virtualFolder|plain)$/",
+                "icon": "$(new-folder)"
+            },
+            {
+                "command": "testbenchExtension.createRootSubdivisionWithMarkerInTestElementsView",
+                "title": "Create Root Resource Subdivision",
+                "when": "view == testbench.testElements",
+                "icon": "$(new-file)"
+            },
+            {
+                "command": "testbenchExtension.createRootSubdivisionWithoutMarkerInTestElementsView",
+                "title": "Create Root Subdivision (No Marker)",
+                "when": "view == testbench.testElements",
+                "icon": "$(new-folder)"
+            },
+            {
                 "command": "testbenchExtension.openSubdivisionFolderInExplorer",
                 "title": "Open in Explorer View",
                 "when": "view == testbench.testElements && viewItem == 'testElement.subdivision.folder'",
@@ -539,6 +590,16 @@
                     "light": "resources/icons/search-on-light.svg",
                     "dark": "resources/icons/search-on-dark.svg"
                 }
+            },
+            {
+                "command": "testbenchExtension.setTestElementsVisibilityModeResourceOnly",
+                "title": "Show Resource Subdivisions Only",
+                "icon": "$(eye)"
+            },
+            {
+                "command": "testbenchExtension.setTestElementsVisibilityModeAllSubdivisions",
+                "title": "Show All Subdivisions",
+                "icon": "$(eye-closed)"
             },
             {
                 "command": "testbenchExtension.setActiveProject",
@@ -634,6 +695,30 @@
                     "when": "false"
                 },
                 {
+                    "command": "testbenchExtension.createSubdivisionInTestElementsView",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.createRootSubdivisionInTestElementsView",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.createSubdivisionWithMarkerInTestElementsView",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.createSubdivisionWithoutMarkerInTestElementsView",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.createRootSubdivisionWithMarkerInTestElementsView",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.createRootSubdivisionWithoutMarkerInTestElementsView",
+                    "when": "false"
+                },
+                {
                     "command": "testbenchExtension.openSubdivisionFolderInExplorer",
                     "when": "false"
                 },
@@ -651,6 +736,14 @@
                 },
                 {
                     "command": "testbenchExtension.validateAndFixLsConfig",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.setTestElementsVisibilityModeResourceOnly",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.setTestElementsVisibilityModeAllSubdivisions",
                     "when": "false"
                 }
             ],
@@ -704,7 +797,7 @@
                 },
                 {
                     "command": "testbenchExtension.displayAllProjects",
-                    "group": "navigation@2",
+                    "group": "navigation@4",
                     "when": "view == testbench.testThemes",
                     "icon": {
                         "light": "resources/icons/menu-light.svg",
@@ -713,7 +806,7 @@
                 },
                 {
                     "command": "testbenchExtension.displayAllProjects",
-                    "group": "navigation@2",
+                    "group": "navigation@4",
                     "when": "view == testbench.testElements",
                     "icon": {
                         "light": "resources/icons/menu-light.svg",
@@ -799,9 +892,15 @@
                     }
                 },
                 {
+                    "command": "testbenchExtension.createRootSubdivisionInTestElementsView",
+                    "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable",
+                    "group": "navigation@2",
+                    "icon": "$(new-folder)"
+                },
+                {
                     "command": "testbenchExtension.searchInTestElementsTreeOff",
                     "when": "view == testbench.testElements && !testbenchExtension.testElementsTreeHasSearchFilter",
-                    "group": "navigation@3",
+                    "group": "navigation@4",
                     "icon": {
                         "light": "resources/icons/search-off-light.svg",
                         "dark": "resources/icons/search-off-dark.svg"
@@ -810,11 +909,23 @@
                 {
                     "command": "testbenchExtension.searchInTestElementsTreeOn",
                     "when": "view == testbench.testElements && testbenchExtension.testElementsTreeHasSearchFilter",
-                    "group": "navigation@3",
+                    "group": "navigation@4",
                     "icon": {
                         "light": "resources/icons/search-on-light.svg",
                         "dark": "resources/icons/search-on-dark.svg"
                     }
+                },
+                {
+                    "command": "testbenchExtension.setTestElementsVisibilityModeAllSubdivisions",
+                    "when": "view == testbench.testElements && config.testbenchExtension.testElementsVisibilityMode == 'resourceOnly'",
+                    "group": "navigation@3",
+                    "icon": "$(eye)"
+                },
+                {
+                    "command": "testbenchExtension.setTestElementsVisibilityModeResourceOnly",
+                    "when": "view == testbench.testElements && config.testbenchExtension.testElementsVisibilityMode == 'allSubdivisions'",
+                    "group": "navigation@3",
+                    "icon": "$(eye-closed)"
                 }
             ],
             "view/item/context": [
@@ -871,6 +982,21 @@
                     "command": "testbenchExtension.openMissingSubdivisionInTestElementsView",
                     "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable && viewItem == 'testElement.subdivision.resource.missing'",
                     "group": "inline@1"
+                },
+                {
+                    "command": "testbenchExtension.createSubdivisionInTestElementsView",
+                    "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\.(folder|virtualFolder|plain)$/",
+                    "group": "inline@2"
+                },
+                {
+                    "command": "testbenchExtension.createSubdivisionWithMarkerInTestElementsView",
+                    "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\.(folder|virtualFolder|plain)$/",
+                    "group": "navigation@3"
+                },
+                {
+                    "command": "testbenchExtension.createSubdivisionWithoutMarkerInTestElementsView",
+                    "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\.(folder|virtualFolder|plain)$/",
+                    "group": "navigation@4"
                 },
                 {
                     "command": "testbenchExtension.openSubdivisionFolderInExplorer",

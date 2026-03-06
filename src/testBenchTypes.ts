@@ -95,6 +95,14 @@ export interface CycleTreeItemData {
     };
 }
 
+// Job related types
+
+export enum JobTypes {
+    TEST_GENERATION = "testGeneration",
+    IMPORT = "import",
+    EXPORT = "export"
+}
+
 export interface OptionalJobIDRequestParameter {
     treeRootUID?: string;
     basedOnExecution?: boolean;
@@ -106,13 +114,6 @@ export interface OptionalJobIDRequestParameter {
         filterType: "TestTheme" | "TestCase" | "TestCaseSet";
         testThemeUID: string;
     }[];
-}
-
-export enum ExecutionMode {
-    Execute = "execute",
-    Continue = "continue",
-    View = "view",
-    Simulate = "simulate"
 }
 
 export interface JobIdResponse {
@@ -158,6 +159,13 @@ export interface JobStatusResponse {
     };
 }
 
+export enum ExecutionMode {
+    Execute = "execute",
+    Continue = "continue",
+    View = "view",
+    Simulate = "simulate"
+}
+
 export interface Project {
     key: string;
     creationTime: string;
@@ -182,6 +190,48 @@ export interface TreeNode {
     children?: TreeNode[];
 }
 
+// Subdivision creation related types
+
+export interface SubdivisionDescriptionImageValue {
+    key: string;
+    suffix: string;
+    imageData: string;
+}
+
+export interface SubdivisionDescriptionImage {
+    key: string;
+    value: SubdivisionDescriptionImageValue;
+}
+
+export interface SubdivisionDescription {
+    html: string;
+    images: SubdivisionDescriptionImage[];
+}
+
+export interface CreateSubdivisionRequest {
+    parentKey: string | null;
+    name: string;
+    uid: string;
+    description: SubdivisionDescription;
+}
+
+export interface CreatedSubdivision {
+    key: string;
+    name: string;
+    uniqueID: string;
+    locker: {
+        key: string;
+        name: string;
+    };
+    description: string;
+    parentUniqueID: string;
+    libraryKey: string;
+    path: string;
+    references: string[];
+}
+
+// Import related types
+
 export interface ImportData {
     fileName: string;
     treeRootUID: string;
@@ -196,6 +246,8 @@ export interface ImportDataFilter {
     filterType: string;
     testThemeUID: string;
 }
+
+// Login related types
 
 export interface LoginRequestBody {
     login: string;
@@ -212,6 +264,8 @@ export interface LoginResponse {
     serverVersion: string;
     licenseWarning: string | null;
 }
+
+// TOV related types
 
 export interface TovStructureOptions {
     treeRootUID?: string;
@@ -254,13 +308,4 @@ export interface ExecutionInfo {
     locker?: string;
     result?: string;
     [key: string]: any;
-}
-
-/**
- * Job types enum
- */
-export enum JobTypes {
-    TEST_GENERATION = "testGeneration",
-    IMPORT = "import",
-    EXPORT = "export"
 }

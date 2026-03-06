@@ -13,6 +13,7 @@ import { testThemesConfig } from "../../../treeViews/implementations/testThemes/
 import { TestThemeItemTypes } from "../../../constants";
 
 suite("TestThemesTreeView", function () {
+    const REVEAL_IN_EXPLORER_COMMAND = "revealInExplorer";
     let testEnv: TestEnvironment;
     let mockContext: vscode.ExtensionContext;
     let treeView: TestThemesTreeView;
@@ -474,7 +475,7 @@ suite("TestThemesTreeView", function () {
                 "Robot file should be opened when it exists"
             );
             assert(
-                !testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
+                !testEnv.vscodeMocks.executeCommandStub.calledWith(REVEAL_IN_EXPLORER_COMMAND),
                 "revealInExplorer should not be called when path is undefined"
             );
         });

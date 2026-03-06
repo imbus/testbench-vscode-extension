@@ -268,11 +268,8 @@ export class IconModule implements TreeViewModule {
         if (item instanceof TestElementsTreeItem) {
             switch (item.data.testElementType) {
                 case TestElementType.Subdivision: {
-                    // Determine icon based on availability and parent marking state
-                    const baseIconName =
-                        item.data.isLocallyAvailable || item.hasLocalChildren
-                            ? "localSubdivision"
-                            : "missingSubdivision";
+                    // Determine icon based on the subdivision's own local resource availability.
+                    const baseIconName = item.data.isLocallyAvailable ? "localSubdivision" : "missingSubdivision";
                     return {
                         light: vscode.Uri.joinPath(extensionUri, "resources", "icons", `${baseIconName}-light.svg`),
                         dark: vscode.Uri.joinPath(extensionUri, "resources", "icons", `${baseIconName}-dark.svg`)

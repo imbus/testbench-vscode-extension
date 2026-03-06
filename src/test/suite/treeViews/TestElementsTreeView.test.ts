@@ -10,12 +10,14 @@ import {
     TestElementsTreeItem,
     TestElementType
 } from "../../../treeViews/implementations/testElements/TestElementsTreeItem";
-import { PlayServerConnection } from "../../../testBenchConnection";
+import { PlayServerConnection, PlayServerHttpError } from "../../../testBenchConnection";
 import { TestBenchLogger } from "../../../testBenchLogger";
 import { EventBus } from "../../../treeViews/utils/EventBus";
 import { StateManager } from "../../../treeViews/state/StateManager";
 import { ResourceFileService } from "../../../treeViews/implementations/testElements/ResourceFileService";
 import { testElementsConfig } from "../../../treeViews/implementations/testElements/TestElementsConfig";
+import { getExtensionSetting } from "../../../configuration";
+import { ConfigKeys } from "../../../constants";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
 
 suite("TestElementsTreeView", function () {
@@ -29,11 +31,21 @@ suite("TestElementsTreeView", function () {
     let getConnectionStub: sinon.SinonStub;
     let mockVSCodeTreeView: vscode.TreeView<any>;
 
+    const REVEAL_IN_EXPLORER_COMMAND = "revealInExplorer";
+    const getPrimaryResourceMarker = (): string => {
+        const configuredResourceMarker = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER)?.find(
+            (marker) => typeof marker === "string" && marker.trim().length > 0
+        );
+
+        return configuredResourceMarker ?? "[Robot-Resource]";
+    };
+    const withResourceMarker = (name: string): string => `${name} ${getPrimaryResourceMarker()}`;
+
     const createMockTestElementData = (overrides: Partial<any> = {}) => ({
         id: "test-item-1",
         parentId: null,
-        name: "TestResource [Robot-Resource]",
-        hierarchicalName: "TestFolder/TestResource [Robot-Resource]",
+        name: withResourceMarker("TestResource"),
+        hierarchicalName: `TestFolder/${withResourceMarker("TestResource")}`,
         testElementType: TestElementType.Subdivision,
         uniqueID: "test-uid-123",
         libraryKey: null,
@@ -136,7 +148,200 @@ suite("TestElementsTreeView", function () {
         }
     });
 
+    suite("Subdivision Creation", function () {
+        test("createSubdivision should use null parentKey for root subdivision", async function () {
+            (treeView as any).currentProjectKey = "PROJ-1";
+            (treeView as any).currentTovKey = "TOV-1";
+
+            const showInputBoxStub = testEnv.sandbox.stub(vscode.window, "showInputBox");
+            showInputBoxStub.onFirstCall().resolves("Root Subdivision");
+            showInputBoxStub.onSecondCall().resolves("");
+
+            mockConnection.createSubdivisionOnServer.resolves({
+                key: "SUB-ROOT",
+                name: "Root Subdivision",
+                uniqueID: "UID-ROOT",
+                locker: { key: "", name: "" },
+                description: "",
+                parentUniqueID: "",
+                libraryKey: "",
+                path: "",
+                references: []
+            } as any);
+
+            const refreshStub = testEnv.sandbox.stub(treeView, "refresh");
+
+            await treeView.promptAndCreateRobotResourceSubdivision();
+
+            assert.ok(mockConnection.createSubdivisionOnServer.calledOnce, "Should call createSubdivision API");
+            const [projectKeyArg, tovKeyArg, payloadArg] = mockConnection.createSubdivisionOnServer.firstCall.args;
+            assert.strictEqual(projectKeyArg, "PROJ-1");
+            assert.strictEqual(tovKeyArg, "TOV-1");
+            assert.strictEqual(payloadArg.parentKey, null);
+            assert.ok(refreshStub.calledOnce, "Should refresh tree after successful creation");
+        });
+
+        test("createSubdivision should create subdivision in testbench server and refresh tree", async function () {
+            const parentItem = createMockTestElementItem(
+                createMockTestElementData({
+                    details: {
+                        Subdivision_key: {
+                            serial: "PARENT-123"
+                        }
+                    }
+                })
+            );
+
+            (treeView as any).currentProjectKey = "PROJ-1";
+            (treeView as any).currentTovKey = "TOV-1";
+
+            const showInputBoxStub = testEnv.sandbox.stub(vscode.window, "showInputBox");
+            showInputBoxStub.onFirstCall().resolves("Child Subdivision");
+            showInputBoxStub.onSecondCall().resolves("My description");
+
+            mockConnection.createSubdivisionOnServer.resolves({
+                key: "SUB-NEW",
+                name: "Child Subdivision",
+                uniqueID: "UID-NEW",
+                locker: { key: "", name: "" },
+                description: "",
+                parentUniqueID: "",
+                libraryKey: "",
+                path: "",
+                references: []
+            } as any);
+
+            const refreshStub = testEnv.sandbox.stub(treeView, "refresh");
+
+            await treeView.promptAndCreateRobotResourceSubdivision(parentItem);
+
+            assert.ok(mockConnection.createSubdivisionOnServer.calledOnce, "Should call createSubdivision API");
+            const [projectKeyArg, tovKeyArg, payloadArg] = mockConnection.createSubdivisionOnServer.firstCall.args;
+            assert.strictEqual(projectKeyArg, "PROJ-1");
+            assert.strictEqual(tovKeyArg, "TOV-1");
+            assert.strictEqual(payloadArg.parentKey, "PARENT-123");
+            const configuredResourceMarker = (
+                getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER) || []
+            ).find((marker) => typeof marker === "string" && marker.trim().length > 0);
+            const expectedName = configuredResourceMarker
+                ? `Child Subdivision ${configuredResourceMarker}`
+                : "Child Subdivision";
+            assert.strictEqual(payloadArg.name, expectedName);
+            assert.ok(typeof payloadArg.uid === "string" && payloadArg.uid.length > 0, "Should generate UID");
+            assert.ok(refreshStub.calledOnce, "Should refresh tree after successful creation");
+            assert.ok(testEnv.vscodeMocks.showInformationMessageStub.calledOnce, "Should show success message");
+        });
+
+        test("createSubdivision should not auto-append marker when marker auto-append is disabled", async function () {
+            const parentItem = createMockTestElementItem(
+                createMockTestElementData({
+                    details: {
+                        Subdivision_key: {
+                            serial: "PARENT-123"
+                        }
+                    }
+                })
+            );
+
+            (treeView as any).currentProjectKey = "PROJ-1";
+            (treeView as any).currentTovKey = "TOV-1";
+
+            const showInputBoxStub = testEnv.sandbox.stub(vscode.window, "showInputBox");
+            showInputBoxStub.onFirstCall().resolves("Child Subdivision");
+            showInputBoxStub.onSecondCall().resolves("My description");
+
+            testEnv.sandbox.stub(treeView as any, "shouldAutoAppendResourceMarker").returns(false);
+
+            mockConnection.createSubdivisionOnServer.resolves({
+                key: "SUB-NEW",
+                name: "Child Subdivision",
+                uniqueID: "UID-NEW",
+                locker: { key: "", name: "" },
+                description: "",
+                parentUniqueID: "",
+                libraryKey: "",
+                path: "",
+                references: []
+            } as any);
+
+            const refreshStub = testEnv.sandbox.stub(treeView, "refresh");
+
+            await treeView.promptAndCreateRobotResourceSubdivision(parentItem);
+
+            assert.ok(mockConnection.createSubdivisionOnServer.calledOnce, "Should call createSubdivision API");
+            const [projectKeyArg, tovKeyArg, payloadArg] = mockConnection.createSubdivisionOnServer.firstCall.args;
+            assert.strictEqual(projectKeyArg, "PROJ-1");
+            assert.strictEqual(tovKeyArg, "TOV-1");
+            assert.strictEqual(payloadArg.parentKey, "PARENT-123");
+            assert.strictEqual(payloadArg.name, "Child Subdivision");
+            assert.ok(refreshStub.calledOnce, "Should refresh tree after successful creation");
+        });
+
+        test("createSubdivision should show conflict error message on status 409", async function () {
+            const parentItem = createMockTestElementItem(
+                createMockTestElementData({
+                    details: {
+                        Subdivision_key: {
+                            serial: "PARENT-123"
+                        }
+                    }
+                })
+            );
+
+            (treeView as any).currentProjectKey = "PROJ-1";
+            (treeView as any).currentTovKey = "TOV-1";
+
+            const showInputBoxStub = testEnv.sandbox.stub(vscode.window, "showInputBox");
+            showInputBoxStub.onFirstCall().resolves("Existing Name");
+            showInputBoxStub.onSecondCall().resolves("");
+
+            mockConnection.createSubdivisionOnServer.rejects(
+                new PlayServerHttpError("Conflict", 409, { message: "Name exists" })
+            );
+
+            await treeView.promptAndCreateRobotResourceSubdivision(parentItem);
+
+            assert.ok(testEnv.vscodeMocks.showErrorMessageStub.called, "Should show error message");
+            const firstErrorMessageArg = testEnv.vscodeMocks.showErrorMessageStub.firstCall.args[0];
+            assert.ok(
+                typeof firstErrorMessageArg === "string" && firstErrorMessageArg.includes("409"),
+                "Should include 409 status in error message"
+            );
+        });
+    });
+
     suite("Resource File Operations", function () {
+        test("updateSubdivisionAvailability should keep non-resource subdivision as missing", async function () {
+            const nonResourceSubdivision = createMockTestElementItem(
+                createMockTestElementData({
+                    displayName: "Plain Subdivision",
+                    originalName: "Plain Subdivision",
+                    hierarchicalName: "Root/Plain Subdivision",
+                    directRegexMatch: false,
+                    isLocallyAvailable: true
+                })
+            );
+
+            testEnv.sandbox.stub(treeView as any, "ensureLanguageServerReadyForAvailabilityChecks").resolves(undefined);
+
+            mockResourceFileService.constructAbsolutePath.resolves("/workspace/Root/Plain Subdivision");
+            mockResourceFileService.pathExists.resolves(true);
+
+            await (treeView as any).updateSubdivisionAvailability([nonResourceSubdivision], {
+                updateParentMarkingOnAvailableResource: false
+            });
+
+            assert.strictEqual(nonResourceSubdivision.data.isLocallyAvailable, false);
+            assert.ok(
+                !mockResourceFileService.constructAbsolutePath.called,
+                "Should not resolve resource path for non-resource subdivisions"
+            );
+            assert.ok(
+                !mockResourceFileService.pathExists.called,
+                "Should not check file existence for non-resource subdivisions"
+            );
+        });
+
         test("openAvailableResource should create file when it doesn't exist", async function () {
             const mockItem = createMockTestElementItem(createMockTestElementData());
 
@@ -162,8 +367,8 @@ suite("TestElementsTreeView", function () {
         test("openAvailableResource should open existing file without creating", async function () {
             const mockItem = createMockTestElementItem(
                 createMockTestElementData({
-                    name: "ExistingResource [Robot-Resource]",
-                    hierarchicalName: "TestFolder/ExistingResource [Robot-Resource]"
+                    name: withResourceMarker("ExistingResource"),
+                    hierarchicalName: `TestFolder/${withResourceMarker("ExistingResource")}`
                 })
             );
 
@@ -180,7 +385,7 @@ suite("TestElementsTreeView", function () {
             assert.ok(mockResourceFileService.pathExists.called, "Should check if file exists");
             assert.ok(!mockResourceFileService.ensureFileExists.called, "Should not create file");
             assert.ok(
-                testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
+                testEnv.vscodeMocks.executeCommandStub.calledWith(REVEAL_IN_EXPLORER_COMMAND),
                 "Should call revealInExplorer command"
             );
         });
@@ -229,7 +434,7 @@ suite("TestElementsTreeView", function () {
             assert.ok(mockResourceFileService.ensureFileExists.called, "Should create file");
             assert.ok(updateParentIconsStub.called, "Should update parent icons");
             assert.ok(
-                testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
+                testEnv.vscodeMocks.executeCommandStub.calledWith(REVEAL_IN_EXPLORER_COMMAND),
                 "Should call revealInExplorer command"
             );
         });
@@ -264,7 +469,7 @@ suite("TestElementsTreeView", function () {
             await treeView.openFolderInExplorer(mockItem);
 
             assert.ok(
-                testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
+                testEnv.vscodeMocks.executeCommandStub.calledWith(REVEAL_IN_EXPLORER_COMMAND),
                 "Should execute reveal command"
             );
         });
@@ -287,7 +492,7 @@ suite("TestElementsTreeView", function () {
 
             assert.ok(mockResourceFileService.ensureFolderPathExists.called, "Should create folder");
             assert.ok(
-                testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
+                testEnv.vscodeMocks.executeCommandStub.calledWith(REVEAL_IN_EXPLORER_COMMAND),
                 "Should execute reveal command"
             );
             assert.ok(updateParentIconsStub.called, "Should update parent icons");
@@ -311,18 +516,18 @@ suite("TestElementsTreeView", function () {
         });
     });
     suite("Keyword Resource Operations", function () {
-        test("goToKeywordResource should create parent resource when missing", async function () {
+        test("goToKeywordResource should create parent resource if missing", async function () {
             const mockParent = createMockTestElementItem(
                 createMockTestElementData({
-                    name: "ParentResource [Robot-Resource]",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
+                    name: withResourceMarker("ParentResource"),
+                    hierarchicalName: `TestFolder/${withResourceMarker("ParentResource")}`
                 })
             );
 
             const mockKeyword = createMockTestElementItem(
                 createMockTestElementData({
                     name: "TestKeyword",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestKeyword",
+                    hierarchicalName: `TestFolder/${withResourceMarker("ParentResource")}/TestKeyword`,
                     testElementType: TestElementType.Keyword
                 }),
                 mockParent
@@ -350,8 +555,8 @@ suite("TestElementsTreeView", function () {
         test("goToKeywordResource should open existing parent resource", async function () {
             const mockParent = createMockTestElementItem(
                 createMockTestElementData({
-                    name: "ExistingParentResource [Robot-Resource]",
-                    hierarchicalName: "TestFolder/ExistingParentResource [Robot-Resource]",
+                    name: withResourceMarker("ExistingParentResource"),
+                    hierarchicalName: `TestFolder/${withResourceMarker("ExistingParentResource")}`,
                     isLocallyAvailable: true,
                     localPath: "/test/path/ExistingParentResource.resource"
                 })
@@ -360,7 +565,7 @@ suite("TestElementsTreeView", function () {
             const mockKeyword = createMockTestElementItem(
                 createMockTestElementData({
                     name: "ExistingKeyword",
-                    hierarchicalName: "TestFolder/ExistingParentResource [Robot-Resource]/ExistingKeyword",
+                    hierarchicalName: `TestFolder/${withResourceMarker("ExistingParentResource")}/ExistingKeyword`,
                     testElementType: TestElementType.Keyword
                 }),
                 mockParent
@@ -397,15 +602,15 @@ suite("TestElementsTreeView", function () {
         test("goToKeywordResource should reveal file in explorer after opening", async function () {
             const mockParent = createMockTestElementItem(
                 createMockTestElementData({
-                    name: "ParentResource [Robot-Resource]",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
+                    name: withResourceMarker("ParentResource"),
+                    hierarchicalName: `TestFolder/${withResourceMarker("ParentResource")}`
                 })
             );
 
             const mockKeyword = createMockTestElementItem(
                 createMockTestElementData({
                     name: "TestKeyword",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestKeyword",
+                    hierarchicalName: `TestFolder/${withResourceMarker("ParentResource")}/TestKeyword`,
                     testElementType: TestElementType.Keyword
                 }),
                 mockParent
@@ -422,7 +627,7 @@ suite("TestElementsTreeView", function () {
             await treeView.goToKeywordResource(mockKeyword);
 
             assert.ok(
-                testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
+                testEnv.vscodeMocks.executeCommandStub.calledWith(REVEAL_IN_EXPLORER_COMMAND),
                 "Should call revealInExplorer command"
             );
         });
@@ -433,7 +638,7 @@ suite("TestElementsTreeView", function () {
             const mockKeyword = createMockTestElementItem(
                 createMockTestElementData({
                     name: "TestKeyword",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestKeyword",
+                    hierarchicalName: `TestFolder/${withResourceMarker("ParentResource")}/TestKeyword`,
                     testElementType: TestElementType.Keyword
                 })
             );
@@ -445,6 +650,45 @@ suite("TestElementsTreeView", function () {
             await treeView.handleKeywordClick(mockKeyword);
 
             assert.ok(handleClickStub.calledWith(mockKeyword, mockKeyword.id, mockLogger), "Should call click handler");
+        });
+
+        test("handleKeywordClick should ignore keyword under non-resource subdivision", async function () {
+            const nonResourceParent = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "Plain Subdivision",
+                    displayName: "Plain Subdivision",
+                    hierarchicalName: "Root/Plain Subdivision",
+                    testElementType: TestElementType.Subdivision,
+                    directRegexMatch: false
+                })
+            );
+
+            const mockKeyword = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "Plain Keyword",
+                    displayName: "Plain Keyword",
+                    hierarchicalName: "Root/Plain Subdivision/Plain Keyword",
+                    testElementType: TestElementType.Keyword,
+                    directRegexMatch: false
+                }),
+                nonResourceParent
+            );
+
+            const handleClickStub = testEnv.sandbox
+                .stub((treeView as any).keywordClickHandler, "handleClick")
+                .resolves();
+
+            await treeView.handleKeywordClick(mockKeyword);
+
+            assert.ok(!handleClickStub.called, "Should not call click handler for non-resource keyword");
+            assert.ok(
+                !testEnv.vscodeMocks.showWarningMessageStub.called,
+                "Should not show warning for non-resource keyword click"
+            );
+            assert.ok(
+                !testEnv.vscodeMocks.showErrorMessageStub.called,
+                "Should not show error for non-resource keyword click"
+            );
         });
 
         test("handleKeywordSingleClick should not create file if it does not exist", async function () {
@@ -470,15 +714,15 @@ suite("TestElementsTreeView", function () {
         test("handleKeywordDoubleClick should create file and reveal in explorer", async function () {
             const mockParent = createMockTestElementItem(
                 createMockTestElementData({
-                    name: "ParentResource [Robot-Resource]",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
+                    name: withResourceMarker("ParentResource"),
+                    hierarchicalName: `TestFolder/${withResourceMarker("ParentResource")}`
                 })
             );
 
             const mockKeyword = createMockTestElementItem(
                 createMockTestElementData({
                     name: "TestKeyword",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestKeyword",
+                    hierarchicalName: `TestFolder/${withResourceMarker("ParentResource")}/TestKeyword`,
                     testElementType: TestElementType.Keyword
                 }),
                 mockParent
@@ -498,14 +742,14 @@ suite("TestElementsTreeView", function () {
             assert.ok(mockResourceFileService.ensureFileExists.called, "Should create file if it doesn't exist");
             assert.ok(showTextDocumentStub.called, "Should open file in editor");
             assert.ok(
-                testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
+                testEnv.vscodeMocks.executeCommandStub.calledWith(REVEAL_IN_EXPLORER_COMMAND),
                 "Should reveal file in explorer"
             );
         });
     });
 
     suite("Parent Icon Updates", function () {
-        test("updateParentIcons should update parent folder icons when resource file is created", async function () {
+        test("updateParentIcons should keep non-resource parent folders as missing", async function () {
             const mockParent = createMockTestElementItem(
                 createMockTestElementData({
                     name: "TestFolder",
@@ -515,20 +759,22 @@ suite("TestElementsTreeView", function () {
 
             const mockChild = createMockTestElementItem(
                 createMockTestElementData({
-                    name: "TestResource [Robot-Resource]",
-                    hierarchicalName: "TestFolder/TestResource [Robot-Resource]"
+                    name: withResourceMarker("TestResource"),
+                    hierarchicalName: `TestFolder/${withResourceMarker("TestResource")}`
                 }),
                 mockParent
             );
 
-            mockResourceFileService.directoryExists.resolves(true);
-            mockResourceFileService.constructAbsolutePath.resolves("/test/path/TestFolder");
-
             const result = await (treeView as any).updateParentIcons(mockChild);
 
             assert.strictEqual(result, true, "updateParentIcons should return true");
-            assert.strictEqual(mockParent.data.isLocallyAvailable, true);
-            assert.strictEqual(mockParent.data.localPath, "/test/path/TestFolder");
+            assert.strictEqual(mockParent.data.isLocallyAvailable, false);
+            assert.strictEqual(mockParent.data.localPath, undefined);
+            assert.ok(!mockResourceFileService.directoryExists.called, "Should not check folder existence");
+            assert.ok(
+                !mockResourceFileService.constructAbsolutePath.called,
+                "Should not construct folder path for non-resource parent"
+            );
         });
     });
 });

@@ -34,8 +34,11 @@ interface RawTestElement {
     DataType_key?: { serial: string };
 }
 
+type TestElementsVisibilityMode = "resourceOnly" | "allSubdivisions";
+
 export class TestElementsDataProvider {
     private elementsCache = new FrameworkCache<TestElementData[]>();
+    private rawElementsCache = new FrameworkCache<RawTestElement[]>();
     private disposables: vscode.Disposable[] = [];
 
     constructor(
@@ -47,25 +50,36 @@ export class TestElementsDataProvider {
     }
 
     /**
-     * Sets up a listener for configuration changes to clear cache when resource markers change
+     * Sets up a listener for configuration changes that affect Test Elements filtering.
+     * Cache is cleared when marker-based matching or visibility mode changes.
      */
     private setupConfigurationChangeListener(): void {
         const configChangeDisposable = vscode.workspace.onDidChangeConfiguration((event) => {
-            if (event.affectsConfiguration("testbenchExtension.resourceMarker")) {
-                this.logger.debug("[TestElementsDataProvider] Resource marker configuration changed, clearing cache");
+            const resourceMarkerChanged = event.affectsConfiguration("testbenchExtension.resourceMarker");
+            const visibilityModeChanged = event.affectsConfiguration(
+                `testbenchExtension.${ConfigKeys.TEST_ELEMENTS_VISIBILITY_MODE}`
+            );
+
+            if (resourceMarkerChanged || visibilityModeChanged) {
+                this.logger.debug(
+                    "[TestElementsDataProvider] Test Elements filtering configuration changed, clearing cache"
+                );
 
                 const newPatterns = this._getResourceRegexPatternsFromSettings();
+                const visibilityMode = this.getTestElementsVisibilityMode();
                 this.logger.debug(
                     `[TestElementsDataProvider] New resource marker patterns: ${JSON.stringify(newPatterns.map((p) => p.source))}`
                 );
+                this.logger.debug(`[TestElementsDataProvider] New Test Elements visibility mode: ${visibilityMode}`);
 
-                this.clearCache();
+                this.clearFilteredCache();
                 this.eventBus.emit({
                     type: "testElements:configurationChanged",
                     source: "testElements",
                     data: {
-                        message: "Resource marker configuration changed, cache cleared",
+                        message: "Test Elements filtering configuration changed, cache cleared",
                         newPatterns: newPatterns.map((p) => p.source),
+                        visibilityMode,
                         timestamp: Date.now()
                     },
                     timestamp: Date.now()
@@ -127,9 +141,18 @@ export class TestElementsDataProvider {
         }
 
         try {
-            const rawTestElementsData = await connection.getTestElementsWithTovKeyUsingOldPlayServer(tovKey);
-            if (!rawTestElementsData || !Array.isArray(rawTestElementsData)) {
-                return [];
+            let rawTestElementsData = this.rawElementsCache.get(tovKey);
+            if (!rawTestElementsData) {
+                this.logger.debug(
+                    `[TestElementsDataProvider] Fetching raw test elements from server for TOV: ${tovKey}`
+                );
+                rawTestElementsData = await connection.getTestElementsWithTovKeyUsingOldPlayServer(tovKey);
+                if (!rawTestElementsData || !Array.isArray(rawTestElementsData)) {
+                    return [];
+                }
+                this.rawElementsCache.set(tovKey, rawTestElementsData);
+            } else {
+                this.logger.debug(`[TestElementsDataProvider] Using cached raw test elements for TOV: ${tovKey}`);
             }
 
             const hierarchicalTestElemData = await this._buildAndFilterHierarchy(rawTestElementsData);
@@ -288,6 +311,8 @@ export class TestElementsDataProvider {
      * @returns A new array of filtered root elements.
      */
     private _filterElementTree(rootsToFilter: TestElementData[]): TestElementData[] {
+        const visibilityMode = this.getTestElementsVisibilityMode();
+
         const recursiveFilter = (testElementData: TestElementData, inheritedMatch: boolean): TestElementData | null => {
             let validChildren: TestElementData[] = [];
             if (testElementData.children) {
@@ -303,25 +328,64 @@ export class TestElementsDataProvider {
             ) {
                 return null;
             }
-            if (
-                testElementData.testElementType === TestElementType.Subdivision &&
-                !testElementData.directRegexMatch &&
-                inheritedMatch
-            ) {
-                if (validChildren.length === 0) {
-                    return null;
-                }
-            }
-            if (testElementData.directRegexMatch || inheritedMatch || validChildren.length > 0) {
+
+            const shouldIncludeCurrentNode =
+                visibilityMode === "allSubdivisions"
+                    ? true
+                    : this.shouldIncludeInResourceOnlyMode(testElementData, inheritedMatch, validChildren.length);
+
+            if (shouldIncludeCurrentNode || validChildren.length > 0) {
                 testElementData.children = validChildren;
                 return testElementData;
             }
+
             return null;
         };
 
         return rootsToFilter
             .map((root) => recursiveFilter(root, false))
             .filter((node) => node !== null) as TestElementData[];
+    }
+
+    /**
+     * Returns the configured Test Elements visibility mode.
+     * Falls back to "resourceOnly" for missing or invalid values.
+     */
+    private getTestElementsVisibilityMode(): TestElementsVisibilityMode {
+        const configuredMode = getExtensionSetting<string>(ConfigKeys.TEST_ELEMENTS_VISIBILITY_MODE);
+        if (configuredMode === "allSubdivisions" || configuredMode === "resourceOnly") {
+            return configuredMode;
+        }
+
+        if (configuredMode && configuredMode.trim().length > 0) {
+            this.logger.warn(
+                `[TestElementsDataProvider] Unknown visibility mode '${configuredMode}'. Falling back to 'resourceOnly'.`
+            );
+        }
+
+        return "resourceOnly";
+    }
+
+    /**
+     * Resource-only filtering behavior used by the default Test Elements mode.
+     * Keeps subdivisions/keywords visible only when they match resource markers,
+     * are descendants of matched nodes, or have matched descendants.
+     */
+    private shouldIncludeInResourceOnlyMode(
+        testElementData: TestElementData,
+        inheritedMatch: boolean,
+        validChildrenCount: number
+    ): boolean {
+        if (
+            testElementData.testElementType === TestElementType.Subdivision &&
+            !testElementData.directRegexMatch &&
+            inheritedMatch &&
+            validChildrenCount === 0
+        ) {
+            return false;
+        }
+
+        return testElementData.directRegexMatch || inheritedMatch || validChildrenCount > 0;
     }
 
     /**
@@ -410,7 +474,12 @@ export class TestElementsDataProvider {
             const isSubdivision = node.testElementType === TestElementType.Subdivision;
             const isResource = node.directRegexMatch;
 
+            if (isSubdivision) {
+                node.hasResourceDescendant = hasResourceDescendant;
+            }
+
             if (isSubdivision && isResource) {
+                node.hasResourceDescendant = true;
                 return true;
             }
 
@@ -575,6 +644,21 @@ export class TestElementsDataProvider {
      * @param tovKey Optional TOV key to clear cache for. If not provided, clears all cache.
      */
     public clearCache(tovKey?: string): void {
+        if (tovKey) {
+            this.elementsCache.clear(tovKey);
+            this.rawElementsCache.clear(tovKey);
+        } else {
+            this.elementsCache.clear();
+            this.rawElementsCache.clear();
+        }
+    }
+
+    /**
+     * Clears only the filtered elements cache, keeping the raw data from the server.
+     * Useful when only the visibility configuration changes.
+     * @param tovKey Optional TOV key to clear cache for. If not provided, clears all filtered cache.
+     */
+    public clearFilteredCache(tovKey?: string): void {
         if (tovKey) {
             this.elementsCache.clear(tovKey);
         } else {
