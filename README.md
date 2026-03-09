@@ -5,7 +5,7 @@ The **TestBench Extension** enables seamless synchronization between [TestBench]
 ## Key Features
 
 - **Project Navigation**: Browse TestBench projects, including Subdivisions, keywords, and Test Theme Trees
-- **Keyword Synchronization**: Bidirectionally synchronize Robot Framework keywords with keywords in TestBench
+- **Keyword Synchronization**: Bidirectionally synchronize Robot Framework keywords with TestBench keywords
 - **Test Generation**: Automatically generate Robot Framework test suites from TestBench test case sets
 - **Result Import**: Upload Robot Framework execution results directly back to TestBench
 
@@ -35,7 +35,7 @@ The following extensions are automatically installed as dependencies when you in
 ### Link a TestBench Project to the Workspace/Folder Opened in VS Code
 
 A workspace or folder in VS Code must always be linked to a specific Test Object Version in TestBench. Only after creating such a link you will be able to use all features of the extension, including the synchronization of Robot Framework keywords.
-To link a TestBench Project to the opened workspace/folder, simply right-click on the desired Test Object Version in the Projects view and select "Set as Active TOV".
+To link a TestBench Project to the currently opened workspace/folder, simply right-click on the desired Test Object Version in the Projects view and select "Set as Active TOV".
 
 ![Link VS Code Workspace to Test Object Version](userGuideImages/link_tov.gif)
 
@@ -43,9 +43,9 @@ To link a TestBench Project to the opened workspace/folder, simply right-click o
 
 For a TestBench Subdivision to be visible in the TestBench extension, the Subdivision name must end with the suffix `[Robot-Resource]`. Subdivisions that do not follow this naming convention are ignored by the extension.
 
-![Edit Subdivision Suffix to display them in the extension](userGuideImages/subdivision_suffix.png)
+![Edit Subdivision Suffix to display it in the extension](userGuideImages/subdivision_suffix.png)
 
-To create a Robot Framework resource file from a TestBench Subdivision, simply hover over the corresponding Subdivision in the `Test Elements` view and click the `Create Resource` button. Afterwards, you can use the test elements view of the extension to navigate between keywords and resource files.
+To create a Robot Framework resource file from a TestBench Subdivision, simply hover over the corresponding Subdivision in the `Test Elements` view and click the `Create Resource` button. Afterwards, you can use the `Test Elements` view of the extension to navigate between keywords and resource files.
 The path where the resource file is created can be configured in the extension settings.
 
 ![Create Resource from TestBench Subdivision](userGuideImages/create_resource.gif)
@@ -81,22 +81,24 @@ Auto Auswählen
 
 As shown in the example above, each keyword that is synchronized with TestBench must have a tag with the format `tb:uid:<Keyword-UID>` where `<Keyword-UID>` is the UID of the corresponding TestBench keyword.
 
-With the required metadata in place, you can now use the CodeLens actions to push or pull keywords between VS Code and TestBench. You can also use the code lens at the top of the file to push or pull all keywords in the file at once.
+With the required metadata in place, you can now use the CodeLens actions to push or pull keywords between VS Code and TestBench. You can also use the CodeLens at the top of the file to push or pull all keywords in the file at once.
 
 ![Synchronize Robot Framework Keywords with TestBench](userGuideImages/sync_keywords.gif)
 
 If there is no uid tag in a keyword, the CodeLens action will allow you to **create** a new keyword in TestBench with the specified name and interface.
 
-### Generate Robot Framework Tests from TestBench Testcases
+### Generate Robot Framework Tests from TestBench Test Cases
 
-After using the Robot Framework keywords within TestBench Testcases to specify the test logic, you can generate Robot Framework test suites from the Testcases defined in TestBench.
-The generated Robot Framework test suites will be created in your workspace/folder and can afterwards be executed or debugged. To generate Robot Framework tests, simply hover over the desired Testcase in the `Test Themes` view and click the `Generate Robot Framework Test Suites` button. The path where the test suites are created and the format of the tests can be configured in the extension settings. Please note that depending on which test cycle or test object version is opened in the extension, different testcases will be generated.
+After using t
+
+he Robot Framework keywords within TestBench test cases to specify the test logic, you can generate Robot Framework test suites from the test cases defined in TestBench.
+The generated Robot Framework test suites will be created in your workspace/folder and can then be executed or debugged. To generate Robot Framework tests, simply hover over the desired test case in the `Test Themes` view and click the `Generate Robot Framework Test Suites` button. The path where the test suites are created and the format of the tests can be configured in the extension settings. Please note that depending on which test cycle or Test Object Version is opened in the extension, different test cases will be generated.
 
 ![Generate Robot Framework Tests](userGuideImages/generate_tests.png)
 
 ### Upload Execution Results Back to TestBench
 
-After executing the generated Robot Framework test suites, you can import the execution results back to TestBench. To do so, simply hover over the desired Testcase in the `Test Themes` view and click the `Upload Execution Results To TestBench` button. The extension will then look for the corresponding Robot Framework output files in the configured output directory and import the results back to TestBench. Please note that execution results can only be imported if the test suites have been generated from a Test Cycle in TestBench (not a Test Object Version).
+After executing the generated Robot Framework test suites, you can import the execution results back to TestBench. To do so, simply hover over the desired test case in the `Test Themes` view and click the `Upload Execution Results To TestBench` button. The extension will then look for the corresponding Robot Framework output files in the configured output directory and import the results back to TestBench. Please note that execution results can only be imported if the test suites have been generated from a Test Cycle in TestBench (not a Test Object Version).
 
 ![Upload Execution Results to TestBench](userGuideImages/upload_results.png)
 
@@ -107,7 +109,7 @@ To make the VS Code extension trust a custom or self-signed certificate from you
 ### How to set it:
 
 - Obtain the public certificate file (.pem) from your TestBench server.
-- In the extension settings, set Certificate Path.
+- In the extension settings, set the Certificate Path.
 
 <!-- ## Documentation
 
