@@ -89,9 +89,7 @@ If there is no uid tag in a keyword, the CodeLens action will allow you to **cre
 
 ### Generate Robot Framework Tests from TestBench Test Cases
 
-After using t
-
-he Robot Framework keywords within TestBench test cases to specify the test logic, you can generate Robot Framework test suites from the test cases defined in TestBench.
+After using the Robot Framework keywords within TestBench test cases to specify the test logic, you can generate Robot Framework test suites from the test cases defined in TestBench.
 The generated Robot Framework test suites will be created in your workspace/folder and can then be executed or debugged. To generate Robot Framework tests, simply hover over the desired test case in the `Test Themes` view and click the `Generate Robot Framework Test Suites` button. The path where the test suites are created and the format of the tests can be configured in the extension settings. Please note that depending on which test cycle or Test Object Version is opened in the extension, different test cases will be generated.
 
 ![Generate Robot Framework Tests](userGuideImages/generate_tests.png)
