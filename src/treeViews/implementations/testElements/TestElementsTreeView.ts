@@ -213,9 +213,11 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * Updates parent marking flags for all subdivision items in the tree.
      * This is called after file system changes to ensure parent markings are accurate.
      * Parents are only marked if all their child resources are locally available.
+     * @param items Optional explicit item list to use instead of this.rootItems.
      */
-    private async updateAllParentMarkings(): Promise<void> {
-        if (!ENABLE_PARENT_MARKING || !this.rootItems || this.rootItems.length === 0) {
+    private async updateAllParentMarkings(items?: TestElementsTreeItem[]): Promise<void> {
+        const targetItems = items || this.rootItems;
+        if (!ENABLE_PARENT_MARKING || !targetItems || targetItems.length === 0) {
             return;
         }
 
@@ -231,7 +233,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                     }
                 }
             };
-            collectSubdivisions(this.rootItems);
+            collectSubdivisions(targetItems);
 
             for (const item of subdivisionItems) {
                 // Only non-resource folders (virtual folders) need the hasLocalChildren flag
@@ -254,7 +256,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 return;
             }
             await this.updateSubdivisionIcons(this.rootItems, false);
-            this._onDidChangeTreeData.fire(undefined);
         } catch (error) {
             this.logger.error("[TestElementsTreeView] Error refreshing resource availability from workspace:", error);
         }
@@ -881,13 +882,26 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      */
     private async runPostFetchAvailabilityUpdates(rootItems: TestElementsTreeItem[]): Promise<void> {
         try {
+            // If rootItems have been replaced by a newer load, skip old updates
+            if (this.rootItems !== rootItems) {
+                return;
+            }
             await this.updateSubdivisionIcons(rootItems, true);
+            if (this.rootItems !== rootItems) {
+                return;
+            }
             await this.updateResourceSubdivisionAvailability(rootItems);
-            await this.updateAllParentMarkings();
+            if (this.rootItems !== rootItems) {
+                return;
+            }
+            await this.updateAllParentMarkings(rootItems);
         } catch (error) {
             this.logger.error("[TestElementsTreeView] Error during post-fetch availability updates:", error);
         } finally {
-            this._onDidChangeTreeData.fire(undefined);
+            // Only refresh if this is still the current data
+            if (this.rootItems === rootItems) {
+                this._onDidChangeTreeData.fire(undefined);
+            }
         }
     }
 
