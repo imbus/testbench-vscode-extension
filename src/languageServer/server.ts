@@ -1308,6 +1308,37 @@ export async function waitForLanguageServerReady(
 }
 
 /**
+ * Ensures the language server is ready, starting it if necessary.
+ * Checks language server status and configuration, starts and waits for readiness if needed.
+ * Used when an operation needs to call LS commands.
+ *
+ * @param timeoutMs Maximum time to wait for LS to be ready
+ * @param checkIntervalMs Interval between readiness checks
+ * @returns True if language server is ready, false if it couldn't be started or config is missing
+ */
+export async function ensureLanguageServerReady(
+    timeoutMs: number = 5000,
+    checkIntervalMs: number = 100
+): Promise<boolean> {
+    if (isLanguageServerRunning()) {
+        return true;
+    }
+
+    const cfgExists = await hasLsConfig();
+    if (!cfgExists) {
+        return false;
+    }
+
+    try {
+        await updateOrRestartLS();
+        await waitForLanguageServerReady(timeoutMs, checkIntervalMs);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
  * Extracts project and TOV names from different tree item types (projects or test theme tree items),
  * retrieves language server parameters and initializes or updates the language server.
  *

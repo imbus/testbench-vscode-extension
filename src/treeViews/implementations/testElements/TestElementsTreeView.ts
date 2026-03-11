@@ -16,9 +16,10 @@ import { treeViews } from "../../../extension";
 import { ClickHandler } from "../../core/ClickHandler";
 import {
     findKeywordPositionInResourceFile,
+    ensureLanguageServerReady,
     isLanguageServerRunning,
-    waitForLanguageServerReady,
-    updateOrRestartLS
+    updateOrRestartLS,
+    waitForLanguageServerReady
 } from "../../../languageServer/server";
 import { hasLsConfig } from "../../../languageServer/lsConfig";
 import { getExtensionSetting } from "../../../configuration";
@@ -274,28 +275,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         }
     }
 
-    /**
-     * Ensure Language Server readiness for availability/icon checks.
-     */
-    private async ensureLanguageServerReadyForAvailabilityChecks(): Promise<void> {
-        if (isLanguageServerRunning()) {
-            return;
-        }
-
-        const cfgExists = await hasLsConfig();
-        if (!cfgExists) {
-            this.logger.trace("[TestElementsTreeView] No LS config present; proceeding with availability checks.");
-            return;
-        }
-
-        try {
-            await updateOrRestartLS();
-            await waitForLanguageServerReady(5000, 100);
-        } catch {
-            this.logger.trace("[TestElementsTreeView] LS not ready, proceeding with availability checks.");
-        }
-    }
-
     private isResourceSubdivision(item: TestElementsTreeItem): boolean {
         if (item.data.testElementType !== TestElementType.Subdivision || item.data.isVirtual) {
             return false;
@@ -341,7 +320,12 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             updateParentMarkingOnAvailableResource: boolean;
         }
     ): Promise<void> {
-        await this.ensureLanguageServerReadyForAvailabilityChecks();
+        const lsReady = await ensureLanguageServerReady();
+        if (!lsReady) {
+            this.logger.trace(
+                "[TestElementsTreeView] Language server not available, proceeding with availability checks."
+            );
+        }
 
         // Process file checks in batches to yield to UI thread
         const BATCH_SIZE = 20;
