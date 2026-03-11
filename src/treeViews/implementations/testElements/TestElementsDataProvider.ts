@@ -358,6 +358,12 @@ export class TestElementsDataProvider {
         let lsCommandUnavailable = false;
         if (resourceDirectoryMarker) {
             lsCommandUnavailable = !(await ensureLanguageServerReady());
+            if (lsCommandUnavailable) {
+                this.logger.warn(
+                    "[TestElementsDataProvider] Language server not ready. " +
+                        "Marking ancestor folders of resources as virtual."
+                );
+            }
         }
 
         /**
@@ -535,7 +541,8 @@ export class TestElementsDataProvider {
                     return `${specificKey.serial}_${raw.uniqueID}`;
                 }
                 this.logger.warn(
-                    `[TestElementsDataProvider] Test element tree item with UID ${raw.uniqueID} and type ${elementType} is missing specific key serial.`
+                    `[TestElementsDataProvider] Cannot generate composite ID for element "${raw.name}" (type: ${elementType}): ` +
+                        `uniqueID=${raw.uniqueID || "<empty>"}, ${keyField}.serial=${specificKey?.serial || "<empty>"}.`
                 );
                 return raw.uniqueID || `fallback_${Date.now()}_${Math.random()}`;
             }
@@ -546,7 +553,8 @@ export class TestElementsDataProvider {
                     return `${keywordKey.serial}_${raw.uniqueID}`;
                 }
                 this.logger.warn(
-                    `[TestElementsDataProvider] Test element tree item with UID ${raw.uniqueID} and type ${elementType} is missing specific key serial.`
+                    `[TestElementsDataProvider] Cannot generate composite ID for element "${raw.name}" (type: ${elementType}): ` +
+                        `uniqueID=${raw.uniqueID || "<empty>"}, keyword key serial=${keywordKey?.serial || "<empty>"}.`
                 );
                 return raw.uniqueID || `fallback_${Date.now()}_${Math.random()}`;
             }

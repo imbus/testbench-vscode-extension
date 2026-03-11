@@ -1168,6 +1168,7 @@ export function configureLanguageServerIntegration(context: vscode.ExtensionCont
  * Updates or restarts the language server based on testbench/ls.config.json file
  * @param projectName the name of the project to update or restart the language server for.
  * @param tovName the name of the TOV to update or restart the language server for.
+ * @returns true if the language server was updated or restarted, false otherwise (e.g. if config is missing/invalid or update not needed).
  */
 export async function updateOrRestartLS(): Promise<boolean> {
     if (!getConnection()) {
@@ -1330,10 +1331,14 @@ export async function ensureLanguageServerReady(
     }
 
     try {
-        await updateOrRestartLS();
+        const lsUpdatedOrStarted = await updateOrRestartLS();
+        if (!lsUpdatedOrStarted) {
+            return false;
+        }
         await waitForLanguageServerReady(timeoutMs, checkIntervalMs);
         return true;
-    } catch {
+    } catch (error) {
+        logger.trace("[server] ensureLanguageServerReady failed:", error);
         return false;
     }
 }

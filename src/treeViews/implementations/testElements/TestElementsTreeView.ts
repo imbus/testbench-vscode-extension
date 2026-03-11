@@ -382,7 +382,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      */
     private async _handleResourceOperation(config: ResourceOperationConfig): Promise<void> {
         try {
-            await this.ensureLanguageServerReady();
+            await this.requireLanguageServerWithProgress();
 
             const resourcePath = await this.resolveResourcePathForTreeItem(config.targetItem, config.errorMessages);
             if (!resourcePath) {
@@ -415,10 +415,11 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Ensures the language server is running and ready for resource operations.
+     * Ensures the language server is running and ready for user initiated resource operations.
+     * Shows a cancellable progress notification and throws on failure .
      * @throws Error if language server configuration is missing
      */
-    private async ensureLanguageServerReady(): Promise<void> {
+    private async requireLanguageServerWithProgress(): Promise<void> {
         if (isLanguageServerRunning()) {
             return;
         }
