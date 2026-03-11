@@ -199,6 +199,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             try {
                 await this.refreshResourceAvailabilityFromWorkspace();
                 await this.updateAllParentMarkings();
+                this._onDidChangeTreeData.fire(undefined);
             } catch (error) {
                 this.logger.error(
                     "[TestElementsTreeView] Error during debounced resource availability refresh:",
@@ -212,9 +213,11 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * Updates parent marking flags for all subdivision items in the tree.
      * This is called after file system changes to ensure parent markings are accurate.
      * Parents are only marked if all their child resources are locally available.
+     * @param items Optional explicit item list to use instead of this.rootItems.
      */
-    private async updateAllParentMarkings(): Promise<void> {
-        if (!ENABLE_PARENT_MARKING || !this.rootItems || this.rootItems.length === 0) {
+    private async updateAllParentMarkings(items?: TestElementsTreeItem[]): Promise<void> {
+        const targetItems = items || this.rootItems;
+        if (!ENABLE_PARENT_MARKING || !targetItems || targetItems.length === 0) {
             return;
         }
 
@@ -230,7 +233,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                     }
                 }
             };
-            collectSubdivisions(this.rootItems);
+            collectSubdivisions(targetItems);
 
             for (const item of subdivisionItems) {
                 // Only non-resource folders (virtual folders) need the hasLocalChildren flag
@@ -253,7 +256,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 return;
             }
             await this.updateSubdivisionIcons(this.rootItems, false);
-            this._onDidChangeTreeData.fire(undefined);
         } catch (error) {
             this.logger.error("[TestElementsTreeView] Error refreshing resource availability from workspace:", error);
         }
@@ -269,6 +271,124 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         while (parent) {
             this._onDidChangeTreeData.fire(parent);
             parent = parent.parent as TestElementsTreeItem | null;
+        }
+    }
+
+    /**
+     * Ensure Language Server readiness for availability/icon checks.
+     */
+    private async ensureLanguageServerReadyForAvailabilityChecks(): Promise<void> {
+        if (isLanguageServerRunning()) {
+            return;
+        }
+
+        const cfgExists = await hasLsConfig();
+        if (!cfgExists) {
+            this.logger.trace("[TestElementsTreeView] No LS config present; proceeding with availability checks.");
+            return;
+        }
+
+        try {
+            await updateOrRestartLS();
+            await waitForLanguageServerReady(5000, 100);
+        } catch {
+            this.logger.trace("[TestElementsTreeView] LS not ready, proceeding with availability checks.");
+        }
+    }
+
+    private isResourceSubdivision(item: TestElementsTreeItem): boolean {
+        if (item.data.testElementType !== TestElementType.Subdivision || item.data.isVirtual) {
+            return false;
+        }
+        return ResourceFileService.hasResourceMarker(item.data.hierarchicalName || item.data.displayName || "");
+    }
+
+    private collectSubdivisionItems(
+        items: TestElementsTreeItem[],
+        options: {
+            onlyVisible: boolean;
+            filter?: (item: TestElementsTreeItem) => boolean;
+        }
+    ): TestElementsTreeItem[] {
+        const subdivisionItems: TestElementsTreeItem[] = [];
+        const { onlyVisible, filter } = options;
+
+        const collect = (currentItems: TestElementsTreeItem[]) => {
+            for (const item of currentItems) {
+                const isExpanded = item.collapsibleState === vscode.TreeItemCollapsibleState.Expanded;
+                const shouldRecurse = !onlyVisible || isExpanded;
+
+                if (item.data.testElementType === TestElementType.Subdivision) {
+                    const passesVisibility = !onlyVisible || isExpanded;
+                    const passesFilter = filter ? filter(item) : true;
+                    if (passesVisibility && passesFilter) {
+                        subdivisionItems.push(item);
+                    }
+                }
+
+                if (item.children && shouldRecurse) {
+                    collect(item.children as TestElementsTreeItem[]);
+                }
+            }
+        };
+        collect(items);
+        return subdivisionItems;
+    }
+
+    private async updateSubdivisionAvailability(
+        subdivisionItems: TestElementsTreeItem[],
+        options: {
+            updateParentMarkingOnAvailableResource: boolean;
+        }
+    ): Promise<void> {
+        await this.ensureLanguageServerReadyForAvailabilityChecks();
+
+        // Process file checks in batches to yield to UI thread
+        const BATCH_SIZE = 20;
+        for (let i = 0; i < subdivisionItems.length; i += BATCH_SIZE) {
+            const batch = subdivisionItems.slice(i, i + BATCH_SIZE);
+            await Promise.all(
+                batch.map(async (subdivisionItem) => {
+                    try {
+                        if (subdivisionItem.data.isVirtual) {
+                            return;
+                        }
+
+                        const hierarchicalName = subdivisionItem.data.hierarchicalName;
+                        if (!hierarchicalName) {
+                            return;
+                        }
+
+                        const isResourceFile = ResourceFileService.hasResourceMarker(hierarchicalName);
+                        const cleanName = this.removeResourceMarkersFromHierarchicalName(hierarchicalName).trim();
+                        let resourcePath = await this.resourceFileService.constructAbsolutePath(cleanName);
+
+                        if (!resourcePath) {
+                            return;
+                        }
+
+                        if (isResourceFile && !resourcePath.endsWith(".resource")) {
+                            resourcePath += ".resource";
+                        }
+
+                        const exists = await this.resourceFileService.pathExists(resourcePath);
+                        subdivisionItem.updateLocalAvailability(exists, resourcePath);
+
+                        if (options.updateParentMarkingOnAvailableResource && exists && isResourceFile) {
+                            await this.updateParentSubdivisionMarking(subdivisionItem);
+                        }
+                    } catch (error) {
+                        this.logger.error(
+                            `[TestElementsTreeView] Error updating subdivision availability for tree item ${subdivisionItem.label}:`,
+                            error
+                        );
+                    }
+                })
+            );
+
+            if (i + BATCH_SIZE < subdivisionItems.length) {
+                await new Promise((resolve) => setImmediate(resolve));
+            }
         }
     }
 
@@ -556,9 +676,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this.stateManager.setLoading(false);
             (this as any).updateTreeViewMessage();
 
+            // Publish new data immediately, then update availability/marking in the background.
             this._onDidChangeTreeData.fire(undefined);
-            // Only check visible items initially
-            await this.updateSubdivisionIcons(newRootItems, true);
+            void this.runPostFetchAvailabilityUpdates(newRootItems);
 
             const loadTime = Date.now() - startTime;
             this.logger.debug(
@@ -645,6 +765,10 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             // Only check icons for visible/expanded items initially for better performance
             // Remaining items will be checked when expanded
             await this.updateSubdivisionIcons(this.rootItems, true);
+
+            // Compute availability for all resource subdivisions and recompute parent markings
+            await this.updateResourceSubdivisionAvailability(this.rootItems);
+            await this.updateAllParentMarkings();
 
             // Set the last data fetch timestamp to prevent infinite loading
             // This is important even for empty results to prevent the tree from continuously trying to load data
@@ -739,10 +863,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this.rootItems = rootTestElementItems;
             (this as any)._lastDataFetch = Date.now();
 
-            // Async icon updates for visible items only
-            this.updateSubdivisionIcons(rootTestElementItems, true).then(() => {
-                this._onDidChangeTreeData.fire(undefined);
-            });
+            // Run availability/icon updates in the background
+            void this.runPostFetchAvailabilityUpdates(rootTestElementItems);
 
             return rootTestElementItems;
         } catch (error) {
@@ -752,87 +874,64 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
+     * Post-fetch background updates:
+     * - refresh visible subdivision availability
+     * - compute availability for all resource subdivisions (even under collapsed branches)
+     * - recompute parent markings
+     * Always triggers a final tree refresh.
+     */
+    private async runPostFetchAvailabilityUpdates(rootItems: TestElementsTreeItem[]): Promise<void> {
+        try {
+            // If rootItems have been replaced by a newer load, skip old updates
+            if (this.rootItems !== rootItems) {
+                return;
+            }
+            await this.updateSubdivisionIcons(rootItems, true);
+            if (this.rootItems !== rootItems) {
+                return;
+            }
+            await this.updateResourceSubdivisionAvailability(rootItems);
+            if (this.rootItems !== rootItems) {
+                return;
+            }
+            await this.updateAllParentMarkings(rootItems);
+        } catch (error) {
+            this.logger.error("[TestElementsTreeView] Error during post-fetch availability updates:", error);
+        } finally {
+            // Only refresh if this is still the current data
+            if (this.rootItems === rootItems) {
+                this._onDidChangeTreeData.fire(undefined);
+            }
+        }
+    }
+
+    /**
+     * Makes sure local availability is computed for all resource subdivisions in the tree.
+     * This is required so parent marking/icon state is correct even when resource subdivisions
+     * are under collapsed branches (i.e., not "visible" yet).
+     */
+    private async updateResourceSubdivisionAvailability(items: TestElementsTreeItem[]): Promise<void> {
+        const resourceSubdivisionItems = this.collectSubdivisionItems(items, {
+            onlyVisible: false,
+            filter: (item) => this.isResourceSubdivision(item)
+        });
+        await this.updateSubdivisionAvailability(resourceSubdivisionItems, {
+            // Parent marking is recomputed in a separate full pass (updateAllParentMarkings)
+            updateParentMarkingOnAvailableResource: false
+        });
+    }
+
+    /**
      * Updates all subdivision icons by checking for their existence on the local file system
      * @param items Array of tree items to process
      * @param onlyVisible If true, only checks visible/expanded items to save performance
      * @returns Promise that resolves when all icon updates are complete
      */
     private async updateSubdivisionIcons(items: TestElementsTreeItem[], onlyVisible: boolean = false): Promise<void> {
-        // The python regex processing is done in language server via testbench_ls.get_resource_directory_subdivision_index command.
-        // Language server initialization should be awaited here to prevent error logs caused by this command call.
-        if (!isLanguageServerRunning()) {
-            const cfgExists = await hasLsConfig();
-            if (cfgExists) {
-                try {
-                    await updateOrRestartLS();
-                    await waitForLanguageServerReady(5000, 100);
-                } catch {
-                    this.logger.trace("[TestElementsTreeView] LS not ready, proceeding with icon updates.");
-                }
-            } else {
-                this.logger.trace("[TestElementsTreeView] No LS config present; proceeding with icon updates.");
-            }
-        }
-
-        const subdivisionItems: TestElementsTreeItem[] = [];
-        const collectSubdivisions = (currentItems: TestElementsTreeItem[], checkExpanded: boolean) => {
-            for (const item of currentItems) {
-                if (item.data.testElementType === TestElementType.Subdivision) {
-                    if (!checkExpanded || item.collapsibleState === vscode.TreeItemCollapsibleState.Expanded) {
-                        subdivisionItems.push(item);
-                    }
-                }
-                if (
-                    item.children &&
-                    (!checkExpanded || item.collapsibleState === vscode.TreeItemCollapsibleState.Expanded)
-                ) {
-                    collectSubdivisions(item.children as TestElementsTreeItem[], checkExpanded);
-                }
-            }
-        };
-        collectSubdivisions(items, onlyVisible);
-
-        // Process file checks in batches to yield to UI thread
-        const BATCH_SIZE = 20;
-        for (let i = 0; i < subdivisionItems.length; i += BATCH_SIZE) {
-            const batch = subdivisionItems.slice(i, i + BATCH_SIZE);
-            await Promise.all(
-                batch.map(async (subdivisionItem) => {
-                    try {
-                        if (subdivisionItem.data.isVirtual) {
-                            return;
-                        }
-                        const hierarchicalName = subdivisionItem.data.hierarchicalName;
-                        if (hierarchicalName) {
-                            const isResourceFile = ResourceFileService.hasResourceMarker(hierarchicalName);
-                            const cleanName = this.removeResourceMarkersFromHierarchicalName(hierarchicalName).trim();
-                            let resourcePath = await this.resourceFileService.constructAbsolutePath(cleanName);
-
-                            if (resourcePath) {
-                                if (isResourceFile && !resourcePath.endsWith(".resource")) {
-                                    resourcePath += ".resource";
-                                }
-                                const resourcePathExists = await this.resourceFileService.pathExists(resourcePath);
-                                subdivisionItem.updateLocalAvailability(resourcePathExists, resourcePath);
-
-                                if (resourcePathExists) {
-                                    await this.updateParentSubdivisionMarking(subdivisionItem);
-                                }
-                            }
-                        }
-                    } catch (error) {
-                        this.logger.error(
-                            `[TestElementsTreeView] Error updating subdivision icon for tree item ${subdivisionItem.label}:`,
-                            error
-                        );
-                    }
-                })
-            );
-            // Yield to UI thread between batches to keep UI responsive
-            if (i + BATCH_SIZE < subdivisionItems.length) {
-                await new Promise((resolve) => setImmediate(resolve));
-            }
-        }
+        const subdivisionItems = this.collectSubdivisionItems(items, { onlyVisible });
+        await this.updateSubdivisionAvailability(subdivisionItems, {
+            updateParentMarkingOnAvailableResource: true
+        });
     }
 
     /**
