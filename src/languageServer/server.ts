@@ -1168,6 +1168,7 @@ export function configureLanguageServerIntegration(context: vscode.ExtensionCont
  * Updates or restarts the language server based on testbench/ls.config.json file
  * @param projectName the name of the project to update or restart the language server for.
  * @param tovName the name of the TOV to update or restart the language server for.
+ * @returns true if the language server was updated or restarted, false otherwise (e.g. if config is missing/invalid or update not needed).
  */
 export async function updateOrRestartLS(): Promise<boolean> {
     if (!getConnection()) {
@@ -1305,6 +1306,41 @@ export async function waitForLanguageServerReady(
     }
 
     throw new Error(`Language server did not become ready within ${timeoutMs}ms`);
+}
+
+/**
+ * Ensures the language server is ready, starting it if necessary.
+ * Checks language server status and configuration, starts and waits for readiness if needed.
+ * Used when an operation needs to call LS commands.
+ *
+ * @param timeoutMs Maximum time to wait for LS to be ready
+ * @param checkIntervalMs Interval between readiness checks
+ * @returns True if language server is ready, false if it couldn't be started or config is missing
+ */
+export async function ensureLanguageServerReady(
+    timeoutMs: number = 5000,
+    checkIntervalMs: number = 100
+): Promise<boolean> {
+    if (isLanguageServerRunning()) {
+        return true;
+    }
+
+    const cfgExists = await hasLsConfig();
+    if (!cfgExists) {
+        return false;
+    }
+
+    try {
+        const lsUpdatedOrStarted = await updateOrRestartLS();
+        if (!lsUpdatedOrStarted) {
+            return false;
+        }
+        await waitForLanguageServerReady(timeoutMs, checkIntervalMs);
+        return true;
+    } catch (error) {
+        logger.trace("[server] ensureLanguageServerReady failed:", error);
+        return false;
+    }
 }
 
 /**
