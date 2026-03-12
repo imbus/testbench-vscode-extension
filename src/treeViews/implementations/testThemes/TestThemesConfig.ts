@@ -109,7 +109,7 @@ export const testThemesConfig: TreeViewConfig = {
 
     ui: {
         emptyMessage: "No test themes to display.",
-        loadingMessage: "Loading test themes view items...",
+        loadingMessage: "Loading test themes...",
         errorMessage: "Failed to load test themes",
         showTooltips: true,
         tooltipFormat: "detailed"
