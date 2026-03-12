@@ -5,6 +5,7 @@
 
 import * as assert from "assert";
 import * as vscode from "vscode";
+import * as sinon from "sinon";
 import { TreeViewBase } from "../../../treeViews/core/TreeViewBase";
 import { TreeItemBase } from "../../../treeViews/core/TreeItemBase";
 import { TreeViewConfig } from "../../../treeViews/core/TreeViewConfig";
@@ -625,6 +626,78 @@ suite("TreeViewBase", function () {
             treeView.clearTree();
 
             assert.ok(clearSpy.called);
+        });
+
+        test("should prepare context switch loading with UI state preserved by default", async () => {
+            await treeView.initialize();
+
+            const mockItem = new TestTreeItem(
+                "TestLabel",
+                "Description",
+                "testContextValue",
+                vscode.TreeItemCollapsibleState.None,
+                mockContext
+            );
+            treeView.setRootItems([mockItem]);
+
+            const stateManager = treeView.getProtectedStateManager();
+            stateManager.setError(new Error("existing error"));
+
+            const clearTreeSpy = testEnv.sandbox.spy(treeView, "clearTree");
+            const clearStateSpy = testEnv.sandbox.spy(stateManager, "clear");
+            const setStateSpy = testEnv.sandbox.spy(stateManager, "setState");
+
+            treeView.prepareForContextSwitchLoading();
+
+            assert.ok(clearTreeSpy.notCalled, "clearTree should not be called when preserving UI state");
+            assert.ok(clearStateSpy.notCalled, "stateManager.clear should not be called when preserving UI state");
+            assert.strictEqual(treeView.getRootItemsArray().length, 0);
+            assert.strictEqual(stateManager.getState().loading, true);
+            assert.strictEqual(stateManager.getState().error, null);
+            // Verify single state transition for loading + error clear
+            assert.ok(
+                setStateSpy.calledWith(sinon.match({ error: null, loading: true })),
+                "Should set loading and clear error in a single setState call"
+            );
+        });
+
+        test("should prepare context switch loading with full clear when preserveUiState is false", async () => {
+            await treeView.initialize();
+
+            const mockItem = new TestTreeItem(
+                "Test",
+                "Description",
+                "test",
+                vscode.TreeItemCollapsibleState.None,
+                mockContext
+            );
+            treeView.setRootItems([mockItem]);
+
+            const stateManager = treeView.getProtectedStateManager();
+            const clearTreeSpy = testEnv.sandbox.spy(treeView, "clearTree");
+
+            treeView.prepareForContextSwitchLoading(false);
+
+            assert.ok(clearTreeSpy.calledOnce);
+            assert.strictEqual(treeView.getRootItemsArray().length, 0);
+            assert.strictEqual(stateManager.getState().loading, true);
+            assert.strictEqual(stateManager.getState().error, null);
+        });
+
+        test("should skip preparation if already in loading state with no items", async () => {
+            await treeView.initialize();
+
+            const stateManager = treeView.getProtectedStateManager();
+
+            // First call: triggers full preparation
+            treeView.prepareForContextSwitchLoading();
+            assert.strictEqual(stateManager.getState().loading, true);
+
+            const setStateSpy = testEnv.sandbox.spy(stateManager, "setState");
+
+            // Second call: should be a no-op since tree is already prepared
+            treeView.prepareForContextSwitchLoading();
+            assert.ok(setStateSpy.notCalled, "Should skip preparation when already in loading state with no items");
         });
     });
 

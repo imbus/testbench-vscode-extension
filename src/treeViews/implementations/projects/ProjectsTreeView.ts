@@ -4,7 +4,7 @@
  */
 
 import * as vscode from "vscode";
-import { TreeViewBase } from "../../core/TreeViewBase";
+import { RefreshOptions, TreeViewBase } from "../../core/TreeViewBase";
 import { TreeItemBase } from "../../core/TreeItemBase";
 import { ProjectData, ProjectsTreeItem } from "./ProjectsTreeItem";
 import { TreeViewConfig } from "../../core/TreeViewConfig";
@@ -398,6 +398,10 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
             return null;
         }
 
+        // Clear old tree items before switching views
+        treeViews.testThemesTree.prepareForContextSwitchLoading();
+        treeViews.testElementsTree.prepareForContextSwitchLoading();
+
         // Display tree views first and then load data for responsive UI
         await displayTestThemeTreeView();
         await displayTestElementsTreeView();
@@ -678,12 +682,16 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
      * @param item Optional specific item to refresh
      * @param options Optional refresh options
      */
-    public override refresh(item?: ProjectsTreeItem, options?: { immediate?: boolean }): void {
+    public override refresh(item?: ProjectsTreeItem, options?: RefreshOptions): void {
         this.logger.debug(`[ProjectsTreeView] Refreshing projects tree view${item ? ` for item: ${item.label}` : ""}`);
 
         if (item) {
             super.refresh(item, options);
             return;
+        }
+
+        if (!options?.skipDataReload) {
+            this.stateManager.setState({ error: null, loading: true });
         }
 
         super.refresh(undefined, options);
