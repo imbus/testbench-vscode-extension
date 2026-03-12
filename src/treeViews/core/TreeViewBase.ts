@@ -592,7 +592,8 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
      * Prepares the tree for loading data for a new context by clearing currently shown tree items and
      * activating the loading state immediately.
      * Preserves UI state (expansion, marking, filtering) by default.
-     * @param preserveUiState When false, performs a full clear including module state. Defaults to true.
+     * @param preserveUiState When false, additionally clears cached data (items, rootItems)
+     * but preserves persistent module state (customRoot, expansion, marking, filtering).
      */
     public prepareForContextSwitchLoading(preserveUiState: boolean = true): void {
         // Skip if already prepared
