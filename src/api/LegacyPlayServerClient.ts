@@ -266,8 +266,7 @@ export class LegacyPlayServerClient {
     }
 
     /**
-     * Shows a user-facing warning for legacy API failures while clarifying that
-     * the current TestBench session remains active.
+     * Shows a user-facing warning for legacy API failures
      *
      * @param operationName The operation that failed (e.g., "test elements", "filters")
      */

@@ -1160,10 +1160,10 @@ export class PlayServerConnection {
  * Used to retry API calls in case of network errors. To disable retries for an API call, set maxRetries to 0.
  *
  * @template T - The type returned by the asynchronous function.
- * @param {Promise<T>} asyncFunction - The asynchronous function to execute.
+ * @param {() => Promise<T>} asyncFunction - The asynchronous function to execute.
  * @param {number} maxAllowedRetryCount - Maximum number of retry attempts (default is 3).
  * @param {number} delayMs - Delay in milliseconds between retries (default is 2000ms).
- * @param {boolean} shouldRetry - Optional predicate function that receives the error and returns whether to retry.
+ * @param {(error: any) => boolean} [shouldRetry] - Optional predicate function that receives the error and returns whether to retry.
  * @param {boolean} showProgressBar - Optional flag to control whether to show a VS Code progress bar (default is true).
  * @param {boolean} forceLogoutOnNetworkError - Whether to force a logout on network errors (default is true).
  * @returns {Promise<T>} A promise resolving to the function's return value.
