@@ -236,6 +236,14 @@ const handleOpenTOV = async (tovItem: ProjectsTreeItem) => {
 
     if (projectKey && tovKey && projectName && tovName) {
         await treeViews.saveUIContext("testThemes", { isCycle: false, projectKey, tovKey, projectName, tovName });
+
+        if (treeViews.testThemesTree) {
+            treeViews.testThemesTree.prepareForContextSwitchLoading();
+        }
+        if (treeViews.testElementsTree) {
+            treeViews.testElementsTree.prepareForContextSwitchLoading();
+        }
+
         await displayTestThemeTreeView();
         await displayTestElementsTreeView();
         await hideProjectManagementTreeView();
