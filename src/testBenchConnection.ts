@@ -1165,6 +1165,7 @@ export class PlayServerConnection {
  * @param {number} delayMs - Delay in milliseconds between retries (default is 2000ms).
  * @param {boolean} shouldRetry - Optional predicate function that receives the error and returns whether to retry.
  * @param {boolean} showProgressBar - Optional flag to control whether to show a VS Code progress bar (default is true).
+ * @param {boolean} forceLogoutOnNetworkError - Whether to force a logout on network errors (default is true).
  * @returns {Promise<T>} A promise resolving to the function's return value.
  * @throws The error from the last failed attempt if all retries fail.
  */
@@ -1173,7 +1174,8 @@ export async function withRetry<T>(
     maxAllowedRetryCount: number = 3,
     delayMs: number = 2000,
     shouldRetry?: (error: any) => boolean,
-    showProgressBar: boolean = true
+    showProgressBar: boolean = true,
+    forceLogoutOnNetworkError: boolean = true
 ): Promise<T> {
     let retryCount: number = 0;
 
@@ -1188,8 +1190,10 @@ export async function withRetry<T>(
             const status = error.response?.status;
             const isNetworkError = !error.response;
             const isAuthEndpoint = error.config?.url?.includes("/2/login/session");
+            const shouldForceLogoutForError =
+                !isAuthEndpoint && (status === 401 || status === 403 || (isNetworkError && forceLogoutOnNetworkError));
 
-            if (!isAuthEndpoint && (status === 401 || status === 403 || isNetworkError)) {
+            if (shouldForceLogoutForError) {
                 logger.warn(
                     `[testBenchConnection] Unrecoverable API error detected (status: ${status}, networkError: ${isNetworkError}). Forcing a local logout.`
                 );
