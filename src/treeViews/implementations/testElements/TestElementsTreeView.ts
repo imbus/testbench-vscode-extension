@@ -1337,7 +1337,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     public async goToKeywordResource(item: TestElementsTreeItem): Promise<void> {
         const parentResource = item.parent as TestElementsTreeItem;
         if (!parentResource) {
-            vscode.window.showErrorMessage(`Could not find the parent resource for keyword ${item.label}`);
+            vscode.window.showErrorMessage(`No resource is linked to keyword '${item.label}'.`);
             return;
         }
 
@@ -1366,7 +1366,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     public async createMissingParentResourceForKeyword(item: TestElementsTreeItem): Promise<void> {
         const parentResource = item.parent as TestElementsTreeItem;
         if (!parentResource) {
-            vscode.window.showErrorMessage(`Could not find the parent resource for keyword ${item.label}`);
+            vscode.window.showErrorMessage(`No resource is linked to keyword '${item.label}'.`);
             return;
         }
 
@@ -1381,7 +1381,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 noPath: "Cannot construct resource path: workspace location not found.",
                 noParent: "Cannot find parent resource for keyword.",
                 noUid: "Parent resource {label} has no UID.",
-                fileNotFound: "Parent resource file does not exist: {path}.",
+                fileNotFound: "Parent resource not found. Create it and try again.",
                 folderNotFound: "Parent resource folder does not exist: {path}."
             }
         });
@@ -1400,7 +1400,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         const parentResource = item.parent as TestElementsTreeItem;
         if (!parentResource) {
             this.logger.error(`[TestElementsTreeView] Could not find parent resource for keyword ${item.label}`);
-            vscode.window.showErrorMessage(`Could not find the parent resource for keyword ${item.label}`);
+            vscode.window.showErrorMessage(`No resource is linked to keyword '${item.label}'.`);
             return;
         }
         await this._handleResourceOperation({
