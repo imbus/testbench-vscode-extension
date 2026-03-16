@@ -4,7 +4,7 @@ The **TestBench Extension** enables seamless synchronization between [TestBench]
 
 ## Key Features
 
-- **Project Navigation**: Browse TestBench projects (Projects view), test themes (Test Themes view), and subdivisions/keywords (Test Elements view)
+- **Project Navigation**: Browse TestBench projects, including Subdivisions, keywords, and Test Theme Trees
 - **Keyword Synchronization**: Bidirectionally synchronize Robot Framework keywords with TestBench keywords
 - **Test Generation**: Automatically generate Robot Framework test suites from TestBench test case sets
 - **Result Import**: Upload Robot Framework execution results directly back to TestBench
@@ -14,7 +14,6 @@ The **TestBench Extension** enables seamless synchronization between [TestBench]
 - **Visual Studio Code** version 1.101.0 or higher
 - **Python** 3.10 or higher
 - **TestBench** 4.0 or higher
-- An open VS Code workspace or folder. Without one, the extension runs in read-only mode and features like test generation and importing results are disabled
 
 ### Required Extensions
 
@@ -36,7 +35,7 @@ The following extensions are automatically installed as dependencies when you in
 ### Link a TestBench Test Object Version (TOV) to the Workspace/Folder Opened in VS Code
 
 A workspace or folder in VS Code must be linked to a specific Test Object Version (TOV) in TestBench. Only after creating such a link will you be able to use all features of the extension, including the synchronization of Robot Framework keywords.
-To link the currently opened workspace/folder, right-click on the desired Test Object Version in the Projects view and select "Set as Active TOV". The active Project/TOV context is stored in your workspace under `.testbench/ls.config.json`.
+To link the currently opened workspace/folder, right-click on the desired Test Object Version in the Projects view and select "Set as Active TOV".
 
 ![Link VS Code Workspace to Test Object Version](userGuideImages/link_tov.gif)
 
@@ -67,7 +66,7 @@ My Keyword
     ⋮
 ```
 
-An example of a Robot Framework resource file with the required TestBench metadata header lines is shown below:
+An example of a Robot Framework resource file with the required TestBench metadata comments lines is shown below:
 
 ```robot
 tb:uid:itba-SD-9d23166fb5
@@ -110,9 +109,9 @@ To make the VS Code extension trust a custom or self-signed certificate from you
 - Obtain the public certificate file (.pem) from your TestBench server.
 - In the extension settings, set the Certificate Path.
 
-## Documentation
+<!--## Documentation
 
-For comprehensive documentation including detailed feature descriptions, configuration settings, and a troubleshooting guide, see the [User Guide](user-guide.md).
+For comprehensive documentation including detailed feature descriptions, configuration settings, and a troubleshooting guide, see the [User Guide](user-guide.md). -->
 
 ## License
 
