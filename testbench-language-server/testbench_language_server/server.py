@@ -168,18 +168,6 @@ class TestBenchLanguageServer(LanguageServer):
     def set_tov(self, tov: str):
         self.tov = tov
 
-    # def generate_ai_documentation(self, keyword: Keyword):
-    #     keyword_string = robot_model_to_string(keyword)
-    #     data = {
-    #         "keyword_code": keyword_string,
-    #         "language": "ENG",
-    #         "arguments_exist": True,
-    #         "return_value_exists": False,
-    #     }
-    #     url = f"{self.ai_server_address}/generate-rf-keyword-description"
-    #     response = requests.post(url, json=data)
-    #     return response.json().get("description", "No documentation found")
-
 
 testbench_ls = TestBenchLanguageServer()
 
