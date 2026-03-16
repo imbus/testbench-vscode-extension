@@ -665,7 +665,7 @@ def push_testbench_subdivision(ls: LanguageServer, kwargs):
         return
     rd = ResourceDocumentation(document.path)
     push_success = True
-    for keyword in vs_code_resource.keyword_section.body:
+    for keyword in reversed(vs_code_resource.keyword_section.body):
         if get_keyword_tags(keyword) and any(
             tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword))
         ):
