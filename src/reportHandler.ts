@@ -679,7 +679,7 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
             const testGenerationCancelledMessage: string =
                 "[reportHandler] Robot Framework test suite generation has been cancelled by user.";
             logger.debug(testGenerationCancelledMessage);
-            vscode.window.showInformationMessage(testGenerationCancelledMessage);
+            vscode.window.showInformationMessage("Robot Framework test generation has been cancelled");
             return false;
         } else {
             logger.error("[reportHandler] Error during Robot Framework test suite generation:", error);
