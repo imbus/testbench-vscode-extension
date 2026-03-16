@@ -240,7 +240,7 @@ def generate_test_suites(ls: LanguageServer, kwargs):
         json_input_report=pathlib.Path(kwargs.get("testbench_report")),
         robot_result_xml=pathlib.Path(kwargs.get("robot_result")),
         json_output_result=pathlib.Path(kwargs.get("output_directory")),
-        config={}
+        config={},
     )
 
 
@@ -284,7 +284,9 @@ def update_project(ls: LanguageServer, *args):
         document = testbench_ls.workspace.get_text_document(docum)
         diagnostics = get_context_diagnostics(testbench_ls, document)
         ls.text_document_publish_diagnostics(
-            PublishDiagnosticsParams(document.uri, diagnostics=diagnostics, version=document.version)
+            PublishDiagnosticsParams(
+                document.uri, diagnostics=diagnostics, version=document.version
+            )
         )
 
 
@@ -298,7 +300,9 @@ def update_tov(ls: LanguageServer, *args):
         document = testbench_ls.workspace.get_text_document(docum)
         diagnostics = get_context_diagnostics(testbench_ls, document)
         ls.text_document_publish_diagnostics(
-            PublishDiagnosticsParams(document.uri, diagnostics=diagnostics, version=document.version)
+            PublishDiagnosticsParams(
+                document.uri, diagnostics=diagnostics, version=document.version
+            )
         )
 
 
@@ -444,7 +448,9 @@ def show_testbench_diff(ls: LanguageServer, kwargs):
             )
             continue
         if not keyword_match:
-            tb_edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier_tb))
+            tb_edits.append(
+                new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier_tb)
+            )
         else:
             if get_keyword_tags(keyword_match) and any(
                 tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword_match))
@@ -469,10 +475,16 @@ def show_testbench_diff(ls: LanguageServer, kwargs):
         return
     testbench_content = robot_model_to_string(vscode_resource.file)
     # testbench_content = apply_text_edits(robot_model_to_string(vscode_resource.file), tb_edits)
-    vscode_content = apply_text_edits(robot_model_to_string(vscode_resource.file), tb_edits + vscode_edits)
+    vscode_content = apply_text_edits(
+        robot_model_to_string(vscode_resource.file), tb_edits + vscode_edits
+    )
     ls.protocol.notify(
         "testbench-language-server/display-diff",
-        {"path": document_uri, "virtualTestBenchContent": testbench_content, "virtualRobotContent": vscode_content},
+        {
+            "path": document_uri,
+            "virtualTestBenchContent": testbench_content,
+            "virtualRobotContent": vscode_content,
+        },
     )
 
 
@@ -541,13 +553,17 @@ def attempt_push_subdivision(ls: LanguageServer, *args):
                 )
                 continue
             if not keyword_match:
-                edits.append(new_keyword_edit(testbench_keyword, kw_section_start + 1, change_identifier))
+                edits.append(
+                    new_keyword_edit(testbench_keyword, kw_section_start + 1, change_identifier)
+                )
             else:
                 if get_keyword_tags(keyword_match) and any(
                     tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword_match))
                 ):
                     continue
-                edits.extend(create_keyword_edits(keyword_match, testbench_keyword, change_identifier))
+                edits.extend(
+                    create_keyword_edits(keyword_match, testbench_keyword, change_identifier)
+                )
     if vscode_resource and vscode_resource.keyword_section:
         for vscode_keyword in vscode_resource.keyword_section.body:
             if not isinstance(vscode_keyword, Keyword):
@@ -559,7 +575,6 @@ def attempt_push_subdivision(ls: LanguageServer, *args):
             ):
                 continue
             edits.append(new_keyword_edit(vscode_keyword, kw_section_start + 1, change_identifier))
-            
 
     if not edits:
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
@@ -657,7 +672,9 @@ def push_testbench_subdivision(ls: LanguageServer, kwargs):
             continue
         keyword_uid = get_kw_uid(keyword)
         if not keyword_uid:
-            create_testbench_keyword(ls, {"document_uri": document_uri, "keyword_name": get_kw_name(keyword)})
+            create_testbench_keyword(
+                ls, {"document_uri": document_uri, "keyword_name": get_kw_name(keyword)}
+            )
         existing_keywords = vs_code_resource.get_keywords(keyword_uid)
         if len(existing_keywords) > 1:
             show_error(
@@ -799,6 +816,7 @@ def new_keyword_edit(new_keyword, kw_section_start_row, change_identifier):
         ),
         new_text=robot_model_to_string(new_keyword),
     )
+
 
 def deleted_keyword_edit(new_keyword, change_identifier):
     return AnnotatedTextEdit(

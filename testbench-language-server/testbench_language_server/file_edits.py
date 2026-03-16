@@ -164,6 +164,7 @@ def get_kw_documentation_edit(
         new_text=f"{new_docu_txt}",
     )
 
+
 def get_deleted_kw_edit(
     existing_keyword: Keyword, new_keyword: Keyword, change_identifier: str
 ) -> AnnotatedTextEdit | None:

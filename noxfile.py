@@ -1,5 +1,6 @@
 import nox
 
+
 @nox.session(python="3.10")
 def bundle_dependencies(session):
     session.install(
@@ -11,6 +12,5 @@ def bundle_dependencies(session):
         "--only-binary=:all:",
         "--no-binary=:none:",
         "--upgrade",
-        "-r"
-        "requirements.txt",
+        "-rrequirements.txt",
     )
