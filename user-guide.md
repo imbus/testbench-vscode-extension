@@ -6,7 +6,7 @@ This guide explains how to use the TestBench VS Code Extension to navigate insid
 
 - **Visual Studio Code** version 1.101.0 or higher
 - **Python** 3.10 or newer installed on your system
-- An open VS Code workspace. Without a workspace, the extension runs in read-only mode and features like test generation and importing results are disabled
+- An open VS Code workspace or folder. Without one, the extension runs in read-only mode and features like test generation and importing results are disabled
 
 **Note:** The following VS Code extensions are required dependencies and will be automatically installed (if not already present) when you install the TestBench extension:
 
