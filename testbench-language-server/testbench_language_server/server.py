@@ -893,11 +893,11 @@ def show_testbench_keyword_diff(ls: LanguageServer, kwargs):
     document_uri = kwargs.get("document_uri")
     keyword_uid = kwargs.get("keyword_uid")
     document = testbench_ls.workspace.get_text_document(document_uri)
-    resource = TestBenchResourceModel.from_file(document.source)
-    if not context_is_valid(ls, resource):
+    vscode_resource = TestBenchResourceModel.from_file(document.source)
+    if not context_is_valid(ls, vscode_resource):
         return
     change_identifier = ChangeAnnotationIdentifier()
-    existing_keywords = resource.get_keywords(keyword_uid)
+    vs_code_keywords = vscode_resource.get_keywords(keyword_uid)
     try:
         new_keyword = create_rf_keyword_from_tb_keyword(
             keyword_uid,
@@ -905,20 +905,25 @@ def show_testbench_keyword_diff(ls: LanguageServer, kwargs):
     except TestBenchKeywordNotFound as e:
         show_error(ls, ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID.format(uid=e.uid))
         return
-    if len(existing_keywords) > 1:
+    if len(vs_code_keywords) > 1:
         show_error(
             ls,
             ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
         )
         return
-    edits = create_keyword_edits(existing_keywords[0], new_keyword, change_identifier)
+    edits = create_keyword_edits(vs_code_keywords[0], new_keyword, change_identifier)
     if not edits:
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
-    testbench_content = apply_text_edits(robot_model_to_string(resource.file), edits)
+    tb_content_before_push = robot_model_to_string(vscode_resource.file)
+    tb_content_after_push = apply_text_edits(robot_model_to_string(vscode_resource.file), edits)
     ls.protocol.notify(
         "testbench-language-server/display-diff",
-        {"path": document_uri, "virtualContent": testbench_content},
+        {
+            "path": document_uri,
+            "virtualTestBenchContent": tb_content_before_push,
+            "virtualRobotContent": tb_content_after_push,
+        },
     )
 
 
