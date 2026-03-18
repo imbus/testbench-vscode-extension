@@ -147,7 +147,7 @@ Example `ls.config.json`
 - **Creating resources:** Use the 'Create Resource' button on a subdivision to create a local `.resource` file. Created resource files will be located according to the 'Resource Directory Path' setting and the subdivision's hierarchy under the 'Resource Root Regex' cut point. After creation, the file is revealed in the VS Code Explorer and opened in the editor
 
 - **Creating subdivisions:**
-    - Use the **Create Root Subdivision** button in the Test Elements view title bar or **Create Subdivision** on a selected subdivision
+    - Use **Create Subdivision** on a selected subdivision
     - These commands open a short picker with two options:
         - **Create Subdivision**: creates the name exactly as entered (no marker auto-append)
         - **Create Resource Subdivision**: auto-appends the configured Resource Marker suffix if missing

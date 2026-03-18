@@ -1482,17 +1482,21 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Creates a Robot Resource subdivision either under the selected subdivision item
-     * or at root level when no item is provided. User is prompted to enter the subdivision name
-     * and an optional description. The configured resource marker suffix is appended
-     * automatically to the subdivision name if missing.
+     * Creates a subdivision under the selected parent subdivision item.
+     * User is prompted to enter the subdivision name and an optional description.
+     * The configured resource marker suffix is appended automatically when enabled.
      *
-     * @param item Optional parent subdivision tree item.
+     * @param item Parent subdivision tree item.
      */
     public async promptAndCreateRobotResourceSubdivision(
-        item?: TestElementsTreeItem,
+        item: TestElementsTreeItem,
         options?: { autoAppendResourceMarker?: boolean }
     ): Promise<void> {
+        if (!item) {
+            vscode.window.showErrorMessage("Cannot create subdivision: select a parent subdivision first.");
+            return;
+        }
+
         const resourceMarkers = this.getConfiguredResourceMarkers();
         const autoAppendedMarker = resourceMarkers[0];
         const shouldAutoAppendResourceMarker =
@@ -1503,10 +1507,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 : "";
 
         const subdivisionName = await vscode.window.showInputBox({
-            title: item ? "Create Subdivision" : "Create Root Subdivision",
-            prompt: item
-                ? `Enter subdivision name under '${item.label?.toString() || "selected parent"}'.${autoAppendHintInPrompt}`
-                : `Enter root subdivision name.${autoAppendHintInPrompt}`,
+            title: "Create Subdivision",
+            prompt: `Enter subdivision name under '${item.label?.toString() || "selected parent"}'.${autoAppendHintInPrompt}`,
             placeHolder:
                 shouldAutoAppendResourceMarker && autoAppendedMarker
                     ? "Subdivision name (resource suffix will be auto-appended)"
@@ -1576,7 +1578,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             await vscode.window.withProgress(
                 {
                     location: vscode.ProgressLocation.Notification,
-                    title: item ? "Creating subdivision" : "Creating root subdivision",
+                    title: "Creating subdivision",
                     cancellable: false
                 },
                 async () => {
@@ -1604,16 +1606,11 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
     /**
      * Resolves the parent key for subdivision creation.
-     * Root subdivisions use null, child subdivisions use the selected item's key.
      *
-     * @param treeItem Optional selected subdivision item.
-     * @returns null for root creation, subdivision key for child creation, or undefined for invalid parent item.
+     * @param treeItem Selected subdivision item.
+     * @returns Subdivision key for child creation, or undefined for invalid parent item.
      */
-    private resolveParentKeyForSubdivisionCreation(treeItem?: TestElementsTreeItem): string | null | undefined {
-        if (!treeItem) {
-            return null;
-        }
-
+    private resolveParentKeyForSubdivisionCreation(treeItem: TestElementsTreeItem): string | undefined {
         if (treeItem.data.testElementType !== TestElementType.Subdivision) {
             return undefined;
         }
@@ -1624,14 +1621,14 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
     /**
      * Builds the create subdivision request body payload sent to the server.
-     * @param parentKey The parent subdivision key or null for root subdivisions.
+     * @param parentKey The parent subdivision key.
      * @param name The name of the new subdivision.
      * @param uid The unique identifier for the new subdivision.
      * @param descriptionText The plain text description entered by the user.
      * @returns The request body object for subdivision creation API call.
      */
     private buildSubdivisionCreationRequestPayload(
-        parentKey: string | null,
+        parentKey: string,
         name: string,
         uid: string,
         descriptionText: string

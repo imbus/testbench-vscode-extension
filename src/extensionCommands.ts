@@ -731,28 +731,24 @@ const promptSubdivisionCreationMode = async (): Promise<SubdivisionCreationMode 
     return selectedMode?.mode;
 };
 
-const createSubdivisionWithMode = async (mode: SubdivisionCreationMode, item?: TestElementsTreeItem) => {
+const createSubdivisionWithMode = async (mode: SubdivisionCreationMode, item: TestElementsTreeItem) => {
     await treeViews?.testElementsTree.promptAndCreateRobotResourceSubdivision(item, {
         autoAppendResourceMarker: mode === "resource"
     });
 };
 
 const handleCreateSubdivision = async (item?: TestElementsTreeItem) => {
+    if (!item) {
+        getLogger().warn("[extensionCommands] Create subdivision command requires a selected parent subdivision.");
+        return;
+    }
+
     const mode = await promptSubdivisionCreationMode();
     if (!mode) {
         return;
     }
 
     await createSubdivisionWithMode(mode, item);
-};
-
-const handleCreateRootSubdivision = async () => {
-    const mode = await promptSubdivisionCreationMode();
-    if (!mode) {
-        return;
-    }
-
-    await createSubdivisionWithMode(mode);
 };
 
 const handleOpenFolderInExplorer = (item: TestElementsTreeItem) => {
@@ -1266,24 +1262,28 @@ export async function registerExtensionCommands(context: vscode.ExtensionContext
             handler: handleCreateSubdivision
         },
         {
-            id: allExtensionCommands.createRootSubdivisionInTestElementsView,
-            handler: handleCreateRootSubdivision
-        },
-        {
             id: allExtensionCommands.createSubdivisionWithMarkerInTestElementsView,
-            handler: (item?: TestElementsTreeItem) => createSubdivisionWithMode("resource", item)
+            handler: (item?: TestElementsTreeItem) => {
+                if (!item) {
+                    getLogger().warn(
+                        "[extensionCommands] Create resource subdivision command requires a selected parent subdivision."
+                    );
+                    return;
+                }
+                return createSubdivisionWithMode("resource", item);
+            }
         },
         {
             id: allExtensionCommands.createSubdivisionWithoutMarkerInTestElementsView,
-            handler: (item?: TestElementsTreeItem) => createSubdivisionWithMode("regular", item)
-        },
-        {
-            id: allExtensionCommands.createRootSubdivisionWithMarkerInTestElementsView,
-            handler: () => createSubdivisionWithMode("resource")
-        },
-        {
-            id: allExtensionCommands.createRootSubdivisionWithoutMarkerInTestElementsView,
-            handler: () => createSubdivisionWithMode("regular")
+            handler: (item?: TestElementsTreeItem) => {
+                if (!item) {
+                    getLogger().warn(
+                        "[extensionCommands] Create subdivision command requires a selected parent subdivision."
+                    );
+                    return;
+                }
+                return createSubdivisionWithMode("regular", item);
+            }
         },
         {
             id: allExtensionCommands.openSubdivisionFolderInExplorer,

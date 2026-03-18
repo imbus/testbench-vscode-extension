@@ -478,12 +478,6 @@
                 "icon": "$(new-folder)"
             },
             {
-                "command": "testbenchExtension.createRootSubdivisionInTestElementsView",
-                "title": "Create Root Subdivision",
-                "when": "view == testbench.testElements",
-                "icon": "$(new-folder)"
-            },
-            {
                 "command": "testbenchExtension.createSubdivisionWithMarkerInTestElementsView",
                 "title": "Create Resource Subdivision Under This Item",
                 "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\.(folder|virtualFolder|plain)$/",
@@ -493,18 +487,6 @@
                 "command": "testbenchExtension.createSubdivisionWithoutMarkerInTestElementsView",
                 "title": "Create Subdivision Under This Item",
                 "when": "view == testbench.testElements && viewItem =~ /^testElement\\.subdivision\\.(folder|virtualFolder|plain)$/",
-                "icon": "$(new-folder)"
-            },
-            {
-                "command": "testbenchExtension.createRootSubdivisionWithMarkerInTestElementsView",
-                "title": "Create Root Resource Subdivision",
-                "when": "view == testbench.testElements",
-                "icon": "$(new-file)"
-            },
-            {
-                "command": "testbenchExtension.createRootSubdivisionWithoutMarkerInTestElementsView",
-                "title": "Create Root Subdivision (No Marker)",
-                "when": "view == testbench.testElements",
                 "icon": "$(new-folder)"
             },
             {
@@ -699,23 +681,11 @@
                     "when": "false"
                 },
                 {
-                    "command": "testbenchExtension.createRootSubdivisionInTestElementsView",
-                    "when": "false"
-                },
-                {
                     "command": "testbenchExtension.createSubdivisionWithMarkerInTestElementsView",
                     "when": "false"
                 },
                 {
                     "command": "testbenchExtension.createSubdivisionWithoutMarkerInTestElementsView",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.createRootSubdivisionWithMarkerInTestElementsView",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.createRootSubdivisionWithoutMarkerInTestElementsView",
                     "when": "false"
                 },
                 {
@@ -890,12 +860,6 @@
                         "light": "resources/icons/refresh-light.svg",
                         "dark": "resources/icons/refresh-dark.svg"
                     }
-                },
-                {
-                    "command": "testbenchExtension.createRootSubdivisionInTestElementsView",
-                    "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable",
-                    "group": "navigation@2",
-                    "icon": "$(new-folder)"
                 },
                 {
                     "command": "testbenchExtension.searchInTestElementsTreeOff",
