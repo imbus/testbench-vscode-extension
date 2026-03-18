@@ -191,14 +191,29 @@ export interface TestBenchLoginResult {
 }
 
 /**
- * Custom error that will be throwed in case an API request fails (including all of its retries)
- * to indicate that the session has expired or the server is unreachable.
- * Used to trigger a logout and return to the login view.
+ * Custom error used for unrecoverable connection/session failures (e.g. repeated network issues,
+ * expired session that requires forced logout). This is intentionally different from API-level
+ * HTTP errors where the request reached the server and returned a status code.
  */
 export class TestBenchConnectionError extends Error {
     constructor(message: string) {
         super(message);
         this.name = "TestBenchConnectionError";
+    }
+}
+
+/**
+ * Represents an HTTP error returned by the Play Server API.
+ * Carries status code and raw response payload for status-specific handling at call sites.
+ */
+export class PlayServerHttpError extends Error {
+    constructor(
+        message: string,
+        public readonly statusCode: number,
+        public readonly responseData?: unknown
+    ) {
+        super(message);
+        this.name = "PlayServerHttpError";
     }
 }
 
@@ -532,6 +547,135 @@ export class PlayServerConnection {
         }
     }
 
+    /**
+     * Creates a subdivision in the given project/TOV context.
+     *
+     * @param projectKey The project key
+     * @param tovKey The Test Object Version key
+     * @param subdivisionPayload The subdivision creation payload
+     * @returns The created subdivision payload returned by the server
+     * @throws PlayServerHttpError with status-specific details for expected API failures
+     */
+    public async createSubdivisionOnServer(
+        projectKey: string,
+        tovKey: string,
+        subdivisionPayload: testBenchTypes.CreateSubdivisionRequest
+    ): Promise<testBenchTypes.CreatedSubdivision> {
+        if (!this.sessionToken || !this.apiClient) {
+            throw new Error("No active TestBench session available.");
+        }
+
+        const createSubdivisionUrl = `/2/projects/${projectKey}/tovs/${tovKey}/subdivisions`;
+        logger.trace(
+            `[testBenchConnection] Creating subdivision via URL ${createSubdivisionUrl} (name='${subdivisionPayload.name}', parent='${subdivisionPayload.parentKey}', uidLength=${subdivisionPayload.uid.length}).`
+        );
+
+        const createSubdivisionResponse = await withRetry(
+            () =>
+                this.apiClient.post<testBenchTypes.CreatedSubdivision>(createSubdivisionUrl, subdivisionPayload, {
+                    headers: {
+                        accept: "application/json",
+                        "Content-Type": "application/json"
+                    },
+                    proxy: false,
+                    validateStatus: () => true
+                }),
+            3,
+            2000,
+            RetryPredicateFactory.createCustomPredicate([400, 403, 404, 409, 422])
+        );
+
+        logger.trace(
+            `[testBenchConnection] Create subdivision response status=${createSubdivisionResponse.status}, body=${JSON.stringify(createSubdivisionResponse.data)}`
+        );
+
+        const serverErrorMessage = this.extractServerErrorMessage(createSubdivisionResponse.data);
+
+        switch (createSubdivisionResponse.status) {
+            case 201:
+                return createSubdivisionResponse.data;
+            case 400:
+                throw this.createHttpError(
+                    createSubdivisionResponse.status,
+                    createSubdivisionResponse.data,
+                    `Bad request while creating subdivision.${serverErrorMessage ? ` ${serverErrorMessage}` : ""}`
+                );
+            case 403:
+                throw this.createHttpError(
+                    createSubdivisionResponse.status,
+                    createSubdivisionResponse.data,
+                    `You are not authorized to create subdivisions in this project.${serverErrorMessage ? ` ${serverErrorMessage}` : ""}`
+                );
+            case 404:
+                throw this.createHttpError(
+                    createSubdivisionResponse.status,
+                    createSubdivisionResponse.data,
+                    `Project, TOV, or parent subdivision was not found.${serverErrorMessage ? ` ${serverErrorMessage}` : ""}`
+                );
+            case 409:
+                throw this.createHttpError(
+                    createSubdivisionResponse.status,
+                    createSubdivisionResponse.data,
+                    `Subdivision creation conflicts with existing data or parent state.${serverErrorMessage ? ` ${serverErrorMessage}` : ""}`
+                );
+            case 422:
+                throw this.createHttpError(
+                    createSubdivisionResponse.status,
+                    createSubdivisionResponse.data,
+                    `Subdivision data is invalid.${serverErrorMessage ? ` ${serverErrorMessage}` : ""}`
+                );
+            default:
+                throw this.createHttpError(
+                    createSubdivisionResponse.status,
+                    createSubdivisionResponse.data,
+                    `Unexpected status code while creating subdivision: ${createSubdivisionResponse.status}.${serverErrorMessage ? ` ${serverErrorMessage}` : ""}`
+                );
+        }
+    }
+
+    /**
+     * Creates a typed HTTP error for API responses.
+     */
+    private createHttpError(statusCode: number, responseData: unknown, message: string): PlayServerHttpError {
+        return new PlayServerHttpError(message, statusCode, responseData);
+    }
+
+    /**
+     * Extracts a readable server-side message from arbitrary API error payloads.
+     */
+    private extractServerErrorMessage(responseData: unknown): string {
+        if (!responseData) {
+            return "";
+        }
+
+        if (typeof responseData === "string") {
+            return responseData;
+        }
+
+        if (typeof responseData === "object") {
+            const responseDataRecord = responseData as Record<string, unknown>;
+            const message = responseDataRecord.message;
+            const error = responseDataRecord.error;
+            const description = responseDataRecord.description;
+
+            const validStringValue = [message, error, description].find(
+                (item) => typeof item === "string" && item.trim().length > 0
+            ) as string | undefined;
+
+            if (validStringValue) {
+                return validStringValue;
+            }
+
+            try {
+                return JSON.stringify(responseData);
+            } catch {
+                return "";
+            }
+        }
+
+        return "";
+    }
+
     // TODO: If this API call is implemented in the new play server, replace this method with the new API.
     /**
      * Fetches test elements using the Test Object Version (TOV) key from the old play server.
@@ -842,31 +986,47 @@ export class PlayServerConnection {
                     } else {
                         const fileNameNotFoundErrorMessage: string = `[testBenchConnection] Imported file name not found in server response.`;
                         logger.error(fileNameNotFoundErrorMessage);
-                        throw new Error(fileNameNotFoundErrorMessage);
+                        throw this.createHttpError(
+                            importZipResponse.status,
+                            importZipResponse.data,
+                            fileNameNotFoundErrorMessage
+                        );
                     }
                 }
                 case 403: {
                     const importForbiddenMessage: string =
                         "[testBenchConnection] Error when importing report: 403 Forbidden: You do not have permission to import execution results.";
                     logger.error(importForbiddenMessage);
-                    throw new Error(importForbiddenMessage);
+                    throw this.createHttpError(
+                        importZipResponse.status,
+                        importZipResponse.data,
+                        importForbiddenMessage
+                    );
                 }
                 case 404: {
                     const importNotFoundMessage: string =
                         "[testBenchConnection] Error when importing report: 404 Not Found: The requested project was not found.";
                     logger.error(importNotFoundMessage);
-                    throw new Error(importNotFoundMessage);
+                    throw this.createHttpError(importZipResponse.status, importZipResponse.data, importNotFoundMessage);
                 }
                 case 422: {
                     const importUnprocessableEntityMessage: string =
                         "[testBenchConnection] Error when importing report: 422 Unprocessable Entity: The imported file is invalid.";
                     logger.error(importUnprocessableEntityMessage);
-                    throw new Error(importUnprocessableEntityMessage);
+                    throw this.createHttpError(
+                        importZipResponse.status,
+                        importZipResponse.data,
+                        importUnprocessableEntityMessage
+                    );
                 }
                 default: {
                     const importUnexpectedErrorMessage: string = `[testBenchConnection] Error when importing report: Unexpected status code ${importZipResponse.status} received.`;
                     logger.error(importUnexpectedErrorMessage);
-                    throw new Error(importUnexpectedErrorMessage);
+                    throw this.createHttpError(
+                        importZipResponse.status,
+                        importZipResponse.data,
+                        importUnexpectedErrorMessage
+                    );
                 }
             }
         } catch (error) {
@@ -928,37 +1088,61 @@ export class PlayServerConnection {
                         const importJobIDNotFoundMessage: string =
                             "[testBenchConnection] Success response received but no jobID found in the response.";
                         logger.error(importJobIDNotFoundMessage);
-                        throw new Error(importJobIDNotFoundMessage);
+                        throw this.createHttpError(
+                            importJobIDResponse.status,
+                            importJobIDResponse.data,
+                            importJobIDNotFoundMessage
+                        );
                     }
                 }
                 case 400: {
                     const importBadRequestMessage: string =
                         "[testBenchConnection] Error when fetching job ID of import job: 400 Bad Request: The request body is invalid.";
                     logger.error(importBadRequestMessage);
-                    throw new Error(importBadRequestMessage);
+                    throw this.createHttpError(
+                        importJobIDResponse.status,
+                        importJobIDResponse.data,
+                        importBadRequestMessage
+                    );
                 }
                 case 403: {
                     const importForbiddenMessage: string =
                         "[testBenchConnection] Error when fetching job ID of import job: 403 Forbidden: You do not have permission to import execution results.";
                     logger.error(importForbiddenMessage);
-                    throw new Error(importForbiddenMessage);
+                    throw this.createHttpError(
+                        importJobIDResponse.status,
+                        importJobIDResponse.data,
+                        importForbiddenMessage
+                    );
                 }
                 case 404: {
                     const importNotFoundMessage: string =
                         "[testBenchConnection] Error when fetching job ID of import job: 404 Not Found: Project or test cycle not found.";
                     logger.error(importNotFoundMessage);
-                    throw new Error(importNotFoundMessage);
+                    throw this.createHttpError(
+                        importJobIDResponse.status,
+                        importJobIDResponse.data,
+                        importNotFoundMessage
+                    );
                 }
                 case 422: {
                     const importUnprocessableEntityMessage: string =
                         "[testBenchConnection] Error when fetching job ID of import job: 422 Unprocessable Entity: The server cannot process the request.";
                     logger.error(importUnprocessableEntityMessage);
-                    throw new Error(importUnprocessableEntityMessage);
+                    throw this.createHttpError(
+                        importJobIDResponse.status,
+                        importJobIDResponse.data,
+                        importUnprocessableEntityMessage
+                    );
                 }
                 default: {
                     const importUnexpectedErrorMessage: string = `[testBenchConnection] Error when fetching job ID of import job: Unexpected status code ${importJobIDResponse.status} received.`;
                     logger.error(importUnexpectedErrorMessage);
-                    throw new Error(importUnexpectedErrorMessage);
+                    throw this.createHttpError(
+                        importJobIDResponse.status,
+                        importJobIDResponse.data,
+                        importUnexpectedErrorMessage
+                    );
                 }
             }
         } catch (error) {

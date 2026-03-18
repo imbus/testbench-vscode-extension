@@ -136,12 +136,23 @@ Example `ls.config.json`
 
 - The Test Elements view displays subdivisions and their keywords for the current TOV context
 - The view title includes the Project and TOV name to show the current context
+- Use the `Test Elements Visibility Mode` setting (`testbenchExtension.testElementsVisibilityMode`) to control what is shown:
+    - `resourceOnly` (default): marker-based visibility (legacy behavior)
+    - `allSubdivisions`: all subdivisions and keywords are shown, regardless of resource marker
 
 ![Test Elements View](userGuideImages/TestElementsView.png)
 
 - The 'Resource Marker' setting identifies subdivisions that correspond to Robot Framework resources. Subdivisions whose names end with this marker are treated as `.resource` files
 
 - **Creating resources:** Use the 'Create Resource' button on a subdivision to create a local `.resource` file. Created resource files will be located according to the 'Resource Directory Path' setting and the subdivision's hierarchy under the 'Resource Root Regex' cut point. After creation, the file is revealed in the VS Code Explorer and opened in the editor
+
+- **Creating subdivisions:**
+    - Use the **Create Root Subdivision** button in the Test Elements view title bar or **Create Subdivision** on a selected subdivision
+    - These commands open a short picker with two options:
+        - **Create Subdivision**: creates the name exactly as entered (no marker auto-append)
+        - **Create Resource Subdivision**: auto-appends the configured Resource Marker suffix if missing
+    - For selected subdivisions, additional explicit child creation actions are available (with marker and without marker)
+    - After successful creation, the tree is refreshed and the new subdivision appears according to the active visibility mode
 
 - **Visual indicators:** Subdivision tree items that are locally available as resource files show differently colored icons to indicate their availability. The 'Create Resource' button changes to 'Open Resource' for existing resource files
 

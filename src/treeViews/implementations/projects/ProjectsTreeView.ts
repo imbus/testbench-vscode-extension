@@ -418,7 +418,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
             );
         }
         if (treeViews?.testElementsTree) {
-            await treeViews.testElementsTree.loadTov(versionKey, tovName, projectName, tovName);
+            await treeViews.testElementsTree.loadTov(versionKey, tovName, projectName, tovName, true, projectKey);
         }
 
         return { projectKey, cycleKey, tovKey: versionKey, projectName, tovName, cycleLabel };

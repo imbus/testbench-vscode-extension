@@ -5,6 +5,7 @@ The **TestBench Extension** enables seamless synchronization between [TestBench]
 ## Key Features
 
 - **Project Navigation**: Browse TestBench projects, including Subdivisions, keywords, and Test Theme Trees
+- **Subdivision Management**: Create Robot Resource subdivisions directly from the Test Elements tree view
 - **Keyword Synchronization**: Bidirectionally synchronize Robot Framework keywords with TestBench keywords
 - **Test Generation**: Automatically generate Robot Framework test suites from TestBench test case sets
 - **Result Import**: Upload Robot Framework execution results directly back to TestBench
@@ -42,6 +43,18 @@ To link the currently opened workspace/folder, right-click on the desired Test O
 ### Create a Robot Framework Resource File from a TestBench Subdivision
 
 By default, subdivisions whose names end with the suffix `[Robot-Resource]` are treated as Robot Framework resources. Subdivisions that do not follow this naming convention are ignored by the extension. You can change the marker in the extension settings ("Resource Marker").
+
+Visibility in the `Test Elements` view is controlled by the `testbenchExtension.testElementsVisibilityMode` setting:
+
+- `resourceOnly` (default): Resource-marker based visibility is used and non-matching subdivisions are hidden.
+- `allSubdivisions`: All subdivisions and their keywords are shown, even without resource markers. This mode is useful for creating new subdivisions which are not marked with the resource marker.
+
+When creating subdivisions from the `Test Elements` view (root or child), the extension now asks which type to create:
+
+- `Create Subdivision`: Creates the subdivision name as entered (no marker auto-append)
+- `Create Resource Subdivision`: Auto-appends the configured resource marker if missing
+
+For selected subdivisions, the Test Elements actions also provide explicit child creation commands (with marker and without marker).
 
 ![Edit Subdivision Suffix to display it in the extension](userGuideImages/subdivision_suffix.png)
 

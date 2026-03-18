@@ -27,6 +27,7 @@ const ROOT_ITEMS_CACHE_KEY = "root_items";
 export interface RefreshOptions {
     immediate?: boolean;
     skipDataReload?: boolean;
+    clearRawCache?: boolean;
 }
 
 export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.TreeDataProvider<T> {
@@ -517,6 +518,12 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
                 }
             } else {
                 // Reset flag for full refresh
+                // Set loading state right away before loadData starts
+                if (options?.immediate) {
+                    this.stateManager.setLoading(true);
+                    this.updateTreeViewMessage();
+                    this._onDidChangeTreeData.fire(undefined);
+                }
                 this.loadData(options);
             }
         } else {
@@ -930,6 +937,11 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             this._isLoading = true;
             this.stateManager.setLoading(true);
             this.updateTreeViewMessage();
+
+            // Fire event immediately to show loading state if requested
+            if (options?.immediate) {
+                this._onDidChangeTreeData.fire(undefined);
+            }
 
             const timeoutMs = this.config.behavior.loadingTimeout;
             const newRootItems = await this.withOptionalTimeout(() => this.fetchRootItems(), "Data loading", timeoutMs);
