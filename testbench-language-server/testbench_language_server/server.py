@@ -416,14 +416,19 @@ def show_testbench_diff(ls: LanguageServer, kwargs):
     vscode_edits = []
     create_kw_section = not bool(get_keyword_section(vscode_resource.file))
     if create_kw_section:
+        minimum_empty_lines_before_section = 0
         if get_variables_section(vscode_resource.file):
             _, _, kw_section_start, _ = get_variables_section_position(vscode_resource.file)
-        else:
+        elif get_setting_section(vscode_resource.file):
             _, _, kw_section_start, _ = get_setting_section_position(vscode_resource.file)
+        else:
+            _, _, kw_section_start, _ = get_testbench_context_position(vscode_resource.file)
+            minimum_empty_lines_before_section = 1
         tb_edits.extend(
             keyword_section_edit(
                 kw_section_start,
                 change_identifier_tb,
+                minimum_empty_lines_before_section=minimum_empty_lines_before_section,
                 existing_trailing_newline_count=_count_trailing_newline_characters(document.source),
             )
         )
@@ -529,14 +534,19 @@ def attempt_push_subdivision(ls: LanguageServer, *args):
     edits = []
     create_kw_section = not bool(get_keyword_section(vscode_resource.file))
     if create_kw_section:
+        minimum_empty_lines_before_section = 0
         if get_variables_section(vscode_resource.file):
             _, _, kw_section_start, _ = get_variables_section_position(vscode_resource.file)
-        else:
+        elif get_setting_section(vscode_resource.file):
             _, _, kw_section_start, _ = get_setting_section_position(vscode_resource.file)
+        else:
+            _, _, kw_section_start, _ = get_testbench_context_position(vscode_resource.file)
+            minimum_empty_lines_before_section = 1
         edits.extend(
             keyword_section_edit(
                 kw_section_start,
                 change_identifier,
+                minimum_empty_lines_before_section=minimum_empty_lines_before_section,
                 existing_trailing_newline_count=_count_trailing_newline_characters(document.source),
             )
         )
@@ -850,10 +860,17 @@ def deleted_keyword_edit(new_keyword, change_identifier):
 
 def _count_trailing_newline_characters(source_text: str) -> int:
     trailing_newline_count = 0
-    for character in reversed(source_text):
-        if character != "\n":
+    index = len(source_text) - 1
+
+    # Count trailing LF and CRLF line breaks at EOF.
+    while index >= 0:
+        if source_text[index] != "\n":
             break
         trailing_newline_count += 1
+        index -= 1
+        if index >= 0 and source_text[index] == "\r":
+            index -= 1
+
     return trailing_newline_count
 
 
