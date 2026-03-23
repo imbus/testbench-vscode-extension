@@ -441,6 +441,7 @@ def build_subdivision_edits(
 ) -> list[AnnotatedTextEdit]:
     edits: list[AnnotatedTextEdit] = []
     anchor = _get_keyword_section_start_and_spacing(existing_resource)
+    trailing_newline_count = _count_trailing_newline_characters(document.source)
 
     if anchor.needs_creation:
         edits.extend(
@@ -448,11 +449,12 @@ def build_subdivision_edits(
                 anchor.start_line,
                 change_identifier,
                 minimum_empty_lines_before_section=anchor.minimum_leading_blank_lines,
-                existing_trailing_newline_count=_count_trailing_newline_characters(document.source),
+                existing_trailing_newline_count=trailing_newline_count,
             )
         )
 
     visited_keywords: list[str] = []
+    first_new_keyword = True
     if new_resource.keyword_section:
         for new_keyword in new_resource.keyword_section.body:
             new_keyword_uid = get_kw_uid(new_keyword)
@@ -475,7 +477,17 @@ def build_subdivision_edits(
                 continue
 
             if not keyword_match:
-                edits.append(new_keyword_edit(new_keyword, anchor.start_line + 1, change_identifier))
+                if first_new_keyword:
+                    effective_trailing = trailing_newline_count if not anchor.needs_creation else 2
+                    first_new_keyword = False
+                else:
+                    effective_trailing = 2
+                edits.append(new_keyword_edit(
+                    new_keyword,
+                    anchor.start_line + 1,
+                    change_identifier,
+                    existing_trailing_newline_count=effective_trailing,
+                ))
             else:
                 if get_keyword_tags(keyword_match) and any(
                     tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword_match))
@@ -760,14 +772,21 @@ def get_matching_testbench_keyword(
         raise MultipleKeywordsWithName(rf_keyword.name)
 
 
-def new_keyword_edit(new_keyword, kw_section_start_row, change_identifier):
+def new_keyword_edit(
+    new_keyword, kw_section_start_row, change_identifier, existing_trailing_newline_count: int = 2
+):
+    keyword_text = robot_model_to_string(new_keyword)
+    required_newlines = 2  # line break + one blank line between keywords
+    missing_newlines = max(0, required_newlines - existing_trailing_newline_count)
+    if missing_newlines > 0:
+        keyword_text = "\n" * missing_newlines + keyword_text
     return AnnotatedTextEdit(
         change_identifier,
         range=Range(
             start=Position(kw_section_start_row + 2, 0),
             end=Position(kw_section_start_row + 2, 0),
         ),
-        new_text=robot_model_to_string(new_keyword),
+        new_text=keyword_text,
     )
 
 
