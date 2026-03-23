@@ -1,5 +1,4 @@
 import re
-from typing import Any
 
 from lsprotocol.types import (
     AnnotatedTextEdit,
@@ -50,7 +49,7 @@ def get_documentation_values(documentation: Documentation) -> list[str]:
     ]
 
 
-def _has_real_line_terminator(parsed_statement: Any) -> bool:
+def _has_real_line_terminator(parsed_statement: object | None) -> bool:
     if not parsed_statement:
         return False
     statement_tokens = getattr(parsed_statement, "tokens", None)
@@ -60,7 +59,7 @@ def _has_real_line_terminator(parsed_statement: Any) -> bool:
 
 
 def _ensure_leading_newline_for_eof_insertion(
-    text_to_insert: str, insertion_anchor_statement: Any
+    text_to_insert: str, insertion_anchor_statement: object | None
 ) -> str:
     if not text_to_insert:
         return text_to_insert
