@@ -150,8 +150,8 @@ jobs:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               with:
                   upload_url: ${{ steps.create_release.outputs.upload_url }}
-                  asset_path: ./testbench-extension-${{ inputs.version }}.vsix
-                  asset_name: testbench-extension-v${{ inputs.version }}.vsix
+                  asset_path: ./testbench-${{ inputs.version }}.vsix
+                  asset_name: testbench-v${{ inputs.version }}.vsix
                   asset_content_type: application/octet-stream
 
             # Summary
@@ -161,5 +161,5 @@ jobs:
                   echo "📦 Version: ${{ inputs.version }}"
                   echo "🏷️  Tag: v${{ inputs.version }}"
                   echo "📝 Changelog: Updated"
-                  echo "📦 VSIX: testbench-extension-v${{ inputs.version }}.vsix"
+                  echo "📦 VSIX: testbench-v${{ inputs.version }}.vsix"
                   echo "🔗 Release: https://github.com/${{ github.repository }}/releases/tag/v${{ inputs.version }}"
