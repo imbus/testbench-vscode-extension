@@ -26,8 +26,6 @@ The **TestBench Extension** bridges [TestBench](https://www.testbench.com/) and 
 3. Generate Robot Framework test suites from the Test Themes view
 4. Execute tests (for example with RobotCode) and upload `output.xml` results back to TestBench
 
-For full walkthroughs and advanced configuration, see the [User Guide](user-guide.md).
-
 ## Features
 
 ### Project Navigation
