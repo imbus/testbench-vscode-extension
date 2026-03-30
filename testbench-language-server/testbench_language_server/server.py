@@ -435,7 +435,7 @@ def build_subdivision_edits(
     ls: LanguageServer,
     document: TextDocument,
     existing_resource: TestBenchResourceModel,
-    new_resource: TestBenchResourceModel,
+    new_resource: TestBenchResourceModel | None,
     change_identifier: ChangeAnnotationIdentifier,
     include_deleted_testbench_tag_cleanup: bool = True,
 ) -> list[AnnotatedTextEdit]:
@@ -443,7 +443,7 @@ def build_subdivision_edits(
     anchor = _get_keyword_section_start_and_spacing(existing_resource)
     trailing_newline_count = _count_trailing_newline_characters(document.source)
 
-    if anchor.needs_creation:
+    if new_resource is not None and anchor.needs_creation:
         edits.extend(
             keyword_section_edit(
                 anchor.start_line,
@@ -455,7 +455,7 @@ def build_subdivision_edits(
 
     visited_keywords: list[str] = []
     first_new_keyword = True
-    if new_resource.keyword_section:
+    if new_resource is not None and new_resource.keyword_section:
         for new_keyword in new_resource.keyword_section.body:
             new_keyword_uid = get_kw_uid(new_keyword)
             if new_keyword_uid:
