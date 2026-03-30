@@ -55,7 +55,11 @@ def _has_real_line_terminator(parsed_statement: object | None) -> bool:
     statement_tokens = getattr(parsed_statement, "tokens", None)
     if not statement_tokens:
         return False
-    return any(token.type == Token.EOL and "\n" in token.value for token in statement_tokens)
+    last_eol = None
+    for token in statement_tokens:
+        if token.type == Token.EOL:
+            last_eol = token
+    return last_eol is not None and "\n" in last_eol.value
 
 
 def _ensure_leading_newline_for_eof_insertion(
