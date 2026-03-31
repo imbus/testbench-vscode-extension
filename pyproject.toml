@@ -14,7 +14,7 @@ readme = "README.md"
 license = {text = "Apache 2.0 License"}
 dynamic = ["version"]
 dependencies = [
-  "testbench2robotframework>=0.9.2a2",
+  "testbench2robotframework>=0.9.2b2",
   "robotframework==7.2",
   "testbench-language-server @ file:./testbench-language-server"
 ]
