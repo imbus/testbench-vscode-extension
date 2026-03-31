@@ -12,7 +12,6 @@ import * as https from "https";
 import * as base64 from "base-64";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import { HttpsProxyAgent } from "https-proxy-agent";
-import { StorageKeys } from "../constants";
 import { logger } from "../extension";
 import { withRetry, RetryPredicateFactory } from "../testBenchConnection";
 
@@ -33,7 +32,6 @@ export class LegacyPlayServerClient {
     private static readonly DEFAULT_LEGACY_PORT = 9444;
     private static readonly LEGACY_SERVER_BASE_PATH = "/api/1";
     private static readonly SERVER_LOCATIONS_ENDPOINT = "/2/serverLocations";
-    public static readonly PORT_CACHE_KEY_PREFIX = StorageKeys.LEGACY_PLAY_SERVER_PORT_CACHE_PREFIX;
 
     /** The currently active legacy server port (discovered during initialization or defaulted to 9444) */
     private currentLegacyPort: number = LegacyPlayServerClient.DEFAULT_LEGACY_PORT;
@@ -47,20 +45,16 @@ export class LegacyPlayServerClient {
      * @param sessionToken The session token for authentication
      * @param username The username for authentication
      * @param httpsAgent The HTTPS agent to use for requests (includes TLS configuration)
-     * @param context The VS Code extension context
-     * @param serverVersion The TestBench server version (used in cache key to invalidate on upgrades)
      */
     constructor(
         private serverName: string,
         private newServerPort: number,
         private sessionToken: string,
         private username: string,
-        private httpsAgent: https.Agent | HttpsProxyAgent<string>,
-        private context: vscode.ExtensionContext,
-        private serverVersion: string = ""
+        private httpsAgent: https.Agent | HttpsProxyAgent<string>
     ) {
         logger.trace(
-            `[LegacyPlayServerClient] Initialized for server '${this.serverName}' (default legacy port: ${LegacyPlayServerClient.DEFAULT_LEGACY_PORT}, new server port: ${this.newServerPort}, serverVersion: '${this.serverVersion}')`
+            `[LegacyPlayServerClient] Initialized for server '${this.serverName}' (default legacy port: ${LegacyPlayServerClient.DEFAULT_LEGACY_PORT}, new server port: ${this.newServerPort})`
         );
     }
 
@@ -122,105 +116,30 @@ export class LegacyPlayServerClient {
     /**
      * Initializes the legacy Play server client by discovering the correct port.
      * This method should be called immediately after construction.
-     * Clears the cached port, fetches from the new Play server's serverLocations endpoint and caches the result.
+     * Always fetches port from the new Play server's serverLocations endpoint.
      * If the fetch fails, it falls back to the default port 9444 for backward compatibility.
      *
      * @returns A promise that resolves when initialization is complete
      */
     public async initialize(): Promise<void> {
         logger.debug(`[LegacyPlayServerClient] Initializing and discovering legacy server port...`);
-        await this.clearPortCache();
 
-        // Fetch fresh port from server
-        logger.debug(`[LegacyPlayServerClient] Fetching legacy server port from server...`);
         const serverLocations = await this.fetchServerLocations();
 
         if (serverLocations && serverLocations.legacyPlayPort) {
             this.currentLegacyPort = serverLocations.legacyPlayPort;
-            await this.cachePort(this.currentLegacyPort);
             logger.info(
-                `[LegacyPlayServerClient] Successfully discovered and cached legacy Play server port: ${this.currentLegacyPort}`
+                `[LegacyPlayServerClient] Successfully discovered legacy Play server port: ${this.currentLegacyPort}`
             );
         } else {
-            await this.cachePort(LegacyPlayServerClient.DEFAULT_LEGACY_PORT);
             logger.info(
-                `[LegacyPlayServerClient] Could not discover legacy server port. Using and caching default port ${LegacyPlayServerClient.DEFAULT_LEGACY_PORT}`
+                `[LegacyPlayServerClient] Could not discover legacy server port. Using default port ${LegacyPlayServerClient.DEFAULT_LEGACY_PORT}`
             );
         }
 
         logger.debug(
             `[LegacyPlayServerClient] Initialization complete. Will use port ${this.currentLegacyPort} for legacy server requests.`
         );
-    }
-
-    /**
-     * Gets the storage key for caching the legacy Play server port for a specific server.
-     * Includes the server version to automatically invalidate the cache when the server version changes.
-     *
-     * @returns The storage key string
-     */
-    private getPortCacheKey(): string {
-        const versionSuffix = this.serverVersion ? `.v${this.serverVersion}` : "";
-        return `${LegacyPlayServerClient.PORT_CACHE_KEY_PREFIX}${this.serverName}${versionSuffix}`;
-    }
-
-    /**
-     * Stores the legacy Play server port in persistent storage for future use.
-     * The port is cached per server and persists across VS Code window reloads.
-     *
-     * @param port The port number to cache
-     */
-    private async cachePort(port: number): Promise<void> {
-        try {
-            const cacheKey = this.getPortCacheKey();
-            await this.context.globalState.update(cacheKey, port);
-            logger.trace(
-                `[LegacyPlayServerClient] Cached port ${port} for server '${this.serverName}' in persistent storage`
-            );
-        } catch (error) {
-            logger.warn(`[LegacyPlayServerClient] Failed to cache port for server '${this.serverName}': ${error}`);
-        }
-    }
-
-    /**
-     * Clears the cached legacy Play server port for the current server.
-     * This can be useful if the server configuration changes or for troubleshooting.
-     *
-     * @returns A promise that resolves when the cache is cleared
-     */
-    public async clearPortCache(): Promise<void> {
-        try {
-            const cacheKey = this.getPortCacheKey();
-            await this.context.globalState.update(cacheKey, undefined);
-            logger.info(`[LegacyPlayServerClient] Cleared cached port for server '${this.serverName}'`);
-        } catch (error) {
-            logger.warn(
-                `[LegacyPlayServerClient] Failed to clear cached port for server '${this.serverName}': ${error}`
-            );
-        }
-    }
-
-    /**
-     * Clears all legacy Play server port caches from global state.
-     * Used by clearAllExtensionData.
-     *
-     * @param context The VS Code extension context
-     */
-    public static async clearAllPortCaches(context: vscode.ExtensionContext): Promise<void> {
-        try {
-            const allGlobalKeys = context.globalState.keys();
-            const portCacheKeys = allGlobalKeys.filter((key) =>
-                key.startsWith(LegacyPlayServerClient.PORT_CACHE_KEY_PREFIX)
-            );
-            for (const key of portCacheKeys) {
-                await context.globalState.update(key, undefined);
-            }
-            if (portCacheKeys.length > 0) {
-                logger.info(`[LegacyPlayServerClient] Cleared ${portCacheKeys.length} legacy port cache entries.`);
-            }
-        } catch (error) {
-            logger.warn(`[LegacyPlayServerClient] Failed to clear all port caches: ${error}`);
-        }
     }
 
     /**

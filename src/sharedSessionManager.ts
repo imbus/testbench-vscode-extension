@@ -19,7 +19,7 @@ interface SharedSessionData {
     createdAt: number;
     lastValidated: number;
     isInsecure: boolean;
-    serverVersion: string;
+    serverVersion?: string;
 }
 
 const SHARED_SESSION_KEY = "testbenchExtension.sharedSession";

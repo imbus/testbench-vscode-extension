@@ -283,6 +283,7 @@ export class PlayServerConnection {
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
     private testElementsCache: CacheManager<string, any>;
     private testStructureCache: CacheManager<string, testBenchTypes.TestStructure>;
+    private legacyInitPromise: Promise<void> | null = null;
 
     /**
      * Creates a new PlayServerConnection.
@@ -335,13 +336,11 @@ export class PlayServerConnection {
             this.portNumber,
             this.sessionToken,
             this.username,
-            agentToUse,
-            this.context,
-            this.serverVersion
+            agentToUse
         );
 
         // Initialize legacy server port discovery in the background
-        this.legacyClient.initialize().catch((error) => {
+        this.legacyInitPromise = this.legacyClient.initialize().catch((error) => {
             logger.warn(
                 `[testBenchConnection] Legacy Play server initialization failed, but main connection is still functional: ${error?.message || error}`
             );
@@ -396,8 +395,10 @@ export class PlayServerConnection {
             this.stopKeepAlive();
             this.testElementsCache.clearCache();
             this.testStructureCache.clearCache();
-            if (this.legacyClient) {
-                await this.legacyClient.clearPortCache();
+            // Await any ongoing legacy client initialization before teardown
+            if (this.legacyInitPromise) {
+                await this.legacyInitPromise;
+                this.legacyInitPromise = null;
             }
             const tlsManager = TLSSecurityManager.getInstance();
             tlsManager.disableInsecureMode();

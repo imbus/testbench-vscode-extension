@@ -42,7 +42,6 @@ import { v4 as uuidv4 } from "uuid";
 import { activeConfigService } from "./languageServer/activeConfigService";
 import { checkWorkspaceAndNotifyUser } from "./utils";
 import { registerExtensionCommands } from "./extensionCommands";
-import { LegacyPlayServerClient } from "./api/LegacyPlayServerClient";
 
 /* =============================================================================
    Constants, Global Variables & Exports
@@ -680,13 +679,6 @@ export async function clearAllExtensionData(
             } catch (error) {
                 logger.error(`[extension] Error clearing global state key ${key}:`, error);
             }
-        }
-
-        logger.debug("[extension] Clearing legacy Play server port caches...");
-        try {
-            await LegacyPlayServerClient.clearAllPortCaches(context);
-        } catch (error) {
-            logger.error("[extension] Error clearing legacy port caches:", error);
         }
 
         if (treeViews) {
