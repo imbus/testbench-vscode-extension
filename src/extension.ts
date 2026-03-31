@@ -42,6 +42,7 @@ import { v4 as uuidv4 } from "uuid";
 import { activeConfigService } from "./languageServer/activeConfigService";
 import { checkWorkspaceAndNotifyUser } from "./utils";
 import { registerExtensionCommands } from "./extensionCommands";
+import { LegacyPlayServerClient } from "./api/LegacyPlayServerClient";
 
 /* =============================================================================
    Constants, Global Variables & Exports
@@ -145,7 +146,8 @@ async function createNewConnection(
     session: vscode.AuthenticationSession,
     currentConnection: PlayServerConnection | null,
     context: vscode.ExtensionContext,
-    isInsecure: boolean
+    isInsecure: boolean,
+    serverVersion: string = ""
 ): Promise<PlayServerConnection> {
     if (currentConnection) {
         logger.warn(
@@ -160,7 +162,8 @@ async function createNewConnection(
         activeConnection.username,
         session.accessToken,
         context,
-        isInsecure
+        isInsecure,
+        serverVersion
     );
     await newConnection.initialize();
     setConnection(newConnection);
@@ -244,8 +247,10 @@ export async function handleTestBenchSessionChange(
         const sharedSessionManager = SharedSessionManager.getInstance(context);
         const sharedSession = await sharedSessionManager.getSharedSession();
         let isInsecure = false;
+        let serverVersion = "";
         if (sharedSession && sharedSession.sessionToken === sessionToProcess.accessToken) {
             isInsecure = sharedSession.isInsecure;
+            serverVersion = sharedSession.serverVersion || "";
         }
 
         // If switching to a different user, reset state for the previous user's data
@@ -279,7 +284,8 @@ export async function handleTestBenchSessionChange(
             sessionToProcess,
             connection,
             context,
-            isInsecure
+            isInsecure,
+            serverVersion
         );
         await handleLanguageServerRestartOnSessionChange(previousSessionToken, newConnection.getSessionToken());
 
@@ -413,7 +419,8 @@ async function validateStoredSession(
             sharedSession.username,
             sharedSession.sessionToken,
             context,
-            sharedSession.isInsecure
+            sharedSession.isInsecure,
+            sharedSession.serverVersion || ""
         );
 
         await tempConnection.initialize();
@@ -673,6 +680,13 @@ export async function clearAllExtensionData(
             } catch (error) {
                 logger.error(`[extension] Error clearing global state key ${key}:`, error);
             }
+        }
+
+        logger.debug("[extension] Clearing legacy Play server port caches...");
+        try {
+            await LegacyPlayServerClient.clearAllPortCaches(context);
+        } catch (error) {
+            logger.error("[extension] Error clearing legacy port caches:", error);
         }
 
         if (treeViews) {

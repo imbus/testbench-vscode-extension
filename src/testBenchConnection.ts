@@ -188,6 +188,7 @@ export interface TestBenchLoginResult {
     userKey: string; // From LoginResponse
     loginName: string;
     isInsecure: boolean;
+    serverVersion: string;
 }
 
 /**
@@ -291,6 +292,8 @@ export class PlayServerConnection {
      * @param {string} username - The username for authentication.
      * @param {string} sessionToken - The session token for authentication.
      * @param {vscode.ExtensionContext} context - The extension context for path resolution.
+     * @param {boolean} isInsecure - Whether to use insecure TLS.
+     * @param {string} serverVersion - The TestBench server version (used for legacy port cache invalidation).
      */
     constructor(
         public serverName: string,
@@ -298,7 +301,8 @@ export class PlayServerConnection {
         public username: string,
         private sessionToken: string,
         private context: vscode.ExtensionContext,
-        private isInsecure: boolean = false
+        private isInsecure: boolean = false,
+        private serverVersion: string = ""
     ) {
         this.baseURL = `https://${this.serverName}:${this.portNumber}/api`;
         this.testElementsCache = new CacheManager<string, any>(TreeViewTiming.TREE_DATA_FRESHNESS_THRESHOLD_MS);
@@ -332,7 +336,8 @@ export class PlayServerConnection {
             this.sessionToken,
             this.username,
             agentToUse,
-            this.context
+            this.context,
+            this.serverVersion
         );
 
         // Initialize legacy server port discovery in the background
@@ -391,6 +396,9 @@ export class PlayServerConnection {
             this.stopKeepAlive();
             this.testElementsCache.clearCache();
             this.testStructureCache.clearCache();
+            if (this.legacyClient) {
+                await this.legacyClient.clearPortCache();
+            }
             const tlsManager = TLSSecurityManager.getInstance();
             tlsManager.disableInsecureMode();
             this.sessionToken = "";
@@ -1148,7 +1156,8 @@ export class PlayServerConnection {
             this.serverName,
             this.portNumber,
             this.username,
-            loginResult.isInsecure
+            loginResult.isInsecure,
+            loginResult.serverVersion
         );
 
         await handleLanguageServerRestartOnSessionChange(oldToken, this.sessionToken);
@@ -1569,7 +1578,8 @@ export async function loginToServerAndGetSessionDetails(
                 sessionToken: loginResponse.data.sessionToken,
                 userKey: loginResponse.data.userKey,
                 loginName: loginResponse.data.login,
-                isInsecure: false
+                isInsecure: false,
+                serverVersion: loginResponse.data.serverVersion || ""
             };
         }
         return null;
@@ -1618,7 +1628,8 @@ export async function loginToServerAndGetSessionDetails(
                             sessionToken: insecureLoginResponse.data.sessionToken,
                             userKey: insecureLoginResponse.data.userKey,
                             loginName: insecureLoginResponse.data.login,
-                            isInsecure: true
+                            isInsecure: true,
+                            serverVersion: insecureLoginResponse.data.serverVersion || ""
                         };
                     } else {
                         logger.error(

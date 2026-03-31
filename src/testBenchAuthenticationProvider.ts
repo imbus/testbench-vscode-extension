@@ -355,7 +355,8 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 connection.username,
                 existingSharedSession.sessionToken,
                 this.context,
-                existingSharedSession.isInsecure
+                existingSharedSession.isInsecure,
+                existingSharedSession.serverVersion || ""
             );
             await tempConnection.initialize();
 
@@ -367,7 +368,8 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                         sessionToken: existingSharedSession.sessionToken,
                         userKey: existingSharedSession.userKey,
                         loginName: existingSharedSession.loginName,
-                        isInsecure: existingSharedSession.isInsecure
+                        isInsecure: existingSharedSession.isInsecure,
+                        serverVersion: existingSharedSession.serverVersion || ""
                     },
                     usingSharedSession: true
                 };
@@ -439,12 +441,6 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             scopes
         };
 
-        this._onDidChangeSessions.fire({
-            added: [authSession],
-            removed: [],
-            changed: []
-        });
-
         if (!usingSharedSession) {
             const sharedSessionManager = SharedSessionManager.getInstance(this.context);
             await sharedSessionManager.storeSharedSession(
@@ -456,12 +452,19 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 connection.serverName,
                 connection.portNumber,
                 connection.username,
-                loginResult.isInsecure
+                loginResult.isInsecure,
+                loginResult.serverVersion
             );
             logger.debug(
                 "[AuthenticationProvider] Stored new session in shared session manager for cross-window access"
             );
         }
+
+        this._onDidChangeSessions.fire({
+            added: [authSession],
+            removed: [],
+            changed: []
+        });
 
         logger.debug(
             `[AuthenticationProvider] TestBench session created successfully for '${sessionData.accountLabel}'.`
