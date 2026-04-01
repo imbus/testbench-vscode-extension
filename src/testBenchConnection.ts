@@ -7,7 +7,6 @@ import * as https from "https";
 import * as tls from "tls";
 import * as vscode from "vscode";
 import * as fs from "fs";
-
 import * as testBenchTypes from "./testBenchTypes";
 import * as reportHandler from "./reportHandler";
 import { HttpsProxyAgent } from "https-proxy-agent";
@@ -40,6 +39,12 @@ interface CachedCertificateData {
 }
 
 let cachedCertificate: CachedCertificateData | null = null;
+
+/**
+ * Module-level flag to prevent multiple retry progress notifications from being
+ * shown simultaneously when several API calls fail at the same time.
+ */
+let isRetryNotificationActive = false;
 
 /**
  * Loads and caches certificate data from disk to avoid redundant reads.
@@ -282,6 +287,7 @@ export class PlayServerConnection {
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
     private testElementsCache: CacheManager<string, any>;
     private testStructureCache: CacheManager<string, testBenchTypes.TestStructure>;
+    private isKeepAliveInProgress: boolean = false;
 
     /**
      * Creates a new PlayServerConnection.
@@ -1006,6 +1012,11 @@ export class PlayServerConnection {
      * If the keep alive request fails with an error code 401, extension tries to re-authenticate same user silently using stored credentials.
      */
     private async sendKeepAliveRequest(): Promise<void> {
+        if (this.isKeepAliveInProgress) {
+            logger.trace("[testBenchConnection] Keep-alive request already in progress. Skipping this interval.");
+            return;
+        }
+
         if (!this.sessionToken || !this.apiClient) {
             logger.error(
                 "[testBenchConnection] Session token or apiClient is missing. Cannot send keep-alive request."
@@ -1013,6 +1024,8 @@ export class PlayServerConnection {
             this.stopKeepAlive();
             return;
         }
+
+        this.isKeepAliveInProgress = true;
 
         try {
             await withRetry(
@@ -1043,6 +1056,8 @@ export class PlayServerConnection {
                 );
                 await vscode.commands.executeCommand(`${allExtensionCommands.logout}`);
             }
+        } finally {
+            this.isKeepAliveInProgress = false;
         }
     }
 
@@ -1168,6 +1183,7 @@ export class PlayServerConnection {
  * @returns {Promise<T>} A promise resolving to the function's return value.
  * @throws The error from the last failed attempt if all retries fail.
  */
+
 export async function withRetry<T>(
     asyncFunction: () => Promise<T>,
     maxAllowedRetryCount: number = 3,
@@ -1243,19 +1259,25 @@ export async function withRetry<T>(
                 throw error;
             }
 
-            // Show the progress bar only if retries are happening and the flag is enabled.
-            if (showProgressBar) {
-                await vscode.window.withProgress(
-                    {
-                        location: vscode.ProgressLocation.Notification,
-                        title: "Retrying request",
-                        cancellable: false
-                    },
-                    async (progress) => {
-                        progress.report({ message: `Attempt ${retryCount} of ${maxAllowedRetryCount}` });
-                        await new Promise((resolve) => setTimeout(resolve, delayMs));
-                    }
-                );
+            // Show the progress bar only if retries are happening, the flag is enabled,
+            // and no other retry notification is already visible.
+            if (showProgressBar && !isRetryNotificationActive) {
+                isRetryNotificationActive = true;
+                try {
+                    await vscode.window.withProgress(
+                        {
+                            location: vscode.ProgressLocation.Notification,
+                            title: "Retrying request",
+                            cancellable: false
+                        },
+                        async (progress) => {
+                            progress.report({ message: `Attempt ${retryCount} of ${maxAllowedRetryCount}` });
+                            await new Promise((resolve) => setTimeout(resolve, delayMs));
+                        }
+                    );
+                } finally {
+                    isRetryNotificationActive = false;
+                }
             } else {
                 await new Promise((resolve) => setTimeout(resolve, delayMs));
             }
