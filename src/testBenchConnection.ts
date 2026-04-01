@@ -1186,6 +1186,47 @@ export async function withRetry<T>(
     showProgressBar: boolean = true
 ): Promise<T> {
     let retryCount: number = 0;
+    const totalAttempts = maxAllowedRetryCount + 1;
+
+    const buildRequestUrl = (baseURL?: string, requestUrl?: string): string => {
+        if (!requestUrl) {
+            return "<unknown-url>";
+        }
+        if (/^https?:\/\//i.test(requestUrl)) {
+            return requestUrl;
+        }
+        if (!baseURL) {
+            return requestUrl;
+        }
+
+        const normalizedBase = baseURL.replace(/\/+$/, "");
+        const normalizedPath = requestUrl.replace(/^\/+/, "");
+        return `${normalizedBase}/${normalizedPath}`;
+    };
+
+    const getRequestDescription = (error: unknown): string => {
+        if (!axios.isAxiosError(error)) {
+            return "<non-axios-error>";
+        }
+
+        const method = (error.config?.method || "GET").toUpperCase();
+        const requestUrl = buildRequestUrl(error.config?.baseURL, error.config?.url);
+        return `${method} ${requestUrl}`;
+    };
+
+    const getStatusDescription = (error: unknown): string => {
+        if (!axios.isAxiosError(error)) {
+            return "unknown";
+        }
+        return error.response?.status?.toString() ?? "network/no-response";
+    };
+
+    const getErrorCodeDescription = (error: unknown): string => {
+        if (!axios.isAxiosError(error)) {
+            return "unknown";
+        }
+        return error.code || "none";
+    };
 
     /**
      * Checks if the given error indicates an expired session or server unavailability,
@@ -1198,10 +1239,13 @@ export async function withRetry<T>(
             const status = error.response?.status;
             const isNetworkError = !error.response;
             const isAuthEndpoint = error.config?.url?.includes("/2/login/session");
+            const requestDescription = getRequestDescription(error);
 
             if (!isAuthEndpoint && (status === 401 || status === 403 || isNetworkError)) {
                 logger.warn(
-                    `[testBenchConnection] Unrecoverable API error detected (status: ${status}, networkError: ${isNetworkError}). Forcing a local logout.`
+                    `[testBenchConnection] Unrecoverable API error detected for ${requestDescription} (status: ${status}, networkError: ${isNetworkError}, code: ${getErrorCodeDescription(
+                        error
+                    )}). Forcing a local logout.`
                 );
                 vscode.window.showWarningMessage(
                     "Your TestBench session has expired or the server is unavailable. You are being returned to the login view."
@@ -1217,19 +1261,21 @@ export async function withRetry<T>(
         try {
             return await asyncFunction();
         } catch (error) {
-            if (axios.isAxiosError(error)) {
-                logger.trace(
-                    `[testBenchConnection] Attempt ${retryCount + 1} failed with status ${
-                        error.response?.status
-                    }: ${error.message}`
-                );
-            } else {
-                logger.trace(`[testBenchConnection] Attempt ${retryCount + 1} failed: ${error}`);
-            }
+            const currentAttempt = retryCount + 1;
+            const requestDescription = getRequestDescription(error);
+            const statusDescription = getStatusDescription(error);
+            const errorCode = getErrorCodeDescription(error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+
+            logger.trace(
+                `[testBenchConnection] Attempt ${currentAttempt}/${totalAttempts} failed for ${requestDescription} (status: ${statusDescription}, code: ${errorCode}): ${errorMessage}`
+            );
 
             // Check if we should retry this error
             if (shouldRetry && !shouldRetry(error)) {
-                logger.trace(`[testBenchConnection] Error is not retryable. Aborting further retry attempts.`);
+                logger.trace(
+                    `[testBenchConnection] Error is not retryable for ${requestDescription}. Aborting further retry attempts.`
+                );
                 const loggedOut = await checkAndForceLogout(error);
                 if (loggedOut) {
                     throw new TestBenchConnectionError(
@@ -1242,7 +1288,7 @@ export async function withRetry<T>(
             retryCount++;
             if (retryCount > maxAllowedRetryCount) {
                 logger.error(
-                    `[testBenchConnection] Attempt ${retryCount} failed. Maximum retries (${maxAllowedRetryCount}) reached, aborting further retries.`
+                    `[testBenchConnection] Attempt ${retryCount}/${totalAttempts} failed for ${requestDescription}. Maximum retries (${maxAllowedRetryCount}) reached, aborting further retries.`
                 );
                 const loggedOut = await checkAndForceLogout(error);
                 if (loggedOut) {
