@@ -1228,6 +1228,40 @@ export async function withRetry<T>(
         return error.code || "none";
     };
 
+    const isCertificateValidationError = (error: unknown): boolean => {
+        const hasCertificateMessage = (message: string | undefined): boolean => {
+            if (!message) {
+                return false;
+            }
+
+            const normalizedMessage = message.toLowerCase();
+            return (
+                normalizedMessage.includes("self signed certificate") ||
+                normalizedMessage.includes("unable to verify") ||
+                normalizedMessage.includes("certificate")
+            );
+        };
+
+        if (!axios.isAxiosError(error)) {
+            return error instanceof Error ? hasCertificateMessage(error.message) : false;
+        }
+
+        const certErrorCodes = new Set([
+            "SELF_SIGNED_CERT",
+            "SELF_SIGNED_CERT_IN_CHAIN",
+            "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+            "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+            "CERT_UNTRUSTED",
+            "DEPTH_ZERO_SELF_SIGNED_CERT"
+        ]);
+
+        return (
+            certErrorCodes.has(error.code || "") ||
+            hasCertificateMessage(error.message) ||
+            hasCertificateMessage(error.cause instanceof Error ? error.cause.message : undefined)
+        );
+    };
+
     /**
      * Checks if the given error indicates an expired session or server unavailability,
      * and forces a local logout if so. Excludes authentication endpoint errors.
@@ -1240,6 +1274,15 @@ export async function withRetry<T>(
             const isNetworkError = !error.response;
             const isAuthEndpoint = error.config?.url?.includes("/2/login/session");
             const requestDescription = getRequestDescription(error);
+
+            if (isCertificateValidationError(error)) {
+                logger.warn(
+                    `[testBenchConnection] Certificate validation error detected for ${requestDescription} (code: ${getErrorCodeDescription(
+                        error
+                    )}). Skipping automatic logout so caller can apply TLS fallback handling.`
+                );
+                return false;
+            }
 
             if (!isAuthEndpoint && (status === 401 || status === 403 || isNetworkError)) {
                 logger.warn(

@@ -9,11 +9,12 @@
 
 import * as vscode from "vscode";
 import * as https from "https";
+import * as tls from "tls";
 import * as base64 from "base-64";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { logger } from "../extension";
-import { withRetry, RetryPredicateFactory } from "../testBenchConnection";
+import { withRetry, RetryPredicateFactory, TLSSecurityManager } from "../testBenchConnection";
 
 /**
  * Interface for server locations response from the new Play server.
@@ -32,9 +33,23 @@ export class LegacyPlayServerClient {
     private static readonly DEFAULT_LEGACY_PORT = 9444;
     private static readonly LEGACY_SERVER_BASE_PATH = "/api/1";
     private static readonly SERVER_LOCATIONS_ENDPOINT = "/2/serverLocations";
+    private static readonly CERTIFICATE_ERROR_CODES = new Set([
+        "SELF_SIGNED_CERT",
+        "SELF_SIGNED_CERT_IN_CHAIN",
+        "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+        "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+        "CERT_UNTRUSTED",
+        "DEPTH_ZERO_SELF_SIGNED_CERT"
+    ]);
 
     /** The currently active legacy server port (discovered during initialization or defaulted to 9444) */
     private currentLegacyPort: number = LegacyPlayServerClient.DEFAULT_LEGACY_PORT;
+
+    /**
+     * If true, all legacy requests use insecure TLS due to a previously detected
+     * certificate mismatch on the legacy endpoint.
+     */
+    private useInsecureLegacyTls: boolean = false;
 
     /**
      * Creates a new LegacyPlayServerClient instance.
@@ -152,7 +167,16 @@ export class LegacyPlayServerClient {
         const legacyServerBaseUrl = `https://${this.serverName}:${this.currentLegacyPort}${LegacyPlayServerClient.LEGACY_SERVER_BASE_PATH}`;
         const encoded = base64.encode(`${this.username}:${this.sessionToken}`);
 
-        logger.trace(`[LegacyPlayServerClient] Creating legacy server session with URL ${legacyServerBaseUrl}`);
+        const httpsAgent = this.useInsecureLegacyTls
+            ? new https.Agent({
+                  rejectUnauthorized: false,
+                  checkServerIdentity: (_hostname: string, _cert: tls.PeerCertificate) => undefined
+              })
+            : this.httpsAgent;
+
+        logger.trace(
+            `[LegacyPlayServerClient] Creating legacy server session with URL ${legacyServerBaseUrl} (insecureTLS=${this.useInsecureLegacyTls})`
+        );
 
         return axios.create({
             baseURL: legacyServerBaseUrl,
@@ -162,12 +186,150 @@ export class LegacyPlayServerClient {
                 password: this.sessionToken
             },
             headers: {
+                accept: "application/vnd.testbench+json; charset=utf-8",
                 Authorization: `Basic ${encoded}`,
                 "Content-Type": "application/vnd.testbench+json; charset=utf-8"
             },
             proxy: false,
-            httpsAgent: this.httpsAgent
+            httpsAgent
         });
+    }
+
+    /**
+     * Determines if the given error is related to TLS certificate validation failure.
+     * @param error The error object to check
+     * @returns True if the error is a certificate validation error, false otherwise
+     */
+    private isCertificateValidationError(error: unknown): boolean {
+        const hasCertificateMessage = (message: string | undefined): boolean => {
+            if (!message) {
+                return false;
+            }
+
+            const normalizedMessage = message.toLowerCase();
+            return (
+                normalizedMessage.includes("self signed certificate") ||
+                normalizedMessage.includes("unable to verify") ||
+                normalizedMessage.includes("certificate")
+            );
+        };
+
+        if (axios.isAxiosError(error)) {
+            const code = error.code || "";
+            return (
+                LegacyPlayServerClient.CERTIFICATE_ERROR_CODES.has(code) ||
+                hasCertificateMessage(error.message) ||
+                hasCertificateMessage(error.cause instanceof Error ? error.cause.message : undefined)
+            );
+        }
+
+        if (error instanceof Error) {
+            return hasCertificateMessage(error.message);
+        }
+
+        return false;
+    }
+
+    /**
+     * Returns a predicate function for retrying legacy server requests that treats TLS certificate validation errors as non-retryable.
+     * @returns A predicate function that returns true for retryable errors and false for non-retryable errors
+     */
+    private getRetryPredicate(): (error: any) => boolean {
+        const defaultPredicate = RetryPredicateFactory.createDefaultPredicate();
+        return (error: any) => {
+            if (this.isCertificateValidationError(error)) {
+                return false;
+            }
+            return defaultPredicate(error);
+        };
+    }
+
+    /**
+     * Executes a GET request to the legacy Play server with automatic fallback to insecure TLS if a certificate validation error is detected.
+     * @param requestPath The path of the request to be made
+     * @returns A promise that resolves to the AxiosResponse or throws an error if all retries fail
+     */
+    private async executeLegacyGetWithCertFallback(requestPath: string): Promise<AxiosResponse> {
+        const session = this.createLegacyServerSession();
+        try {
+            return await withRetry(
+                () => session.get(requestPath),
+                3, // maxRetries
+                2000, // delayMs
+                this.getRetryPredicate()
+            );
+        } catch (error: unknown) {
+            if (!this.isCertificateValidationError(error)) {
+                throw error;
+            }
+
+            logger.warn(
+                `[LegacyPlayServerClient] Certificate validation failed on legacy endpoint (code: ${(error as any)?.code || "unknown"}). Retrying legacy request with insecure TLS.`
+            );
+
+            this.useInsecureLegacyTls = true;
+            const insecureSession = this.createLegacyServerSession();
+            try {
+                return await withRetry(
+                    () => insecureSession.get(requestPath),
+                    1, // maxRetries
+                    1000, // delayMs
+                    RetryPredicateFactory.createDefaultPredicate(),
+                    false
+                );
+            } catch (insecureError: unknown) {
+                if (!this.isCertificateValidationError(insecureError)) {
+                    throw insecureError;
+                }
+
+                logger.warn(
+                    `[LegacyPlayServerClient] Insecure legacy agent still failed certificate validation (code: ${(insecureError as any)?.code || "unknown"}). Enabling global insecure TLS mode and retrying once.`
+                );
+
+                TLSSecurityManager.getInstance().enableInsecureMode();
+                const globallyInsecureSession = this.createLegacyServerSession();
+                return withRetry(
+                    () => globallyInsecureSession.get(requestPath),
+                    0, // maxRetries
+                    0, // delayMs
+                    RetryPredicateFactory.createDefaultPredicate(),
+                    false
+                );
+            }
+        }
+    }
+
+    /**
+     * Executes a legacy GET with TLS fallback and, when needed, a port fallback.
+     * @param requestPath The path of the request to be made
+     * @returns A promise that resolves to the AxiosResponse or throws an error if all retries fail
+     */
+    private async executeLegacyGetWithPortAndTlsFallback(requestPath: string): Promise<AxiosResponse> {
+        try {
+            return await this.executeLegacyGetWithCertFallback(requestPath);
+        } catch (error: unknown) {
+            if (
+                !this.isCertificateValidationError(error) ||
+                this.currentLegacyPort === LegacyPlayServerClient.DEFAULT_LEGACY_PORT
+            ) {
+                throw error;
+            }
+
+            const discoveredPort = this.currentLegacyPort;
+            logger.warn(
+                `[LegacyPlayServerClient] Legacy request on discovered port ${discoveredPort} failed with certificate validation. Retrying on default port ${LegacyPlayServerClient.DEFAULT_LEGACY_PORT}.`
+            );
+
+            this.currentLegacyPort = LegacyPlayServerClient.DEFAULT_LEGACY_PORT;
+            this.useInsecureLegacyTls = false;
+
+            try {
+                return await this.executeLegacyGetWithCertFallback(requestPath);
+            } catch (fallbackError: unknown) {
+                this.currentLegacyPort = discoveredPort;
+                throw fallbackError;
+            }
+        }
     }
 
     /**
@@ -196,13 +358,7 @@ export class LegacyPlayServerClient {
                 `[LegacyPlayServerClient] Fetching test elements for TOV key ${tovKey} from port ${this.currentLegacyPort}`
             );
 
-            const session = this.createLegacyServerSession();
-            const response: AxiosResponse = await withRetry(
-                () => session.get(getTestElementsURL),
-                3, // maxRetries
-                2000, // delayMs
-                RetryPredicateFactory.createDefaultPredicate()
-            );
+            const response: AxiosResponse = await this.executeLegacyGetWithPortAndTlsFallback(getTestElementsURL);
 
             if (response.data) {
                 logger.trace(
@@ -239,13 +395,7 @@ export class LegacyPlayServerClient {
                 `[LegacyPlayServerClient] Fetching filters from legacy Play server on port ${this.currentLegacyPort}`
             );
 
-            const session = this.createLegacyServerSession();
-            const response: AxiosResponse = await withRetry(
-                () => session.get(getFiltersPath),
-                3, // maxRetries
-                2000, // delayMs
-                RetryPredicateFactory.createDefaultPredicate()
-            );
+            const response: AxiosResponse = await this.executeLegacyGetWithPortAndTlsFallback(getFiltersPath);
 
             if (response.data) {
                 logger.trace(`[LegacyPlayServerClient] Successfully fetched filters data:`, response.data);
