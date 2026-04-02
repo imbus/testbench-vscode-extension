@@ -284,6 +284,7 @@ export class PlayServerConnection {
     private apiClient!: AxiosInstance;
     private legacyClient!: LegacyPlayServerClient;
     private readonly keepAliveIntervalInMs: number = 30 * 1000; // 30 seconds
+    private readonly keepAliveRequestTimeoutInMs: number = 10 * 1000; // 10 seconds per request attempt
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
     private testElementsCache: CacheManager<string, any>;
     private testStructureCache: CacheManager<string, testBenchTypes.TestStructure>;
@@ -1029,11 +1030,24 @@ export class PlayServerConnection {
 
         try {
             await withRetry(
-                () =>
-                    this.apiClient.get(`/2/login/session`, {
-                        headers: { accept: "application/vnd.testbench+json" },
-                        proxy: false
-                    }),
+                () => {
+                    // Hung requests should not block future keep-alive cycles.
+                    const requestAbortController = new AbortController();
+                    const requestTimeoutHandle = setTimeout(() => {
+                        requestAbortController.abort();
+                    }, this.keepAliveRequestTimeoutInMs);
+
+                    return this.apiClient
+                        .get(`/2/login/session`, {
+                            headers: { accept: "application/vnd.testbench+json" },
+                            proxy: false,
+                            timeout: this.keepAliveRequestTimeoutInMs,
+                            signal: requestAbortController.signal
+                        })
+                        .finally(() => {
+                            clearTimeout(requestTimeoutHandle);
+                        });
+                },
                 3,
                 2000,
                 RetryPredicateFactory.createDefaultPredicate()
