@@ -7,7 +7,7 @@ title: Quickstart
 
 1. Open a workspace folder in VS Code.
 2. Open the TestBench view from the side bar.
-3. Create or select a connection and sign in.
+3. Create or select a connection and sign in. To create a new connection, use the connection form in the TestBench view, enter server, port, username, and password, then sign in.
 
 ## 2. Set active context from Projects View
 
@@ -18,7 +18,9 @@ The extension stores this TOV context in `.testbench/ls.config.json`.
 
 ## 3. Open the context you want to work with
 
-The active behavior depends on what you open from Projects View:
+Open either the test object version you selected as active context, or a cycle that belongs to this test object version.
+
+The available features depend on what you open from Projects View:
 
 - If you open a TOV context, test generation is available.
 - If you open a cycle context, test generation and result import are available.

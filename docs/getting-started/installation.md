@@ -12,7 +12,7 @@ title: Installation
 
 ## Install the extension
 
-1. Install the TestBench extension from the Visual Studio Marketplace.
+1. Install the [TestBench extension from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=imbus.testbench-extension). You can also find it in the Extensions view by searching for the extension identifier `imbus.testbench-extension`.
 2. Verify that the extension is enabled in VS Code.
 3. If prompted, reload VS Code to complete activation.
 
@@ -25,8 +25,4 @@ The extension installs these VS Code dependencies automatically:
 
 ## Next steps
 
-After installation, continue with [Quickstart](quickstart.md) to:
-
-- open the TestBench view
-- create or select a connection
-- log in and run your first workflow
+After installation, continue with [Quickstart](quickstart.md) to open the TestBench view, create or select a connection, and run your first workflow.

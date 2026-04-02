@@ -180,6 +180,13 @@ Open a workspace or folder in VS Code. Features such as test generation and resu
 
 Set the `certificatePath` setting to your `.pem` certificate file, or set the `NODE_EXTRA_CA_CERTS` environment variable before starting VS Code.
 
+**Session keep-alive and automatic recovery**
+
+- While you are logged in, the extension sends a keep-alive request to TestBench every 30 seconds to prevent session timeout.
+- If a request fails temporarily, the extension retries automatically.
+- If keep-alive returns `401`, the extension first attempts a silent re-authentication.
+- If recovery fails and the server/session remains unavailable, the extension performs a local logout and returns you to the login view.
+
 **General reset**
 
 Use **Reload Window** (`Ctrl+R` / `Cmd+R`) to resolve transient issues. For persistent problems, run the **TestBench: Clear All Extension Data** command to reset all stored extension data.

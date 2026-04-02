@@ -7,28 +7,20 @@ title: Projects View
 
 ## Open context
 
-- Opening a **Test Object Version** loads the selected TOV into **Test Themes View** and **Test Elements View**
-- Opening a **Test Cycle** loads the selected cycle into **Test Themes View** and **Test Elements View**
+Opening a **Test Object Version** loads the selected TOV into **Test Themes View** and **Test Elements View**. Opening a **Test Cycle** also loads its context into **Test Themes View** and **Test Elements View**.
 
 ## Set the active configuration
 
-- right-click a project to open the context menu and choose **Set as Active Project** if you want to set only the active project
-- right-click a TOV to open the context menu and choose **Set as Active TOV** to set that TOV as active; its parent project is set as the active project automatically
-- the selected active project and active TOV are visually pinned as the first items in **Projects View**
-- the active configuration is written to `.testbench/ls.config.json`
+To define the working context, right-click a project and choose **Set as Active Project** when you only want to set the project. Right-click a TOV and choose **Set as Active TOV** when you want to set both the active TOV and its parent project in one step. The selected active project and active TOV are visually pinned as the first items in **Projects View**, and the active configuration is written to `.testbench/ls.config.json`.
 
 ## Generate tests from project nodes
 
-- **Generate Robot Framework Test Suites (TOV based)** starts generation for the selected TOV
-- **Generate Robot Framework Test Suites (Cycle based)** starts generation for the selected cycle
+Use **Generate Robot Framework Test Suites (TOV based)** to start generation for a selected TOV. Use **Generate Robot Framework Test Suites (Cycle based)** to start generation for a selected cycle.
 
 ## Search and refresh
 
-- use **Search** to filter projects, TOVs, and cycles in the tree
-- use **Refresh Projects** to reload the tree content from TestBench
+Use **Search** to filter projects, TOVs, and cycles in the tree. Use **Refresh Projects** to reload tree content from TestBench.
 
 ## Persisted state
 
-- tree item expansion/collapse state is preserved across sessions
-- visible view configuration is preserved across sessions
-- the last active project context is restored when possible
+Tree expansion and collapse state is preserved across sessions, visible view configuration is persisted, and the last active project context is restored when possible.

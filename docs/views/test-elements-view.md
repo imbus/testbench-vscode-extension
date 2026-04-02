@@ -11,14 +11,11 @@ Subdivisions with a configured resource marker suffix are treated as Robot Frame
 
 The default resource marker suffix is `[Robot-Resource]` and can be changed with the **resourceMarker** extension setting.
 
-- **Create Resource** and **Open Resource** are shown only for subdivisions that match the configured resource marker suffix
-- **Open in Explorer View** is shown for subdivision folder nodes
+The **Create Resource** and **Open Resource** actions are shown only for subdivisions that match the configured resource marker suffix. **Open in Explorer View** is shown for subdivision folder nodes.
 
 ## Create or open resource files
 
-- **Create Resource** creates a `.resource` file for a resource subdivision
-- **Open Resource** opens an existing `.resource` file for a resource subdivision
-- **Open in Explorer View** reveals the related subdivision folder in the VS Code Explorer view
+Use **Create Resource** to create a `.resource` file for a resource subdivision. Use **Open Resource** to open an existing `.resource` file for that subdivision. Use **Open in Explorer View** to reveal the related subdivision folder in the VS Code Explorer view.
 
 ## Required metadata for synchronization
 
@@ -31,18 +28,12 @@ These metadata lines are required for synchronization and must be kept valid. If
 
 ## Keyword navigation
 
-- single-clicking a keyword opens the corresponding resource file and jumps to the keyword definition
-- double-clicking a keyword does the same and also reveals the resource file in the VS Code Explorer view
+Single-clicking a keyword opens the corresponding resource file and jumps to the keyword definition. Double-clicking performs the same action and also reveals the resource file in the VS Code Explorer view.
 
 ## Keyword synchronization
 
-CodeLens actions support:
-
-- pulling keyword definitions from TestBench
-- pushing local keyword definitions to TestBench
-- synchronizing a single keyword or the entire resource file
+CodeLens actions support pulling keyword definitions from TestBench, pushing local keyword definitions to TestBench, and synchronizing either a single keyword or the entire resource file.
 
 ## Search and refresh
 
-- use **Search** to filter subdivisions and keywords in the tree
-- use **Refresh Test Elements** to reload the current context
+Use **Search** to filter subdivisions and keywords in the tree, and use **Refresh Test Elements** to reload the current context.
