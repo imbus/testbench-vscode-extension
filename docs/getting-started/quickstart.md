@@ -9,10 +9,14 @@ title: Quickstart
 2. Open the TestBench view from the side bar.
 3. Create or select a connection and sign in. To create a new connection, use the connection form in the TestBench view, enter server, port, username, and password, then sign in.
 
+![Login to TestBench](./images/login.gif)
+
 ## 2. Set active context from Projects View
 
 1. In Projects View, navigate to a project.
 2. Right-click the target TOV you want to work with and choose **Set as Active TOV**.
+
+![Link workspace to a Test Object Version](./images/link_tov.gif)
 
 The extension stores this TOV context in `.testbench/ls.config.json`.
 
@@ -36,6 +40,8 @@ You can start test generation from either of these two views:
     - Run **Generate Robot Framework Test Suites** on a test theme or test case set node to generate that subtree.
 3. Execute the generated tests (for example with RobotCode).
 
+![Generate test suites from Test Themes](./images/TestThemesGenerateTestsButton.png)
+
 ## 5. Upload execution results
 
 1. Ensure the Robot Framework execution tool you used produced the file `output.xml`.
@@ -43,10 +49,14 @@ You can start test generation from either of these two views:
 3. In Test Themes view, use the **Upload Execution Results To TestBench** button on a generated node. You can upload a single generated node or a generated subtree.
 4. Verify that uploaded items are updated in TestBench.
 
+![Upload execution results from Test Themes](./images/UploadResultsToTestbenchButton.png)
+
 ## Workspace behavior
 
 - When a workspace is open, the full feature set is available.
 - When no workspace is open, the extension is in read-only mode. Test generation, execution results upload, resource creation, and keyword synchronization actions that modify local files or TestBench content are unavailable.
+
+![Read-only mode when no workspace is open](./images/ReadOnlyMode.png)
 
 ## Context behavior
 

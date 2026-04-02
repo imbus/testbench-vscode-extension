@@ -42,3 +42,5 @@ You can trigger it from the Command Palette:
 :::warning
 **Clear All Extension Data** removes persisted extension data, including stored connections. This operation cannot be undone.
 :::
+
+![Clear All Extension Data command](./images/ClearAllExtensionDataCommand.png)

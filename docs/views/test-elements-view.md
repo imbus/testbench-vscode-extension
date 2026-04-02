@@ -5,17 +5,23 @@ title: Test Elements View
 
 **Test Elements View** shows the resource subdivisions and keywords for the currently opened TestBench context.
 
+![Test Elements View](./images/TestElementsView.png)
+
 ## Resource identification and action visibility
 
 Subdivisions with a configured resource marker suffix are treated as Robot Framework resources.
 
 The default resource marker suffix is `[Robot-Resource]` and can be changed with the **resourceMarker** extension setting.
 
+![Resource marker suffix in subdivisions](./images/subdivision_suffix.png)
+
 The **Create Resource** and **Open Resource** actions are shown only for subdivisions that match the configured resource marker suffix. **Open in Explorer View** is shown for subdivision folder nodes.
 
 ## Create or open resource files
 
 Use **Create Resource** to create a `.resource` file for a resource subdivision. Use **Open Resource** to open an existing `.resource` file for that subdivision. Use **Open in Explorer View** to reveal the related subdivision folder in the VS Code Explorer view.
+
+![Create resource file from Test Elements View](./images/create_resource.gif)
 
 ## Required metadata for synchronization
 
@@ -32,11 +38,13 @@ These metadata lines are required for synchronization and must be kept valid. If
 
 Single-clicking a keyword opens the corresponding resource file and jumps to the keyword definition. Double-clicking performs the same action and also reveals the resource file in the VS Code Explorer view.
 
+![Keyword navigation to resource file definition](./images/TestElementsKeywordOfResourceFile.png)
+
 ## Keyword synchronization
 
 CodeLens actions are inline clickable commands shown directly in the editor above a resource file or keyword definition. They support pulling keyword definitions from TestBench, pushing local keyword definitions to TestBench, and synchronizing either a single keyword or the entire resource file.
 
-![CodeLens actions for keyword synchronization](./images/test-elements-codelens-keyword-sync.png)
+![CodeLens actions for keyword synchronization](./images/sync_keywords.gif)
 
 ## Toolbar buttons
 

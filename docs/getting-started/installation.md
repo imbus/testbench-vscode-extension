@@ -16,6 +16,8 @@ title: Installation
 2. Verify that the extension is enabled in VS Code.
 3. If prompted, reload VS Code to complete activation.
 
+![TestBench extension login page in VS Code](./images/ExtensionLoginPage.png)
+
 ## Automatically installed dependencies
 
 The extension installs these VS Code dependencies automatically:
