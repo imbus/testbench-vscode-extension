@@ -30,4 +30,4 @@ The extension auto-installs these dependencies:
 - [Test Themes View](views/test-themes-view)
 - [Test Elements View](views/test-elements-view)
 - [Settings Reference](configuration/settings-reference)
-- [Troubleshooting](troubleshooting/troubleshooting)
+- [Troubleshooting](troubleshooting/)

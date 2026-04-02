@@ -10,6 +10,14 @@ title: Troubleshooting
 | Import results fail                               | `output.xml` missing or wrong path           | Verify **outputXmlFilePath** and test runner output location.                                                                               |
 | No CodeLens actions available for a resource file | Invalid or missing resource metadata/context | Ensure the correct TOV context is selected in Projects View and verify that `tb:uid` and `tb:context` exist and match the selected context. |
 | TLS/certificate errors                            | Untrusted server certificate                 | Configure **certificatePath** or **NODE_EXTRA_CA_CERTS**.                                                                                   |
+| Unexpected redirect to login view                 | Session could not be recovered automatically | Check network/server availability, then sign in again. If this persists, verify proxy/certificate settings and server reachability.         |
+
+## Session keep-alive and automatic recovery
+
+- While you are logged in, the extension sends a keep-alive request (`GET /2/login/session`) every 30 seconds to prevent session timeout.
+- Temporary request failures are retried automatically (typically up to 3 retries with a short delay between attempts).
+- If keep-alive returns HTTP `401` (Unauthorized), the extension first attempts silent re-authentication.
+- If retries and re-authentication do not recover the session, or if API requests continue to fail with session-expired/forbidden or network-unreachable conditions, the extension performs a local logout and returns to the login view.
 
 Quick reset actions:
 
