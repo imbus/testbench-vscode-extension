@@ -19,10 +19,12 @@ Use **Create Resource** to create a `.resource` file for a resource subdivision.
 
 ## Required metadata for synchronization
 
-When the extension creates a resource file, it writes these metadata lines at the top:
+When the extension creates a resource file, it writes metadata comments at the top:
 
-- `tb:uid`
-- `tb:context`
+```robot
+tb:uid:<Subdivision-UID>
+tb:context:<Project-Name>/<Test Object Version Name>
+```
 
 These metadata lines are required for synchronization and must be kept valid. If metadata is missing or invalid, the extension offers **Quick Fix** actions to restore them.
 
@@ -32,8 +34,14 @@ Single-clicking a keyword opens the corresponding resource file and jumps to the
 
 ## Keyword synchronization
 
-CodeLens actions support pulling keyword definitions from TestBench, pushing local keyword definitions to TestBench, and synchronizing either a single keyword or the entire resource file.
+CodeLens actions are inline clickable commands shown directly in the editor above a resource file or keyword definition. They support pulling keyword definitions from TestBench, pushing local keyword definitions to TestBench, and synchronizing either a single keyword or the entire resource file.
 
-## Search and refresh
+![CodeLens actions for keyword synchronization](./images/test-elements-codelens-keyword-sync.png)
 
-Use **Search** to filter subdivisions and keywords in the tree, and use **Refresh Test Elements** to reload the current context.
+## Toolbar buttons
+
+The Test Elements View toolbar provides quick actions for navigation and tree updates:
+
+- **Open Projects View** switches back to Projects View.
+- **Refresh Test Elements** reloads the current Test Elements context.
+- **Search** filters subdivisions and keywords in the tree.

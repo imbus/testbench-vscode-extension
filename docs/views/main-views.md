@@ -7,4 +7,4 @@ The extension is organized around three main views. In [Projects View](projects-
 
 ## Shared behavior
 
-Search is available in all three views and filters the currently displayed tree items. The extension also preserves view state across sessions, including expansion/collapse state and visible view configuration.
+Search is available in all three views and filters the currently displayed tree items in real time. You can search by name and tooltip in all views, and by UID in Test Themes and Test Elements, with optional case-sensitive and exact matching. The extension also preserves view state across sessions, including expansion state and which views are currently shown or hidden.

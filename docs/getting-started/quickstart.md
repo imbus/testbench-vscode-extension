@@ -23,31 +23,32 @@ Open either the test object version you selected as active context, or a cycle t
 The available features depend on what you open from Projects View:
 
 - If you open a TOV context, test generation is available.
-- If you open a cycle context, test generation and result import are available.
+- If you open a cycle context, test generation and execution results upload are available.
 
 ## 4. Generate tests and run them
 
 You can start test generation from either of these two views:
 
 1. Projects View:
-    - run **Generate Robot Framework Test Suites (Cycle based)** on a cycle to generate suites for that cycle scope
-    - run **Generate Robot Framework Test Suites (TOV based)** on a TOV when you want TOV-scope generation
+    - Run **Generate Robot Framework Test Suites (Cycle based)** on a cycle to generate suites for that cycle scope.
+    - Run **Generate Robot Framework Test Suites (TOV based)** on a TOV when you want TOV-scope generation.
 2. Test Themes View:
-    - run **Generate Robot Framework Test Suites** on a test theme or test case set node to generate that subtree
+    - Run **Generate Robot Framework Test Suites** on a test theme or test case set node to generate that subtree.
 3. Execute the generated tests (for example with RobotCode).
 
 ## 5. Upload execution results
 
-1. Ensure the Robot Framework execution tool you used produced `output.xml`.
-2. In Test Themes view, use the **Upload Execution Results To Testbench** button on a generated node. You can import a single generated node or a generated subtree.
-3. Verify that uploaded items are updated in TestBench.
+1. Ensure the Robot Framework execution tool you used produced the file `output.xml`.
+2. Ensure that the extension setting `testbenchExtension.outputXmlFilePath` points to that `output.xml`.
+3. In Test Themes view, use the **Upload Execution Results To TestBench** button on a generated node. You can upload a single generated node or a generated subtree.
+4. Verify that uploaded items are updated in TestBench.
 
 ## Workspace behavior
 
-- With workspace open: full feature set.
-- Without workspace open: read-only mode. Test generation, result import, resource creation, and keyword synchronization actions that modify local files or TestBench content are unavailable.
+- When a workspace is open, the full feature set is available.
+- When no workspace is open, the extension is in read-only mode. Test generation, execution results upload, resource creation, and keyword synchronization actions that modify local files or TestBench content are unavailable.
 
 ## Context behavior
 
-- Cycle context: test generation and result import available.
-- TOV-only context: generation available, result import unavailable.
+- In a cycle-based context, test generation and execution results upload are available.
+- In a TOV-only context, test generation is available, but execution results upload is unavailable.

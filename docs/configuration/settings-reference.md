@@ -3,7 +3,14 @@ sidebar_position: 6
 title: Settings Reference
 ---
 
-Settings are grouped in VS Code under:
+This page is a quick reference for TestBench extension settings.
+
+- Use the **Setting** column when browsing settings in VS Code.
+- Use the **Setting ID** column when editing `.vscode/settings.json` or searching by ID.
+
+For deeper behavior of generation and import related options (provided by the bundled TestBench2RobotFramework tooling), see the [TestBench2RobotFramework documentation](https://github.com/imbus/testbench2robotframework#readme).
+
+Settings are grouped in VS Code under these categories:
 
 - Login
 - Logger
@@ -13,52 +20,52 @@ Settings are grouped in VS Code under:
 
 ## Login
 
-| Setting                                | Value Type | Default | Description                                            |
-| -------------------------------------- | ---------- | ------- | ------------------------------------------------------ |
-| automaticLoginAfterExtensionActivation | On/Off     | false   | Attempts login with last active connection on startup. |
+| Setting                                    | Setting ID                                                | Value Type | Default | Description                                                                                    |
+| ------------------------------------------ | --------------------------------------------------------- | ---------- | ------- | ---------------------------------------------------------------------------------------------- |
+| Automatic Login After Extension Activation | testbenchExtension.automaticLoginAfterExtensionActivation | On/Off     | false   | Automatically attempts login on startup using the last active connection, if one is available. |
 
 ## Logger
 
-| Setting           | Value Type             | Default | Description                                                          |
-| ----------------- | ---------------------- | ------- | -------------------------------------------------------------------- |
-| testbenchLogLevel | One option from a list | Info    | Log threshold. Options: No logging, Trace, Debug, Info, Warn, Error. |
+| Setting             | Setting ID                           | Value Type             | Default | Description                                                              |
+| ------------------- | ------------------------------------ | ---------------------- | ------- | ------------------------------------------------------------------------ |
+| Testbench Log Level | testbenchExtension.testbenchLogLevel | One option from a list | Info    | Minimum log level. Options: No logging, Trace, Debug, Info, Warn, Error. |
 
 ## TestBench2RobotFramework
 
-| Setting                        | Value Type             | Default              | Description                                                                                      |
-| ------------------------------ | ---------------------- | -------------------- | ------------------------------------------------------------------------------------------------ |
-| cleanFilesBeforeTestGeneration | On/Off                 | true                 | Clears output directory before generation.                                                       |
-| fullyQualifiedKeywords         | On/Off                 | false                | Uses fully qualified keyword calls in generated suites, for example `ResourceOrLibrary.Keyword`. |
-| outputDirectory                | Text path              | tests                | Relative path for generated `.robot` suites.                                                     |
-| compoundKeywordLogging         | One option from a list | GROUP                | Logging mode for compound keywords: GROUP, COMMENT, NONE.                                        |
-| logSuiteNumbering              | On/Off                 | false                | Adds numbering prefixes to generated suite folder and file names, for example `1_Name.robot`.    |
-| resourceDirectoryPath          | Text path              | empty                | Relative base path for generated/managed `.resource` files.                                      |
-| resourceRootRegex              | Text pattern (regex)   | resources            | Cut point regex for mapping subdivision hierarchy to local path.                                 |
-| libraryMarker                  | List of text values    | ["[Robot-Library]"]  | Marker suffixes identifying library subdivisions.                                                |
-| libraryRoot                    | List of text values    | ["RF", "RF-Library"] | Root nodes used to identify library hierarchy.                                                   |
-| resourceMarker                 | List of text values    | ["[Robot-Resource]"] | Marker suffixes identifying resource subdivisions.                                               |
-| resourceRoot                   | List of text values    | ["RF-Resource"]      | Root nodes used to identify resource hierarchy.                                                  |
-| libraryMapping                 | List of text values    | []                   | Custom subdivision-to-library import mappings.                                                   |
-| resourceMapping                | List of text values    | []                   | Custom subdivision-to-resource import mappings.                                                  |
-| outputXmlFilePath              | Text path              | results/output.xml   | Relative path to Robot Framework execution result XML.                                           |
+| Setting                            | Setting ID                                        | Value Type             | Default              | Description                                                                                                                     |
+| ---------------------------------- | ------------------------------------------------- | ---------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Clean Files Before Test Generation | testbenchExtension.cleanFilesBeforeTestGeneration | On/Off                 | true                 | Deletes existing files in the output directory before generating new suites.                                                    |
+| Fully Qualified Keywords           | testbenchExtension.fullyQualifiedKeywords         | On/Off                 | false                | Uses fully qualified keyword calls in generated suites, for example `ResourceOrLibrary.Keyword`.                                |
+| Output Directory                   | testbenchExtension.outputDirectory                | Text path              | tests                | Output location for generated suites (relative to workspace). A ZIP archive path is also supported by the underlying generator. |
+| Compound Keyword Logging           | testbenchExtension.compoundKeywordLogging         | One option from a list | GROUP                | Logging mode for compound keywords: GROUP, COMMENT, NONE.                                                                       |
+| Log Suite Numbering                | testbenchExtension.logSuiteNumbering              | On/Off                 | true                 | Adds numbering prefixes to generated suite folder and file names, for example `1_Name.robot`.                                   |
+| Resource Directory Path            | testbenchExtension.resourceDirectoryPath          | Text path              | empty                | Base directory for generated or managed `.resource` files (relative to workspace).                                              |
+| Resource Root Regex                | testbenchExtension.resourceRootRegex              | Text pattern (regex)   | .\*                  | Regex anchor used when mapping subdivision hierarchy to local resource folder paths and imports.                                |
+| Library Marker                     | testbenchExtension.libraryMarker                  | List of text values    | ["[Robot-Library]"]  | Marker suffixes used to identify library subdivisions.                                                                          |
+| Library Root                       | testbenchExtension.libraryRoot                    | List of text values    | ["RF", "RF-Library"] | Root nodes used to identify the library hierarchy.                                                                              |
+| Resource Marker                    | testbenchExtension.resourceMarker                 | List of text values    | ["[Robot-Resource]"] | Marker suffixes used to identify resource subdivisions.                                                                         |
+| Resource Root                      | testbenchExtension.resourceRoot                   | List of text values    | ["RF-Resource"]      | Root nodes used to identify the resource hierarchy.                                                                             |
+| Library Mapping                    | testbenchExtension.libraryMapping                 | List of text values    | []                   | Optional subdivision-to-library import mappings in the form `<Subdivision>:<Library Import>`.                                   |
+| Resource Mapping                   | testbenchExtension.resourceMapping                | List of text values    | []                   | Optional subdivision-to-resource import mappings in the form `<Subdivision>:<Resource Import>`.                                 |
+| Output Xml File Path               | testbenchExtension.outputXmlFilePath              | Text path              | results/output.xml   | Path to the Robot Framework output XML used for execution result import (relative to workspace).                                |
 
 ## Test Generation
 
-| Setting                                             | Value Type | Default | Description                                                                                 |
-| --------------------------------------------------- | ---------- | ------- | ------------------------------------------------------------------------------------------- |
-| clearInternalTestbenchDirectoryBeforeTestGeneration | On/Off     | false   | Clears internal `.testbench` files before generation (except protected internal artifacts). |
-| openTestingViewAfterTestGeneration                  | On/Off     | false   | Opens VS Code Testing view automatically after generation.                                  |
+| Setting                                                   | Setting ID                                                             | Value Type | Default | Description                                                                                 |
+| --------------------------------------------------------- | ---------------------------------------------------------------------- | ---------- | ------- | ------------------------------------------------------------------------------------------- |
+| Clear Internal Testbench Directory Before Test Generation | testbenchExtension.clearInternalTestbenchDirectoryBeforeTestGeneration | On/Off     | false   | Clears internal `.testbench` files before generation (except protected internal artifacts). |
+| Open Testing View After Test Generation                   | testbenchExtension.openTestingViewAfterTestGeneration                  | On/Off     | false   | Opens the VS Code Testing view automatically after generation.                              |
 
 ## Connection
 
-| Setting         | Value Type | Default | Description                                                               |
-| --------------- | ---------- | ------- | ------------------------------------------------------------------------- |
-| certificatePath | Text path  | empty   | Optional custom PEM certificate path. Supports relative or absolute path. |
+| Setting          | Setting ID                         | Value Type | Default | Description                                                               |
+| ---------------- | ---------------------------------- | ---------- | ------- | ------------------------------------------------------------------------- |
+| Certificate Path | testbenchExtension.certificatePath | Text path  | empty   | Optional custom PEM certificate path. Supports relative or absolute path. |
 
 ## Path rules
 
-- all path settings are workspace-relative except `certificatePath`
-- `certificatePath` supports absolute and relative values
+- All path settings are workspace-relative except `certificatePath`.
+- `certificatePath` supports both absolute and relative values.
 
 Example:
 

@@ -135,9 +135,9 @@ Click the **Generate Robot Framework Test Suites** button next to any item in th
 
 ### 6. Upload Results
 
-After test execution, click the **Upload Execution Results To TestBench** button next to any generated item in the Test Themes view to import results from `output.xml` back to TestBench.
+After test execution, click the **Upload Execution Results To TestBench** button next to any generated item in the Test Themes view to upload results from `output.xml` back to TestBench.
 
-> **Note:** Result import requires test suites to have been generated from a **Test Cycle** (not a TOV directly).
+> **Note:** Uploading execution results requires test suites to have been generated from a **Test Cycle** (not a TOV directly).
 
 ![Upload Results Button](userGuideImages/UploadResultsToTestbenchButton.png)
 
@@ -147,17 +147,17 @@ Settings are available via the gear icon on the login page or in the Projects vi
 
 The table below lists the most-used settings for day-to-day workflows.
 
-| Setting                                  | Default                | Description                                                                                       |
-| ---------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------- |
-| `automaticLoginAfterExtensionActivation` | `false`                | Automatically log in using the last used connection on startup                                    |
-| `outputDirectory`                        | `tests`                | Output directory for generated `.robot` test files (relative to workspace root)                   |
-| `outputXmlFilePath`                      | `results/output.xml`   | Path to the Robot Framework results file used when importing results (relative to workspace root) |
-| `resourceDirectoryPath`                  | _(empty)_              | Local directory for `.resource` files (relative to workspace root)                                |
-| `resourceMarker`                         | `["[Robot-Resource]"]` | Suffix that identifies TestBench subdivisions as Robot Framework resources                        |
-| `cleanFilesBeforeTestGeneration`         | `true`                 | Delete existing files in the output directory before generating new test suites                   |
-| `openTestingViewAfterTestGeneration`     | `false`                | Automatically open the VS Code Testing view after test generation                                 |
-| `testbenchLogLevel`                      | `Info`                 | Log verbosity: `No logging`, `Trace`, `Debug`, `Info`, `Warn`, `Error`                            |
-| `certificatePath`                        | _(empty)_              | Path to a custom or self-signed `.pem` certificate for the TestBench server                       |
+| Setting                                  | Default                | Description                                                                                                 |
+| ---------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `automaticLoginAfterExtensionActivation` | `false`                | Automatically log in using the last used connection on startup                                              |
+| `outputDirectory`                        | `tests`                | Output directory for generated `.robot` test files (relative to workspace root)                             |
+| `outputXmlFilePath`                      | `results/output.xml`   | Path to the Robot Framework results file used when uploading execution results (relative to workspace root) |
+| `resourceDirectoryPath`                  | _(empty)_              | Local directory for `.resource` files (relative to workspace root)                                          |
+| `resourceMarker`                         | `["[Robot-Resource]"]` | Suffix that identifies TestBench subdivisions as Robot Framework resources                                  |
+| `cleanFilesBeforeTestGeneration`         | `true`                 | Delete existing files in the output directory before generating new test suites                             |
+| `openTestingViewAfterTestGeneration`     | `false`                | Automatically open the VS Code Testing view after test generation                                           |
+| `testbenchLogLevel`                      | `Info`                 | Log verbosity: `No logging`, `Trace`, `Debug`, `Info`, `Warn`, `Error`                                      |
+| `certificatePath`                        | _(empty)_              | Path to a custom or self-signed `.pem` certificate for the TestBench server                                 |
 
 All path settings are relative to the workspace root. `certificatePath` accepts both absolute and relative paths. Alternatively, you can set the `NODE_EXTRA_CA_CERTS` environment variable to point to your certificate file instead of using the `certificatePath` setting.
 
@@ -167,9 +167,9 @@ For the full settings reference, see the [User Guide](user-guide.md#extension-se
 
 **Extension is running in read-only mode**
 
-Open a workspace or folder in VS Code. Features such as test generation and result import require an open workspace.
+Open a workspace or folder in VS Code. Features such as test generation and execution results upload require an open workspace.
 
-**Cannot generate tests or import results**
+**Cannot generate tests or upload execution results**
 
 - Confirm `outputDirectory` and `outputXmlFilePath` settings are correct (paths are relative to the workspace root)
 - Ensure the RobotCode extension is installed and enabled
