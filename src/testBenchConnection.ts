@@ -46,6 +46,9 @@ let cachedCertificate: CachedCertificateData | null = null;
  */
 let isRetryNotificationActive = false;
 
+const SESSION_LOGOUT_WARNING_MESSAGE =
+    "Your TestBench session has expired or the server is unavailable. You are being returned to the login view.";
+
 /**
  * Loads and caches certificate data from disk to avoid redundant reads.
  * @param absolutePath The absolute path to the certificate file
@@ -1065,9 +1068,7 @@ export class PlayServerConnection {
             }
 
             if (shouldLogout) {
-                vscode.window.showInformationMessage(
-                    "Unable to maintain TestBench session. Redirecting to login page."
-                );
+                vscode.window.showWarningMessage(SESSION_LOGOUT_WARNING_MESSAGE);
                 await vscode.commands.executeCommand(`${allExtensionCommands.logout}`);
             }
         } finally {
@@ -1223,9 +1224,7 @@ export async function withRetry<T>(
                 logger.warn(
                     `[testBenchConnection] Unrecoverable API error detected (status: ${status}, networkError: ${isNetworkError}). Forcing a local logout.`
                 );
-                vscode.window.showWarningMessage(
-                    "Your TestBench session has expired or the server is unavailable. You are being returned to the login view."
-                );
+                vscode.window.showWarningMessage(SESSION_LOGOUT_WARNING_MESSAGE);
                 await vscode.commands.executeCommand(allExtensionCommands.logout);
                 return true;
             }
