@@ -44,3 +44,8 @@ You can trigger it from the Command Palette:
 :::
 
 ![Clear All Extension Data command](./images/ClearAllExtensionDataCommand.png)
+
+## Need more help?
+
+For bug reports or feature requests, use the
+[TestBench VS Code extension GitHub repository](https://github.com/imbus/testbench-vscode-extension).

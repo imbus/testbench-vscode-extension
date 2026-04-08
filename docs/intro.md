@@ -21,6 +21,11 @@ The extension auto-installs these dependencies:
 - Python extension (`ms-python.python`)
 - RobotCode extension (`d-biehl.robotcode`)
 
+## Repository
+
+See the source code of the extension in the
+[TestBench VS Code extension GitHub repository](https://github.com/imbus/testbench-vscode-extension).
+
 ## Contents
 
 - [Installation](getting-started/installation)
