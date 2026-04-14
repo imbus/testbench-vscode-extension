@@ -148,6 +148,8 @@ When this option is enabled, uploading execution results causes TestBench to che
 
 If **Check-in mandatory for test execution** is disabled, uploaded items remain visible after upload.
 
+![TestBench check-in mandatory for test execution option](userGuideImages/TestBenchClientCheckInOption.png)
+
 ## Extension Settings
 
 Settings are available via the gear icon on the login page or in the Projects view toolbar, or through **File → Preferences → Settings → Extensions → TestBench**.
