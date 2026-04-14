@@ -31,14 +31,22 @@ Run generated suites with RobotCode or any other Robot Framework runner before u
 Use the tree item action **Upload Execution Results To TestBench** on the node you want to upload. You can upload a selected subtree or a single node.
 The **Upload Execution Results To TestBench** action is visible for generated nodes and generated subtree contexts. Upload reads Robot Framework test execution results from `output.xml`, and the default result path is defined by **outputXmlFilePath** relative to the workspace. After a successful upload, affected tree items are updated to `Performed` and show verdict details in their tooltips. The upload action is available only when **Test Themes View** is opened from a cycle context.
 
+**Default behavior after upload**
+
+In TestBench, **Check-in mandatory for test execution** is enabled by default. You can find this option in **Administration > System-wide Preferences**.
+
+When this option is enabled, uploading execution results causes TestBench to check in the executed items. The extension shows only executable items that are not locked by the system, so uploaded items are removed from **Test Themes View** after a successful upload.
+
+If **Check-in mandatory for test execution** is disabled in TestBench, uploaded items remain visible in **Test Themes View** after upload.
+
 ![Upload execution results action in Test Themes](./images/UploadResultsToTestbenchButton.png)
 
 ## Toolbar buttons
 
 The Test Themes View toolbar provides quick actions for navigation and tree updates:
 
-- **Open Projects View** switches back to Projects View.
 - **Refresh Test Themes** reloads the current Test Themes context.
+- **Open Projects View** switches back to Projects View.
 - **Search** filters test themes and test case sets in the tree.
 
 ![Search options for Test Themes](./images/SearchOptionsForTestThemes.png)

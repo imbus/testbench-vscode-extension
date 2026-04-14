@@ -25,9 +25,9 @@ Use **Generate Robot Framework Test Suites (TOV based)** to start generation for
 
 The Projects View toolbar provides quick actions for the current session and tree content:
 
+- **Logout** signs you out locally in the extension and returns to the login view. It does not terminate the server-side session for other API clients that use the same account.
 - **Refresh Projects** reloads tree content from TestBench.
 - **Search** filters projects, TOVs, and cycles in the tree.
-- **Logout** signs you out locally in the extension and returns to the login view. It does not terminate the server-side session for other API clients that use the same account.
 - **Open Extension Settings** opens TestBench extension settings. For details on all settings, see [Settings Reference](../configuration/settings-reference.md).
 
 ## Persisted state

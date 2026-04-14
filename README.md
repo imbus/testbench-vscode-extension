@@ -135,11 +135,18 @@ Click the **Generate Robot Framework Test Suites** button next to any item in th
 
 ### 6. Upload Results
 
-After test execution, click the **Upload Execution Results To TestBench** button next to any generated item in the Test Themes view to upload results from `output.xml` back to TestBench.
-
-> **Note:** Uploading execution results requires test suites to have been generated from a **Test Cycle** (not a TOV directly).
+After test execution, click the **Upload Execution Results To TestBench** button next to any generated item in the Test Themes view to upload results from `output.xml` back to TestBench. Uploading execution results requires test suites to have been generated from a **Test Cycle** (not a TOV directly).
 
 ![Upload Results Button](userGuideImages/UploadResultsToTestbenchButton.png)
+
+**Default behavior after upload**
+
+In TestBench, **Check-in mandatory for test execution** is enabled by default.
+You can find this option in **Administration > System-wide Preferences**.
+
+When this option is enabled, uploading execution results causes TestBench to check in the executed items. The extension shows only executable items that are not locked by the system, so uploaded items are removed from the Test Themes view in VS Code after a successful upload.
+
+If **Check-in mandatory for test execution** is disabled, uploaded items remain visible after upload.
 
 ## Extension Settings
 
@@ -175,6 +182,15 @@ Open a workspace or folder in VS Code. Features such as test generation and exec
 - Ensure the RobotCode extension is installed and enabled
 - Verify that test suites have been executed and the `output.xml` file exists
 - Check that the tree items are not locked in the TestBench client
+
+**Default behavior after upload**
+
+In TestBench, **Check-in mandatory for test execution** is enabled by default.
+You can find this option in **Administration > System-wide Preferences**.
+
+When this option is enabled, uploading execution results causes TestBench to check in the executed items. The extension shows only executable items that are not locked by the system, so uploaded items are removed from the Test Themes view after a successful upload.
+
+If **Check-in mandatory for test execution** is disabled, uploaded items remain visible after upload.
 
 **Connection issues with a custom certificate**
 
