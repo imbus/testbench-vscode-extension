@@ -139,7 +139,7 @@ After test execution, click the **Upload Execution Results To TestBench** button
 
 ![Upload Results Button](userGuideImages/UploadResultsToTestbenchButton.png)
 
-**Default behavior after upload**
+#### Default behavior after upload
 
 In TestBench, **Check-in mandatory for test execution** is enabled by default.
 You can find this option in **Administration > System-wide Preferences**.
@@ -183,7 +183,7 @@ Open a workspace or folder in VS Code. Features such as test generation and exec
 - Verify that test suites have been executed and the `output.xml` file exists
 - Check that the tree items are not locked in the TestBench client
 
-**Default behavior after upload**
+### Default behavior after upload
 
 In TestBench, **Check-in mandatory for test execution** is enabled by default.
 You can find this option in **Administration > System-wide Preferences**.
