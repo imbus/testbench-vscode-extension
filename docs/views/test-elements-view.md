@@ -3,6 +3,11 @@ sidebar_position: 4
 title: Test Elements View
 ---
 
+import createResourceWebm from './videos/create_resource.webm';
+import createResourceMp4 from './videos/create_resource.mp4';
+import syncKeywordsWebm from './videos/sync_keywords.webm';
+import syncKeywordsMp4 from './videos/sync_keywords.mp4';
+
 **Test Elements View** shows the resource subdivisions and keywords for the currently opened TestBench context.
 
 ![Test Elements View](./images/TestElementsView.png)
@@ -22,8 +27,8 @@ The **Create Resource** and **Open Resource** actions are shown only for subdivi
 Use **Create Resource** to create a `.resource` file for a resource subdivision. Use **Open Resource** to open an existing `.resource` file for that subdivision. Use **Open in Explorer View** to reveal the related subdivision folder in the VS Code Explorer view.
 
 <video controls preload="metadata" playsinline width="100%">
-	<source src="./videos/create_resource.webm" type="video/webm" />
-	<source src="./videos/create_resource.mp4" type="video/mp4" />
+	<source src={createResourceWebm} type="video/webm" />
+	<source src={createResourceMp4} type="video/mp4" />
 	Your browser does not support the video tag.
 </video>
 
@@ -49,8 +54,8 @@ Single-clicking a keyword opens the corresponding resource file and jumps to the
 CodeLens actions are inline clickable commands shown directly in the editor above a resource file or keyword definition. They support pulling keyword definitions from TestBench, pushing local keyword definitions to TestBench, and synchronizing either a single keyword or the entire resource file.
 
 <video controls preload="metadata" playsinline width="100%">
-	<source src="./videos/sync_keywords.webm" type="video/webm" />
-	<source src="./videos/sync_keywords.mp4" type="video/mp4" />
+	<source src={syncKeywordsWebm} type="video/webm" />
+	<source src={syncKeywordsMp4} type="video/mp4" />
 	Your browser does not support the video tag.
 </video>
 

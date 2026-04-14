@@ -3,6 +3,11 @@ sidebar_position: 2
 title: Quickstart
 ---
 
+import loginWebm from './videos/login.webm';
+import loginMp4 from './videos/login.mp4';
+import linkTovWebm from './videos/link_tov.webm';
+import linkTovMp4 from './videos/link_tov.mp4';
+
 ## 1. Open workspace and sign in
 
 1. Open a workspace folder in VS Code.
@@ -10,8 +15,8 @@ title: Quickstart
 3. Create or select a connection and sign in. To create a new connection, use the connection form in the TestBench view, enter server, port, username, and password, then sign in.
 
 <video controls preload="metadata" playsinline width="100%">
-    <source src="./videos/login.webm" type="video/webm" />
-    <source src="./videos/login.mp4" type="video/mp4" />
+    <source src={loginWebm} type="video/webm" />
+    <source src={loginMp4} type="video/mp4" />
     Your browser does not support the video tag.
 </video>
 
@@ -21,8 +26,8 @@ title: Quickstart
 2. Right-click the target test object version (TOV) you want to work with and choose **Set as Active TOV**.
 
 <video controls preload="metadata" playsinline width="100%">
-    <source src="./videos/link_tov.webm" type="video/webm" />
-    <source src="./videos/link_tov.mp4" type="video/mp4" />
+    <source src={linkTovWebm} type="video/webm" />
+    <source src={linkTovMp4} type="video/mp4" />
     Your browser does not support the video tag.
 </video>
 
