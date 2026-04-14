@@ -37,32 +37,10 @@ The extension stores this TOV context in `.testbench/ls.config.json`.
 
 Open either the test object version you selected as active context, or a cycle that belongs to this test object version.
 
-The available features depend on what you open from Projects View:
+The context you open determines the available actions:
 
 - If you open a TOV context, test generation is available.
 - If you open a cycle context, test generation and execution results upload are available.
-
-## 4. Generate tests and run them
-
-You can start test generation from either of these two views:
-
-1. Projects View:
-    - Run **Generate Robot Framework Test Suites (Cycle based)** on a cycle to generate suites for that cycle scope.
-    - Run **Generate Robot Framework Test Suites (TOV based)** on a TOV when you want TOV-scope generation.
-2. Test Themes View:
-    - Run **Generate Robot Framework Test Suites** on a test theme or test case set node to generate that subtree.
-3. Execute the generated tests (for example with RobotCode).
-
-![Generate test suites from Test Themes](./images/TestThemesGenerateTestsButton.png)
-
-## 5. Upload execution results
-
-1. Ensure the Robot Framework execution tool you used produced the file `output.xml`.
-2. Ensure that the extension setting `testbenchExtension.outputXmlFilePath` points to that `output.xml`.
-3. In Test Themes view, use the **Upload Execution Results To TestBench** button on a generated node. You can upload a single generated node or a generated subtree.
-4. Verify that uploaded items are updated in TestBench.
-
-![Upload execution results from Test Themes](./images/UploadResultsToTestbenchButton.png)
 
 ## Workspace behavior
 
@@ -71,7 +49,9 @@ You can start test generation from either of these two views:
 
 ![Read-only mode when no workspace is open](./images/ReadOnlyMode.png)
 
-## Context behavior
+## Next steps
 
-- In a cycle-based context, test generation and execution results upload are available.
-- In a TOV-only context, test generation is available, but execution results upload is unavailable.
+1. Create or open local `.resource` files in [Create or open resource files](../views/test-elements-view#create-or-open-resource-files).
+2. Synchronize keyword definitions in [Keyword synchronization](../views/test-elements-view#keyword-synchronization).
+3. Generate Robot Framework suites in [Generate Robot Framework test suites](../views/test-themes-view#generate-robot-framework-test-suites).
+4. Execute suites and upload results in [Execute and upload results](../views/test-themes-view#execute-and-upload-results).
