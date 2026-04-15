@@ -21,6 +21,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     private currentWebview?: vscode.WebviewView;
     private _messageListenerDisposable: vscode.Disposable | undefined;
     private editingConnectionId: string | null = null;
+    private isLoginInProgress: boolean = false;
+    private loginInProgressConnectionId: string | null = null;
+    private loginInProgressConnectionLabel: string | null = null;
 
     /**
      * Constructs a new LoginWebViewProvider.
@@ -67,9 +70,17 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     await this.handleLoginWithConnection(message.payload.connectionId);
                     break;
                 case WebviewMessageCommands.SAVE_NEW_CONNECTION:
+                    if (this.isLoginInProgress) {
+                        this.notifyLoginInProgressActionBlocked();
+                        break;
+                    }
                     await this.handleSaveNewConnection(message.payload);
                     break;
                 case WebviewMessageCommands.REQUEST_DELETE_CONFIRMATION:
+                    if (this.isLoginInProgress) {
+                        this.notifyLoginInProgressActionBlocked();
+                        break;
+                    }
                     await this.handleRequestDeleteConfirmation(message.payload.connectionId);
                     break;
                 case WebviewMessageCommands.LOGIN:
@@ -104,12 +115,24 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     }
                     break;
                 case WebviewMessageCommands.EDIT_CONNECTION:
+                    if (this.isLoginInProgress) {
+                        this.notifyLoginInProgressActionBlocked();
+                        break;
+                    }
                     await this.handleEditConnection(message.payload.connectionId);
                     break;
                 case WebviewMessageCommands.UPDATE_CONNECTION:
+                    if (this.isLoginInProgress) {
+                        this.notifyLoginInProgressActionBlocked();
+                        break;
+                    }
                     await this.handleUpdateConnection(message.payload);
                     break;
                 case WebviewMessageCommands.CANCEL_EDIT_CONNECTION:
+                    if (this.isLoginInProgress) {
+                        this.notifyLoginInProgressActionBlocked();
+                        break;
+                    }
                     await this.handleCancelEditConnection();
                     break;
                 default:
@@ -206,6 +229,38 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     }
 
     /**
+     * Updates host-side login progress state and notifies the webview.
+     * @param {boolean} isInProgress Whether a login operation is currently in progress.
+     * @param {string | null} connectionId The ID of the connection being used for login, if applicable.
+     * @param {string | null} connectionLabel The label of the connection being used for login, if applicable.
+     */
+    private updateLoginProgressState(
+        isInProgress: boolean,
+        connectionId: string | null = null,
+        connectionLabel: string | null = null
+    ): void {
+        this.isLoginInProgress = isInProgress;
+        this.loginInProgressConnectionId = isInProgress ? connectionId : null;
+        this.loginInProgressConnectionLabel = isInProgress ? connectionLabel : null;
+
+        this.postMessageToWebview(WebviewMessageCommands.UPDATE_LOGIN_STATE, {
+            loginInProgress: this.isLoginInProgress,
+            loginConnectionId: this.loginInProgressConnectionId,
+            loginConnectionLabel: this.loginInProgressConnectionLabel
+        });
+    }
+
+    /**
+     * Shows a message when actions are blocked during an active login.
+     */
+    private notifyLoginInProgressActionBlocked(): void {
+        this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+            type: "info",
+            text: "A login request is already in progress. Please wait."
+        });
+    }
+
+    /**
      * Checks if an error object signifies a user-cancelled login operation.
      * @param {any} error The error object to inspect.
      * @returns {boolean} True if the error is a login cancellation, false otherwise.
@@ -215,7 +270,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     }
 
     /**
-     * Asynchronously fetches user connections them to the webview sorted alphabetically by label.
+     * Asynchronously fetches user connections and sends them to the webview sorted alphabetically by label.
      * Send the editing state to the webview if a connection edited.
      * If successful, it posts the connections for display.
      * If an error occurs, it logs the error and posts an error message to the webview.
@@ -231,7 +286,10 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
             this.postMessageToWebview(WebviewMessageCommands.DISPLAY_CONNECTIONS_IN_WEBVIEW, {
                 connections: sortedConnections,
-                editingConnectionId: this.editingConnectionId
+                editingConnectionId: this.editingConnectionId,
+                loginInProgress: this.isLoginInProgress,
+                loginConnectionId: this.loginInProgressConnectionId,
+                loginConnectionLabel: this.loginInProgressConnectionLabel
             });
         } catch (error: any) {
             logger.error("[loginWebView] Error fetching connections for webview:", error);
@@ -252,6 +310,15 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      */
     private async handleLoginWithConnection(connectionId: string): Promise<void> {
         logger.debug(`[loginWebView] Attempting login to TestBench...`);
+
+        if (this.isLoginInProgress) {
+            this.notifyLoginInProgressActionBlocked();
+            return;
+        }
+
+        // Notify the webview immediately so the loading indicator appears without waiting for async lookups.
+        this.updateLoginProgressState(true, connectionId);
+
         try {
             const connections: connectionManager.TestBenchConnection[] = await connectionManager.getConnections(
                 this.extensionContext
@@ -267,6 +334,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 });
                 return;
             }
+
+            this.updateLoginProgressState(true, selectedConnection.id, selectedConnection.label);
 
             await connectionManager.setActiveConnectionId(this.extensionContext, selectedConnection.id);
 
@@ -294,6 +363,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     text: `Login Error: ${error.message}`
                 });
             }
+        } finally {
+            this.updateLoginProgressState(false);
         }
     }
 
