@@ -316,21 +316,27 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
-        // Notify the webview immediately so the loading indicator appears without waiting for async lookups.
-        this.updateLoginProgressState(true, connectionId);
+        const normalizedConnectionId = connectionId?.trim();
+        if (!normalizedConnectionId) {
+            this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                type: "error",
+                text: "Cannot login: Connection ID missing or invalid."
+            });
+            return;
+        }
 
         try {
             const connections: connectionManager.TestBenchConnection[] = await connectionManager.getConnections(
                 this.extensionContext
             );
             const selectedConnection: connectionManager.TestBenchConnection | undefined = connections.find(
-                (p) => p.id === connectionId
+                (p) => p.id === normalizedConnectionId
             );
 
             if (!selectedConnection) {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                     type: "error",
-                    text: `Connection with ID ${connectionId} not found.`
+                    text: `Connection with ID ${normalizedConnectionId} not found.`
                 });
                 return;
             }

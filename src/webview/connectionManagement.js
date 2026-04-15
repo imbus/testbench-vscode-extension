@@ -152,6 +152,16 @@
                     loginButtonTitle = "Finish editing before login";
                 }
 
+                let loginButtonAriaLabel = `Login with connection ${connection.label}`;
+                if (isLoginTarget) {
+                    loginButtonAriaLabel = `Login in progress for connection ${connection.label}`;
+                } else if (isLoginInProgress) {
+                    const activeConnectionLabel = loginInProgressConnectionLabel || "another connection";
+                    loginButtonAriaLabel = `Login unavailable. Please wait while logging in with ${activeConnectionLabel}`;
+                } else if (isAnyConnectionBeingEdited) {
+                    loginButtonAriaLabel = "Login unavailable while a connection is being edited";
+                }
+
                 const editButtonTitle = isLoginInProgress
                     ? "Please wait for the current login request to complete"
                     : "Edit this connection";
@@ -184,7 +194,7 @@
                 </div>
                 <div class="connection-actions">
                     <button class="login-btn${isLoginTarget ? " is-loading" : ""}" data-connection-id="${connection.id}" 
-                            aria-label="Login with connection ${connection.label}" 
+                            aria-label="${loginButtonAriaLabel}" 
                             title="${loginButtonTitle}"
                             ${areActionsBlocked ? "disabled" : ""}>
                         <span class="icon icon-login"></span>
