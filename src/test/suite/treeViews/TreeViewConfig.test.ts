@@ -6,7 +6,6 @@
 import * as assert from "assert";
 import {
     TreeViewConfig,
-    CustomRootConfig,
     MarkingConfig,
     PersistenceConfig,
     FilterConfig,
@@ -23,7 +22,6 @@ suite("TreeViewConfig", () => {
                 title: "Test Tree View",
                 contextValue: "testTreeView",
                 features: {
-                    customRoot: true,
                     marking: true,
                     persistence: false,
                     filtering: true,
@@ -31,13 +29,6 @@ suite("TreeViewConfig", () => {
                     expansion: true
                 },
                 modules: {
-                    customRoot: {
-                        enabled: true,
-                        contextKey: "test.customRoot",
-                        allowedItemTypes: ["project", "cycle"],
-                        persistAcrossSessions: true,
-                        maxDepth: 3
-                    },
                     marking: {
                         enabled: true,
                         strategies: ["click", "keyboard"],
@@ -49,7 +40,6 @@ suite("TreeViewConfig", () => {
                     persistence: {
                         strategy: "workspace",
                         autoSave: true,
-                        includeCustomRoot: true,
                         includeExpansion: true,
                         includeMarking: true
                     },
@@ -92,7 +82,6 @@ suite("TreeViewConfig", () => {
             assert.strictEqual(config.id, "test-tree");
             assert.strictEqual(config.title, "Test Tree View");
             assert.strictEqual(config.contextValue, "testTreeView");
-            assert.strictEqual(config.features.customRoot, true);
             assert.strictEqual(config.features.persistence, false);
             assert.strictEqual(config.behavior.refreshStrategy, "smart");
             assert.strictEqual(config.ui.emptyMessage, "No items found");
@@ -104,7 +93,6 @@ suite("TreeViewConfig", () => {
                 title: "Minimal Tree",
                 contextValue: "minimal",
                 features: {
-                    customRoot: false,
                     marking: false,
                     persistence: false,
                     filtering: false,
@@ -130,39 +118,6 @@ suite("TreeViewConfig", () => {
             assert.strictEqual(config.id, "minimal-tree");
             assert.strictEqual(config.title, "Minimal Tree");
             assert.strictEqual(config.contextValue, "minimal");
-        });
-    });
-
-    suite("CustomRootConfig", () => {
-        test("should create valid CustomRootConfig", () => {
-            const config: CustomRootConfig = {
-                enabled: true,
-                contextKey: "custom.root",
-                allowedItemTypes: ["project", "cycle", "version"],
-                persistAcrossSessions: true,
-                maxDepth: 5
-            };
-
-            assert.strictEqual(config.enabled, true);
-            assert.strictEqual(config.contextKey, "custom.root");
-            assert.deepStrictEqual(config.allowedItemTypes, ["project", "cycle", "version"]);
-            assert.strictEqual(config.persistAcrossSessions, true);
-            assert.strictEqual(config.maxDepth, 5);
-        });
-
-        test("should create CustomRootConfig without optional properties", () => {
-            const config: CustomRootConfig = {
-                enabled: false,
-                contextKey: "disabled.root",
-                allowedItemTypes: [],
-                persistAcrossSessions: false
-            };
-
-            assert.strictEqual(config.enabled, false);
-            assert.strictEqual(config.contextKey, "disabled.root");
-            assert.deepStrictEqual(config.allowedItemTypes, []);
-            assert.strictEqual(config.persistAcrossSessions, false);
-            assert.strictEqual(config.maxDepth, undefined);
         });
     });
 
@@ -209,14 +164,12 @@ suite("TreeViewConfig", () => {
             const config: PersistenceConfig = {
                 strategy: "workspace",
                 autoSave: true,
-                includeCustomRoot: true,
                 includeExpansion: true,
                 includeMarking: true
             };
 
             assert.strictEqual(config.strategy, "workspace");
             assert.strictEqual(config.autoSave, true);
-            assert.strictEqual(config.includeCustomRoot, true);
             assert.strictEqual(config.includeExpansion, true);
             assert.strictEqual(config.includeMarking, true);
         });
@@ -225,14 +178,12 @@ suite("TreeViewConfig", () => {
             const config: PersistenceConfig = {
                 strategy: "global",
                 autoSave: false,
-                includeCustomRoot: false,
                 includeExpansion: false,
                 includeMarking: false
             };
 
             assert.strictEqual(config.strategy, "global");
             assert.strictEqual(config.autoSave, false);
-            assert.strictEqual(config.includeCustomRoot, false);
             assert.strictEqual(config.includeExpansion, false);
             assert.strictEqual(config.includeMarking, false);
         });
@@ -241,7 +192,6 @@ suite("TreeViewConfig", () => {
             const config: PersistenceConfig = {
                 strategy: "none",
                 autoSave: false,
-                includeCustomRoot: false,
                 includeExpansion: false,
                 includeMarking: false
             };
@@ -417,7 +367,6 @@ suite("TreeViewConfig", () => {
                     title: "Test",
                     contextValue: "test",
                     features: {
-                        customRoot: false,
                         marking: false,
                         persistence: false,
                         filtering: false,
@@ -453,7 +402,6 @@ suite("TreeViewConfig", () => {
                     title: "Test",
                     contextValue: "test",
                     features: {
-                        customRoot: false,
                         marking: false,
                         persistence: false,
                         filtering: false,
@@ -506,7 +454,6 @@ suite("TreeViewConfig", () => {
                 const config: PersistenceConfig = {
                     strategy: strategy,
                     autoSave: true,
-                    includeCustomRoot: true,
                     includeExpansion: true,
                     includeMarking: true
                 };

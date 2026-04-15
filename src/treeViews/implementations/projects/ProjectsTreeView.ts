@@ -59,16 +59,6 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
      * Registers all command handlers for the projects tree view
      */
     private registerCommands(): void {
-        this.disposables.push(
-            vscode.commands.registerCommand(`${this.config.id}.makeRoot`, async (item: ProjectsTreeItem) =>
-                this.makeRoot(item)
-            )
-        );
-
-        this.disposables.push(
-            vscode.commands.registerCommand(`${this.config.id}.resetCustomRoot`, async () => this.resetCustomRoot())
-        );
-
         this.disposables.push(vscode.commands.registerCommand(`${this.config.id}.refresh`, () => this.refresh()));
 
         this.disposables.push(

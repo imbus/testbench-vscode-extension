@@ -16,7 +16,6 @@ export type TestThemeType =
     | "TestCaseNode"
     | `MarkedForImport.${string}`
     | `MarkedForGeneration.${string}`
-    | `customRoot.${string}`
     | `openedFromCycle.${string}`;
 
 export interface TestThemeData {
@@ -182,10 +181,6 @@ export class TestThemesTreeItem extends TreeItemBase {
      */
     private getContextValue(): string {
         let contextValue = this.originalContextValue;
-
-        if (this.getMetadata("isCustomRoot") === true) {
-            contextValue = `customRoot.${contextValue}`;
-        }
 
         const markingInfo = this.getMetadata("markingInfo") as MarkingInfo | undefined;
         if (markingInfo) {

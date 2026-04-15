@@ -352,8 +352,6 @@ async function initializeContextValues(context: vscode.ExtensionContext): Promis
     // Set initial context states
     const initialContexts = [
         { key: ContextKeys.CONNECTION_ACTIVE, value: false },
-        { key: ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, value: false },
-        { key: ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, value: false },
         { key: ContextKeys.FILTER_DIFF_MODE_ENABLED, value: false },
         { key: ContextKeys.FILTER_DIFF_MODE_ENABLED_PROJECTS, value: false },
         { key: ContextKeys.FILTER_DIFF_MODE_ENABLED_TEST_THEMES, value: false },
@@ -706,8 +704,6 @@ export async function clearAllExtensionData(
 
         const contextUpdates = [
             ["setContext", ContextKeys.CONNECTION_ACTIVE, false],
-            ["setContext", ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, false],
-            ["setContext", ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, false],
             ["setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, false]
         ];
 

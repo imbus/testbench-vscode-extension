@@ -536,16 +536,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      */
     private registerCommands(): void {
         this.disposables.push(
-            vscode.commands.registerCommand(`${this.config.id}.makeRoot`, async (item: TestThemesTreeItem) =>
-                this.makeRoot(item)
-            )
-        );
-
-        this.disposables.push(
-            vscode.commands.registerCommand(`${this.config.id}.resetCustomRoot`, async () => this.resetCustomRoot())
-        );
-
-        this.disposables.push(
             vscode.commands.registerCommand(`${this.config.id}.refresh`, () => this.refreshWithCacheClear())
         );
 
