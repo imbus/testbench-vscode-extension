@@ -177,7 +177,7 @@ export class TestThemesTreeItem extends TreeItemBase {
 
     /**
      * Builds the context value string for the tree item based on its state and metadata.
-     * @return Context value string with appropriate prefixes for custom root, marking, and cycle context
+     * @return Context value string with appropriate prefixes for marking, and cycle context
      */
     private getContextValue(): string {
         let contextValue = this.originalContextValue;

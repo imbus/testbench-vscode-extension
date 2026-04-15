@@ -587,7 +587,7 @@ export async function clearAllExtensionData(
                 "This will clear ALL TestBench extension data including:\n\n" +
                     "• All saved connections and passwords\n" +
                     "• Current login session\n" +
-                    "• Tree view states and custom roots\n" +
+                    "• Tree view states\n" +
                     "• Import tracking data\n" +
                     "• All persistent settings\n\n" +
                     "This action cannot be undone. Are you sure you want to continue?",

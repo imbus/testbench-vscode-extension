@@ -93,7 +93,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
 
     /**
      * Registers event handlers for the projects tree view.
-     * Sets up listeners for project selection, data updates, and custom root events with debouncing
+     * Sets up listeners for project selection, data updates with debouncing
      */
     private registerEventHandlers(): void {
         // Listen for project selection events
