@@ -183,8 +183,9 @@ export async function pollJobStatus(
     while (true) {
         if (cancellationToken?.isCancellationRequested) {
             const cancellationMsg = "Job status polling cancelled by the user.";
+            const cancellationMsgForUser = "Operation cancelled.";
             logger.debug(`[reportHandler] ${cancellationMsg}`);
-            vscode.window.showInformationMessage(cancellationMsg);
+            vscode.window.showInformationMessage(cancellationMsgForUser);
             throw new vscode.CancellationError();
         }
         if (!connection) {
@@ -291,7 +292,7 @@ export async function getJobIdOfCycleReport(
     } catch (error: any) {
         const errorMsg: string = `Error fetching job ID: ${error.message}`;
         logger.error("[reportHandler] " + errorMsg);
-        vscode.window.showErrorMessage(errorMsg);
+        vscode.window.showErrorMessage("Could not reach TestBench server. Please try again.");
         return null;
     }
 }
@@ -406,7 +407,7 @@ export async function downloadReport(
     } catch (error) {
         const downloadReportErrorMessage: string = `Failed to download report: ${(error as Error).message}`;
         logger.error(`[reportHandler] ${downloadReportErrorMessage}`);
-        vscode.window.showErrorMessage(downloadReportErrorMessage);
+        vscode.window.showErrorMessage("Could not download the report from TestBench.");
         return null;
     }
 }
@@ -679,7 +680,7 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
             const testGenerationCancelledMessage: string =
                 "[reportHandler] Robot Framework test suite generation has been cancelled by user.";
             logger.debug(testGenerationCancelledMessage);
-            vscode.window.showInformationMessage(testGenerationCancelledMessage);
+            vscode.window.showInformationMessage("Robot Framework test generation has been cancelled");
             return false;
         } else {
             logger.error("[reportHandler] Error during Robot Framework test suite generation:", error);
@@ -806,7 +807,7 @@ export async function removeReportZipFile(
                 await utils.delay(delayMs);
             } else {
                 logger.error(`[reportHandler] Error removing file ${zipFileFullPath}:`, error);
-                vscode.window.showErrorMessage(`Error removing file ${zipFileFullPath}: ${(error as Error).message}`);
+                vscode.window.showErrorMessage("Could not remove the report file. It may still be in use.");
                 return;
             }
         }
