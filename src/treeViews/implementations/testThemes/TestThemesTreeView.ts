@@ -711,12 +711,62 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             // If this is a descendant of a marked hierarchy, use the root UID
             const rootId = markingModule.getRootIDForDescendant(item.id!);
             let reportRootUID = itemUID;
+            let importTargetItem = item;
+            let canValidateImportScope = true;
 
             if (rootId) {
-                // This item is a descendant, get the root's UID
-                const rootMarkingInfo = markingModule.getMarkingInfo(rootId);
-                if (rootMarkingInfo && rootMarkingInfo.metadata?.uniqueID) {
-                    reportRootUID = rootMarkingInfo.metadata.uniqueID;
+                // This item is a descendant, import against the marked root hierarchy.
+                const rootTreeItem = this.findTreeItemById(rootId);
+                if (rootTreeItem) {
+                    importTargetItem = rootTreeItem;
+                    if (rootTreeItem.data.base.uniqueID) {
+                        reportRootUID = rootTreeItem.data.base.uniqueID;
+                    }
+                } else {
+                    const rootMarkingInfo = markingModule.getMarkingInfo(rootId);
+                    if (rootMarkingInfo && rootMarkingInfo.metadata?.uniqueID) {
+                        reportRootUID = rootMarkingInfo.metadata.uniqueID;
+                    }
+                    canValidateImportScope = false;
+                }
+            }
+
+            if (!canValidateImportScope) {
+                const cannotValidateRootScopeMessageForUser = `Cannot import "${itemLabel}" because the marked root scope is not available in the current tree state. Refresh the Test Themes tree and try again.`;
+                this.logger.warn(
+                    `[TestThemesTreeView] Import blocked for "${itemLabel}", unable to validate lock state for root scope (rootId: ${rootId}, reportRootUID: ${reportRootUID}).`
+                );
+                vscode.window.showWarningMessage(cannotValidateRootScopeMessageForUser);
+                return;
+            }
+
+            // Check for locked descendants before importing
+            const lockedDescendantNames = this.getLockedDescendantNames(importTargetItem);
+            if (lockedDescendantNames.length > 0) {
+                const lockedList = lockedDescendantNames.join(", ");
+                if (importTargetItem.lockedByOther) {
+                    // The item itself is locked, should not happen since the button is hidden,
+                    // but guard against it.
+                    vscode.window.showErrorMessage(
+                        `Cannot import "${itemLabel}" because the selected import scope is locked by another user.`
+                    );
+                    this.logger.warn(
+                        `[TestThemesTreeView] Import blocked for "${itemLabel}", selected import scope is locked by another user.`
+                    );
+                    return;
+                }
+
+                // Some descendants are locked
+                const proceed = await vscode.window.showWarningMessage(
+                    `Some items are locked by another user and will not be imported: ${lockedList}. Do you want to proceed with the remaining items?`,
+                    "Proceed",
+                    "Cancel"
+                );
+                if (proceed !== "Proceed") {
+                    this.logger.debug(
+                        `[TestThemesTreeView] Import cancelled by user due to locked descendants: ${lockedList}`
+                    );
+                    return;
                 }
             }
 
@@ -730,15 +780,25 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
             if (importResult) {
                 if (importResult.importedTestCaseCount === 0) {
-                    const noItemsImportedWarning =
-                        `Import completed for "${itemLabel}", but no test cases were actually imported. ` +
-                        `This may happen when items are locked by another user in TestBench.`;
+                    // Import job succeeded on the server but no test cases were actually imported.
+                    // This usually happens when items are locked by another user in TestBench.
+                    let noItemsImportedWarning = `Import completed for "${itemLabel}", but no test cases were actually imported.`;
+                    if (lockedDescendantNames.length > 0) {
+                        noItemsImportedWarning += ` The following items are locked by another user: ${lockedDescendantNames.join(", ")}.`;
+                    } else {
+                        noItemsImportedWarning += ` This may happen when items are locked by another user in TestBench.`;
+                    }
                     this.logger.warn(`[TestThemesTreeView] ${noItemsImportedWarning}`);
                     vscode.window.showWarningMessage(noItemsImportedWarning);
                 } else {
-                    const importSuccessfulMessageForUser =
+                    let importSuccessfulMessageForUser =
                         `Successfully imported ${importResult.importedTestCaseSetCount} test case set(s) with ` +
                         `${importResult.importedTestCaseCount} test case(s) for "${itemLabel}" to TestBench.`;
+                    if (lockedDescendantNames.length > 0) {
+                        importSuccessfulMessageForUser +=
+                            ` Note: The following items were locked by another user and could not be imported: ` +
+                            `${lockedDescendantNames.join(", ")}.`;
+                    }
                     this.logger.info(`[TestThemesTreeView] ${importSuccessfulMessageForUser}`);
                     vscode.window.showInformationMessage(importSuccessfulMessageForUser);
 
@@ -797,6 +857,53 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      */
     public isImportFunctionalityAvailable(): boolean {
         return this.isOpenedFromCycle;
+    }
+
+    /**
+     * Collects names of descendant tree items (and the item itself) that are locked by another user.
+     * @param item The root tree item to check
+     * @returns Array of names of locked items
+     */
+    private getLockedDescendantNames(item: TestThemesTreeItem): string[] {
+        const lockedNames = new Set<string>();
+        const stack: TestThemesTreeItem[] = [item];
+
+        while (stack.length > 0) {
+            const current = stack.pop()!;
+            if (current.lockedByOther) {
+                lockedNames.add(current.label?.toString() || current.data.base.name || "Unknown");
+            }
+
+            const childItems = (current.children || []) as TestThemesTreeItem[];
+            for (const child of childItems) {
+                stack.push(child);
+            }
+        }
+
+        return Array.from(lockedNames);
+    }
+
+    /**
+     * Finds a tree item by its ID.
+     * @param itemId The tree item ID
+     * @returns The tree item or null when not found
+     */
+    private findTreeItemById(itemId: string): TestThemesTreeItem | null {
+        const stack: TestThemesTreeItem[] = [...(this.rootItems || [])];
+
+        while (stack.length > 0) {
+            const current = stack.pop()!;
+            if (current.id === itemId) {
+                return current;
+            }
+
+            const childItems = (current.children || []) as TestThemesTreeItem[];
+            for (const child of childItems) {
+                stack.push(child);
+            }
+        }
+
+        return null;
     }
 
     /**
