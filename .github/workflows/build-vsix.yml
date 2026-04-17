@@ -21,11 +21,11 @@ jobs:
         steps:
             # Checkout the repository
             - name: Checkout Code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
 
             # Set up Node.js
             - name: Set up Node.js ${{ matrix.node-version }}
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v6
               with:
                   node-version: ${{ matrix.node-version }}
                   cache: "npm"
@@ -60,7 +60,7 @@ jobs:
 
             # Cache VS Code test instance to speed up tests
             - name: Cache VS Code Test Instance
-              uses: actions/cache@v3
+              uses: actions/cache@v5
               with:
                   path: .vscode-test
                   key: vscode-test-${{ runner.os }}-${{ hashFiles('package.json') }}
@@ -97,11 +97,11 @@ jobs:
         steps:
             # Checkout the repository
             - name: Checkout Code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
 
             # Set up Node.js
             - name: Set up Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v6
               with:
                   node-version: "lts/*"
                   check-latest: true

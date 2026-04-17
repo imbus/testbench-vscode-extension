@@ -12,13 +12,13 @@ jobs:
         steps:
             # Step 1: Checkout code with full history
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
               with:
                   fetch-depth: 0
 
             # Step 2: Setup Node.js
             - name: Setup Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v6
               with:
                   node-version: "lts/*"
 
@@ -138,12 +138,12 @@ jobs:
 
             #     steps:
             #         - name: Checkout code
-            #           uses: actions/checkout@v4
+            #           uses: actions/checkout@v6
             #           with:
             #               fetch-depth: 0
 
             #         - name: Setup Node.js
-            #           uses: actions/setup-node@v4
+            #           uses: actions/setup-node@v6
             #           with:
             #               node-version: "lts/*"
 
