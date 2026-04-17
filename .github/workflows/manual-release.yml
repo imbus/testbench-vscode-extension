@@ -29,6 +29,8 @@ jobs:
     manual-release:
         name: Create Manual Release
         runs-on: ubuntu-latest
+        permissions:
+            contents: write
 
         steps:
             # Checkout code
@@ -120,14 +122,14 @@ jobs:
                   git push origin main
                   git push origin "v${{ inputs.version }}"
 
-            # Create GitHub Release
+            # Create GitHub release and upload VSIX artifact(s)
             - name: Create GitHub Release
-              uses: actions/create-release@v1
+              uses: softprops/action-gh-release@v2
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               with:
                   tag_name: v${{ inputs.version }}
-                  release_name: Release v${{ inputs.version }}
+                  name: Release v${{ inputs.version }}
                   body: |
                       ## What's Changed
 
@@ -141,18 +143,8 @@ jobs:
                       ### Download
                       Download the VSIX file from the assets below to install this extension.
                   draft: false
-                  prerelease: ${{ inputs.release_type == 'prerelease' }}
-
-            # Upload VSIX to release
-            - name: Upload VSIX to Release
-              uses: actions/upload-release-asset@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  upload_url: ${{ steps.create_release.outputs.upload_url }}
-                  asset_path: ./testbench-extension-${{ inputs.version }}.vsix
-                  asset_name: testbench-extension-v${{ inputs.version }}.vsix
-                  asset_content_type: application/octet-stream
+                  prerelease: ${{ contains(inputs.version, '-') }}
+                  files: ./*.vsix
 
             # Summary
             - name: Release Summary
