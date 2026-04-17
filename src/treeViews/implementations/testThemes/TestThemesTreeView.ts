@@ -715,7 +715,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 }
             }
 
-            const importSuccessful = await reportHandler.fetchTestResultsAndCreateResultsAndImportToTestbench(
+            const importResult = await reportHandler.fetchTestResultsAndCreateResultsAndImportToTestbench(
                 this.extensionContext,
                 item,
                 projectKey,
@@ -723,10 +723,33 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 reportRootUID
             );
 
-            if (importSuccessful) {
-                const importSuccessfulMessageForUser = `Successfully imported Robot Framework test results for ${reportRootUID} (${itemLabel}) to TestBench.`;
-                this.logger.info(`[TestThemesTreeView] ${importSuccessfulMessageForUser}`);
-                vscode.window.showInformationMessage(importSuccessfulMessageForUser);
+            if (importResult) {
+                if (importResult.importedTestCaseCount === 0) {
+                    const noItemsImportedWarning =
+                        `Import completed for "${itemLabel}", but no test cases were actually imported. ` +
+                        `This may happen when items are locked by another user in TestBench.`;
+                    this.logger.warn(`[TestThemesTreeView] ${noItemsImportedWarning}`);
+                    vscode.window.showWarningMessage(noItemsImportedWarning);
+                } else {
+                    const importSuccessfulMessageForUser =
+                        `Successfully imported ${importResult.importedTestCaseSetCount} test case set(s) with ` +
+                        `${importResult.importedTestCaseCount} test case(s) for "${itemLabel}" to TestBench.`;
+                    this.logger.info(`[TestThemesTreeView] ${importSuccessfulMessageForUser}`);
+                    vscode.window.showInformationMessage(importSuccessfulMessageForUser);
+
+                    if (importResult.testCaseSetErrors.length > 0 || importResult.testCaseWarnings.length > 0) {
+                        const warningDetails = [
+                            ...importResult.testCaseSetErrors,
+                            ...importResult.testCaseWarnings
+                        ].join("; ");
+                        this.logger.warn(
+                            `[TestThemesTreeView] Import completed with warnings for ${itemLabel}: ${warningDetails}`
+                        );
+                        vscode.window.showWarningMessage(
+                            `Import completed for ${itemLabel} but with warnings. Check the TestBench log for details.`
+                        );
+                    }
+                }
 
                 this.extensionContext.workspaceState.update(lastImportedItemKey, item.id);
 
