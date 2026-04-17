@@ -133,12 +133,10 @@ jobs:
             - name: Generate requirements.txt for Python
               id: pip-compile
               run: pip-compile --resolver=backtracking --output-file=requirements.txt pyproject.toml
-              continue-on-error: true
 
             - name: Bundle Python Dependencies using Nox
               id: nox-bundle
               run: python -m nox --session bundle_dependencies
-              continue-on-error: true
 
             # Validate version format before building
             - name: Validate Version Format
