@@ -869,9 +869,17 @@ async function runRobotFrameworkTestGenerationProcess(
         return false;
     }
 
-    const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
+    const generationResult: testbench2robotframeworkLib.TestGenerationResult =
         await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(downloadedReportZipPath);
-    if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
+    if (!generationResult.commandSucceeded) {
+        return false;
+    }
+
+    if (!generationResult.testsWereGenerated) {
+        const noTestsWarning =
+            "No Robot Framework test suites were generated. No test data was found for generation. This can happen when selected items are locked by another user, excluded by active Test Theme filters, or marked as not executable.";
+        logger.warn(`[reportHandler] ${noTestsWarning}`);
+        vscode.window.showWarningMessage(noTestsWarning);
         return false;
     }
 
@@ -1581,12 +1589,21 @@ export async function startTestGenerationUsingTOV(
 
                 progress.report({ increment: 20, message: "Generating Robot Framework test suites..." });
 
-                const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
+                const generationResult: testbench2robotframeworkLib.TestGenerationResult =
                     await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(
                         downloadedTovReportPath
                     );
 
-                if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
+                if (!generationResult.commandSucceeded) {
+                    return false;
+                }
+
+                if (!generationResult.testsWereGenerated) {
+                    const noTestsMessage = generateTestForSpecificTestThemeTreeItem
+                        ? `No Robot Framework test suites were generated from ${rootUIDToUse} ('${treeItem.label}'). No eligible test data was found for generation. This can happen when selected items are locked by another user, excluded by active Test Theme filters, or marked as not executable.`
+                        : `No Robot Framework test suites were generated from Test Object Version '${treeItem.label}'. The report may not contain test data.`;
+                    logger.warn(`[reportHandler] ${noTestsMessage}`);
+                    vscode.window.showWarningMessage(noTestsMessage);
                     return false;
                 }
 
