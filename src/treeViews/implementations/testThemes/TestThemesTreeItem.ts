@@ -14,6 +14,7 @@ export type TestThemeType =
     | "TestThemeNode"
     | "TestCaseSetNode"
     | "TestCaseNode"
+    | `lockedByOther.${string}`
     | `MarkedForImport.${string}`
     | `MarkedForGeneration.${string}`
     | `customRoot.${string}`
@@ -73,6 +74,7 @@ export class TestThemesTreeItem extends TreeItemBase {
     private folderExists: boolean = false;
     private folderPath?: string;
     public isFilteredOutInDiffMode = false;
+    public lockedByOther = false;
 
     constructor(data: TestThemeData, extensionContext: vscode.ExtensionContext, parent?: TestThemesTreeItem) {
         super(
@@ -106,6 +108,7 @@ export class TestThemesTreeItem extends TreeItemBase {
      */
     public updateId(): void {
         (this as any).id = this.generateUniqueId();
+        this.resourceUri = vscode.Uri.parse(`testbench-theme:/${encodeURIComponent(this.id as string)}`);
     }
 
     /**
@@ -183,6 +186,11 @@ export class TestThemesTreeItem extends TreeItemBase {
     private getContextValue(): string {
         let contextValue = this.originalContextValue;
 
+        // Mark context value for items locked by another user so menu when clauses can hide write actions.
+        if (this.lockedByOther) {
+            contextValue = `lockedByOther.${contextValue}`;
+        }
+
         if (this.getMetadata("isCustomRoot") === true) {
             contextValue = `customRoot.${contextValue}`;
         }
@@ -190,8 +198,10 @@ export class TestThemesTreeItem extends TreeItemBase {
         const markingInfo = this.getMetadata("markingInfo") as MarkingInfo | undefined;
         if (markingInfo) {
             if (markingInfo.type === "import" || markingInfo.type === "imported") {
-                // Allow items to be re-imported
-                contextValue = `MarkedForImport.${contextValue}`;
+                // Hide the upload button for items locked by another user
+                if (!this.lockedByOther) {
+                    contextValue = `MarkedForImport.${contextValue}`;
+                }
             } else if (markingInfo.type === "generation") {
                 contextValue = `MarkedForGeneration.${contextValue}`;
             }

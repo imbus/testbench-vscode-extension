@@ -21,6 +21,7 @@ import {
     userSessionManager
 } from "../../../extension";
 import { MarkingModule, MarkingContext } from "../../features/MarkingModule";
+import { LockDecorationProvider } from "../../features/LockDecorationProvider";
 import * as reportHandler from "../../../reportHandler";
 import { TreeViewEventTypes } from "../../utils/EventBus";
 import { PersistenceModule } from "../../features/PersistenceModule";
@@ -48,6 +49,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     private dataProvider: TestThemesDataProvider;
     private disposables: vscode.Disposable[] = [];
     public testCaseSetClickHandler: ClickHandler<TestThemesTreeItem>;
+    private readonly lockDecorationProvider: LockDecorationProvider;
 
     private currentProjectKey: string | null = null;
     private currentProjectName: string | null = null;
@@ -68,6 +70,9 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         super(extensionContext, { ...testThemesConfig, ...config });
         this.dataProvider = new TestThemesDataProvider(this.logger, getConnection);
         this.testCaseSetClickHandler = new ClickHandler<TestThemesTreeItem>();
+        this.lockDecorationProvider = new LockDecorationProvider();
+        this.disposables.push(vscode.window.registerFileDecorationProvider(this.lockDecorationProvider));
+        this.disposables.push(this.lockDecorationProvider);
 
         this.registerEventHandlers();
         this.registerCommands();
@@ -883,6 +888,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 `[TestThemesTreeView] Loading Test Cycle '${cycleLabel}' from project '${projectName}' to get Test Theme information...`
             );
             this.prepareForContextSwitchLoading();
+            this.lockDecorationProvider.clear();
             this.dataProvider.clearCache();
 
             // Set context before fetching data so filters can be applied correctly
@@ -971,6 +977,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         this._onDidChangeTreeData.fire(undefined);
         await this.refreshMarkingFromWorkspace();
         this._onDidChangeTreeData.fire(undefined);
+        this.lockDecorationProvider.fireDidChange();
         (this as any).updateTreeViewMessage();
 
         const currentFilters = this.getSavedFilters();
@@ -1006,6 +1013,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         try {
             this.logger.debug(`[TestThemesTreeView] Loading TOV ${tovKey} for project ${projectKey}`);
             this.prepareForContextSwitchLoading();
+            this.lockDecorationProvider.clear();
             this.dataProvider.clearCache();
 
             // Set context BEFORE fetching data so filters can be applied correctly
@@ -1439,6 +1447,20 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             item.updateId();
             this.applyModulesToTestThemesItem(item);
 
+            // Update lock decoration state for this item
+            if (item.resourceUri) {
+                this.lockDecorationProvider.updateLockState(item.resourceUri, {
+                    spec: treeItemData.spec?.locker,
+                    aut: treeItemData.aut?.locker,
+                    exec: treeItemData.exec?.locker
+                });
+                // Set lockedByOther flag so contextValue excludes MarkedForImport (hides upload button)
+                item.lockedByOther = this.lockDecorationProvider.isLockedByOther(item.resourceUri);
+                if (item.lockedByOther) {
+                    item.updateContextValue();
+                }
+            }
+
             // Apply filter diff icon if filter diff mode is enabled and item doesn't match filter
             if (this.filterDiffMode && treeItemData.base.matchesFilter === false) {
                 item.isFilteredOutInDiffMode = true;
@@ -1562,6 +1584,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      */
     public clearTree(): void {
         super.clearTree();
+        this.lockDecorationProvider.clear();
         this.currentProjectKey = null;
         this.currentCycleKey = null;
         this.currentCycleLabel = null;

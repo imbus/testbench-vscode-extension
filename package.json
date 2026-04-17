@@ -840,12 +840,12 @@
                 },
                 {
                     "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
-                    "when": "view == 'testbench.testThemes' && testbenchExtension.isTestThemeOpenedFromCycle && testbenchExtension.workspaceAvailable && viewItem =~ /(TestThemeNode|TestCaseSetNode)(\\.hasRobotFile)?$/",
+                    "when": "view == 'testbench.testThemes' && testbenchExtension.isTestThemeOpenedFromCycle && testbenchExtension.workspaceAvailable && !(viewItem =~ /lockedByOther\\./) && viewItem =~ /(TestThemeNode|TestCaseSetNode)(\\.hasRobotFile)?$/",
                     "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.generateTestsForTestThemeTreeItemFromTOV",
-                    "when": "view == 'testbench.testThemes' && !testbenchExtension.isTestThemeOpenedFromCycle && testbenchExtension.workspaceAvailable && viewItem =~ /(TestThemeNode|TestCaseSetNode)(\\.hasRobotFile)?$/",
+                    "when": "view == 'testbench.testThemes' && !testbenchExtension.isTestThemeOpenedFromCycle && testbenchExtension.workspaceAvailable && !(viewItem =~ /lockedByOther\\./) && viewItem =~ /(TestThemeNode|TestCaseSetNode)(\\.hasRobotFile)?$/",
                     "group": "inline@2"
                 },
                 {
