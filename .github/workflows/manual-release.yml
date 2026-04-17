@@ -8,14 +8,6 @@ on:
                 description: "The version to release (e.g., 1.2.3)"
                 type: string
                 required: true
-            release_type:
-                description: "Type of release"
-                type: choice
-                options:
-                    - patch
-                    - minor
-                    - major
-                default: "patch"
             create_tag:
                 description: "Create a git tag for this release"
                 type: boolean
@@ -121,6 +113,17 @@ jobs:
                   git tag -a "v${{ inputs.version }}" -m "Release version ${{ inputs.version }}"
                   git push origin main
                   git push origin "v${{ inputs.version }}"
+
+            # If we don't create a tag in this run, ensure it already exists remotely.
+            - name: Verify release tag exists
+              if: inputs.create_tag != 'true'
+              run: |
+                  TAG_REF="refs/tags/v${{ inputs.version }}"
+                  if ! git ls-remote --exit-code --tags origin "$TAG_REF" > /dev/null; then
+                    echo "Tag v${{ inputs.version }} was not found on origin."
+                    echo "Set create_tag=true or create and push the tag before running this workflow."
+                    exit 1
+                  fi
 
             # Create GitHub release and upload VSIX artifact(s)
             - name: Create GitHub Release
