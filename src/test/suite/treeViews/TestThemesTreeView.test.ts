@@ -10,6 +10,7 @@ import { TestThemesTreeView } from "../../../treeViews/implementations/testTheme
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
 import { testThemesConfig } from "../../../treeViews/implementations/testThemes/TestThemesConfig";
+import { TestThemeItemTypes } from "../../../constants";
 
 suite("TestThemesTreeView", function () {
     let testEnv: TestEnvironment;
@@ -334,6 +335,77 @@ suite("TestThemesTreeView", function () {
             assert.strictEqual(treeView.getCurrentCycleLabel(), null);
             assert.strictEqual((treeView as any).currentTovKey, null);
             assert.strictEqual((treeView as any).isOpenedFromCycle, false);
+        });
+    });
+
+    suite("Import Scope Resolution", function () {
+        test("should keep clicked UID for TestCaseSet imports", function () {
+            const itemUID = "clicked-uid";
+            const item = {
+                id: "descendant-id",
+                label: "Clicked Test Case Set",
+                data: {
+                    elementType: TestThemeItemTypes.TEST_CASE_SET
+                }
+            } as any;
+
+            const markingModule = {
+                getRootIDForDescendant: testEnv.sandbox.stub().returns("root-id"),
+                getMarkingInfo: testEnv.sandbox.stub().returns({ metadata: { uniqueID: "root-uid" } })
+            } as any;
+
+            const result = (treeView as any).resolveImportScope(item, itemUID, markingModule);
+
+            assert.strictEqual(result.importUID, itemUID);
+            assert.strictEqual(result.rootId, "root-id");
+            assert.strictEqual(markingModule.getRootIDForDescendant.calledOnce, true);
+            assert.strictEqual(markingModule.getMarkingInfo.called, false);
+        });
+
+        test("should keep clicked UID for TestTheme descendants", function () {
+            const itemUID = "clicked-uid";
+            const item = {
+                id: "descendant-id",
+                label: "Clicked Test Theme",
+                data: {
+                    elementType: TestThemeItemTypes.TEST_THEME
+                }
+            } as any;
+
+            const markingModule = {
+                getRootIDForDescendant: testEnv.sandbox.stub().returns("root-id"),
+                getMarkingInfo: testEnv.sandbox.stub().returns({ metadata: { uniqueID: "root-uid" } })
+            } as any;
+
+            const result = (treeView as any).resolveImportScope(item, itemUID, markingModule);
+
+            assert.strictEqual(result.importUID, itemUID);
+            assert.strictEqual(result.rootId, "root-id");
+            assert.strictEqual(markingModule.getRootIDForDescendant.calledOnce, true);
+            assert.strictEqual(markingModule.getMarkingInfo.called, false);
+        });
+
+        test("should return clicked UID with null rootId when no hierarchy root exists", function () {
+            const itemUID = "clicked-uid";
+            const item = {
+                id: "standalone-id",
+                label: "Standalone Item",
+                data: {
+                    elementType: TestThemeItemTypes.TEST_THEME
+                }
+            } as any;
+
+            const markingModule = {
+                getRootIDForDescendant: testEnv.sandbox.stub().returns(null),
+                getMarkingInfo: testEnv.sandbox.stub()
+            } as any;
+
+            const result = (treeView as any).resolveImportScope(item, itemUID, markingModule);
+
+            assert.strictEqual(result.importUID, itemUID);
+            assert.strictEqual(result.rootId, null);
+            assert.strictEqual(markingModule.getRootIDForDescendant.calledOnce, true);
+            assert.strictEqual(markingModule.getMarkingInfo.called, false);
         });
     });
 

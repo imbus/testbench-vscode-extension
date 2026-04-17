@@ -707,38 +707,13 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 return;
             }
 
-            // Determine which UID to use for the import
-            // If this is a descendant of a marked hierarchy, use the root UID
-            const rootId = markingModule.getRootIDForDescendant(item.id!);
-            let reportRootUID = itemUID;
-            let importTargetItem = item;
-            let canValidateImportScope = true;
+            const { importUID, rootId } = this.resolveImportScope(item, itemUID, markingModule);
 
-            if (rootId) {
-                // This item is a descendant, import against the marked root hierarchy.
-                const rootTreeItem = this.findTreeItemById(rootId);
-                if (rootTreeItem) {
-                    importTargetItem = rootTreeItem;
-                    if (rootTreeItem.data.base.uniqueID) {
-                        reportRootUID = rootTreeItem.data.base.uniqueID;
-                    }
-                } else {
-                    const rootMarkingInfo = markingModule.getMarkingInfo(rootId);
-                    if (rootMarkingInfo && rootMarkingInfo.metadata?.uniqueID) {
-                        reportRootUID = rootMarkingInfo.metadata.uniqueID;
-                    }
-                    canValidateImportScope = false;
-                }
-            }
+            this.logger.debug(
+                `[TestThemesTreeView] Import scope resolved for '${itemLabel}': itemUID='${itemUID}', importUID='${importUID}', rootId='${rootId ?? "none"}', elementType='${item.data.elementType}'`
+            );
 
-            if (!canValidateImportScope) {
-                const cannotValidateRootScopeMessageForUser = `Cannot import "${itemLabel}" because the marked root scope is not available in the current tree state. Refresh the Test Themes tree and try again.`;
-                this.logger.warn(
-                    `[TestThemesTreeView] Import blocked for "${itemLabel}", unable to validate lock state for root scope (rootId: ${rootId}, reportRootUID: ${reportRootUID}).`
-                );
-                vscode.window.showWarningMessage(cannotValidateRootScopeMessageForUser);
-                return;
-            }
+            const importTargetItem = item;
 
             // Check for locked descendants before importing
             const lockedDescendantNames = this.getLockedDescendantNames(importTargetItem);
@@ -775,7 +750,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 item,
                 projectKey,
                 cycleKey || tovKey || "",
-                reportRootUID
+                importUID
             );
 
             if (importResult) {
@@ -839,7 +814,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 this.refresh();
             } else {
                 const importFailedMessageForUser = `Import was cancelled or did not complete successfully for ${itemLabel}`;
-                const importFailedMessage = `[TestThemesTreeView] Import process for item ${itemLabel} (UID: ${reportRootUID}) did not complete successfully or was cancelled.`;
+                const importFailedMessage = `[TestThemesTreeView] Import process for item ${itemLabel} (UID: ${importUID}) did not complete successfully or was cancelled.`;
                 this.logger.warn(importFailedMessage);
                 vscode.window.showWarningMessage(importFailedMessageForUser);
             }
@@ -857,6 +832,34 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      */
     public isImportFunctionalityAvailable(): boolean {
         return this.isOpenedFromCycle;
+    }
+
+    /**
+     * Resolves the UID scope used for importing execution results.
+     * Import always stays item scoped and uses the clicked item's UID.
+     * Resolves an optional hierarchy root ID for UI state handling.
+     * @param item The tree item being imported
+     * @param itemUID The unique ID of the item being imported
+     * @param markingModule The marking module instance to use for hierarchy resolution
+     */
+    private resolveImportScope(
+        item: TestThemesTreeItem,
+        itemUID: string,
+        markingModule: MarkingModule
+    ): { importUID: string; rootId: string | null } {
+        const rootId = markingModule.getRootIDForDescendant(item.id!);
+
+        this.logger.trace(
+            `[TestThemesTreeView] resolveImportScope: item='${item.label?.toString() || "Unknown"}', itemId='${item.id}', itemUID='${itemUID}', elementType='${item.data.elementType}', hierarchyRootId='${rootId ?? "none"}'`
+        );
+
+        if (rootId) {
+            this.logger.trace(
+                `[TestThemesTreeView] Import remains item-scoped despite hierarchy root '${rootId}'. Using clicked item UID '${itemUID}'.`
+            );
+        }
+
+        return { importUID: itemUID, rootId: rootId ?? null };
     }
 
     /**
@@ -881,29 +884,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         }
 
         return Array.from(lockedNames);
-    }
-
-    /**
-     * Finds a tree item by its ID.
-     * @param itemId The tree item ID
-     * @returns The tree item or null when not found
-     */
-    private findTreeItemById(itemId: string): TestThemesTreeItem | null {
-        const stack: TestThemesTreeItem[] = [...(this.rootItems || [])];
-
-        while (stack.length > 0) {
-            const current = stack.pop()!;
-            if (current.id === itemId) {
-                return current;
-            }
-
-            const childItems = (current.children || []) as TestThemesTreeItem[];
-            for (const child of childItems) {
-                stack.push(child);
-            }
-        }
-
-        return null;
     }
 
     /**
