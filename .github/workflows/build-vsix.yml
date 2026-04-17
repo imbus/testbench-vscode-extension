@@ -15,8 +15,8 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                os: [ubuntu-latest] # Test on multiple OS with [ubuntu-latest, windows-latest, macos-latest]
-                node-version: [20.x] # Test on multiple Node versions with [20.x, 18.x, 16.x]
+                os: [ubuntu-latest]
+                node-version: [20.x]
 
         steps:
             # Checkout the repository
