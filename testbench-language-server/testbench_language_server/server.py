@@ -663,6 +663,7 @@ def push_testbench_subdivision(ls: LanguageServer, kwargs):
             create_testbench_keyword(
                 ls, {"document_uri": document_uri, "keyword_name": get_kw_name(keyword)}
             )
+            continue
         existing_keywords = vs_code_resource.get_keywords(keyword_uid)
         if len(existing_keywords) > 1:
             show_error(
