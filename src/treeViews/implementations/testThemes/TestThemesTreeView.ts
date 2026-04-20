@@ -47,7 +47,7 @@ interface GenerationContext {
     isOpenedFromCycle: boolean;
 }
 
-interface ImportScopeLockInfo {
+interface ScopeLockInfo {
     lockedDescendantNames: string[];
     isSelectedScopeLocked: boolean;
 }
@@ -719,13 +719,13 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             const importTargetItem = item;
 
             // Validate lock state with fresh server data to avoid stale lock information.
-            const lockInfo = await this.getImportScopeLockInfo(importTargetItem, projectKey, cycleKey || "");
+            const lockInfo = await this.getScopeLockInfo(importTargetItem, projectKey, cycleKey || "", "cycle");
             const lockedDescendantNames = lockInfo.lockedDescendantNames;
             if (lockedDescendantNames.length > 0) {
                 const lockedList = lockedDescendantNames.join(", ");
                 if (lockInfo.isSelectedScopeLocked) {
                     // The selected import scope item itself is locked by another user.
-                    vscode.window.showErrorMessage(
+                    vscode.window.showWarningMessage(
                         `Cannot import "${itemLabel}" because the selected import scope is locked by another user.`
                     );
                     this.logger.warn(
@@ -868,30 +868,35 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Refreshes lock information for the selected import scope from latest cycle data.
+     * Refreshes lock information for the selected scope from latest server data.
      * Falls back to current in-memory tree state if fresh data cannot be loaded.
-     * @param item Selected import root item.
+     * @param item Selected root item for import/generation.
      * @param projectKey Active project key.
-     * @param cycleKey Active cycle key.
+     * @param scopeKey Active cycle or TOV key.
+     * @param scopeType Scope type used to fetch latest structure.
      * @returns Fresh lock information for warning/validation flow.
      */
-    private async getImportScopeLockInfo(
+    private async getScopeLockInfo(
         item: TestThemesTreeItem,
         projectKey: string,
-        cycleKey: string
-    ): Promise<ImportScopeLockInfo> {
-        const fallback: ImportScopeLockInfo = {
+        scopeKey: string,
+        scopeType: "cycle" | "tov"
+    ): Promise<ScopeLockInfo> {
+        const fallback: ScopeLockInfo = {
             lockedDescendantNames: this.getLockedDescendantNames(item),
             isSelectedScopeLocked: item.lockedByOther
         };
 
-        if (!projectKey || !cycleKey) {
+        if (!projectKey || !scopeKey) {
             return fallback;
         }
 
         try {
             this.dataProvider.clearCache();
-            const latestStructure = await this.dataProvider.fetchCycleStructure(projectKey, cycleKey, false);
+            const latestStructure =
+                scopeType === "cycle"
+                    ? await this.dataProvider.fetchCycleStructure(projectKey, scopeKey, false)
+                    : await this.dataProvider.fetchTovStructure(projectKey, scopeKey, false);
             if (!latestStructure || !latestStructure.nodes || latestStructure.nodes.length === 0) {
                 return fallback;
             }
@@ -918,13 +923,18 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             const lockedNames = new Set<string>();
             const stack: TestStructureNode[] = [selectedNode];
             let isSelectedScopeLocked = false;
+            const selectedNodeKey = selectedNode.base.key;
+            const selectedNodeUID = selectedNode.base.uniqueID;
 
             while (stack.length > 0) {
                 const currentNode = stack.pop()!;
                 const isLockedByOther = this.isNodeLockedByOtherUser(currentNode);
                 if (isLockedByOther) {
                     lockedNames.add(currentNode.base.name || "Unknown");
-                    if (currentNode.base.key === selectedNode.base.key) {
+                    if (
+                        currentNode.base.key === selectedNodeKey ||
+                        (selectedNodeUID !== "" && currentNode.base.uniqueID === selectedNodeUID)
+                    ) {
                         isSelectedScopeLocked = true;
                     }
                 }
@@ -943,11 +953,35 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             };
         } catch (error) {
             this.logger.warn(
-                "[TestThemesTreeView] Failed to refresh lock state for import scope. Using local state.",
+                `[TestThemesTreeView] Failed to refresh lock state for ${scopeType} scope. Using local state.`,
                 error
             );
             return fallback;
         }
+    }
+
+    /**
+     * Resolves lock information for test generation scope using freshest available server data.
+     * @param item Selected generation root item.
+     * @param context Active generation context.
+     * @returns Lock information for generation prompt logic.
+     */
+    private async getGenerationScopeLockInfo(
+        item: TestThemesTreeItem,
+        context: GenerationContext
+    ): Promise<ScopeLockInfo> {
+        if (context.isOpenedFromCycle && context.cycleKey) {
+            return this.getScopeLockInfo(item, context.projectKey, context.cycleKey, "cycle");
+        }
+
+        if (context.tovKey) {
+            return this.getScopeLockInfo(item, context.projectKey, context.tovKey, "tov");
+        }
+
+        return {
+            lockedDescendantNames: this.getLockedDescendantNames(item),
+            isSelectedScopeLocked: item.lockedByOther
+        };
     }
 
     /**
@@ -1294,12 +1328,17 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         }
 
         try {
-            await this.executeClearInternalDirIfNeeded();
-
             const context = this.validateTestGenerationContext();
             if (!context) {
                 return;
             }
+
+            const canProceed = await this.confirmTestGenerationScope(item, context);
+            if (!canProceed) {
+                return;
+            }
+
+            await this.executeClearInternalDirIfNeeded();
 
             const testGenerationSuccessful = await this.performTestGeneration(item, context);
 
@@ -1309,6 +1348,45 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         } catch (error) {
             this.handleTestGenerationError(error);
         }
+    }
+
+    /**
+     * Validates lock state before generation and asks for confirmation when only descendants are locked.
+     * @param item Selected generation root item.
+     * @param context Active generation context.
+     * @returns True when generation should proceed.
+     */
+    private async confirmTestGenerationScope(item: TestThemesTreeItem, context: GenerationContext): Promise<boolean> {
+        const itemLabel = item.label?.toString() || item.data.base.name || "Unknown Item";
+        const lockInfo = await this.getGenerationScopeLockInfo(item, context);
+        const lockedDescendantNames = lockInfo.lockedDescendantNames;
+
+        if (lockedDescendantNames.length === 0) {
+            return true;
+        }
+
+        if (lockInfo.isSelectedScopeLocked) {
+            const scopeLockedMessage = `Cannot generate tests for "${itemLabel}" because the selected scope is locked by another user.`;
+            vscode.window.showWarningMessage(scopeLockedMessage);
+            this.logger.warn(`[TestThemesTreeView] ${scopeLockedMessage}`);
+            return false;
+        }
+
+        const lockedList = lockedDescendantNames.join(", ");
+        const proceed = await vscode.window.showWarningMessage(
+            `Some items are locked by another user and will not be generated: ${lockedList}. Do you want to proceed with the remaining items?`,
+            "Proceed",
+            "Cancel"
+        );
+
+        if (proceed !== "Proceed") {
+            this.logger.debug(
+                `[TestThemesTreeView] Test generation cancelled by user due to locked descendants: ${lockedList}`
+            );
+            return false;
+        }
+
+        return true;
     }
 
     /**
