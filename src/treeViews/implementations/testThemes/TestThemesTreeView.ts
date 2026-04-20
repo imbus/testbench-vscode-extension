@@ -21,12 +21,14 @@ import {
     userSessionManager
 } from "../../../extension";
 import { MarkingModule, MarkingContext } from "../../features/MarkingModule";
-import { LockDecorationProvider } from "../../features/LockDecorationProvider";
 import * as reportHandler from "../../../reportHandler";
 import { TreeViewEventTypes } from "../../utils/EventBus";
 import { PersistenceModule } from "../../features/PersistenceModule";
 import { ClickHandler } from "../../core/ClickHandler";
 import { ProjectsTreeItem } from "../projects/ProjectsTreeItem";
+
+type LockerValue = string | { key: string; name: string } | null | undefined;
+const SYSTEM_LOCK_KEY = "-2";
 
 /**
  * Interface for filter storage
@@ -45,11 +47,15 @@ interface GenerationContext {
     isOpenedFromCycle: boolean;
 }
 
+interface ImportScopeLockInfo {
+    lockedDescendantNames: string[];
+    isSelectedScopeLocked: boolean;
+}
+
 export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     private dataProvider: TestThemesDataProvider;
     private disposables: vscode.Disposable[] = [];
     public testCaseSetClickHandler: ClickHandler<TestThemesTreeItem>;
-    private readonly lockDecorationProvider: LockDecorationProvider;
 
     private currentProjectKey: string | null = null;
     private currentProjectName: string | null = null;
@@ -70,9 +76,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         super(extensionContext, { ...testThemesConfig, ...config });
         this.dataProvider = new TestThemesDataProvider(this.logger, getConnection);
         this.testCaseSetClickHandler = new ClickHandler<TestThemesTreeItem>();
-        this.lockDecorationProvider = new LockDecorationProvider();
-        this.disposables.push(vscode.window.registerFileDecorationProvider(this.lockDecorationProvider));
-        this.disposables.push(this.lockDecorationProvider);
 
         this.registerEventHandlers();
         this.registerCommands();
@@ -715,13 +718,13 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
             const importTargetItem = item;
 
-            // Check for locked descendants before importing
-            const lockedDescendantNames = this.getLockedDescendantNames(importTargetItem);
+            // Validate lock state with fresh server data to avoid stale lock information.
+            const lockInfo = await this.getImportScopeLockInfo(importTargetItem, projectKey, cycleKey || "");
+            const lockedDescendantNames = lockInfo.lockedDescendantNames;
             if (lockedDescendantNames.length > 0) {
                 const lockedList = lockedDescendantNames.join(", ");
-                if (importTargetItem.lockedByOther) {
-                    // The item itself is locked, should not happen since the button is hidden,
-                    // but guard against it.
+                if (lockInfo.isSelectedScopeLocked) {
+                    // The selected import scope item itself is locked by another user.
                     vscode.window.showErrorMessage(
                         `Cannot import "${itemLabel}" because the selected import scope is locked by another user.`
                     );
@@ -761,7 +764,9 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                     if (lockedDescendantNames.length > 0) {
                         noItemsImportedWarning += ` The following items are locked by another user: ${lockedDescendantNames.join(", ")}.`;
                     } else {
-                        noItemsImportedWarning += ` This may happen when items are locked by another user in TestBench.`;
+                        noItemsImportedWarning +=
+                            " This can happen when no importable test execution data exists for the selected scope, " +
+                            "or when items are locked by another user in TestBench.";
                     }
                     this.logger.warn(`[TestThemesTreeView] ${noItemsImportedWarning}`);
                     vscode.window.showWarningMessage(noItemsImportedWarning);
@@ -860,6 +865,89 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         }
 
         return { importUID: itemUID, rootId: rootId ?? null };
+    }
+
+    /**
+     * Refreshes lock information for the selected import scope from latest cycle data.
+     * Falls back to current in-memory tree state if fresh data cannot be loaded.
+     * @param item Selected import root item.
+     * @param projectKey Active project key.
+     * @param cycleKey Active cycle key.
+     * @returns Fresh lock information for warning/validation flow.
+     */
+    private async getImportScopeLockInfo(
+        item: TestThemesTreeItem,
+        projectKey: string,
+        cycleKey: string
+    ): Promise<ImportScopeLockInfo> {
+        const fallback: ImportScopeLockInfo = {
+            lockedDescendantNames: this.getLockedDescendantNames(item),
+            isSelectedScopeLocked: item.lockedByOther
+        };
+
+        if (!projectKey || !cycleKey) {
+            return fallback;
+        }
+
+        try {
+            this.dataProvider.clearCache();
+            const latestStructure = await this.dataProvider.fetchCycleStructure(projectKey, cycleKey, false);
+            if (!latestStructure || !latestStructure.nodes || latestStructure.nodes.length === 0) {
+                return fallback;
+            }
+
+            const selectedNode =
+                latestStructure.nodes.find((node) => node.base.uniqueID === item.data.base.uniqueID) ||
+                latestStructure.nodes.find((node) => node.base.key === item.data.base.key);
+
+            if (!selectedNode) {
+                return fallback;
+            }
+
+            const childrenByParent = new Map<string, TestStructureNode[]>();
+            for (const node of latestStructure.nodes) {
+                const parentKey = node.base.parentKey || "";
+                const existing = childrenByParent.get(parentKey);
+                if (existing) {
+                    existing.push(node);
+                } else {
+                    childrenByParent.set(parentKey, [node]);
+                }
+            }
+
+            const lockedNames = new Set<string>();
+            const stack: TestStructureNode[] = [selectedNode];
+            let isSelectedScopeLocked = false;
+
+            while (stack.length > 0) {
+                const currentNode = stack.pop()!;
+                const isLockedByOther = this.isNodeLockedByOtherUser(currentNode);
+                if (isLockedByOther) {
+                    lockedNames.add(currentNode.base.name || "Unknown");
+                    if (currentNode.base.key === selectedNode.base.key) {
+                        isSelectedScopeLocked = true;
+                    }
+                }
+
+                const children = childrenByParent.get(currentNode.base.key) || [];
+                for (const child of children) {
+                    stack.push(child);
+                }
+            }
+
+            item.setLockedByOther(isSelectedScopeLocked);
+
+            return {
+                lockedDescendantNames: Array.from(lockedNames),
+                isSelectedScopeLocked
+            };
+        } catch (error) {
+            this.logger.warn(
+                "[TestThemesTreeView] Failed to refresh lock state for import scope. Using local state.",
+                error
+            );
+            return fallback;
+        }
     }
 
     /**
@@ -975,7 +1063,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 `[TestThemesTreeView] Loading Test Cycle '${cycleLabel}' from project '${projectName}' to get Test Theme information...`
             );
             this.prepareForContextSwitchLoading();
-            this.lockDecorationProvider.clear();
             this.dataProvider.clearCache();
 
             // Set context before fetching data so filters can be applied correctly
@@ -1064,7 +1151,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         this._onDidChangeTreeData.fire(undefined);
         await this.refreshMarkingFromWorkspace();
         this._onDidChangeTreeData.fire(undefined);
-        this.lockDecorationProvider.fireDidChange();
         (this as any).updateTreeViewMessage();
 
         const currentFilters = this.getSavedFilters();
@@ -1100,7 +1186,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         try {
             this.logger.debug(`[TestThemesTreeView] Loading TOV ${tovKey} for project ${projectKey}`);
             this.prepareForContextSwitchLoading();
-            this.lockDecorationProvider.clear();
             this.dataProvider.clearCache();
 
             // Set context BEFORE fetching data so filters can be applied correctly
@@ -1533,20 +1618,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             item.setMetadata("openedFromCycle", this.isOpenedFromCycle);
             item.updateId();
             this.applyModulesToTestThemesItem(item);
-
-            // Update lock decoration state for this item
-            if (item.resourceUri) {
-                this.lockDecorationProvider.updateLockState(item.resourceUri, {
-                    spec: treeItemData.spec?.locker,
-                    aut: treeItemData.aut?.locker,
-                    exec: treeItemData.exec?.locker
-                });
-                // Set lockedByOther flag so contextValue excludes MarkedForImport (hides upload button)
-                item.lockedByOther = this.lockDecorationProvider.isLockedByOther(item.resourceUri);
-                if (item.lockedByOther) {
-                    item.updateContextValue();
-                }
-            }
+            item.setLockedByOther(this.isLockedByOtherUser(treeItemData));
 
             // Apply filter diff icon if filter diff mode is enabled and item doesn't match filter
             if (this.filterDiffMode && treeItemData.base.matchesFilter === false) {
@@ -1573,6 +1645,93 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 module.applyMarkingToItem(item);
             }
         }
+    }
+
+    /**
+     * Gets the currently authenticated user key used for lock ownership checks.
+     * @returns User key or null when no valid user session is available.
+     */
+    private getCurrentUserKey(): string | null {
+        const currentUserKey = userSessionManager?.getCurrentUserId?.();
+        if (!currentUserKey || currentUserKey.trim() === "" || currentUserKey === "global_fallback") {
+            return null;
+        }
+
+        return currentUserKey;
+    }
+
+    /**
+     * Normalizes locker value into a comparable locker key.
+     * @param locker Locker value from spec/aut/exec layer.
+     * @returns Normalized locker key or null when not available.
+     */
+    private getLockerKey(locker: LockerValue): string | null {
+        if (locker === null || locker === undefined) {
+            return null;
+        }
+
+        if (typeof locker === "string") {
+            const trimmed = locker.trim();
+            return trimmed === "" ? null : trimmed;
+        }
+
+        const rawKey = locker.key;
+        if (rawKey === null || rawKey === undefined) {
+            return null;
+        }
+
+        const normalized = String(rawKey).trim();
+        return normalized === "" ? null : normalized;
+    }
+
+    /**
+     * Evaluates whether a locker belongs to a different user than the current session user.
+     * @param locker Locker value from spec/aut/exec layer.
+     * @returns True only when locked by a different user (system lock excluded).
+     */
+    private isLockerLockedByOtherUser(locker: LockerValue): boolean {
+        const currentUserKey = this.getCurrentUserKey();
+        if (!currentUserKey) {
+            return false;
+        }
+
+        const lockerKey = this.getLockerKey(locker);
+        if (!lockerKey) {
+            return false;
+        }
+
+        // System lock is not a different user lock.
+        if (lockerKey === SYSTEM_LOCK_KEY) {
+            return false;
+        }
+
+        return lockerKey !== currentUserKey;
+    }
+
+    /**
+     * Checks whether any locker field in a TestTheme tree item is owned by another user.
+     * @param data Tree item data containing spec/aut/exec lockers.
+     * @returns True when any layer is locked by another user.
+     */
+    private isLockedByOtherUser(data: TestThemeData): boolean {
+        return (
+            this.isLockerLockedByOtherUser(data.spec?.locker) ||
+            this.isLockerLockedByOtherUser(data.aut?.locker) ||
+            this.isLockerLockedByOtherUser(data.exec?.locker)
+        );
+    }
+
+    /**
+     * Checks whether any locker field in a server node is owned by another user.
+     * @param node Server node data containing spec/aut/exec lockers.
+     * @returns True when any layer is locked by another user.
+     */
+    private isNodeLockedByOtherUser(node: TestStructureNode): boolean {
+        return (
+            this.isLockerLockedByOtherUser(node.spec?.locker) ||
+            this.isLockerLockedByOtherUser(node.aut?.locker) ||
+            this.isLockerLockedByOtherUser(node.exec?.locker)
+        );
     }
 
     /**
@@ -1671,7 +1830,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      */
     public clearTree(): void {
         super.clearTree();
-        this.lockDecorationProvider.clear();
         this.currentProjectKey = null;
         this.currentCycleKey = null;
         this.currentCycleLabel = null;

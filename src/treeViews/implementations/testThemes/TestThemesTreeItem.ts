@@ -10,11 +10,13 @@ import { TestThemeItemTypes, allExtensionCommands } from "../../../constants";
 import { MarkingInfo } from "../../state/StateTypes";
 import { RobotFileService } from "./RobotFileService";
 
+type LockerValue = string | { key: string; name: string } | null | undefined;
+const SYSTEM_LOCK_KEY = "-2";
+
 export type TestThemeType =
     | "TestThemeNode"
     | "TestCaseSetNode"
     | "TestCaseNode"
-    | `lockedByOther.${string}`
     | `MarkedForImport.${string}`
     | `MarkedForGeneration.${string}`
     | `customRoot.${string}`
@@ -76,6 +78,18 @@ export class TestThemesTreeItem extends TreeItemBase {
     public isFilteredOutInDiffMode = false;
     public lockedByOther = false;
 
+    /**
+     * Updates whether the item is locked by a different user and refreshes the tooltip if state changed.
+     * @param lockedByOther True if the item is currently locked by another user.
+     */
+    public setLockedByOther(lockedByOther: boolean): void {
+        if (this.lockedByOther === lockedByOther) {
+            return;
+        }
+        this.lockedByOther = lockedByOther;
+        this.tooltip = this.generateTooltip();
+    }
+
     constructor(data: TestThemeData, extensionContext: vscode.ExtensionContext, parent?: TestThemesTreeItem) {
         super(
             data.base.name,
@@ -108,7 +122,6 @@ export class TestThemesTreeItem extends TreeItemBase {
      */
     public updateId(): void {
         (this as any).id = this.generateUniqueId();
-        this.resourceUri = vscode.Uri.parse(`testbench-theme:/${encodeURIComponent(this.id as string)}`);
     }
 
     /**
@@ -186,11 +199,6 @@ export class TestThemesTreeItem extends TreeItemBase {
     private getContextValue(): string {
         let contextValue = this.originalContextValue;
 
-        // Mark context value for items locked by another user so menu when clauses can hide write actions.
-        if (this.lockedByOther) {
-            contextValue = `lockedByOther.${contextValue}`;
-        }
-
         if (this.getMetadata("isCustomRoot") === true) {
             contextValue = `customRoot.${contextValue}`;
         }
@@ -198,10 +206,8 @@ export class TestThemesTreeItem extends TreeItemBase {
         const markingInfo = this.getMetadata("markingInfo") as MarkingInfo | undefined;
         if (markingInfo) {
             if (markingInfo.type === "import" || markingInfo.type === "imported") {
-                // Hide the upload button for items locked by another user
-                if (!this.lockedByOther) {
-                    contextValue = `MarkedForImport.${contextValue}`;
-                }
+                // Allow items to be re-imported
+                contextValue = `MarkedForImport.${contextValue}`;
             } else if (markingInfo.type === "generation") {
                 contextValue = `MarkedForGeneration.${contextValue}`;
             }
@@ -216,6 +222,122 @@ export class TestThemesTreeItem extends TreeItemBase {
         }
 
         return contextValue;
+    }
+
+    /**
+     * Normalizes a locker identifier from string/object formats.
+     * @param locker Locker value from server payload.
+     * @returns Normalized locker key or null when unavailable.
+     */
+    private getLockerKey(locker: LockerValue): string | null {
+        if (!locker) {
+            return null;
+        }
+
+        if (typeof locker === "string") {
+            const trimmed = locker.trim();
+            return trimmed === "" ? null : trimmed;
+        }
+
+        const key = String(locker.key || "").trim();
+        return key === "" ? null : key;
+    }
+
+    /**
+     * Resolves a human-readable locker name for tooltip output.
+     * @param locker Locker value from server payload.
+     * @returns Display name of the locker, or "Unknown" if not available.
+     */
+    private getLockerName(locker: LockerValue): string {
+        if (!locker) {
+            return "Unknown";
+        }
+
+        if (typeof locker === "string") {
+            const key = locker.trim();
+            return key === "" ? "Unknown" : `User ${key}`;
+        }
+
+        const name = String(locker.name || "").trim();
+        if (name !== "") {
+            return name;
+        }
+
+        const key = String(locker.key || "").trim();
+        return key === "" ? "Unknown" : `User ${key}`;
+    }
+
+    /**
+     * Formats locker metadata for tooltip lines, including key when useful.
+     * @param locker Locker value from server payload.
+     * @returns Formatted locker text or null when no locker data is available.
+     */
+    private formatLockerForTooltip(locker: LockerValue): string | null {
+        const lockerKey = this.getLockerKey(locker);
+        if (!lockerKey) {
+            return null;
+        }
+
+        if (lockerKey === SYSTEM_LOCK_KEY) {
+            return "System";
+        }
+
+        const lockerName = this.getLockerName(locker);
+        if (lockerName === "Unknown") {
+            return `User ${lockerKey}`;
+        }
+
+        return lockerName;
+    }
+
+    /**
+     * Builds a compact lock summary for the tooltip with lock owner and affected scopes.
+     * @returns A lock summary line when locked by another user, otherwise null.
+     */
+    private buildLockSummary(): string | null {
+        if (!this.lockedByOther) {
+            return null;
+        }
+
+        const currentUserKey = userSessionManager.getCurrentUserId();
+        const groupedByOwner = new Map<string, { displayName: string; scopes: string[] }>();
+        const lockEntries: Array<{ scope: string; locker: LockerValue }> = [
+            { scope: "Specification", locker: this.data.spec?.locker },
+            { scope: "Automation", locker: this.data.aut?.locker },
+            { scope: "Execution", locker: this.data.exec?.locker }
+        ];
+
+        for (const entry of lockEntries) {
+            const lockerKey = this.getLockerKey(entry.locker);
+            if (!lockerKey || lockerKey === SYSTEM_LOCK_KEY || lockerKey === currentUserKey) {
+                continue;
+            }
+
+            const displayName = this.getLockerName(entry.locker);
+            const existing = groupedByOwner.get(lockerKey);
+            if (existing) {
+                if (!existing.scopes.includes(entry.scope)) {
+                    existing.scopes.push(entry.scope);
+                }
+                continue;
+            }
+
+            groupedByOwner.set(lockerKey, {
+                displayName,
+                scopes: [entry.scope]
+            });
+        }
+
+        if (groupedByOwner.size === 0) {
+            return "Locked by another user";
+        }
+
+        const ownerDetails = Array.from(groupedByOwner.values()).map((ownerInfo) => {
+            const scopeText = ownerInfo.scopes.join(", ");
+            return `${ownerInfo.displayName} (${scopeText})`;
+        });
+
+        return `Locked by: ${ownerDetails.join("; ")}`;
     }
 
     /**
@@ -247,6 +369,12 @@ export class TestThemesTreeItem extends TreeItemBase {
         }
         tooltipContextLines.push(`Status: ${statusTooltipText}`);
 
+        const lockSummary = this.buildLockSummary();
+        if (lockSummary) {
+            tooltipContextLines.push(lockSummary);
+        }
+        const showDetailedLockerLines = !lockSummary;
+
         if (this.data.exec) {
             if (this.data.exec.status) {
                 tooltipContextLines.push(`Execution Status: ${this.data.exec.status}`);
@@ -254,10 +382,11 @@ export class TestThemesTreeItem extends TreeItemBase {
             if (this.data.exec.verdict) {
                 tooltipContextLines.push(`Verdict: ${this.data.exec.verdict}`);
             }
-            if (this.data.exec.locker) {
-                const lockerValue =
-                    typeof this.data.exec.locker === "string" ? this.data.exec.locker : this.data.exec.locker.name;
-                tooltipContextLines.push(`Execution Locker: ${lockerValue}`);
+            if (showDetailedLockerLines && this.data.exec.locker) {
+                const lockerValue = this.formatLockerForTooltip(this.data.exec.locker);
+                if (lockerValue) {
+                    tooltipContextLines.push(`Execution Locker: ${lockerValue}`);
+                }
             }
         }
 
@@ -265,20 +394,22 @@ export class TestThemesTreeItem extends TreeItemBase {
             tooltipContextLines.push(`Specification Status: ${this.data.spec.status}`);
         }
 
-        if (this.data.spec.locker) {
-            const lockerValue =
-                typeof this.data.spec.locker === "string" ? this.data.spec.locker : this.data.spec.locker.name;
-            tooltipContextLines.push(`Specification Locker: ${lockerValue}`);
+        if (showDetailedLockerLines && this.data.spec.locker) {
+            const lockerValue = this.formatLockerForTooltip(this.data.spec.locker);
+            if (lockerValue) {
+                tooltipContextLines.push(`Specification Locker: ${lockerValue}`);
+            }
         }
 
         if (this.data.aut.status) {
             tooltipContextLines.push(`Automation Status: ${this.data.aut.status}`);
         }
 
-        if (this.data.aut.locker) {
-            const lockerValue =
-                typeof this.data.aut.locker === "string" ? this.data.aut.locker : this.data.aut.locker.name;
-            tooltipContextLines.push(`Automation Locker: ${lockerValue}`);
+        if (showDetailedLockerLines && this.data.aut.locker) {
+            const lockerValue = this.formatLockerForTooltip(this.data.aut.locker);
+            if (lockerValue) {
+                tooltipContextLines.push(`Automation Locker: ${lockerValue}`);
+            }
         }
 
         if (this.data.base.uniqueID) {
