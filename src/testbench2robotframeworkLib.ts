@@ -30,30 +30,73 @@ interface RobotFileSnapshot {
     size: number;
 }
 
+const ROBOT_SCAN_MAX_CONCURRENCY = 16;
+
+class AsyncSemaphore {
+    private readonly waitQueue: Array<() => void> = [];
+    private activeCount = 0;
+
+    constructor(private readonly maxConcurrency: number) {}
+
+    public async run<T>(task: () => Promise<T>): Promise<T> {
+        await this.acquire();
+        try {
+            return await task();
+        } finally {
+            this.release();
+        }
+    }
+
+    private acquire(): Promise<void> {
+        if (this.activeCount < this.maxConcurrency) {
+            this.activeCount++;
+            return Promise.resolve();
+        }
+
+        return new Promise((resolve) => {
+            this.waitQueue.push(() => {
+                this.activeCount++;
+                resolve();
+            });
+        });
+    }
+
+    private release(): void {
+        this.activeCount--;
+        const next = this.waitQueue.shift();
+        if (next) {
+            next();
+        }
+    }
+}
+
 /**
  * Collects .robot file paths and their modification times from a directory recursively.
  *
  * @param {string} dir Root directory to scan recursively for `.robot` files.
  * @returns {Promise<Map<string, RobotFileSnapshot>>} A map of absolute `.robot` file paths to file metadata snapshots.
  */
-async function collectRobotFileTimestamps(dir: string): Promise<Map<string, RobotFileSnapshot>> {
+async function collectRobotFileTimestamps(
+    dir: string,
+    semaphore: AsyncSemaphore = new AsyncSemaphore(ROBOT_SCAN_MAX_CONCURRENCY)
+): Promise<Map<string, RobotFileSnapshot>> {
     const files = new Map<string, RobotFileSnapshot>();
     let entries: Dirent[] = [];
     try {
-        entries = await fsPromise.readdir(dir, { withFileTypes: true });
+        entries = await semaphore.run(() => fsPromise.readdir(dir, { withFileTypes: true }));
     } catch {
         // Directory doesn't exist or can't be read.
         return files;
     }
 
-    for (const entry of entries) {
+    const tasks = entries.map(async (entry) => {
         const entryPath = path.join(dir, entry.name);
         try {
             if (entry.isDirectory()) {
-                const subFiles = await collectRobotFileTimestamps(entryPath);
+                const subFiles = await collectRobotFileTimestamps(entryPath, semaphore);
                 subFiles.forEach((snapshot, filePath) => files.set(filePath, snapshot));
             } else if (entry.isFile() && entry.name.endsWith(".robot")) {
-                const stats = await fsPromise.stat(entryPath);
+                const stats = await semaphore.run(() => fsPromise.stat(entryPath));
                 files.set(entryPath, {
                     mtimeMs: stats.mtimeMs,
                     ctimeMs: stats.ctimeMs,
@@ -63,7 +106,9 @@ async function collectRobotFileTimestamps(dir: string): Promise<Map<string, Robo
         } catch {
             // Skip unreadable entries so one file does not abort the whole snapshot.
         }
-    }
+    });
+
+    await Promise.all(tasks);
 
     return files;
 }

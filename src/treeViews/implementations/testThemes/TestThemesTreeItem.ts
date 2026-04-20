@@ -9,9 +9,7 @@ import { logger, treeViews, userSessionManager } from "../../../extension";
 import { TestThemeItemTypes, allExtensionCommands } from "../../../constants";
 import { MarkingInfo } from "../../state/StateTypes";
 import { RobotFileService } from "./RobotFileService";
-
-type LockerValue = string | { key: string; name: string } | null | undefined;
-const SYSTEM_LOCK_KEY = "-2";
+import { LockerValue, normalizeLockerKey, SYSTEM_LOCK_KEY } from "./lockUtils";
 
 export type TestThemeType =
     | "TestThemeNode"
@@ -230,17 +228,7 @@ export class TestThemesTreeItem extends TreeItemBase {
      * @returns Normalized locker key or null when unavailable.
      */
     private getLockerKey(locker: LockerValue): string | null {
-        if (!locker) {
-            return null;
-        }
-
-        if (typeof locker === "string") {
-            const trimmed = locker.trim();
-            return trimmed === "" ? null : trimmed;
-        }
-
-        const key = String(locker.key || "").trim();
-        return key === "" ? null : key;
+        return normalizeLockerKey(locker);
     }
 
     /**

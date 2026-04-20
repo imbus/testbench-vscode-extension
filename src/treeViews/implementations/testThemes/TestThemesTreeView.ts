@@ -26,9 +26,7 @@ import { TreeViewEventTypes } from "../../utils/EventBus";
 import { PersistenceModule } from "../../features/PersistenceModule";
 import { ClickHandler } from "../../core/ClickHandler";
 import { ProjectsTreeItem } from "../projects/ProjectsTreeItem";
-
-type LockerValue = string | { key: string; name: string } | null | undefined;
-const SYSTEM_LOCK_KEY = "-2";
+import { LockerValue, normalizeLockerKey, SYSTEM_LOCK_KEY } from "./lockUtils";
 
 /**
  * Interface for filter storage
@@ -948,7 +946,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             item.setLockedByOther(isSelectedScopeLocked);
 
             return {
-                lockedDescendantNames: Array.from(lockedNames),
+                lockedDescendantNames: this.sortLockedNames(lockedNames),
                 isSelectedScopeLocked
             };
         } catch (error) {
@@ -1005,7 +1003,18 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             }
         }
 
-        return Array.from(lockedNames);
+        return this.sortLockedNames(lockedNames);
+    }
+
+    /**
+     * Returns lock names in stable order for prompts/logging.
+     * @param names Lock names to normalize and sort.
+     * @returns Sorted lock names.
+     */
+    private sortLockedNames(names: Iterable<string>): string[] {
+        return Array.from(new Set(names)).sort((left, right) =>
+            left.localeCompare(right, undefined, { sensitivity: "base" })
+        );
     }
 
     /**
@@ -1744,22 +1753,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * @returns Normalized locker key or null when not available.
      */
     private getLockerKey(locker: LockerValue): string | null {
-        if (locker === null || locker === undefined) {
-            return null;
-        }
-
-        if (typeof locker === "string") {
-            const trimmed = locker.trim();
-            return trimmed === "" ? null : trimmed;
-        }
-
-        const rawKey = locker.key;
-        if (rawKey === null || rawKey === undefined) {
-            return null;
-        }
-
-        const normalized = String(rawKey).trim();
-        return normalized === "" ? null : normalized;
+        return normalizeLockerKey(locker);
     }
 
     /**

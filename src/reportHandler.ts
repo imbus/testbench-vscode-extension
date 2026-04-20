@@ -1332,7 +1332,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
     resolvedTargetProjectKey: string,
     resolvedTargetCycleKey: string,
     resolvedReportRootUID: string
-): Promise<ImportResultSummary | false> {
+): Promise<ImportResultSummary | null> {
     logger.trace(`[reportHandler] Fetching results and importing to Testbench for tree item: ${invokedOnItem.label}`);
     return vscode.window.withProgress(
         {
@@ -1345,13 +1345,13 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 if (cancellationToken.isCancellationRequested) {
                     logger.debug("[reportHandler] User cancelled the fetch and import process.");
                     vscode.window.showInformationMessage("Import process cancelled.");
-                    return false;
+                    return null;
                 }
 
                 progress.report({ message: "Step 1/4: Validating parameters...", increment: 10 });
 
                 if (cancellationToken.isCancellationRequested) {
-                    return false;
+                    return null;
                 }
 
                 progress.report({ message: "Step 2/4: Creating report with local test results...", increment: 30 });
@@ -1363,7 +1363,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 );
                 if (cancellationToken.isCancellationRequested || !reportCreationDetails?.createdReportPath) {
                     logger.error("[reportHandler] Failed to create report with results, or process was cancelled.");
-                    return false;
+                    return null;
                 }
 
                 const { createdReportPath } = reportCreationDetails!;
@@ -1383,11 +1383,11 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
 
                 if (cancellationToken.isCancellationRequested) {
                     logger.debug("[reportHandler] Fetch and import process cancelled.");
-                    return false;
+                    return null;
                 }
 
                 if (!importResult) {
-                    return false;
+                    return null;
                 }
 
                 progress.report({ message: "Step 4/4: Cleaning up and updating state...", increment: 30 });
@@ -1401,7 +1401,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 const fetchAndImportErrorMsgForUser: string = "Error during fetch and import process.";
                 logger.error(fetchAndImportErrorMsg, error);
                 vscode.window.showErrorMessage(fetchAndImportErrorMsgForUser);
-                return false;
+                return null;
             }
         }
     );
