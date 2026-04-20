@@ -24,14 +24,20 @@ export interface TestGenerationResult {
     testsWereGenerated: boolean;
 }
 
+interface RobotFileSnapshot {
+    mtimeMs: number;
+    ctimeMs: number;
+    size: number;
+}
+
 /**
  * Collects .robot file paths and their modification times from a directory recursively.
  *
  * @param {string} dir Root directory to scan recursively for `.robot` files.
- * @returns {Promise<Map<string, number>>} A map of absolute `.robot` file paths to their `mtimeMs` values.
+ * @returns {Promise<Map<string, RobotFileSnapshot>>} A map of absolute `.robot` file paths to file metadata snapshots.
  */
-async function collectRobotFileTimestamps(dir: string): Promise<Map<string, number>> {
-    const files = new Map<string, number>();
+async function collectRobotFileTimestamps(dir: string): Promise<Map<string, RobotFileSnapshot>> {
+    const files = new Map<string, RobotFileSnapshot>();
     let entries: Dirent[] = [];
     try {
         entries = await fsPromise.readdir(dir, { withFileTypes: true });
@@ -45,10 +51,14 @@ async function collectRobotFileTimestamps(dir: string): Promise<Map<string, numb
         try {
             if (entry.isDirectory()) {
                 const subFiles = await collectRobotFileTimestamps(entryPath);
-                subFiles.forEach((mtime, filePath) => files.set(filePath, mtime));
+                subFiles.forEach((snapshot, filePath) => files.set(filePath, snapshot));
             } else if (entry.isFile() && entry.name.endsWith(".robot")) {
                 const stats = await fsPromise.stat(entryPath);
-                files.set(entryPath, stats.mtimeMs);
+                files.set(entryPath, {
+                    mtimeMs: stats.mtimeMs,
+                    ctimeMs: stats.ctimeMs,
+                    size: stats.size
+                });
             }
         } catch {
             // Skip unreadable entries so one file does not abort the whole snapshot.
@@ -61,14 +71,25 @@ async function collectRobotFileTimestamps(dir: string): Promise<Map<string, numb
 /**
  * Checks if any .robot files were created or modified by comparing before/after snapshots.
  *
- * @param {Map<string, number>} before Snapshot collected before generation, keyed by absolute file path.
- * @param {Map<string, number>} after Snapshot collected after generation, keyed by absolute file path.
- * @returns {boolean} `true` if at least one `.robot` file is new or has a newer modification time.
+ * @param {Map<string, RobotFileSnapshot>} before Snapshot collected before generation, keyed by absolute file path.
+ * @param {Map<string, RobotFileSnapshot>} after Snapshot collected after generation, keyed by absolute file path.
+ * @returns {boolean} `true` if at least one `.robot` file is new or has changed metadata.
  */
-function wereRobotFilesCreatedOrModified(before: Map<string, number>, after: Map<string, number>): boolean {
-    for (const [filePath, mtime] of after) {
-        const beforeMtime = before.get(filePath);
-        if (beforeMtime === undefined || mtime > beforeMtime) {
+function wereRobotFilesCreatedOrModified(
+    before: Map<string, RobotFileSnapshot>,
+    after: Map<string, RobotFileSnapshot>
+): boolean {
+    for (const [filePath, currentSnapshot] of after) {
+        const previousSnapshot = before.get(filePath);
+        if (previousSnapshot === undefined) {
+            return true;
+        }
+
+        if (
+            currentSnapshot.mtimeMs !== previousSnapshot.mtimeMs ||
+            currentSnapshot.ctimeMs !== previousSnapshot.ctimeMs ||
+            currentSnapshot.size !== previousSnapshot.size
+        ) {
             return true;
         }
     }
@@ -129,7 +150,7 @@ export class tb2robotLib {
         const resourceRoot: string[] | undefined = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_ROOT);
 
         // Snapshot .robot files in output directory before generation.
-        let robotFilesBefore = new Map<string, number>();
+        let robotFilesBefore = new Map<string, RobotFileSnapshot>();
         let outputDirFullPath: string | undefined;
         if (outputDirectory) {
             const workspaceLocation = await validateAndReturnWorkspaceLocation();
