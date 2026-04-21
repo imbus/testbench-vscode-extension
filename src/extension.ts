@@ -127,7 +127,7 @@ export function safeCommandHandler(handler: (...args: any[]) => any): (...args: 
         } catch (error) {
             const errorMessage: string = error instanceof Error ? error.message : "An unknown error occurred";
             logger.error(`[extension] Error executing command: ${errorMessage}`, error);
-            vscode.window.showErrorMessage(`Error executing command: ${errorMessage}`);
+            vscode.window.showErrorMessage("The action could not be completed.");
         }
     };
 }
@@ -580,7 +580,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         // Ensure logger is initialized, or fall back to console
         const log = logger ? logger.error : console.error;
         log(`[extension] Failed to activate extension. ${errorMessage}`, error);
-        vscode.window.showErrorMessage(`TestBench Extension failed to activate: ${errorMessage}`);
+        vscode.window.showErrorMessage("TestBench extension could not start. Reload VS Code and try again.");
     }
 }
 
