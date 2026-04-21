@@ -28,6 +28,14 @@ function createMockAxiosNetworkError(url: string): any {
     return networkError;
 }
 
+function createMockAxiosCertificateError(url: string): any {
+    const certificateError: any = new Error("self signed certificate");
+    certificateError.isAxiosError = true;
+    certificateError.code = "SELF_SIGNED_CERT";
+    certificateError.config = { url };
+    return certificateError;
+}
+
 suite("testBenchConnection", function () {
     let testEnv: TestEnvironment;
 
@@ -41,18 +49,17 @@ suite("testBenchConnection", function () {
     });
 
     suite("withRetry", () => {
-        test("does not force logout on network errors when forceLogoutOnNetworkError is false", async () => {
-            const networkError = createMockAxiosNetworkError(MOCK_PROJECTS_ENDPOINT);
+        test("does not force logout on certificate validation errors", async () => {
+            const certificateError = createMockAxiosCertificateError(MOCK_PROJECTS_ENDPOINT);
 
             await assert.rejects(async () => {
                 await testBenchConnection.withRetry(
                     async () => {
-                        throw networkError;
+                        throw certificateError;
                     },
                     0,
                     0,
                     undefined,
-                    false,
                     false
                 );
             });
@@ -61,7 +68,7 @@ suite("testBenchConnection", function () {
             sinon.assert.notCalled(testEnv.vscodeMocks.showWarningMessageStub);
         });
 
-        test("forces logout on network errors when forceLogoutOnNetworkError is true", async () => {
+        test("forces logout on network errors", async () => {
             const networkError = createMockAxiosNetworkError(MOCK_PROJECTS_ENDPOINT);
 
             await assert.rejects(
@@ -73,8 +80,7 @@ suite("testBenchConnection", function () {
                         0,
                         0,
                         undefined,
-                        false,
-                        true
+                        false
                     );
                 },
                 (error: any) => error instanceof testBenchConnection.TestBenchConnectionError
@@ -86,7 +92,7 @@ suite("testBenchConnection", function () {
     });
 
     suite("LegacyPlayServerClient", () => {
-        test("shows user warning that session remains active when fetching test elements fails", async () => {
+        test("shows user error when fetching test elements fails", async () => {
             const withRetryStub = testEnv.sandbox
                 .stub(testBenchConnection, "withRetry")
                 .rejects(new Error(MOCK_LEGACY_API_FAILURE_MESSAGE));
@@ -97,15 +103,15 @@ suite("testBenchConnection", function () {
                 MOCK_SESSION_TOKEN,
                 MOCK_USERNAME,
                 new https.Agent(),
-                testEnv.mockContext
+                false
             );
 
             const result = await client.getTestElements(MOCK_TOV_KEY);
 
             assert.strictEqual(result, null);
             sinon.assert.calledOnce(withRetryStub);
-            sinon.assert.calledOnce(testEnv.vscodeMocks.showWarningMessageStub);
-            sinon.assert.notCalled(testEnv.vscodeMocks.showErrorMessageStub);
+            sinon.assert.notCalled(testEnv.vscodeMocks.showWarningMessageStub);
+            sinon.assert.calledOnce(testEnv.vscodeMocks.showErrorMessageStub);
         });
     });
 });
