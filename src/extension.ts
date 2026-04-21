@@ -145,8 +145,7 @@ async function createNewConnection(
     session: vscode.AuthenticationSession,
     currentConnection: PlayServerConnection | null,
     context: vscode.ExtensionContext,
-    isInsecure: boolean,
-    serverVersion: string = ""
+    isInsecure: boolean
 ): Promise<PlayServerConnection> {
     if (currentConnection) {
         logger.warn(
@@ -161,8 +160,7 @@ async function createNewConnection(
         activeConnection.username,
         session.accessToken,
         context,
-        isInsecure,
-        serverVersion
+        isInsecure
     );
     await newConnection.initialize();
     setConnection(newConnection);
@@ -246,10 +244,8 @@ export async function handleTestBenchSessionChange(
         const sharedSessionManager = SharedSessionManager.getInstance(context);
         const sharedSession = await sharedSessionManager.getSharedSession();
         let isInsecure = false;
-        let serverVersion = "";
         if (sharedSession && sharedSession.sessionToken === sessionToProcess.accessToken) {
             isInsecure = sharedSession.isInsecure;
-            serverVersion = sharedSession.serverVersion || "";
         }
 
         // If switching to a different user, reset state for the previous user's data
@@ -283,8 +279,7 @@ export async function handleTestBenchSessionChange(
             sessionToProcess,
             connection,
             context,
-            isInsecure,
-            serverVersion
+            isInsecure
         );
         await handleLanguageServerRestartOnSessionChange(previousSessionToken, newConnection.getSessionToken());
 
@@ -418,8 +413,7 @@ async function validateStoredSession(
             sharedSession.username,
             sharedSession.sessionToken,
             context,
-            sharedSession.isInsecure,
-            sharedSession.serverVersion || ""
+            sharedSession.isInsecure
         );
 
         await tempConnection.initialize();

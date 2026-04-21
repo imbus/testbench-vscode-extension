@@ -14,7 +14,8 @@ import * as base64 from "base-64";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { logger } from "../extension";
-import { withRetry, RetryPredicateFactory, TLSSecurityManager } from "../testBenchConnection";
+import { ConfigKeys } from "../constants";
+import { withRetry, RetryPredicateFactory } from "../testBenchConnection";
 
 /**
  * Interface for server locations response from the new Play server.
@@ -66,11 +67,36 @@ export class LegacyPlayServerClient {
         private newServerPort: number,
         private sessionToken: string,
         private username: string,
-        private httpsAgent: https.Agent | HttpsProxyAgent<string>
+        private httpsAgent: https.Agent | HttpsProxyAgent<string>,
+        private allowInsecureTlsFallback: boolean = false
     ) {
         logger.trace(
             `[LegacyPlayServerClient] Initialized for server '${this.serverName}' (default legacy port: ${LegacyPlayServerClient.DEFAULT_LEGACY_PORT}, new server port: ${this.newServerPort})`
         );
+    }
+
+    /**
+     * Creates an HTTPS agent for legacy requests. In insecure mode, this keeps proxy behavior if configured.
+     */
+    private createLegacyHttpsAgent(insecure: boolean): https.Agent | HttpsProxyAgent<string> {
+        if (!insecure) {
+            return this.httpsAgent;
+        }
+
+        const httpConfig = vscode.workspace.getConfiguration("http");
+        const proxyUrl = httpConfig.get<string>(ConfigKeys.PROXY_URL) ?? "";
+        const insecureAgentOptions: https.AgentOptions & {
+            checkServerIdentity?: (hostname: string, cert: tls.PeerCertificate) => Error | undefined;
+        } = {
+            rejectUnauthorized: false,
+            checkServerIdentity: (_hostname: string, _cert: tls.PeerCertificate) => undefined
+        };
+
+        if (proxyUrl) {
+            return new HttpsProxyAgent(proxyUrl, insecureAgentOptions);
+        }
+
+        return new https.Agent(insecureAgentOptions);
     }
 
     /**
@@ -167,12 +193,7 @@ export class LegacyPlayServerClient {
         const legacyServerBaseUrl = `https://${this.serverName}:${this.currentLegacyPort}${LegacyPlayServerClient.LEGACY_SERVER_BASE_PATH}`;
         const encoded = base64.encode(`${this.username}:${this.sessionToken}`);
 
-        const httpsAgent = this.useInsecureLegacyTls
-            ? new https.Agent({
-                  rejectUnauthorized: false,
-                  checkServerIdentity: (_hostname: string, _cert: tls.PeerCertificate) => undefined
-              })
-            : this.httpsAgent;
+        const httpsAgent = this.createLegacyHttpsAgent(this.useInsecureLegacyTls);
 
         logger.trace(
             `[LegacyPlayServerClient] Creating legacy server session with URL ${legacyServerBaseUrl} (insecureTLS=${this.useInsecureLegacyTls})`
@@ -263,6 +284,13 @@ export class LegacyPlayServerClient {
                 throw error;
             }
 
+            if (!this.allowInsecureTlsFallback) {
+                logger.warn(
+                    `[LegacyPlayServerClient] Certificate validation failed on legacy endpoint (code: ${(error as any)?.code || "unknown"}). Insecure TLS fallback is disabled because the session is in secure mode.`
+                );
+                throw error;
+            }
+
             logger.warn(
                 `[LegacyPlayServerClient] Certificate validation failed on legacy endpoint (code: ${(error as any)?.code || "unknown"}). Retrying legacy request with insecure TLS.`
             );
@@ -283,18 +311,9 @@ export class LegacyPlayServerClient {
                 }
 
                 logger.warn(
-                    `[LegacyPlayServerClient] Insecure legacy agent still failed certificate validation (code: ${(insecureError as any)?.code || "unknown"}). Enabling global insecure TLS mode and retrying once.`
+                    `[LegacyPlayServerClient] Insecure legacy agent still failed certificate validation (code: ${(insecureError as any)?.code || "unknown"}). Keeping failure scoped to legacy request.`
                 );
-
-                TLSSecurityManager.getInstance().enableInsecureMode();
-                const globallyInsecureSession = this.createLegacyServerSession();
-                return withRetry(
-                    () => globallyInsecureSession.get(requestPath),
-                    0, // maxRetries
-                    0, // delayMs
-                    RetryPredicateFactory.createDefaultPredicate(),
-                    false
-                );
+                throw insecureError;
             }
         }
     }

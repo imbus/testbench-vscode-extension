@@ -304,7 +304,6 @@ export class PlayServerConnection {
      * @param {string} sessionToken - The session token for authentication.
      * @param {vscode.ExtensionContext} context - The extension context for path resolution.
      * @param {boolean} isInsecure - Whether to use insecure TLS.
-     * @param {string} serverVersion - The TestBench server version (used for legacy port cache invalidation).
      */
     constructor(
         public serverName: string,
@@ -312,8 +311,7 @@ export class PlayServerConnection {
         public username: string,
         private sessionToken: string,
         private context: vscode.ExtensionContext,
-        private isInsecure: boolean = false,
-        private serverVersion: string = ""
+        private isInsecure: boolean = false
     ) {
         this.baseURL = `https://${this.serverName}:${this.portNumber}/api`;
         this.testElementsCache = new CacheManager<string, any>(TreeViewTiming.TREE_DATA_FRESHNESS_THRESHOLD_MS);
@@ -346,7 +344,8 @@ export class PlayServerConnection {
             this.portNumber,
             this.sessionToken,
             this.username,
-            agentToUse
+            agentToUse,
+            this.isInsecure
         );
 
         // Initialize legacy server port discovery in the background
@@ -562,6 +561,8 @@ export class PlayServerConnection {
             return null;
         }
 
+        await this.ensureLegacyClientInitialized();
+
         const cachedEntry = this.testElementsCache.getEntryFromCache(tovKey);
         if (cachedEntry) {
             logger.trace(`[testBenchConnection] Returning cached test elements for TOV key ${tovKey}.`);
@@ -586,7 +587,18 @@ export class PlayServerConnection {
      * @returns {Promise<any | null>} The filters data or null if an error occurs
      */
     async getFiltersFromOldPlayServer(): Promise<any | null> {
+        await this.ensureLegacyClientInitialized();
         return this.legacyClient.getFilters();
+    }
+
+    /**
+     * Ensures legacy server discovery has completed before issuing legacy API calls.
+     */
+    private async ensureLegacyClientInitialized(): Promise<void> {
+        if (this.legacyInitPromise) {
+            await this.legacyInitPromise;
+            this.legacyInitPromise = null;
+        }
     }
 
     /**

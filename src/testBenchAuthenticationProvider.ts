@@ -355,8 +355,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 connection.username,
                 existingSharedSession.sessionToken,
                 this.context,
-                existingSharedSession.isInsecure,
-                existingSharedSession.serverVersion || ""
+                existingSharedSession.isInsecure
             );
             await tempConnection.initialize();
 
