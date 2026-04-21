@@ -9,10 +9,15 @@
     const sectionTitle = document.getElementById("sectionTitle");
     const sectionIcon = document.querySelector(".add-connection-section h3 .icon");
     const saveButtonText = document.getElementById("saveButtonText");
+    const connectionSectionEl = document.querySelector(".connection-section");
 
     let currentEditingConnectionId = null;
     let isEditMode = false;
     let hasStoredPasswordWhileEditing = false;
+    let isLoginInProgress = false;
+    let loginInProgressConnectionId = null;
+    let loginInProgressConnectionLabel = null;
+    let latestConnectionPayload = null;
 
     // Form elements
     const connectionLabelInput = document.getElementById("connectionLabel");
@@ -52,7 +57,43 @@
         }
     }
 
+    function updateLoginProgressFeedback() {
+        if (connectionSectionEl) {
+            connectionSectionEl.setAttribute("aria-busy", isLoginInProgress ? "true" : "false");
+        }
+    }
+
+    function setLoginState(state) {
+        if (!state || typeof state.loginInProgress !== "boolean") {
+            return;
+        }
+
+        isLoginInProgress = state.loginInProgress;
+        loginInProgressConnectionId = state.loginConnectionId || null;
+        loginInProgressConnectionLabel = state.loginConnectionLabel || null;
+
+        updateLoginProgressFeedback();
+
+        if (latestConnectionPayload) {
+            if (Array.isArray(latestConnectionPayload)) {
+                renderConnections(latestConnectionPayload);
+                return;
+            }
+
+            const payloadWithCurrentLoginState = {
+                ...latestConnectionPayload,
+                loginInProgress: isLoginInProgress,
+                loginConnectionId: loginInProgressConnectionId,
+                loginConnectionLabel: loginInProgressConnectionLabel
+            };
+
+            renderConnections(payloadWithCurrentLoginState);
+        }
+    }
+
     function renderConnections(data) {
+        latestConnectionPayload = data;
+
         let connections, editingConnectionId;
         if (Array.isArray(data)) {
             connections = data;
@@ -60,9 +101,17 @@
         } else {
             connections = data.connections || [];
             editingConnectionId = data.editingConnectionId || null;
+
+            if (typeof data.loginInProgress === "boolean") {
+                isLoginInProgress = data.loginInProgress;
+                loginInProgressConnectionId = data.loginConnectionId || null;
+                loginInProgressConnectionLabel = data.loginConnectionLabel || null;
+                updateLoginProgressFeedback();
+            }
         }
 
         const isAnyConnectionBeingEdited = editingConnectionId !== null;
+        const areActionsBlocked = isAnyConnectionBeingEdited || isLoginInProgress;
 
         if (connectionsLoadingMessageEl) {
             connectionsLoadingMessageEl.style.display = "none";
@@ -92,6 +141,37 @@
             sortedConnections.forEach((connection) => {
                 const li = document.createElement("li");
                 const isBeingEdited = editingConnectionId === connection.id;
+                const isLoginTarget = isLoginInProgress && loginInProgressConnectionId === connection.id;
+
+                let loginButtonTitle = "Login with this connection";
+                if (isLoginTarget) {
+                    loginButtonTitle = "Login in progress";
+                } else if (isLoginInProgress) {
+                    loginButtonTitle = "Please wait for the current login request to complete";
+                } else if (isAnyConnectionBeingEdited) {
+                    loginButtonTitle = "Finish editing before login";
+                }
+
+                let loginButtonAriaLabel = `Login with connection ${connection.label}`;
+                if (isLoginTarget) {
+                    loginButtonAriaLabel = `Login in progress for connection ${connection.label}`;
+                } else if (isLoginInProgress) {
+                    const activeConnectionLabel = loginInProgressConnectionLabel || "another connection";
+                    loginButtonAriaLabel = `Login unavailable. Please wait while logging in with ${activeConnectionLabel}`;
+                } else if (isAnyConnectionBeingEdited) {
+                    loginButtonAriaLabel = "Login unavailable while a connection is being edited";
+                }
+
+                const editButtonTitle = isLoginInProgress
+                    ? "Please wait for the current login request to complete"
+                    : "Edit this connection";
+
+                let deleteButtonTitle = "Delete this connection";
+                if (isLoginInProgress) {
+                    deleteButtonTitle = "Please wait for the current login request to complete";
+                } else if (isAnyConnectionBeingEdited) {
+                    deleteButtonTitle = "Cannot delete while editing";
+                }
 
                 // Add visual indication for connection being edited
                 if (isBeingEdited) {
@@ -113,24 +193,25 @@
                     <div class="connection-info">${connection.username}@${connection.serverName}:${connection.portNumber}</div>
                 </div>
                 <div class="connection-actions">
-                    <button class="login-btn" data-connection-id="${connection.id}" 
-                            aria-label="Login with connection ${connection.label}" 
-                            title="${isAnyConnectionBeingEdited ? "Finish editing before login" : "Login with this connection"}"
-                            ${isAnyConnectionBeingEdited ? "disabled" : ""}>
+                    <button class="login-btn${isLoginTarget ? " is-loading" : ""}" data-connection-id="${connection.id}" 
+                            aria-label="${loginButtonAriaLabel}" 
+                            title="${loginButtonTitle}"
+                            ${areActionsBlocked ? "disabled" : ""}>
                         <span class="icon icon-login"></span>
+                        <span class="spinner ${isLoginTarget ? "" : "hidden"}" aria-hidden="true"></span>
                     </button>
                     <button class="edit-btn" data-connection-id="${connection.id}" 
                             aria-label="Edit connection ${connection.label}" 
-                            title="Edit this connection"
-                            ${isBeingEdited ? "disabled" : ""}
+                            title="${editButtonTitle}"
+                            ${isBeingEdited || isLoginInProgress ? "disabled" : ""}
                             style="${isBeingEdited ? "opacity: 0.5; cursor: not-allowed;" : ""}">
                         <span class="icon icon-edit"></span>
                     </button>
                     <button class="delete-btn" data-connection-id="${connection.id}" 
                             aria-label="Delete connection ${connection.label}" 
-                            title="${isAnyConnectionBeingEdited ? "Cannot delete while editing" : "Delete this connection"}"
-                            ${isAnyConnectionBeingEdited ? "disabled" : ""}
-                            style="${isAnyConnectionBeingEdited ? "opacity: 0.3; cursor: not-allowed;" : ""}">
+                            title="${deleteButtonTitle}"
+                            ${areActionsBlocked ? "disabled" : ""}
+                            style="${areActionsBlocked ? "opacity: 0.3; cursor: not-allowed;" : ""}">
                         <span class="icon icon-delete"></span>
                     </button>
                 </div>
@@ -278,7 +359,12 @@
                 vscode.postMessage({ command: "requestDeleteConfirmation", payload: { connectionId: connectionId } });
             }
         } else if (targetButton && targetButton.disabled) {
-            if (targetButton.classList.contains("delete-btn")) {
+            if (isLoginInProgress) {
+                const connectionLabelText = loginInProgressConnectionLabel
+                    ? ` for "${loginInProgressConnectionLabel}"`
+                    : "";
+                displayMessage("info", `Login is already in progress${connectionLabelText}. Please wait.`);
+            } else if (targetButton.classList.contains("delete-btn")) {
                 displayMessage(
                     "info",
                     "Cannot delete connection while editing it. Please save or cancel your changes first."
@@ -321,6 +407,9 @@
             case "exitEditMode":
                 exitEditMode();
                 break;
+            case "updateLoginState":
+                setLoginState(message.payload);
+                break;
         }
     });
 
@@ -328,4 +417,5 @@
     console.log("[WebviewScript] Requesting initial connections via connectionUiLoaded.");
     vscode.postMessage({ command: "connectionUiLoaded" });
     messagesEl.classList.add("hidden");
+    updateLoginProgressFeedback();
 })();

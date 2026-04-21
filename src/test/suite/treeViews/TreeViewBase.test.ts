@@ -156,7 +156,6 @@ suite("TreeViewBase", function () {
             title: "Test Tree View",
             contextValue: "testTreeView",
             features: {
-                customRoot: true,
                 marking: true,
                 persistence: true,
                 filtering: true,
@@ -290,7 +289,6 @@ suite("TreeViewBase", function () {
             const modules = treeView.getModules();
 
             // Check that expected modules are registered
-            assert.ok(modules.has("customRoot"));
             assert.ok(modules.has("marking"));
             assert.ok(modules.has("persistence"));
             assert.ok(modules.has("expansion"));
@@ -301,12 +299,9 @@ suite("TreeViewBase", function () {
         test("should get module by ID", async () => {
             await treeView.initialize();
 
-            const customRootModule = treeView.getModule("customRoot");
             const markingModule = treeView.getModule("marking");
 
-            assert.ok(customRootModule);
             assert.ok(markingModule);
-            assert.strictEqual(customRootModule!.id, "customRoot");
             assert.strictEqual(markingModule!.id, "marking");
         });
 
@@ -557,36 +552,6 @@ suite("TreeViewBase", function () {
         });
     });
 
-    suite("Custom Root Management", () => {
-        test("should make item root", async () => {
-            await treeView.initialize();
-
-            const item = new TestTreeItem(
-                "Test",
-                "Description",
-                "test",
-                vscode.TreeItemCollapsibleState.None,
-                mockContext
-            );
-
-            treeView.makeRoot(item);
-
-            // Should delegate to custom root module
-            const customRootModule = treeView.getModule("customRoot");
-            assert.ok(customRootModule);
-        });
-
-        test("should reset custom root", async () => {
-            await treeView.initialize();
-
-            treeView.resetCustomRoot();
-
-            // Should delegate to custom root module
-            const customRootModule = treeView.getModule("customRoot");
-            assert.ok(customRootModule);
-        });
-    });
-
     suite("Tree Clearing", () => {
         test("should clear tree", async () => {
             await treeView.initialize();
@@ -738,7 +703,6 @@ suite("TreeViewBase", function () {
 
             const newConfig = {
                 features: {
-                    customRoot: false,
                     marking: true,
                     persistence: false,
                     filtering: true,

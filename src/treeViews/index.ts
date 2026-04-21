@@ -33,7 +33,6 @@ export { EventBus } from "./utils/EventBus";
 export type { TreeViewEvent, EventHandler } from "./utils/EventBus";
 
 // Feature module exports
-export { CustomRootModule } from "./features/CustomRootModule";
 export { MarkingModule } from "./features/MarkingModule";
 export { PersistenceModule } from "./features/PersistenceModule";
 export { ExpansionModule } from "./features/ExpansionModule";
