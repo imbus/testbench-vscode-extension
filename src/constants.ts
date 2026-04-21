@@ -47,7 +47,8 @@ export const WebviewMessageCommands = {
 
     // Host to Webview communication
     DISPLAY_CONNECTIONS_IN_WEBVIEW: "displayConnectionsInWebview",
-    SHOW_WEBVIEW_MESSAGE: "showWebviewMessage"
+    SHOW_WEBVIEW_MESSAGE: "showWebviewMessage",
+    UPDATE_LOGIN_STATE: "updateLoginState"
 } as const;
 
 // --- Webview File Paths ---
