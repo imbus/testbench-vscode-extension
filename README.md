@@ -1,8 +1,8 @@
 # TestBench Extension for Visual Studio Code
 
-[![Visual Studio Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/imbus.testbench-extension)](https://marketplace.visualstudio.com/items?itemName=imbus.testbench-extension)
-[![Visual Studio Marketplace Installs](https://img.shields.io/visual-studio-marketplace/i/imbus.testbench-extension)](https://marketplace.visualstudio.com/items?itemName=imbus.testbench-extension)
-[![Visual Studio Marketplace Rating](https://img.shields.io/visual-studio-marketplace/r/imbus.testbench-extension)](https://marketplace.visualstudio.com/items?itemName=imbus.testbench-extension)
+[![Visual Studio Marketplace Version](https://vsmarketplacebadges.dev/version-short/imbus.testbench-extension.svg)](https://marketplace.visualstudio.com/items?itemName=imbus.testbench-extension)
+[![Visual Studio Marketplace Installs](https://vsmarketplacebadges.dev/installs-short/imbus.testbench-extension.svg)](https://marketplace.visualstudio.com/items?itemName=imbus.testbench-extension)
+[![Visual Studio Marketplace Rating](https://vsmarketplacebadges.dev/rating-short/imbus.testbench-extension.svg)](https://marketplace.visualstudio.com/items?itemName=imbus.testbench-extension)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 The **TestBench Extension** bridges [TestBench](https://www.testbench.com/) and [Robot Framework](https://github.com/robotframework/robotframework) directly inside VS Code. Navigate TestBench projects, synchronize keywords, generate test suites, execute tests, and upload results, all within your editor.
