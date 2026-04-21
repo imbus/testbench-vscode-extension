@@ -1,8 +1,8 @@
 # TestBench Extension for Visual Studio Code
 
-[![Visual Studio Marketplace Version](https://vsmarketplacebadges.dev/version-short/imbus.testbench-extension.svg)](https://marketplace.visualstudio.com/items?itemName=imbus.testbench-extension)
-[![Visual Studio Marketplace Installs](https://vsmarketplacebadges.dev/installs-short/imbus.testbench-extension.svg)](https://marketplace.visualstudio.com/items?itemName=imbus.testbench-extension)
-[![Visual Studio Marketplace Rating](https://vsmarketplacebadges.dev/rating-short/imbus.testbench-extension.svg)](https://marketplace.visualstudio.com/items?itemName=imbus.testbench-extension)
+[![Visual Studio Marketplace Version](https://badgen.net/vs-marketplace/v/imbus.testbench-extension)](https://marketplace.visualstudio.com/items?itemName=imbus.testbench-extension)
+[![Visual Studio Marketplace Installs](https://badgen.net/vs-marketplace/i/imbus.testbench-extension)](https://marketplace.visualstudio.com/items?itemName=imbus.testbench-extension)
+[![Visual Studio Marketplace Rating](https://badgen.net/vs-marketplace/rating/imbus.testbench-extension)](https://marketplace.visualstudio.com/items?itemName=imbus.testbench-extension)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 The **TestBench Extension** bridges [TestBench](https://www.testbench.com/) and [Robot Framework](https://github.com/robotframework/robotframework) directly inside VS Code. Navigate TestBench projects, synchronize keywords, generate test suites, execute tests, and upload results, all within your editor.
@@ -169,8 +169,6 @@ The table below lists the most-used settings for day-to-day workflows.
 | `certificatePath`                        | _(empty)_              | Path to a custom or self-signed `.pem` certificate for the TestBench server                                 |
 
 All path settings are relative to the workspace root. `certificatePath` accepts both absolute and relative paths. Alternatively, you can set the `NODE_EXTRA_CA_CERTS` environment variable to point to your certificate file instead of using the `certificatePath` setting.
-
-For the full settings reference, see the [User Guide](user-guide.md#extension-settings).
 
 ## Troubleshooting
 
