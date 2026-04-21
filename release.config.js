@@ -68,7 +68,7 @@ module.exports = {
         [
             "@semantic-release/exec",
             {
-                prepareCmd: "npm run package && vsce package -o testbench-extension-v${nextRelease.version}.vsix"
+                prepareCmd: "npm run package && vsce package -o testbench-v${nextRelease.version}.vsix"
             }
         ],
 
@@ -78,7 +78,7 @@ module.exports = {
             {
                 assets: [
                     {
-                        path: "testbench-extension-v${nextRelease.version}.vsix",
+                        path: "testbench-v${nextRelease.version}.vsix",
                         label: "VSIX Extension (v${nextRelease.version})"
                     }
                 ]
