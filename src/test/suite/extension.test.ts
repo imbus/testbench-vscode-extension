@@ -110,14 +110,6 @@ suite("Extension Test Suite", function () {
                 executeCommandStub.calledWith("setContext", ContextKeys.CONNECTION_ACTIVE, false),
                 "Should set connection active context to false"
             );
-            assert.ok(
-                executeCommandStub.calledWith("setContext", ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, false),
-                "Should set project tree custom root context to false"
-            );
-            assert.ok(
-                executeCommandStub.calledWith("setContext", ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, false),
-                "Should set theme tree custom root context to false"
-            );
         });
 
         test("should register login webview provider", async () => {

@@ -535,14 +535,6 @@ const handleDisplayAllProjects = async () => {
     }
 };
 
-const handleMakeRoot = (item: any) => {
-    if (treeViews?.projectsTree && item.data?.type === "project") {
-        treeViews?.projectsTree.makeRoot(item);
-    } else if (treeViews?.testThemesTree && item.data?.type?.includes("TestTheme")) {
-        treeViews?.testThemesTree.makeRoot(item);
-    }
-};
-
 const handleRefreshProjectTreeView = () => {
     treeViews?.projectsTree.refresh();
 };
@@ -671,14 +663,6 @@ const handleDisableFilterDiffMode = async () => {
     } else {
         getLogger().warn("[extensionCommands] Test themes tree not available to disable filter diff mode.");
     }
-};
-
-const handleResetProjectTreeViewRoot = () => {
-    treeViews?.projectsTree.resetCustomRoot();
-};
-
-const handleResetTestThemeTreeViewRoot = () => {
-    treeViews?.testThemesTree.resetCustomRoot();
 };
 
 const handleCheckForTestCaseSetDoubleClick = async (item: TestThemesTreeItem) => {
@@ -1149,15 +1133,6 @@ export async function registerExtensionCommands(context: vscode.ExtensionContext
         },
         { id: allExtensionCommands.enableFilterDiffMode, handler: handleEnableFilterDiffMode },
         { id: allExtensionCommands.disableFilterDiffMode, handler: handleDisableFilterDiffMode },
-        {
-            id: allExtensionCommands.makeRoot,
-            handler: handleMakeRoot
-        },
-        { id: allExtensionCommands.resetProjectTreeViewRoot, handler: handleResetProjectTreeViewRoot },
-        {
-            id: allExtensionCommands.resetTestThemeTreeViewRoot,
-            handler: handleResetTestThemeTreeViewRoot
-        },
 
         // Other extension commands
         { id: allExtensionCommands.clearInternalTestbenchFolder, handler: clearInternalFolder },
