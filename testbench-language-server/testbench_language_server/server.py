@@ -168,18 +168,6 @@ class TestBenchLanguageServer(LanguageServer):
     def set_tov(self, tov: str):
         self.tov = tov
 
-    # def generate_ai_documentation(self, keyword: Keyword):
-    #     keyword_string = robot_model_to_string(keyword)
-    #     data = {
-    #         "keyword_code": keyword_string,
-    #         "language": "ENG",
-    #         "arguments_exist": True,
-    #         "return_value_exists": False,
-    #     }
-    #     url = f"{self.ai_server_address}/generate-rf-keyword-description"
-    #     response = requests.post(url, json=data)
-    #     return response.json().get("description", "No documentation found")
-
 
 testbench_ls = TestBenchLanguageServer()
 
@@ -240,7 +228,7 @@ def generate_test_suites(ls: LanguageServer, kwargs):
         json_input_report=pathlib.Path(kwargs.get("testbench_report")),
         robot_result_xml=pathlib.Path(kwargs.get("robot_result")),
         json_output_result=pathlib.Path(kwargs.get("output_directory")),
-        config={}
+        config={},
     )
 
 
@@ -284,7 +272,9 @@ def update_project(ls: LanguageServer, *args):
         document = testbench_ls.workspace.get_text_document(docum)
         diagnostics = get_context_diagnostics(testbench_ls, document)
         ls.text_document_publish_diagnostics(
-            PublishDiagnosticsParams(document.uri, diagnostics=diagnostics, version=document.version)
+            PublishDiagnosticsParams(
+                document.uri, diagnostics=diagnostics, version=document.version
+            )
         )
 
 
@@ -298,7 +288,9 @@ def update_tov(ls: LanguageServer, *args):
         document = testbench_ls.workspace.get_text_document(docum)
         diagnostics = get_context_diagnostics(testbench_ls, document)
         ls.text_document_publish_diagnostics(
-            PublishDiagnosticsParams(document.uri, diagnostics=diagnostics, version=document.version)
+            PublishDiagnosticsParams(
+                document.uri, diagnostics=diagnostics, version=document.version
+            )
         )
 
 
@@ -409,26 +401,31 @@ def show_testbench_diff(ls: LanguageServer, kwargs):
     document_uri = kwargs.get("document_uri")
     subdivision_uid = kwargs.get("subdivision_uid")
     document = testbench_ls.workspace.get_text_document(document_uri)
-    existing_resource = TestBenchResourceModel.from_file(document.source)
-    if not existing_resource.tb_subdivision_uid or not context_is_valid(ls, existing_resource):
+    vscode_resource = TestBenchResourceModel.from_file(document.source)
+    if not vscode_resource.tb_subdivision_uid or not context_is_valid(ls, vscode_resource):
         return
-    new_resource = create_resource_from_subdivision(
+    testbench_resource = create_resource_from_subdivision(
         uid=subdivision_uid,
     )
-    change_identifier = ChangeAnnotationIdentifier()
-    edits = []
-    create_kw_section = not bool(get_keyword_section(existing_resource.file))
+    if not testbench_resource:
+        show_error(ls, ERROR_FINDING_TESTBENCH_SUBDIVISION_WITH_UID.format(uid=subdivision_uid))
+        return
+    change_identifier_tb = ChangeAnnotationIdentifier()
+    change_identifier_vscode = ChangeAnnotationIdentifier()
+    tb_edits = []
+    vscode_edits = []
+    create_kw_section = not bool(get_keyword_section(vscode_resource.file))
     if create_kw_section:
-        if get_variables_section(existing_resource.file):
-            _, _, kw_section_start, _ = get_variables_section_position(existing_resource.file)
+        if get_variables_section(vscode_resource.file):
+            _, _, kw_section_start, _ = get_variables_section_position(vscode_resource.file)
         else:
-            _, _, kw_section_start, _ = get_setting_section_position(existing_resource.file)
-        edits.extend(keyword_section_edit(kw_section_start, change_identifier))
+            _, _, kw_section_start, _ = get_setting_section_position(vscode_resource.file)
+        tb_edits.extend(keyword_section_edit(kw_section_start, change_identifier_tb))
     else:
-        _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
-    for new_keyword in new_resource.keyword_section.body:
+        _, _, kw_section_start, _ = get_keyword_section_position(vscode_resource.file)
+    for new_keyword in testbench_resource.keyword_section.body:
         try:
-            keyword_match = get_matching_testbench_keyword(new_keyword, existing_resource)
+            keyword_match = get_matching_testbench_keyword(new_keyword, vscode_resource)
         except MultipleKeywordsWithUid as e:
             show_error(
                 ls,
@@ -442,20 +439,43 @@ def show_testbench_diff(ls: LanguageServer, kwargs):
             )
             continue
         if not keyword_match:
-            edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
+            tb_edits.append(
+                new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier_tb)
+            )
         else:
             if get_keyword_tags(keyword_match) and any(
                 tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword_match))
             ):
                 continue
-            edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
-    if not edits:
+            tb_edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier_tb))
+
+    if vscode_resource and vscode_resource.keyword_section:
+        for vscode_keyword in vscode_resource.keyword_section.body:
+            if not isinstance(vscode_keyword, Keyword):
+                continue
+            if get_kw_uid(vscode_keyword):
+                continue
+            if get_keyword_tags(vscode_keyword) and any(
+                tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(vscode_keyword))
+            ):
+                continue
+            vscode_edits.append(deleted_keyword_edit(vscode_keyword, change_identifier_vscode))
+
+    if not tb_edits and not vscode_edits:
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
-    testbench_content = apply_text_edits(robot_model_to_string(existing_resource.file), edits)
+    testbench_content = robot_model_to_string(vscode_resource.file)
+    # testbench_content = apply_text_edits(robot_model_to_string(vscode_resource.file), tb_edits)
+    vscode_content = apply_text_edits(
+        robot_model_to_string(vscode_resource.file), tb_edits + vscode_edits
+    )
     ls.protocol.notify(
         "testbench-language-server/display-diff",
-        {"path": document_uri, "virtualContent": testbench_content},
+        {
+            "path": document_uri,
+            "virtualTestBenchContent": testbench_content,
+            "virtualRobotContent": vscode_content,
+        },
     )
 
 
@@ -490,27 +510,30 @@ def apply_text_edits(content: str, text_edits: list[AnnotatedTextEdit]) -> str:
 def attempt_push_subdivision(ls: LanguageServer, *args):
     document_uri, subdivision_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
-    existing_resource = TestBenchResourceModel.from_file(document.source)
-    if not existing_resource.tb_subdivision_uid or not context_is_valid(ls, existing_resource):
+    vscode_resource = TestBenchResourceModel.from_file(document.source)
+    if not vscode_resource.tb_subdivision_uid or not context_is_valid(ls, vscode_resource):
         return
-    new_resource = create_resource_from_subdivision(
+    testbench_resource = create_resource_from_subdivision(
         uid=subdivision_uid,
     )
+    if not testbench_resource:
+        show_error(ls, ERROR_FINDING_TESTBENCH_SUBDIVISION_WITH_UID.format(uid=subdivision_uid))
+        return
     change_identifier = ChangeAnnotationIdentifier()
     edits = []
-    create_kw_section = not bool(get_keyword_section(existing_resource.file))
+    create_kw_section = not bool(get_keyword_section(vscode_resource.file))
     if create_kw_section:
-        if get_variables_section(existing_resource.file):
-            _, _, kw_section_start, _ = get_variables_section_position(existing_resource.file)
+        if get_variables_section(vscode_resource.file):
+            _, _, kw_section_start, _ = get_variables_section_position(vscode_resource.file)
         else:
-            _, _, kw_section_start, _ = get_setting_section_position(existing_resource.file)
+            _, _, kw_section_start, _ = get_setting_section_position(vscode_resource.file)
         edits.extend(keyword_section_edit(kw_section_start, change_identifier))
     else:
-        _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
-    if new_resource and new_resource.keyword_section:
-        for new_keyword in new_resource.keyword_section.body:
+        _, _, kw_section_start, _ = get_keyword_section_position(vscode_resource.file)
+    if testbench_resource and testbench_resource.keyword_section:
+        for testbench_keyword in testbench_resource.keyword_section.body:
             try:
-                keyword_match = get_matching_testbench_keyword(new_keyword, existing_resource)
+                keyword_match = get_matching_testbench_keyword(testbench_keyword, vscode_resource)
             except MultipleKeywordsWithUid as e:
                 show_error(
                     ls,
@@ -524,13 +547,29 @@ def attempt_push_subdivision(ls: LanguageServer, *args):
                 )
                 continue
             if not keyword_match:
-                edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
+                edits.append(
+                    new_keyword_edit(testbench_keyword, kw_section_start + 1, change_identifier)
+                )
             else:
                 if get_keyword_tags(keyword_match) and any(
                     tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword_match))
                 ):
                     continue
-                edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
+                edits.extend(
+                    create_keyword_edits(keyword_match, testbench_keyword, change_identifier)
+                )
+    if vscode_resource and vscode_resource.keyword_section:
+        for vscode_keyword in vscode_resource.keyword_section.body:
+            if not isinstance(vscode_keyword, Keyword):
+                continue
+            if get_kw_uid(vscode_keyword):
+                continue
+            if get_keyword_tags(vscode_keyword) and any(
+                tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(vscode_keyword))
+            ):
+                continue
+            edits.append(new_keyword_edit(vscode_keyword, kw_section_start + 1, change_identifier))
+
     if not edits:
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
@@ -615,18 +654,23 @@ def get_resource_directory_subdivision_index(ls: LanguageServer, kwargs) -> int:
 def push_testbench_subdivision(ls: LanguageServer, kwargs):
     document_uri = kwargs.get("document_uri")
     document = testbench_ls.workspace.get_text_document(document_uri)
-    existing_resource = TestBenchResourceModel.from_file(document.source)
-    if not existing_resource.tb_subdivision_uid or not context_is_valid(ls, existing_resource):
+    vs_code_resource = TestBenchResourceModel.from_file(document.source)
+    if not vs_code_resource.tb_subdivision_uid or not context_is_valid(ls, vs_code_resource):
         return
     rd = ResourceDocumentation(document.path)
     push_success = True
-    for keyword in existing_resource.keyword_section.body:
+    for keyword in reversed(vs_code_resource.keyword_section.body):
         if get_keyword_tags(keyword) and any(
             tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword))
         ):
             continue
         keyword_uid = get_kw_uid(keyword)
-        existing_keywords = existing_resource.get_keywords(keyword_uid)
+        if not keyword_uid:
+            create_testbench_keyword(
+                ls, {"document_uri": document_uri, "keyword_name": get_kw_name(keyword)}
+            )
+            continue
+        existing_keywords = vs_code_resource.get_keywords(keyword_uid)
         if len(existing_keywords) > 1:
             show_error(
                 ls,
@@ -674,6 +718,9 @@ def pull_testbench_subdivision(ls: LanguageServer, *args):
     new_resource = create_resource_from_subdivision(
         uid=subdivision_uid,
     )
+    if not new_resource:
+        show_error(ls, ERROR_FINDING_TESTBENCH_SUBDIVISION_WITH_UID.format(uid=subdivision_uid))
+        return
     change_identifier = ChangeAnnotationIdentifier()
     edits = []
     create_kw_section = not bool(get_keyword_section(existing_resource.file))
@@ -769,6 +816,17 @@ def new_keyword_edit(new_keyword, kw_section_start_row, change_identifier):
     )
 
 
+def deleted_keyword_edit(new_keyword, change_identifier):
+    return AnnotatedTextEdit(
+        change_identifier,
+        range=Range(
+            start=Position(new_keyword.lineno - 1, 0),
+            end=Position(new_keyword.end_lineno - 1, new_keyword.end_col_offset),
+        ),
+        new_text="",
+    )
+
+
 def keyword_section_edit(keyword_section_line, change_identifier):
     return [
         AnnotatedTextEdit(
@@ -833,11 +891,11 @@ def show_testbench_keyword_diff(ls: LanguageServer, kwargs):
     document_uri = kwargs.get("document_uri")
     keyword_uid = kwargs.get("keyword_uid")
     document = testbench_ls.workspace.get_text_document(document_uri)
-    resource = TestBenchResourceModel.from_file(document.source)
-    if not context_is_valid(ls, resource):
+    vscode_resource = TestBenchResourceModel.from_file(document.source)
+    if not context_is_valid(ls, vscode_resource):
         return
     change_identifier = ChangeAnnotationIdentifier()
-    existing_keywords = resource.get_keywords(keyword_uid)
+    vs_code_keywords = vscode_resource.get_keywords(keyword_uid)
     try:
         new_keyword = create_rf_keyword_from_tb_keyword(
             keyword_uid,
@@ -845,20 +903,25 @@ def show_testbench_keyword_diff(ls: LanguageServer, kwargs):
     except TestBenchKeywordNotFound as e:
         show_error(ls, ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID.format(uid=e.uid))
         return
-    if len(existing_keywords) > 1:
+    if len(vs_code_keywords) > 1:
         show_error(
             ls,
             ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
         )
         return
-    edits = create_keyword_edits(existing_keywords[0], new_keyword, change_identifier)
+    edits = create_keyword_edits(vs_code_keywords[0], new_keyword, change_identifier)
     if not edits:
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
-    testbench_content = apply_text_edits(robot_model_to_string(resource.file), edits)
+    tb_content_before_push = robot_model_to_string(vscode_resource.file)
+    tb_content_after_push = apply_text_edits(robot_model_to_string(vscode_resource.file), edits)
     ls.protocol.notify(
         "testbench-language-server/display-diff",
-        {"path": document_uri, "virtualContent": testbench_content},
+        {
+            "path": document_uri,
+            "virtualTestBenchContent": tb_content_before_push,
+            "virtualRobotContent": tb_content_after_push,
+        },
     )
 
 

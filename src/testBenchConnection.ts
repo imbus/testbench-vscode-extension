@@ -7,7 +7,6 @@ import * as https from "https";
 import * as tls from "tls";
 import * as vscode from "vscode";
 import * as fs from "fs";
-
 import * as testBenchTypes from "./testBenchTypes";
 import * as reportHandler from "./reportHandler";
 import { HttpsProxyAgent } from "https-proxy-agent";
@@ -40,6 +39,15 @@ interface CachedCertificateData {
 }
 
 let cachedCertificate: CachedCertificateData | null = null;
+
+/**
+ * Module-level flag to prevent multiple retry progress notifications from being
+ * shown simultaneously when several API calls fail at the same time.
+ */
+let isRetryNotificationActive = false;
+
+const SESSION_LOGOUT_WARNING_MESSAGE =
+    "Your TestBench session has expired or the server is unavailable. You are being returned to the login view.";
 
 /**
  * Loads and caches certificate data from disk to avoid redundant reads.
@@ -188,6 +196,7 @@ export interface TestBenchLoginResult {
     userKey: string; // From LoginResponse
     loginName: string;
     isInsecure: boolean;
+    serverVersion: string;
 }
 
 /**
@@ -279,9 +288,12 @@ export class PlayServerConnection {
     private apiClient!: AxiosInstance;
     private legacyClient!: LegacyPlayServerClient;
     private readonly keepAliveIntervalInMs: number = 30 * 1000; // 30 seconds
+    private readonly keepAliveRequestTimeoutInMs: number = 10 * 1000; // 10 seconds per request attempt
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
     private testElementsCache: CacheManager<string, any>;
     private testStructureCache: CacheManager<string, testBenchTypes.TestStructure>;
+    private legacyInitPromise: Promise<void> | null = null;
+    private isKeepAliveInProgress: boolean = false;
 
     /**
      * Creates a new PlayServerConnection.
@@ -291,6 +303,7 @@ export class PlayServerConnection {
      * @param {string} username - The username for authentication.
      * @param {string} sessionToken - The session token for authentication.
      * @param {vscode.ExtensionContext} context - The extension context for path resolution.
+     * @param {boolean} isInsecure - Whether to use insecure TLS.
      */
     constructor(
         public serverName: string,
@@ -332,11 +345,11 @@ export class PlayServerConnection {
             this.sessionToken,
             this.username,
             agentToUse,
-            this.context
+            this.isInsecure
         );
 
         // Initialize legacy server port discovery in the background
-        this.legacyClient.initialize().catch((error) => {
+        this.legacyInitPromise = this.legacyClient.initialize().catch((error) => {
             logger.warn(
                 `[testBenchConnection] Legacy Play server initialization failed, but main connection is still functional: ${error?.message || error}`
             );
@@ -391,6 +404,11 @@ export class PlayServerConnection {
             this.stopKeepAlive();
             this.testElementsCache.clearCache();
             this.testStructureCache.clearCache();
+            // Await any ongoing legacy client initialization before teardown
+            if (this.legacyInitPromise) {
+                await this.legacyInitPromise;
+                this.legacyInitPromise = null;
+            }
             const tlsManager = TLSSecurityManager.getInstance();
             tlsManager.disableInsecureMode();
             this.sessionToken = "";
@@ -447,10 +465,9 @@ export class PlayServerConnection {
                 `[testBenchConnection] Response status of project list request for URL ${projectsURL}: ${projectsResponse.status}`
             );
             if (projectsResponse.data) {
-                logger.trace(
-                    `[testBenchConnection] Fetched project list for request ${projectsURL}:`,
-                    projectsResponse.data
-                );
+                logger.trace(`[testBenchConnection] Fetched project list for request ${projectsURL}:`, {
+                    response: projectsResponse.data
+                });
                 return projectsResponse.data;
             } else {
                 logger.error("[testBenchConnection] Project list data is not available.");
@@ -517,10 +534,9 @@ export class PlayServerConnection {
                 `[testBenchConnection] Response status of project tree request for URL ${projectTreeURL}: ${projectTreeResponse.status}`
             );
             if (projectTreeResponse.data) {
-                logger.trace(
-                    `[testBenchConnection] Fetched project tree for request ${projectTreeURL}:`,
-                    projectTreeResponse.data
-                );
+                logger.trace(`[testBenchConnection] Fetched project tree for request ${projectTreeURL}:`, {
+                    response: projectTreeResponse.data
+                });
                 return projectTreeResponse.data;
             } else {
                 logger.error("[testBenchConnection] Project tree data is not available.");
@@ -544,6 +560,8 @@ export class PlayServerConnection {
             logger.error(`[testBenchConnection] TOV key is missing. Cannot fetch test elements.`);
             return null;
         }
+
+        await this.ensureLegacyClientInitialized();
 
         const cachedEntry = this.testElementsCache.getEntryFromCache(tovKey);
         if (cachedEntry) {
@@ -569,7 +587,18 @@ export class PlayServerConnection {
      * @returns {Promise<any | null>} The filters data or null if an error occurs
      */
     async getFiltersFromOldPlayServer(): Promise<any | null> {
+        await this.ensureLegacyClientInitialized();
         return this.legacyClient.getFilters();
+    }
+
+    /**
+     * Ensures legacy server discovery has completed before issuing legacy API calls.
+     */
+    private async ensureLegacyClientInitialized(): Promise<void> {
+        if (this.legacyInitPromise) {
+            await this.legacyInitPromise;
+            this.legacyInitPromise = null;
+        }
     }
 
     /**
@@ -610,10 +639,9 @@ export class PlayServerConnection {
                 `[testBenchConnection] Response status of TOV report job ID request for URL ${tovReportUrl}: ${tovReportJobResponse.status}`
             );
             if (tovReportJobResponse.data.jobID) {
-                logger.trace(
-                    `[testBenchConnection] Received TOV report Job ID for URL ${tovReportUrl}:`,
-                    tovReportJobResponse.data
-                );
+                logger.trace(`[testBenchConnection] Received TOV report Job ID for URL ${tovReportUrl}:`, {
+                    response: tovReportJobResponse.data
+                });
                 return tovReportJobResponse.data.jobID;
             } else {
                 logger.error(
@@ -782,7 +810,9 @@ export class PlayServerConnection {
             );
 
             if (response.data) {
-                logger.trace(`[testBenchConnection] Received ${structureType} structure:`, response.data);
+                logger.trace(`[testBenchConnection] Received ${structureType} structure:`, {
+                    response: response.data
+                });
                 this.testStructureCache.setEntryInCache(cacheKey, response.data);
                 return response.data;
             } else {
@@ -1006,6 +1036,11 @@ export class PlayServerConnection {
      * If the keep alive request fails with an error code 401, extension tries to re-authenticate same user silently using stored credentials.
      */
     private async sendKeepAliveRequest(): Promise<void> {
+        if (this.isKeepAliveInProgress) {
+            logger.trace("[testBenchConnection] Keep-alive request already in progress. Skipping this interval.");
+            return;
+        }
+
         if (!this.sessionToken || !this.apiClient) {
             logger.error(
                 "[testBenchConnection] Session token or apiClient is missing. Cannot send keep-alive request."
@@ -1014,13 +1049,28 @@ export class PlayServerConnection {
             return;
         }
 
+        this.isKeepAliveInProgress = true;
+
         try {
             await withRetry(
-                () =>
-                    this.apiClient.get(`/2/login/session`, {
-                        headers: { accept: "application/vnd.testbench+json" },
-                        proxy: false
-                    }),
+                () => {
+                    // Hung requests should not block future keep-alive cycles.
+                    const requestAbortController = new AbortController();
+                    const requestTimeoutHandle = setTimeout(() => {
+                        requestAbortController.abort();
+                    }, this.keepAliveRequestTimeoutInMs);
+
+                    return this.apiClient
+                        .get(`/2/login/session`, {
+                            headers: { accept: "application/vnd.testbench+json" },
+                            proxy: false,
+                            timeout: this.keepAliveRequestTimeoutInMs,
+                            signal: requestAbortController.signal
+                        })
+                        .finally(() => {
+                            clearTimeout(requestTimeoutHandle);
+                        });
+                },
                 3,
                 2000,
                 RetryPredicateFactory.createDefaultPredicate()
@@ -1038,11 +1088,11 @@ export class PlayServerConnection {
             }
 
             if (shouldLogout) {
-                vscode.window.showInformationMessage(
-                    "Unable to maintain TestBench session. Redirecting to login page."
-                );
+                vscode.window.showWarningMessage(SESSION_LOGOUT_WARNING_MESSAGE);
                 await vscode.commands.executeCommand(`${allExtensionCommands.logout}`);
             }
+        } finally {
+            this.isKeepAliveInProgress = false;
         }
     }
 
@@ -1148,7 +1198,8 @@ export class PlayServerConnection {
             this.serverName,
             this.portNumber,
             this.username,
-            loginResult.isInsecure
+            loginResult.isInsecure,
+            loginResult.serverVersion
         );
 
         await handleLanguageServerRestartOnSessionChange(oldToken, this.sessionToken);
@@ -1168,6 +1219,7 @@ export class PlayServerConnection {
  * @returns {Promise<T>} A promise resolving to the function's return value.
  * @throws The error from the last failed attempt if all retries fail.
  */
+
 export async function withRetry<T>(
     asyncFunction: () => Promise<T>,
     maxAllowedRetryCount: number = 3,
@@ -1176,6 +1228,81 @@ export async function withRetry<T>(
     showProgressBar: boolean = true
 ): Promise<T> {
     let retryCount: number = 0;
+    const totalAttempts = maxAllowedRetryCount + 1;
+
+    const buildRequestUrl = (baseURL?: string, requestUrl?: string): string => {
+        if (!requestUrl) {
+            return "<unknown-url>";
+        }
+        if (/^https?:\/\//i.test(requestUrl)) {
+            return requestUrl;
+        }
+        if (!baseURL) {
+            return requestUrl;
+        }
+
+        const normalizedBase = baseURL.replace(/\/+$/, "");
+        const normalizedPath = requestUrl.replace(/^\/+/, "");
+        return `${normalizedBase}/${normalizedPath}`;
+    };
+
+    const getRequestDescription = (error: unknown): string => {
+        if (!axios.isAxiosError(error)) {
+            return "<non-axios-error>";
+        }
+
+        const method = (error.config?.method || "GET").toUpperCase();
+        const requestUrl = buildRequestUrl(error.config?.baseURL, error.config?.url);
+        return `${method} ${requestUrl}`;
+    };
+
+    const getStatusDescription = (error: unknown): string => {
+        if (!axios.isAxiosError(error)) {
+            return "unknown";
+        }
+        return error.response?.status?.toString() ?? "network/no-response";
+    };
+
+    const getErrorCodeDescription = (error: unknown): string => {
+        if (!axios.isAxiosError(error)) {
+            return "unknown";
+        }
+        return error.code || "none";
+    };
+
+    const isCertificateValidationError = (error: unknown): boolean => {
+        const hasCertificateMessage = (message: string | undefined): boolean => {
+            if (!message) {
+                return false;
+            }
+
+            const normalizedMessage = message.toLowerCase();
+            return (
+                normalizedMessage.includes("self signed certificate") ||
+                normalizedMessage.includes("unable to verify") ||
+                normalizedMessage.includes("certificate")
+            );
+        };
+
+        if (!axios.isAxiosError(error)) {
+            return error instanceof Error ? hasCertificateMessage(error.message) : false;
+        }
+
+        const certErrorCodes = new Set([
+            "SELF_SIGNED_CERT",
+            "SELF_SIGNED_CERT_IN_CHAIN",
+            "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+            "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+            "CERT_UNTRUSTED",
+            "DEPTH_ZERO_SELF_SIGNED_CERT"
+        ]);
+
+        return (
+            certErrorCodes.has(error.code || "") ||
+            hasCertificateMessage(error.message) ||
+            hasCertificateMessage(error.cause instanceof Error ? error.cause.message : undefined)
+        );
+    };
 
     /**
      * Checks if the given error indicates an expired session or server unavailability,
@@ -1188,14 +1315,24 @@ export async function withRetry<T>(
             const status = error.response?.status;
             const isNetworkError = !error.response;
             const isAuthEndpoint = error.config?.url?.includes("/2/login/session");
+            const requestDescription = getRequestDescription(error);
+
+            if (isCertificateValidationError(error)) {
+                logger.warn(
+                    `[testBenchConnection] Certificate validation error detected for ${requestDescription} (code: ${getErrorCodeDescription(
+                        error
+                    )}). Skipping automatic logout so caller can apply TLS fallback handling.`
+                );
+                return false;
+            }
 
             if (!isAuthEndpoint && (status === 401 || status === 403 || isNetworkError)) {
                 logger.warn(
-                    `[testBenchConnection] Unrecoverable API error detected (status: ${status}, networkError: ${isNetworkError}). Forcing a local logout.`
+                    `[testBenchConnection] Unrecoverable API error detected for ${requestDescription} (status: ${status}, networkError: ${isNetworkError}, code: ${getErrorCodeDescription(
+                        error
+                    )}). Forcing a local logout.`
                 );
-                vscode.window.showWarningMessage(
-                    "Your TestBench session has expired or the server is unavailable. You are being returned to the login view."
-                );
+                vscode.window.showWarningMessage(SESSION_LOGOUT_WARNING_MESSAGE);
                 await vscode.commands.executeCommand(allExtensionCommands.logout);
                 return true;
             }
@@ -1207,19 +1344,21 @@ export async function withRetry<T>(
         try {
             return await asyncFunction();
         } catch (error) {
-            if (axios.isAxiosError(error)) {
-                logger.trace(
-                    `[testBenchConnection] Attempt ${retryCount + 1} failed with status ${
-                        error.response?.status
-                    }: ${error.message}`
-                );
-            } else {
-                logger.trace(`[testBenchConnection] Attempt ${retryCount + 1} failed: ${error}`);
-            }
+            const currentAttempt = retryCount + 1;
+            const requestDescription = getRequestDescription(error);
+            const statusDescription = getStatusDescription(error);
+            const errorCode = getErrorCodeDescription(error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+
+            logger.trace(
+                `[testBenchConnection] Attempt ${currentAttempt}/${totalAttempts} failed for ${requestDescription} (status: ${statusDescription}, code: ${errorCode}): ${errorMessage}`
+            );
 
             // Check if we should retry this error
             if (shouldRetry && !shouldRetry(error)) {
-                logger.trace(`[testBenchConnection] Error is not retryable. Aborting further retry attempts.`);
+                logger.trace(
+                    `[testBenchConnection] Error is not retryable for ${requestDescription}. Aborting further retry attempts.`
+                );
                 const loggedOut = await checkAndForceLogout(error);
                 if (loggedOut) {
                     throw new TestBenchConnectionError(
@@ -1232,7 +1371,7 @@ export async function withRetry<T>(
             retryCount++;
             if (retryCount > maxAllowedRetryCount) {
                 logger.error(
-                    `[testBenchConnection] Attempt ${retryCount} failed. Maximum retries (${maxAllowedRetryCount}) reached, aborting further retries.`
+                    `[testBenchConnection] Attempt ${retryCount}/${totalAttempts} failed for ${requestDescription}. Maximum retries (${maxAllowedRetryCount}) reached, aborting further retries.`
                 );
                 const loggedOut = await checkAndForceLogout(error);
                 if (loggedOut) {
@@ -1243,19 +1382,25 @@ export async function withRetry<T>(
                 throw error;
             }
 
-            // Show the progress bar only if retries are happening and the flag is enabled.
-            if (showProgressBar) {
-                await vscode.window.withProgress(
-                    {
-                        location: vscode.ProgressLocation.Notification,
-                        title: "Retrying request",
-                        cancellable: false
-                    },
-                    async (progress) => {
-                        progress.report({ message: `Attempt ${retryCount} of ${maxAllowedRetryCount}` });
-                        await new Promise((resolve) => setTimeout(resolve, delayMs));
-                    }
-                );
+            // Show the progress bar only if retries are happening, the flag is enabled,
+            // and no other retry notification is already visible.
+            if (showProgressBar && !isRetryNotificationActive) {
+                isRetryNotificationActive = true;
+                try {
+                    await vscode.window.withProgress(
+                        {
+                            location: vscode.ProgressLocation.Notification,
+                            title: "Retrying request",
+                            cancellable: false
+                        },
+                        async (progress) => {
+                            progress.report({ message: `Attempt ${retryCount} of ${maxAllowedRetryCount}` });
+                            await new Promise((resolve) => setTimeout(resolve, delayMs));
+                        }
+                    );
+                } finally {
+                    isRetryNotificationActive = false;
+                }
             } else {
                 await new Promise((resolve) => setTimeout(resolve, delayMs));
             }
@@ -1420,6 +1565,14 @@ export async function importReportWithResultsToTestbench(
                 const importJobStatusUnknownMessageForUser: string = "Import job status unknown after polling.";
                 logger.warn(importJobStatusUnknownMessage, importJobStatus);
                 vscode.window.showWarningMessage(importJobStatusUnknownMessageForUser);
+            } else {
+                const importSummary = reportHandler.analyzeImportResult(importJobStatus);
+                if (importSummary.importedTestCaseCount === 0) {
+                    const noItemsImportedWarning =
+                        "Import completed, but no test cases were actually imported. This may happen when items are locked by another user in TestBench.";
+                    logger.warn(`[testBenchConnection] ${noItemsImportedWarning}`);
+                    vscode.window.showWarningMessage(noItemsImportedWarning);
+                }
             }
         } catch (error: any) {
             logger.error(
@@ -1569,7 +1722,8 @@ export async function loginToServerAndGetSessionDetails(
                 sessionToken: loginResponse.data.sessionToken,
                 userKey: loginResponse.data.userKey,
                 loginName: loginResponse.data.login,
-                isInsecure: false
+                isInsecure: false,
+                serverVersion: loginResponse.data.serverVersion || ""
             };
         }
         return null;
@@ -1618,7 +1772,8 @@ export async function loginToServerAndGetSessionDetails(
                             sessionToken: insecureLoginResponse.data.sessionToken,
                             userKey: insecureLoginResponse.data.userKey,
                             loginName: insecureLoginResponse.data.login,
-                            isInsecure: true
+                            isInsecure: true,
+                            serverVersion: insecureLoginResponse.data.serverVersion || ""
                         };
                     } else {
                         logger.error(

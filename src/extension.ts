@@ -127,7 +127,7 @@ export function safeCommandHandler(handler: (...args: any[]) => any): (...args: 
         } catch (error) {
             const errorMessage: string = error instanceof Error ? error.message : "An unknown error occurred";
             logger.error(`[extension] Error executing command: ${errorMessage}`, error);
-            vscode.window.showErrorMessage(`Error executing command: ${errorMessage}`);
+            vscode.window.showErrorMessage("The action could not be completed.");
         }
     };
 }
@@ -352,8 +352,6 @@ async function initializeContextValues(context: vscode.ExtensionContext): Promis
     // Set initial context states
     const initialContexts = [
         { key: ContextKeys.CONNECTION_ACTIVE, value: false },
-        { key: ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, value: false },
-        { key: ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, value: false },
         { key: ContextKeys.FILTER_DIFF_MODE_ENABLED, value: false },
         { key: ContextKeys.FILTER_DIFF_MODE_ENABLED_PROJECTS, value: false },
         { key: ContextKeys.FILTER_DIFF_MODE_ENABLED_TEST_THEMES, value: false },
@@ -574,7 +572,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         // Ensure logger is initialized, or fall back to console
         const log = logger ? logger.error : console.error;
         log(`[extension] Failed to activate extension. ${errorMessage}`, error);
-        vscode.window.showErrorMessage(`TestBench Extension failed to activate: ${errorMessage}`);
+        vscode.window.showErrorMessage("TestBench extension could not start. Reload VS Code and try again.");
     }
 }
 
@@ -589,7 +587,7 @@ export async function clearAllExtensionData(
                 "This will clear ALL TestBench extension data including:\n\n" +
                     "• All saved connections and passwords\n" +
                     "• Current login session\n" +
-                    "• Tree view states and custom roots\n" +
+                    "• Tree view states\n" +
                     "• Import tracking data\n" +
                     "• All persistent settings\n\n" +
                     "This action cannot be undone. Are you sure you want to continue?",
@@ -706,8 +704,6 @@ export async function clearAllExtensionData(
 
         const contextUpdates = [
             ["setContext", ContextKeys.CONNECTION_ACTIVE, false],
-            ["setContext", ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, false],
-            ["setContext", ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, false],
             ["setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, false]
         ];
 

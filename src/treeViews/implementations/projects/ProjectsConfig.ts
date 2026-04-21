@@ -12,7 +12,6 @@ export const projectsConfig: TreeViewConfig = {
     contextValue: "project",
 
     features: {
-        customRoot: true,
         marking: false,
         persistence: true,
         filtering: true,
@@ -21,18 +20,9 @@ export const projectsConfig: TreeViewConfig = {
     },
 
     modules: {
-        customRoot: {
-            enabled: true,
-            contextKey: "projectTreeHasCustomRoot",
-            allowedItemTypes: ["project"],
-            persistAcrossSessions: true,
-            maxDepth: undefined
-        },
-
         persistence: {
             strategy: "workspace",
             autoSave: true,
-            includeCustomRoot: true,
             includeExpansion: true,
             includeMarking: false
         },

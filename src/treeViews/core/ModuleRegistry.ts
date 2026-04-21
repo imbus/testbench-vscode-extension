@@ -4,7 +4,6 @@
  */
 
 import { TreeViewModule } from "./TreeViewModule";
-import { CustomRootModule } from "../features/CustomRootModule";
 import { MarkingModule } from "../features/MarkingModule";
 import { PersistenceModule } from "../features/PersistenceModule";
 import { ExpansionModule } from "../features/ExpansionModule";
@@ -28,7 +27,6 @@ export class ModuleRegistry {
     private static initializeFactories(): Map<string, ModuleFactory> {
         const map = new Map<string, ModuleFactory>();
 
-        map.set("customRoot", () => new CustomRootModule());
         map.set("marking", () => new MarkingModule());
         map.set("persistence", () => new PersistenceModule());
         map.set("expansion", () => new ExpansionModule());
