@@ -830,12 +830,12 @@
                 },
                 {
                     "command": "testbenchExtension.generateTestCasesForTOV",
-                    "when": "view == testbench.projects && (viewItem == Version || viewItem == customRoot.Version) && testbenchExtension.workspaceAvailable",
+                    "when": "view == testbench.projects && viewItem == Version && testbenchExtension.workspaceAvailable",
                     "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.openTOVFromProjectsView",
-                    "when": "view == testbench.projects && (viewItem == Version || viewItem == customRoot.Version)",
+                    "when": "view == testbench.projects && viewItem == Version",
                     "group": "inline@2"
                 },
                 {

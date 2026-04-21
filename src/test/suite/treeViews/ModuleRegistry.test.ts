@@ -63,7 +63,6 @@ suite("ModuleRegistry", function () {
             const registeredModules = ModuleRegistry.getRegisteredModules();
 
             // Check that built-in modules are registered
-            assert.ok(registeredModules.includes("customRoot"), "customRoot module should be registered");
             assert.ok(registeredModules.includes("marking"), "marking module should be registered");
             assert.ok(registeredModules.includes("persistence"), "persistence module should be registered");
             assert.ok(registeredModules.includes("expansion"), "expansion module should be registered");
@@ -74,12 +73,11 @@ suite("ModuleRegistry", function () {
         test("should have correct number of built-in modules", () => {
             const registeredModules = ModuleRegistry.getRegisteredModules();
 
-            // Should have 6 built-in modules
-            assert.strictEqual(registeredModules.length, 6);
+            // Should have 5 built-in modules
+            assert.strictEqual(registeredModules.length, 5);
         });
 
         test("should check if modules are registered", () => {
-            assert.strictEqual(ModuleRegistry.hasModule("customRoot"), true);
             assert.strictEqual(ModuleRegistry.hasModule("marking"), true);
             assert.strictEqual(ModuleRegistry.hasModule("persistence"), true);
             assert.strictEqual(ModuleRegistry.hasModule("expansion"), true);
@@ -108,8 +106,8 @@ suite("ModuleRegistry", function () {
         });
 
         test("should override existing module factory", () => {
-            const moduleName = "customRoot"; // Use existing module name
-            const customFactory: ModuleFactory = () => MockModuleFactory.createModule("custom-root-override");
+            const moduleName = "marking"; // Use existing module name
+            const customFactory: ModuleFactory = () => MockModuleFactory.createModule("marking-override");
 
             // Should be registered initially
             assert.strictEqual(ModuleRegistry.hasModule(moduleName), true);
@@ -123,7 +121,7 @@ suite("ModuleRegistry", function () {
             // Create module should use custom factory
             const module = ModuleRegistry.create(moduleName);
             assert.ok(module);
-            assert.strictEqual(module!.id, "custom-root-override");
+            assert.strictEqual(module!.id, "marking-override");
         });
 
         test("should register multiple modules", () => {
@@ -187,7 +185,7 @@ suite("ModuleRegistry", function () {
         });
 
         test("should create built-in modules", () => {
-            const builtInModules = ["customRoot", "marking", "persistence", "expansion", "icons", "filtering"];
+            const builtInModules = ["marking", "persistence", "expansion", "icons", "filtering"];
 
             builtInModules.forEach((moduleName) => {
                 const module = ModuleRegistry.create(moduleName);
@@ -248,7 +246,6 @@ suite("ModuleRegistry", function () {
     suite("Enabled Modules Creation", () => {
         test("should create enabled modules from feature configuration", () => {
             const features = {
-                customRoot: true,
                 marking: true,
                 persistence: false,
                 filtering: true,
@@ -259,8 +256,7 @@ suite("ModuleRegistry", function () {
             const modules = ModuleRegistry.createEnabledModules(features);
 
             // Should create modules for enabled features
-            assert.strictEqual(modules.size, 4);
-            assert.ok(modules.has("customRoot"));
+            assert.strictEqual(modules.size, 3);
             assert.ok(modules.has("marking"));
             assert.ok(modules.has("filtering"));
             assert.ok(modules.has("expansion"));
@@ -272,7 +268,6 @@ suite("ModuleRegistry", function () {
 
         test("should create all modules when all features enabled", () => {
             const features = {
-                customRoot: true,
                 marking: true,
                 persistence: true,
                 filtering: true,
@@ -282,8 +277,7 @@ suite("ModuleRegistry", function () {
 
             const modules = ModuleRegistry.createEnabledModules(features);
 
-            assert.strictEqual(modules.size, 6);
-            assert.ok(modules.has("customRoot"));
+            assert.strictEqual(modules.size, 5);
             assert.ok(modules.has("marking"));
             assert.ok(modules.has("persistence"));
             assert.ok(modules.has("filtering"));
@@ -293,7 +287,6 @@ suite("ModuleRegistry", function () {
 
         test("should create no modules when all features disabled", () => {
             const features = {
-                customRoot: false,
                 marking: false,
                 persistence: false,
                 filtering: false,
@@ -308,7 +301,6 @@ suite("ModuleRegistry", function () {
 
         test("should handle non-existent modules in feature configuration", () => {
             const features = {
-                customRoot: true,
                 marking: true,
                 nonExistentModule: true, // This module doesn't exist
                 filtering: true
@@ -317,8 +309,7 @@ suite("ModuleRegistry", function () {
             const modules = ModuleRegistry.createEnabledModules(features);
 
             // Should only create existing modules
-            assert.strictEqual(modules.size, 3);
-            assert.ok(modules.has("customRoot"));
+            assert.strictEqual(modules.size, 2);
             assert.ok(modules.has("marking"));
             assert.ok(modules.has("filtering"));
             assert.ok(!modules.has("nonExistentModule"));
@@ -326,7 +317,6 @@ suite("ModuleRegistry", function () {
 
         test("should handle mixed enabled/disabled features", () => {
             const features = {
-                customRoot: true,
                 marking: false,
                 persistence: true,
                 filtering: false,
@@ -336,8 +326,7 @@ suite("ModuleRegistry", function () {
 
             const modules = ModuleRegistry.createEnabledModules(features);
 
-            assert.strictEqual(modules.size, 3);
-            assert.ok(modules.has("customRoot"));
+            assert.strictEqual(modules.size, 2);
             assert.ok(modules.has("persistence"));
             assert.ok(modules.has("icons"));
 
@@ -435,7 +424,7 @@ suite("ModuleRegistry", function () {
         });
 
         test("should maintain built-in modules", () => {
-            const builtInModules = ["customRoot", "marking", "persistence", "expansion", "icons", "filtering"];
+            const builtInModules = ["marking", "persistence", "expansion", "icons", "filtering"];
 
             // Check that built-in modules are always available
             builtInModules.forEach((moduleName) => {

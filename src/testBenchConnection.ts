@@ -196,6 +196,7 @@ export interface TestBenchLoginResult {
     userKey: string; // From LoginResponse
     loginName: string;
     isInsecure: boolean;
+    serverVersion: string;
 }
 
 /**
@@ -291,6 +292,7 @@ export class PlayServerConnection {
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
     private testElementsCache: CacheManager<string, any>;
     private testStructureCache: CacheManager<string, testBenchTypes.TestStructure>;
+    private legacyInitPromise: Promise<void> | null = null;
     private isKeepAliveInProgress: boolean = false;
 
     /**
@@ -301,6 +303,7 @@ export class PlayServerConnection {
      * @param {string} username - The username for authentication.
      * @param {string} sessionToken - The session token for authentication.
      * @param {vscode.ExtensionContext} context - The extension context for path resolution.
+     * @param {boolean} isInsecure - Whether to use insecure TLS.
      */
     constructor(
         public serverName: string,
@@ -342,11 +345,11 @@ export class PlayServerConnection {
             this.sessionToken,
             this.username,
             agentToUse,
-            this.context
+            this.isInsecure
         );
 
         // Initialize legacy server port discovery in the background
-        this.legacyClient.initialize().catch((error) => {
+        this.legacyInitPromise = this.legacyClient.initialize().catch((error) => {
             logger.warn(
                 `[testBenchConnection] Legacy Play server initialization failed, but main connection is still functional: ${error?.message || error}`
             );
@@ -401,6 +404,11 @@ export class PlayServerConnection {
             this.stopKeepAlive();
             this.testElementsCache.clearCache();
             this.testStructureCache.clearCache();
+            // Await any ongoing legacy client initialization before teardown
+            if (this.legacyInitPromise) {
+                await this.legacyInitPromise;
+                this.legacyInitPromise = null;
+            }
             const tlsManager = TLSSecurityManager.getInstance();
             tlsManager.disableInsecureMode();
             this.sessionToken = "";
@@ -553,6 +561,8 @@ export class PlayServerConnection {
             return null;
         }
 
+        await this.ensureLegacyClientInitialized();
+
         const cachedEntry = this.testElementsCache.getEntryFromCache(tovKey);
         if (cachedEntry) {
             logger.trace(`[testBenchConnection] Returning cached test elements for TOV key ${tovKey}.`);
@@ -577,7 +587,18 @@ export class PlayServerConnection {
      * @returns {Promise<any | null>} The filters data or null if an error occurs
      */
     async getFiltersFromOldPlayServer(): Promise<any | null> {
+        await this.ensureLegacyClientInitialized();
         return this.legacyClient.getFilters();
+    }
+
+    /**
+     * Ensures legacy server discovery has completed before issuing legacy API calls.
+     */
+    private async ensureLegacyClientInitialized(): Promise<void> {
+        if (this.legacyInitPromise) {
+            await this.legacyInitPromise;
+            this.legacyInitPromise = null;
+        }
     }
 
     /**
@@ -1177,7 +1198,8 @@ export class PlayServerConnection {
             this.serverName,
             this.portNumber,
             this.username,
-            loginResult.isInsecure
+            loginResult.isInsecure,
+            loginResult.serverVersion
         );
 
         await handleLanguageServerRestartOnSessionChange(oldToken, this.sessionToken);
@@ -1206,6 +1228,81 @@ export async function withRetry<T>(
     showProgressBar: boolean = true
 ): Promise<T> {
     let retryCount: number = 0;
+    const totalAttempts = maxAllowedRetryCount + 1;
+
+    const buildRequestUrl = (baseURL?: string, requestUrl?: string): string => {
+        if (!requestUrl) {
+            return "<unknown-url>";
+        }
+        if (/^https?:\/\//i.test(requestUrl)) {
+            return requestUrl;
+        }
+        if (!baseURL) {
+            return requestUrl;
+        }
+
+        const normalizedBase = baseURL.replace(/\/+$/, "");
+        const normalizedPath = requestUrl.replace(/^\/+/, "");
+        return `${normalizedBase}/${normalizedPath}`;
+    };
+
+    const getRequestDescription = (error: unknown): string => {
+        if (!axios.isAxiosError(error)) {
+            return "<non-axios-error>";
+        }
+
+        const method = (error.config?.method || "GET").toUpperCase();
+        const requestUrl = buildRequestUrl(error.config?.baseURL, error.config?.url);
+        return `${method} ${requestUrl}`;
+    };
+
+    const getStatusDescription = (error: unknown): string => {
+        if (!axios.isAxiosError(error)) {
+            return "unknown";
+        }
+        return error.response?.status?.toString() ?? "network/no-response";
+    };
+
+    const getErrorCodeDescription = (error: unknown): string => {
+        if (!axios.isAxiosError(error)) {
+            return "unknown";
+        }
+        return error.code || "none";
+    };
+
+    const isCertificateValidationError = (error: unknown): boolean => {
+        const hasCertificateMessage = (message: string | undefined): boolean => {
+            if (!message) {
+                return false;
+            }
+
+            const normalizedMessage = message.toLowerCase();
+            return (
+                normalizedMessage.includes("self signed certificate") ||
+                normalizedMessage.includes("unable to verify") ||
+                normalizedMessage.includes("certificate")
+            );
+        };
+
+        if (!axios.isAxiosError(error)) {
+            return error instanceof Error ? hasCertificateMessage(error.message) : false;
+        }
+
+        const certErrorCodes = new Set([
+            "SELF_SIGNED_CERT",
+            "SELF_SIGNED_CERT_IN_CHAIN",
+            "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+            "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+            "CERT_UNTRUSTED",
+            "DEPTH_ZERO_SELF_SIGNED_CERT"
+        ]);
+
+        return (
+            certErrorCodes.has(error.code || "") ||
+            hasCertificateMessage(error.message) ||
+            hasCertificateMessage(error.cause instanceof Error ? error.cause.message : undefined)
+        );
+    };
 
     /**
      * Checks if the given error indicates an expired session or server unavailability,
@@ -1218,10 +1315,22 @@ export async function withRetry<T>(
             const status = error.response?.status;
             const isNetworkError = !error.response;
             const isAuthEndpoint = error.config?.url?.includes("/2/login/session");
+            const requestDescription = getRequestDescription(error);
+
+            if (isCertificateValidationError(error)) {
+                logger.warn(
+                    `[testBenchConnection] Certificate validation error detected for ${requestDescription} (code: ${getErrorCodeDescription(
+                        error
+                    )}). Skipping automatic logout so caller can apply TLS fallback handling.`
+                );
+                return false;
+            }
 
             if (!isAuthEndpoint && (status === 401 || status === 403 || isNetworkError)) {
                 logger.warn(
-                    `[testBenchConnection] Unrecoverable API error detected (status: ${status}, networkError: ${isNetworkError}). Forcing a local logout.`
+                    `[testBenchConnection] Unrecoverable API error detected for ${requestDescription} (status: ${status}, networkError: ${isNetworkError}, code: ${getErrorCodeDescription(
+                        error
+                    )}). Forcing a local logout.`
                 );
                 vscode.window.showWarningMessage(SESSION_LOGOUT_WARNING_MESSAGE);
                 await vscode.commands.executeCommand(allExtensionCommands.logout);
@@ -1235,19 +1344,21 @@ export async function withRetry<T>(
         try {
             return await asyncFunction();
         } catch (error) {
-            if (axios.isAxiosError(error)) {
-                logger.trace(
-                    `[testBenchConnection] Attempt ${retryCount + 1} failed with status ${
-                        error.response?.status
-                    }: ${error.message}`
-                );
-            } else {
-                logger.trace(`[testBenchConnection] Attempt ${retryCount + 1} failed: ${error}`);
-            }
+            const currentAttempt = retryCount + 1;
+            const requestDescription = getRequestDescription(error);
+            const statusDescription = getStatusDescription(error);
+            const errorCode = getErrorCodeDescription(error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+
+            logger.trace(
+                `[testBenchConnection] Attempt ${currentAttempt}/${totalAttempts} failed for ${requestDescription} (status: ${statusDescription}, code: ${errorCode}): ${errorMessage}`
+            );
 
             // Check if we should retry this error
             if (shouldRetry && !shouldRetry(error)) {
-                logger.trace(`[testBenchConnection] Error is not retryable. Aborting further retry attempts.`);
+                logger.trace(
+                    `[testBenchConnection] Error is not retryable for ${requestDescription}. Aborting further retry attempts.`
+                );
                 const loggedOut = await checkAndForceLogout(error);
                 if (loggedOut) {
                     throw new TestBenchConnectionError(
@@ -1260,7 +1371,7 @@ export async function withRetry<T>(
             retryCount++;
             if (retryCount > maxAllowedRetryCount) {
                 logger.error(
-                    `[testBenchConnection] Attempt ${retryCount} failed. Maximum retries (${maxAllowedRetryCount}) reached, aborting further retries.`
+                    `[testBenchConnection] Attempt ${retryCount}/${totalAttempts} failed for ${requestDescription}. Maximum retries (${maxAllowedRetryCount}) reached, aborting further retries.`
                 );
                 const loggedOut = await checkAndForceLogout(error);
                 if (loggedOut) {
@@ -1611,7 +1722,8 @@ export async function loginToServerAndGetSessionDetails(
                 sessionToken: loginResponse.data.sessionToken,
                 userKey: loginResponse.data.userKey,
                 loginName: loginResponse.data.login,
-                isInsecure: false
+                isInsecure: false,
+                serverVersion: loginResponse.data.serverVersion || ""
             };
         }
         return null;
@@ -1660,7 +1772,8 @@ export async function loginToServerAndGetSessionDetails(
                             sessionToken: insecureLoginResponse.data.sessionToken,
                             userKey: insecureLoginResponse.data.userKey,
                             loginName: insecureLoginResponse.data.login,
-                            isInsecure: true
+                            isInsecure: true,
+                            serverVersion: insecureLoginResponse.data.serverVersion || ""
                         };
                     } else {
                         logger.error(

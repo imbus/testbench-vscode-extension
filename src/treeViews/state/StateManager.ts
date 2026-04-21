@@ -42,7 +42,6 @@ export class StateManager {
             lastRefresh: Date.now(),
             items: new Map(),
             rootItems: [],
-            customRoot: null,
             marking: null,
             expansion: null,
             filtering: null,
@@ -114,7 +113,7 @@ export class StateManager {
      * Used for simple refreshes, preserves UI state.
      */
     public clear(): void {
-        // Do not clear customRoot, marking, expansion, or filtering states (persistent UI states)
+        // Do not clear marking, expansion, or filtering states (persistent UI states)
         this.setState({
             loading: false,
             error: null,
@@ -277,7 +276,7 @@ export class StateManager {
      */
     private shouldAutoSave(updates: Partial<TreeViewState>): boolean {
         // Save on significant changes
-        return !!(updates.customRoot || updates.marking || updates.expansion || updates.filtering || updates.rootItems);
+        return !!(updates.marking || updates.expansion || updates.filtering || updates.rootItems);
     }
 
     /**
@@ -317,7 +316,6 @@ export class StateManager {
         const fields: (keyof TreeViewState)[] = [
             "loading",
             "error",
-            "customRoot",
             "marking",
             "expansion",
             "filtering",
@@ -351,7 +349,6 @@ export class StateManager {
             ...state,
             items: new Map(state.items),
             error: state.error ? { ...state.error } : null,
-            customRoot: state.customRoot ? { ...state.customRoot } : null,
             marking: state.marking
                 ? {
                       markedItems: new Map(state.marking.markedItems),
@@ -399,15 +396,6 @@ export class StateManager {
                 lastRefresh: state.lastRefresh,
                 items: Array.from(state.items.entries()),
                 rootItems: state.rootItems,
-                customRoot: state.customRoot
-                    ? {
-                          active: state.customRoot.active,
-                          rootItemId: state.customRoot.rootItemId,
-                          rootItemPath: state.customRoot.rootItemPath,
-                          originalTitle: state.customRoot.originalTitle,
-                          contextData: state.customRoot.contextData
-                      }
-                    : null,
                 marking: state.marking
                     ? {
                           markedItems: Array.from(state.marking.markedItems.entries()),
@@ -466,7 +454,6 @@ export class StateManager {
             lastRefresh: state.lastRefresh,
             items: new Map(state.items || []),
             rootItems: state.rootItems || [],
-            customRoot: state.customRoot,
             marking: state.marking
                 ? {
                       markedItems: new Map(state.marking.markedItems || []),
