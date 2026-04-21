@@ -447,15 +447,6 @@ export class TreeViewFactory {
             await Promise.all([projectsTree.refresh(), testThemesTree.refresh(), testElementsTree.refresh()]);
         });
 
-        // Clear all custom roots
-        const clearRootsCmd = vscode.commands.registerCommand(allExtensionCommands.clearAllCustomRoots, () => {
-            this.logger.trace("[TreeViewFactory] Clearing all custom roots of tree views");
-
-            projectsTree.resetCustomRoot();
-            testThemesTree.resetCustomRoot();
-            // TestElementsTreeView doesnt support custom roots
-        });
-
         // Clear all marks
         const clearMarksCmd = vscode.commands.registerCommand(allExtensionCommands.clearAllMarks, () => {
             this.logger.trace("[TreeViewFactory] Clearing all markings from test theme tree view");
@@ -467,8 +458,8 @@ export class TreeViewFactory {
         });
 
         // Store disposables
-        context.subscriptions.push(refreshAllCmd, clearRootsCmd, clearMarksCmd);
-        this.disposables.push(refreshAllCmd, clearRootsCmd, clearMarksCmd);
+        context.subscriptions.push(refreshAllCmd, clearMarksCmd);
+        this.disposables.push(refreshAllCmd, clearMarksCmd);
     }
 
     /**
