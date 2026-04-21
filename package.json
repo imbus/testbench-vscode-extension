@@ -417,7 +417,7 @@
             },
             {
                 "command": "testbenchExtension.readAndImportTestResultsToTestbench",
-                "title": "Upload Execution Results To Testbench",
+                "title": "Upload Execution Results To TestBench",
                 "icon": {
                     "light": "resources/icons/upload-light.svg",
                     "dark": "resources/icons/upload-dark.svg"
@@ -425,7 +425,7 @@
             },
             {
                 "command": "testbenchExtension.importTestResultsToTestbench",
-                "title": "Upload Execution Results To Testbench",
+                "title": "Upload Execution Results To TestBench",
                 "icon": {
                     "light": "resources/icons/upload-light.svg",
                     "dark": "resources/icons/upload-dark.svg"

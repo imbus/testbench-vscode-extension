@@ -15,7 +15,6 @@ The **TestBench Extension** enables seamless synchronization between [TestBench]
 - **Visual Studio Code** version 1.101.0 or higher
 - **Python** 3.10 or higher
 - **TestBench** 4.0 or higher
-- An open VS Code workspace or folder. Without one, the extension runs in read-only mode and features like test generation and importing results are disabled
 
 ### Required Extensions
 
@@ -41,27 +40,6 @@ To link the currently opened workspace/folder, right-click on the desired Test O
 
 ![Link VS Code Workspace to Test Object Version](userGuideImages/link_tov.gif)
 
-### Create a Robot Framework Resource File from a TestBench Subdivision
-
-Visibility in the `Test Elements` view is controlled by the `testbenchExtension.testElementsVisibilityMode` setting:
-
-- `resourceOnly` (default): Resource-marker based visibility is used and non-matching subdivisions are hidden.
-- `allSubdivisions`: All subdivisions and their keywords are shown, even without resource markers. This mode is useful for creating new subdivisions which are not marked with the resource marker.
-
-When creating subdivisions from the `Test Elements` view (root or child), the extension now asks which type to create:
-
-- `Create Subdivision`: Creates the subdivision name as entered (no marker auto-append)
-- `Create Resource Subdivision`: Auto-appends the configured resource marker if missing
-
-For selected subdivisions, the Test Elements actions also provide explicit child creation commands (with marker and without marker).
-
-![Edit Subdivision Suffix to display it in the extension](userGuideImages/subdivision_suffix.png)
-
-To create a Robot Framework resource file from a TestBench Subdivision, find the corresponding Subdivision in the `Test Elements` view and click its `Create Resource` button next to it. Afterwards, you can use the `Test Elements` view of the extension to navigate between keywords and resource files.
-The path where the resource file is created can be configured in the extension settings.
-
-![Create Resource from TestBench Subdivision](userGuideImages/create_resource.gif)
-
 ### Synchronize Robot Framework Keywords with TestBench
 
 To synchronize Robot Framework keywords between VS Code and TestBench, open the Robot Framework resource file that contains the keywords you want to synchronize. You will see CodeLens actions above each keyword definition that allow you to either push the keyword to TestBench or pull the keyword from TestBench.
@@ -78,7 +56,7 @@ My Keyword
     ⋮
 ```
 
-An example of a Robot Framework resource file with the required TestBench metadata header lines is shown below:
+An example of a Robot Framework resource file with the required TestBench metadata comments lines is shown below:
 
 ```robot
 tb:uid:itba-SD-9d23166fb5
@@ -101,8 +79,8 @@ If there is no UID tag in a keyword, the CodeLens action will allow you to **cre
 
 ### Generate Robot Framework Tests from TestBench Test Cases
 
-After using the Robot Framework keywords within TestBench test cases to specify the test logic, you can generate Robot Framework test suites from the test cases defined in TestBench.
-The generated Robot Framework test suites will be created in your workspace/folder and can then be executed or debugged. To generate Robot Framework tests, click the `Generate Robot Framework Test Suites` button next to a tree item in the `Test Themes` view (tests are generated for that item and its subtree). The output path and test format can be configured in the extension settings. Please note that depending on which Test Cycle or Test Object Version is opened in the extension, different test case sets will be generated.
+After using the Robot Framework keywords within TestBench test cases to specify the test logic, you can generate Robot Framework test suites from the test case sets defined in TestBench.
+The generated Robot Framework test suites will be created in your workspace/folder and can then be executed or debugged. To generate Robot Framework tests, click the `Generate Robot Framework Test Suites` button next to a tree item in the `Test Themes` view (tests are generated for that item and its subtree). The output path and test format can be configured in the extension settings. Please note that depending on which Test Cycle or Test Object Version is opened in the extension, different tests will be generated.
 
 ![Generate Robot Framework Tests](userGuideImages/generate_tests.png)
 
