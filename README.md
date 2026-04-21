@@ -5,7 +5,6 @@ The **TestBench Extension** enables seamless synchronization between [TestBench]
 ## Key Features
 
 - **Project Navigation**: Browse TestBench projects, including Subdivisions, keywords, and Test Theme Trees
-- **Subdivision Management**: Create Robot Resource subdivisions directly from the Test Elements tree view
 - **Keyword Synchronization**: Bidirectionally synchronize Robot Framework keywords with TestBench keywords
 - **Test Generation**: Automatically generate Robot Framework test suites from TestBench test case sets
 - **Result Import**: Upload Robot Framework execution results directly back to TestBench
@@ -36,13 +35,13 @@ The following extensions are automatically installed as dependencies when you in
 ### Link a TestBench Test Object Version (TOV) to the Workspace/Folder Opened in VS Code
 
 A workspace or folder in VS Code must be linked to a specific Test Object Version (TOV) in TestBench. Only after creating such a link will you be able to use all features of the extension, including the synchronization of Robot Framework keywords.
-To link the currently opened workspace/folder, right-click on the desired Test Object Version in the Projects view and select "Set as Active TOV". The active Project/TOV context is stored in your workspace under `.testbench/ls.config.json`.
+To link the currently opened workspace/folder, right-click on the desired Test Object Version in the Projects view and select "Set as Active TOV".
 
 ![Link VS Code Workspace to Test Object Version](userGuideImages/link_tov.gif)
 
 ### Create a Robot Framework Resource File from a TestBench Subdivision
 
-For a TestBench Subdivision to be visible in the TestBench extension, the Subdivision name must end with the suffix `[Robot-Resource]`. Subdivisions that do not follow this naming convention are ignored by the extension.
+By default, subdivisions whose names end with the suffix `[Robot-Resource]` are treated as Robot Framework resources. Subdivisions that do not follow this naming convention are ignored by the extension. You can change the marker in the extension settings ("Resource Marker").
 
 ![Edit Subdivision Suffix to display it in the extension](userGuideImages/subdivision_suffix.png)
 
@@ -91,7 +90,7 @@ If there is no UID tag in a keyword, the CodeLens action will allow you to **cre
 ### Generate Robot Framework Tests from TestBench Test Cases
 
 After using the Robot Framework keywords within TestBench test cases to specify the test logic, you can generate Robot Framework test suites from the test case sets defined in TestBench.
-The generated Robot Framework test suites will be created in your workspace/folder and can then be executed or debugged. To generate Robot Framework tests, click the `Generate Robot Framework Test Suites` button next to a tree item in the `Test Themes` view (tests are generated for that item and its subtree). The output path and test format can be configured in the extension settings. Please note that depending on which Test Cycle or Test Object Version is opened in the extension, different tests will be generated.
+The generated Robot Framework test suites will be created in your workspace/folder and can then be executed or debugged. To generate Robot Framework tests, click the `Generate Robot Framework Test Suites` button next to a tree item in the `Test Themes` view (tests are generated for that item and its subtree). The output path and test format can be configured in the extension settings. Please note that depending on which Test Cycle or Test Object Version is opened in the extension, different test suites and tests will be generated.
 
 ![Generate Robot Framework Tests](userGuideImages/generate_tests.png)
 
