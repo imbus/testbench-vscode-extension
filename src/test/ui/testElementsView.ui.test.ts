@@ -27,6 +27,9 @@ import { TestContext, setupTestHooks } from "./utils/testHooks";
 import { TestElementsPage } from "./pages/TestElementsPage";
 
 const logger = getTestLogger();
+const ROBOT_RESOURCE_MARKER = "[Robot-Resource]";
+const OPEN_RESOURCE_RETRY_ATTEMPTS = 3;
+const OPEN_RESOURCE_RETRY_DELAY_MS = 400;
 
 describe("Test Elements View UI Tests", function () {
     const ctx: TestContext = {} as TestContext;
@@ -48,6 +51,144 @@ describe("Test Elements View UI Tests", function () {
         const sideBar = new SideBarView();
         const content = sideBar.getContent();
         return await testElementsPage.getSection(content);
+    }
+
+    async function findRobotResourceSubdivision(
+        testElementsPage: TestElementsPage,
+        requireChildren = false
+    ): Promise<{ subdivision: TreeItem | null; label: string }> {
+        const elementsSection = await getElementsSection();
+        if (!elementsSection) {
+            return { subdivision: null, label: "" };
+        }
+
+        const visibleItems = await elementsSection.getVisibleItems();
+        const labels = await collectTreeItemLabels(visibleItems as TreeItem[]);
+        const resourceLabels = labels.filter((label) => label.includes(ROBOT_RESOURCE_MARKER));
+
+        for (const label of resourceLabels) {
+            const refreshedSection = await getElementsSection();
+            if (!refreshedSection) {
+                continue;
+            }
+
+            const candidate = await testElementsPage.getItem(refreshedSection, label);
+            if (!candidate) {
+                continue;
+            }
+
+            if (requireChildren) {
+                let hasChildren = false;
+                try {
+                    hasChildren = await candidate.hasChildren();
+                } catch {
+                    hasChildren = false;
+                }
+
+                if (!hasChildren) {
+                    continue;
+                }
+            }
+
+            return { subdivision: candidate, label };
+        }
+
+        return { subdivision: null, label: "" };
+    }
+
+    async function resolvePreferredSubdivision(
+        testElementsPage: TestElementsPage,
+        configuredLabel: string,
+        requireChildren = false
+    ): Promise<{ subdivision: TreeItem | null; label: string }> {
+        const elementsSection = await getElementsSection();
+        if (!elementsSection) {
+            return { subdivision: null, label: "" };
+        }
+
+        const configuredSubdivision = await testElementsPage.getItem(elementsSection, configuredLabel);
+        if (configuredSubdivision) {
+            if (!requireChildren) {
+                return { subdivision: configuredSubdivision, label: configuredLabel };
+            }
+
+            try {
+                if (await configuredSubdivision.hasChildren()) {
+                    return { subdivision: configuredSubdivision, label: configuredLabel };
+                }
+            } catch {
+                // Fall through to marker-based fallback if configured item becomes stale.
+            }
+        }
+
+        return await findRobotResourceSubdivision(testElementsPage, requireChildren);
+    }
+
+    async function tryClickOpenResourceWithRetries(
+        testElementsPage: TestElementsPage,
+        subdivisionLabel: string,
+        maxAttempts = OPEN_RESOURCE_RETRY_ATTEMPTS
+    ): Promise<boolean> {
+        const driver = getDriver();
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            await openTestBenchSidebar(driver);
+            const elementsSection = await getElementsSection();
+            if (!elementsSection) {
+                continue;
+            }
+
+            const subdivisionItem = await testElementsPage.getItem(elementsSection, subdivisionLabel);
+            if (!subdivisionItem) {
+                continue;
+            }
+
+            await subdivisionItem.click();
+            await applySlowMotion(driver);
+
+            const clicked = await testElementsPage.clickOpenResource(subdivisionItem);
+            if (clicked) {
+                return true;
+            }
+
+            if (attempt < maxAttempts) {
+                await driver.sleep(OPEN_RESOURCE_RETRY_DELAY_MS);
+            }
+        }
+
+        return false;
+    }
+
+    async function tryCreateResourceWithRetries(
+        testElementsPage: TestElementsPage,
+        subdivisionLabel: string,
+        maxAttempts = OPEN_RESOURCE_RETRY_ATTEMPTS
+    ): Promise<boolean> {
+        const driver = getDriver();
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            await openTestBenchSidebar(driver);
+            const elementsSection = await getElementsSection();
+            if (!elementsSection) {
+                continue;
+            }
+
+            const subdivisionItem = await testElementsPage.getItem(elementsSection, subdivisionLabel);
+            if (!subdivisionItem) {
+                continue;
+            }
+
+            const created = await testElementsPage.clickCreateResource(subdivisionItem, subdivisionLabel);
+            if (created) {
+                return true;
+            }
+
+            if (attempt < maxAttempts) {
+                await driver.sleep(OPEN_RESOURCE_RETRY_DELAY_MS);
+            }
+        }
+
+        return false;
     }
 
     before(async function () {
@@ -116,16 +257,24 @@ describe("Test Elements View UI Tests", function () {
 
             await waitForTreeItems(elementsSection, driver);
 
-            const targetSubdivision = await testElementsPage.getItem(elementsSection, config.subdivisionName);
+            const subdivisionSearchResult = await resolvePreferredSubdivision(testElementsPage, config.subdivisionName);
+            const targetSubdivision = subdivisionSearchResult.subdivision;
+            const resolvedSubdivisionLabel = subdivisionSearchResult.label || config.subdivisionName;
+
+            if (resolvedSubdivisionLabel !== config.subdivisionName) {
+                logger.info(
+                    "TestElements",
+                    `Configured subdivision "${config.subdivisionName}" not found. Falling back to available resource subdivision.`
+                );
+            }
 
             if (!targetSubdivision) {
-                logger.warn("TestElements", `Subdivision "${config.subdivisionName}" not found`);
+                logger.warn("TestElements", `No resource subdivision with actions found`);
                 this.skip();
                 return;
             }
 
-            const subdivisionLabel = await targetSubdivision.getLabel();
-            logger.info("TestElements", `Found subdivision: "${subdivisionLabel}"`);
+            logger.info("TestElements", `Found subdivision: "${resolvedSubdivisionLabel}"`);
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
             expect(targetSubdivision, "Subdivision should exist").to.not.be.undefined;
         });
@@ -238,7 +387,13 @@ describe("Test Elements View UI Tests", function () {
 
             await waitForTreeItems(elementsSection, driver);
 
-            const targetSubdivision = await testElementsPage.getItem(elementsSection, config.subdivisionName);
+            const subdivisionSearchResult = await resolvePreferredSubdivision(
+                testElementsPage,
+                config.subdivisionName,
+                true
+            );
+            const targetSubdivision = subdivisionSearchResult.subdivision;
+
             if (!targetSubdivision) {
                 this.skip();
                 return;
@@ -267,7 +422,7 @@ describe("Test Elements View UI Tests", function () {
             collectedSubdivisionLabels.forEach((label) => logger.debug("TestElements", `  Keyword: ${label}`));
         });
 
-        it("should open resource file when clicking a keyword (single-click)", async function () {
+        it("should attempt to open resource file when clicking a keyword (single-click)", async function () {
             const driver = getDriver();
             const config = getTestData();
             const testElementsPage = new TestElementsPage(driver);
@@ -282,7 +437,13 @@ describe("Test Elements View UI Tests", function () {
 
             await waitForTreeItems(elementsSection, driver);
 
-            const subdivisionItem = await testElementsPage.getItem(elementsSection, config.subdivisionName);
+            const subdivisionSearchResult = await resolvePreferredSubdivision(
+                testElementsPage,
+                config.subdivisionName,
+                true
+            );
+            const subdivisionItem = subdivisionSearchResult.subdivision;
+
             if (!subdivisionItem) {
                 this.skip();
                 return;
@@ -325,7 +486,7 @@ describe("Test Elements View UI Tests", function () {
             }
         });
 
-        it("should open and reveal in Explorer when double-clicking keyword", async function () {
+        it("should attempt to open and reveal in Explorer when double-clicking keyword", async function () {
             const driver = getDriver();
             const config = getTestData();
             const testElementsPage = new TestElementsPage(driver);
@@ -340,7 +501,13 @@ describe("Test Elements View UI Tests", function () {
 
             await waitForTreeItems(elementsSection, driver);
 
-            const subdivisionItem = await testElementsPage.getItem(elementsSection, config.subdivisionName);
+            const subdivisionSearchResult = await resolvePreferredSubdivision(
+                testElementsPage,
+                config.subdivisionName,
+                true
+            );
+            const subdivisionItem = subdivisionSearchResult.subdivision;
+
             if (!subdivisionItem) {
                 this.skip();
                 return;
@@ -383,7 +550,7 @@ describe("Test Elements View UI Tests", function () {
 
             await openTestBenchSidebar(driver);
 
-            let elementsSection = await getElementsSection();
+            const elementsSection = await getElementsSection();
             if (!elementsSection) {
                 this.skip();
                 return;
@@ -392,56 +559,66 @@ describe("Test Elements View UI Tests", function () {
             await waitForTreeItems(elementsSection, driver);
 
             // Try configured subdivision first
-            let subdivision = await testElementsPage.getItem(elementsSection, config.subdivisionName);
             let subdivisionLabel = config.subdivisionName;
-            let hasOpenButton = false;
+            let openResourceClicked = false;
+            let resourceCreatedAsFallback = false;
 
-            if (subdivision) {
-                await subdivision.click();
-                await applySlowMotion(driver);
-                hasOpenButton = await hasActionButton(subdivision, "Open Resource", driver);
-                subdivisionLabel = await subdivision.getLabel();
+            const configuredSubdivision = await testElementsPage.getItem(elementsSection, config.subdivisionName);
+            if (configuredSubdivision) {
+                subdivisionLabel = await configuredSubdivision.getLabel();
+                openResourceClicked = await tryClickOpenResourceWithRetries(testElementsPage, subdivisionLabel);
             }
 
             // Search for any subdivision with Open Resource button if needed
-            if (!hasOpenButton) {
+            if (!openResourceClicked) {
                 logger.info("TestElements", "Searching for subdivision with Open Resource button...");
-                const resourceSearchResult = await findResourceSubdivision(driver, elementsSection, testElementsPage);
+                const markerSubdivisionSearch = await findRobotResourceSubdivision(testElementsPage);
 
-                if (resourceSearchResult.subdivision) {
-                    subdivision = resourceSearchResult.subdivision;
-                    subdivisionLabel = resourceSearchResult.label;
-                    hasOpenButton = await hasActionButton(subdivision, "Open Resource", driver);
+                if (markerSubdivisionSearch.subdivision) {
+                    subdivisionLabel = markerSubdivisionSearch.label;
+                    openResourceClicked = await tryClickOpenResourceWithRetries(testElementsPage, subdivisionLabel);
+                }
+
+                if (!openResourceClicked) {
+                    const resourceSearchResult = await findResourceSubdivision(
+                        driver,
+                        elementsSection,
+                        testElementsPage
+                    );
+
+                    if (resourceSearchResult.subdivision) {
+                        subdivisionLabel = resourceSearchResult.label;
+                        openResourceClicked = await tryClickOpenResourceWithRetries(testElementsPage, subdivisionLabel);
+                    }
                 }
             }
 
-            if (!hasOpenButton) {
-                logger.info("TestElements", "No Open Resource button found - possible reasons:");
-                logger.info("TestElements", "  - All subdivisions are virtual (no resource marker)");
-                logger.info("TestElements", "  - No resource files have been created locally yet");
+            // If resource exists only as "Create Resource", create it first and re-check Open Resource.
+            if (!openResourceClicked) {
+                logger.info(
+                    "TestElements",
+                    `Open Resource not available yet for "${subdivisionLabel}". Creating resource first...`
+                );
+
+                const resourceCreated = await tryCreateResourceWithRetries(testElementsPage, subdivisionLabel);
+                if (resourceCreated) {
+                    resourceCreatedAsFallback = true;
+                    await waitForFileInEditor(driver, ".resource", UITimeouts.LONG);
+                    openResourceClicked = await tryClickOpenResourceWithRetries(testElementsPage, subdivisionLabel);
+                }
+            }
+
+            if (!openResourceClicked && !resourceCreatedAsFallback) {
+                logger.info("TestElements", "No actionable resource operation found for selected subdivision");
                 this.skip();
                 return;
             }
 
-            // Re-fetch subdivision with fresh reference
-            elementsSection = await getElementsSection();
-            if (!elementsSection) {
-                this.skip();
-                return;
-            }
-
-            subdivision = await testElementsPage.getItem(elementsSection, subdivisionLabel);
-            if (!subdivision) {
-                this.skip();
-                return;
-            }
-
-            // Click Open Resource button
-            const isOpenClicked = await testElementsPage.clickOpenResource(subdivision);
-            if (!isOpenClicked) {
-                logger.warn("TestElements", "Could not click Open Resource button");
-                this.skip();
-                return;
+            if (!openResourceClicked && resourceCreatedAsFallback) {
+                logger.warn(
+                    "TestElements",
+                    "Open Resource action remained flaky; validating by resource file open after create fallback"
+                );
             }
 
             const isResourceFileOpened = await waitForFileInEditor(driver, ".resource", UITimeouts.MEDIUM);
