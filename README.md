@@ -40,6 +40,17 @@ To link the currently opened workspace/folder, right-click on the desired Test O
 
 ![Link VS Code Workspace to Test Object Version](userGuideImages/link_tov.gif)
 
+### Create a Robot Framework Resource File from a TestBench Subdivision
+
+For a TestBench Subdivision to be visible in the TestBench extension, the Subdivision name must end with the suffix `[Robot-Resource]`. Subdivisions that do not follow this naming convention are ignored by the extension.
+
+![Edit Subdivision Suffix to display it in the extension](userGuideImages/subdivision_suffix.png)
+
+To create a Robot Framework resource file from a TestBench Subdivision, simply hover over the corresponding Subdivision in the `Test Elements` view and click the `Create Resource` button. Afterwards, you can use the `Test Elements` view of the extension to navigate between keywords and resource files.
+The path where the resource file is created can be configured in the extension settings.
+
+![Create Resource from TestBench Subdivision](userGuideImages/create_resource.gif)
+
 ### Synchronize Robot Framework Keywords with TestBench
 
 To synchronize Robot Framework keywords between VS Code and TestBench, open the Robot Framework resource file that contains the keywords you want to synchronize. You will see CodeLens actions above each keyword definition that allow you to either push the keyword to TestBench or pull the keyword from TestBench.
