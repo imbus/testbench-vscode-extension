@@ -40,6 +40,12 @@ export const ModalButtonSelectors = {
     PROCEED_ANYWAY: `//button[contains(text(), '${ModalButtonTexts.PROCEED_ANYWAY}') or @aria-label='${ModalButtonTexts.PROCEED_ANYWAY}'] | //a[contains(@class, 'monaco-button') and contains(., '${ModalButtonTexts.PROCEED_ANYWAY}')]`
 } as const;
 
+const STARTUP_OVERLAY_SELECTORS = {
+    OVERLAY: ".onboarding-a-overlay.visible",
+    SKIP: `//button[normalize-space(.)='Skip'] | //a[normalize-space(.)='Skip'] | //*[@role='button' and normalize-space(.)='Skip']`,
+    CONTINUE_WITHOUT_SIGNIN: `//button[contains(normalize-space(.), 'Continue without Signing In')] | //a[contains(normalize-space(.), 'Continue without Signing In')]`
+} as const;
+
 /**
  * Logs out from TestBench if a session is active.
  * Uses the logout toolbar button in the Projects view.
@@ -509,6 +515,84 @@ export async function cleanupWorkspace(
 }
 
 /**
+ * Dismisses the VS Code startup/sign-in overlay if it is shown.
+ * This screen can block clicks on the activity bar and cause UI tests to fail.
+ *
+ * @param driver - The WebDriver instance
+ * @returns Promise<boolean> - True if overlay was dismissed, false otherwise
+ */
+async function dismissStartupSignInOverlay(driver: WebDriver): Promise<boolean> {
+    try {
+        await driver.switchTo().defaultContent();
+
+        const isOverlayVisible = async (): Promise<boolean> => {
+            try {
+                const overlays = await driver.findElements(By.css(STARTUP_OVERLAY_SELECTORS.OVERLAY));
+                if (overlays.length === 0) {
+                    return false;
+                }
+
+                for (const overlay of overlays) {
+                    if (await overlay.isDisplayed()) {
+                        return true;
+                    }
+                }
+                return false;
+            } catch {
+                return false;
+            }
+        };
+
+        if (!(await isOverlayVisible())) {
+            return false;
+        }
+
+        logger.debug("StartupOverlay", "Detected startup welcome/sign-in overlay. Attempting to dismiss it.");
+
+        const tryClickOverlayAction = async (selector: string, actionLabel: string): Promise<boolean> => {
+            try {
+                const candidates = await driver.findElements(By.xpath(selector));
+                for (const element of candidates) {
+                    if ((await element.isDisplayed()) && (await element.isEnabled())) {
+                        await element.click();
+                        logger.debug("StartupOverlay", `Clicked '${actionLabel}' on startup overlay.`);
+                        return true;
+                    }
+                }
+            } catch {
+                // Ignore and proceed with next fallback.
+            }
+            return false;
+        };
+
+        let actionTriggered = await tryClickOverlayAction(STARTUP_OVERLAY_SELECTORS.SKIP, "Skip");
+        if (!actionTriggered) {
+            actionTriggered = await tryClickOverlayAction(
+                STARTUP_OVERLAY_SELECTORS.CONTINUE_WITHOUT_SIGNIN,
+                "Continue without Signing In"
+            );
+        }
+
+        if (!actionTriggered) {
+            await driver.actions().sendKeys(Key.ESCAPE).perform();
+            logger.debug("StartupOverlay", "Sent Escape to dismiss startup overlay.");
+        }
+
+        await driver.wait(
+            async () => !(await isOverlayVisible()),
+            UITimeouts.MEDIUM,
+            "Waiting for startup overlay to close",
+            UITimeouts.MINIMAL
+        );
+
+        return true;
+    } catch (error) {
+        logger.debug("StartupOverlay", `Could not dismiss startup overlay: ${error}`);
+        return false;
+    }
+}
+
+/**
  * Opens the TestBench sidebar by finding and clicking the TestBench activity bar item.
  * Handles stale element references by retrying if needed.
  *
@@ -521,6 +605,12 @@ export async function openTestBenchSidebar(driver?: WebDriver): Promise<void> {
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
+            // Do a proactive overlay dismissal only once.
+            // On VS Code versions without this overlay, this stays a fast no-op.
+            if (driver && attempt === 0) {
+                await dismissStartupSignInOverlay(driver);
+            }
+
             // Check if sidebar is already open by trying to get sections
             if (driver) {
                 try {
@@ -578,6 +668,27 @@ export async function openTestBenchSidebar(driver?: WebDriver): Promise<void> {
                         return; // Successfully opened sidebar
                     }
                 } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    const normalizedError = errorMessage.toLowerCase();
+                    const isClickIntercepted = normalizedError.includes("element click intercepted");
+                    const isStartupOverlayInterception =
+                        normalizedError.includes("onboarding-a-overlay") ||
+                        normalizedError.includes("welcome to visual studio code");
+
+                    if (driver && (isClickIntercepted || isStartupOverlayInterception)) {
+                        const overlayDismissed = await dismissStartupSignInOverlay(driver);
+                        if (overlayDismissed) {
+                            logger.debug(
+                                "Sidebar",
+                                `Startup overlay dismissed after click interception (attempt ${attempt + 1}/${maxRetries})`
+                            );
+                            if (attempt < maxRetries - 1) {
+                                await driver.sleep(UITimeouts.MINIMAL);
+                            }
+                            break;
+                        }
+                    }
+
                     // Stale element reference - element was found but became stale
                     // If this is the last attempt, throw the error
                     if (attempt === maxRetries - 1) {
