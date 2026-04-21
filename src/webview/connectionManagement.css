@@ -123,6 +123,10 @@ h3 {
     color: var(--text-primary) !important;
 }
 
+.hidden {
+    display: none !important;
+}
+
 /* Icon system */
 .icon {
     width: var(--icon-size);
@@ -152,6 +156,24 @@ h3 {
 }
 .icon-delete {
     background-image: var(--icon-delete);
+}
+
+.spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 2px solid var(--vscode-descriptionForeground);
+    border-top-color: transparent;
+    animation: spin 1.6s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* Remove margin for connection action icons */
@@ -332,6 +354,19 @@ button .icon {
 .connection-actions button:disabled:hover {
     background-color: var(--color-secondary-bg);
     opacity: 0.3;
+}
+
+.connection-actions .login-btn.is-loading,
+.connection-actions .login-btn.is-loading:disabled,
+.connection-actions .login-btn.is-loading:disabled:hover {
+    opacity: 1;
+    cursor: wait;
+    background-color: var(--bg-body);
+    border-color: var(--color-focus);
+}
+
+.connection-actions .login-btn.is-loading .icon-login {
+    display: none;
 }
 
 .delete-btn:disabled {
