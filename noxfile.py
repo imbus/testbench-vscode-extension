@@ -12,5 +12,6 @@ def bundle_dependencies(session):
         "--only-binary=:all:",
         "--no-binary=:none:",
         "--upgrade",
-        "-rrequirements.txt",
+        "-r",
+        "requirements.txt",
     )
