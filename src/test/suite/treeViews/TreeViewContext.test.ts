@@ -70,7 +70,6 @@ suite("TreeViewContext", function () {
             title: "Test Tree View",
             contextValue: "testTreeView",
             features: {
-                customRoot: true,
                 marking: true,
                 persistence: true,
                 filtering: true,
@@ -131,7 +130,6 @@ suite("TreeViewContext", function () {
 
         test("should have all features enabled", () => {
             const features = treeViewContext.config.features;
-            assert.strictEqual(features.customRoot, true);
             assert.strictEqual(features.marking, true);
             assert.strictEqual(features.persistence, true);
             assert.strictEqual(features.filtering, true);
@@ -242,7 +240,6 @@ suite("TreeViewContext", function () {
 
         test("should provide access to feature flags", () => {
             const features = treeViewContext.config.features;
-            assert.strictEqual(features.customRoot, true);
             assert.strictEqual(features.marking, true);
             assert.strictEqual(features.persistence, true);
             assert.strictEqual(features.filtering, true);

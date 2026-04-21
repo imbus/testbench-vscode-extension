@@ -10,6 +10,7 @@ import { TestThemesTreeView } from "../../../treeViews/implementations/testTheme
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
 import { testThemesConfig } from "../../../treeViews/implementations/testThemes/TestThemesConfig";
+import { TestThemeItemTypes } from "../../../constants";
 
 suite("TestThemesTreeView", function () {
     let testEnv: TestEnvironment;
@@ -337,6 +338,77 @@ suite("TestThemesTreeView", function () {
         });
     });
 
+    suite("Import Scope Resolution", function () {
+        test("should keep clicked UID for TestCaseSet imports", function () {
+            const itemUID = "clicked-uid";
+            const item = {
+                id: "descendant-id",
+                label: "Clicked Test Case Set",
+                data: {
+                    elementType: TestThemeItemTypes.TEST_CASE_SET
+                }
+            } as any;
+
+            const markingModule = {
+                getRootIDForDescendant: testEnv.sandbox.stub().returns("root-id"),
+                getMarkingInfo: testEnv.sandbox.stub().returns({ metadata: { uniqueID: "root-uid" } })
+            } as any;
+
+            const result = (treeView as any).resolveImportScope(item, itemUID, markingModule);
+
+            assert.strictEqual(result.importUID, itemUID);
+            assert.strictEqual(result.rootId, "root-id");
+            assert.strictEqual(markingModule.getRootIDForDescendant.calledOnce, true);
+            assert.strictEqual(markingModule.getMarkingInfo.called, false);
+        });
+
+        test("should keep clicked UID for TestTheme descendants", function () {
+            const itemUID = "clicked-uid";
+            const item = {
+                id: "descendant-id",
+                label: "Clicked Test Theme",
+                data: {
+                    elementType: TestThemeItemTypes.TEST_THEME
+                }
+            } as any;
+
+            const markingModule = {
+                getRootIDForDescendant: testEnv.sandbox.stub().returns("root-id"),
+                getMarkingInfo: testEnv.sandbox.stub().returns({ metadata: { uniqueID: "root-uid" } })
+            } as any;
+
+            const result = (treeView as any).resolveImportScope(item, itemUID, markingModule);
+
+            assert.strictEqual(result.importUID, itemUID);
+            assert.strictEqual(result.rootId, "root-id");
+            assert.strictEqual(markingModule.getRootIDForDescendant.calledOnce, true);
+            assert.strictEqual(markingModule.getMarkingInfo.called, false);
+        });
+
+        test("should return clicked UID with null rootId when no hierarchy root exists", function () {
+            const itemUID = "clicked-uid";
+            const item = {
+                id: "standalone-id",
+                label: "Standalone Item",
+                data: {
+                    elementType: TestThemeItemTypes.TEST_THEME
+                }
+            } as any;
+
+            const markingModule = {
+                getRootIDForDescendant: testEnv.sandbox.stub().returns(null),
+                getMarkingInfo: testEnv.sandbox.stub()
+            } as any;
+
+            const result = (treeView as any).resolveImportScope(item, itemUID, markingModule);
+
+            assert.strictEqual(result.importUID, itemUID);
+            assert.strictEqual(result.rootId, null);
+            assert.strictEqual(markingModule.getRootIDForDescendant.calledOnce, true);
+            assert.strictEqual(markingModule.getMarkingInfo.called, false);
+        });
+    });
+
     suite("Click Handler Functionality", function () {
         let mockTestThemesTreeItem: any;
 
@@ -442,6 +514,111 @@ suite("TestThemesTreeView", function () {
             await treeView.testCaseSetClickHandler.handleClick(mockTestThemesTreeItem, "test-item-id", testEnv.logger);
 
             assert(mockHandleDoubleClick.calledOnce, "Double click handler should be called for double click");
+        });
+    });
+
+    suite("Generation Lock Confirmation", function () {
+        let mockGenerationItem: any;
+        let executeClearInternalDirIfNeededStub: sinon.SinonStub;
+
+        this.beforeEach(function () {
+            (treeView as any).currentProjectKey = "project-1";
+            (treeView as any).currentCycleKey = "cycle-1";
+            (treeView as any).currentTovKey = "tov-1";
+            (treeView as any).isOpenedFromCycle = true;
+
+            mockGenerationItem = {
+                id: "item-1",
+                label: "Theme A",
+                lockedByOther: false,
+                data: {
+                    base: {
+                        key: "key-1",
+                        uniqueID: "uid-1",
+                        name: "Theme A"
+                    },
+                    elementType: TestThemeItemTypes.TEST_THEME
+                }
+            };
+
+            executeClearInternalDirIfNeededStub = testEnv.sandbox
+                .stub(treeView as any, "executeClearInternalDirIfNeeded")
+                .resolves();
+            testEnv.sandbox.stub(treeView as any, "handleSuccessfulGeneration").resolves();
+        });
+
+        test("should warn and proceed with generation when descendants are locked and user confirms", async function () {
+            testEnv.sandbox.stub(treeView as any, "getGenerationScopeLockInfo").resolves({
+                lockedDescendantNames: ["Locked Child 1", "Locked Child 2"],
+                isSelectedScopeLocked: false
+            });
+            const performTestGenerationStub = testEnv.sandbox
+                .stub(treeView as any, "performTestGeneration")
+                .resolves(true);
+            testEnv.vscodeMocks.showWarningMessageStub.resolves("Proceed" as any);
+
+            await treeView.generateTestCases(mockGenerationItem);
+
+            assert(
+                testEnv.vscodeMocks.showWarningMessageStub.calledOnce,
+                "Expected warning prompt when descendants are locked"
+            );
+            assert(
+                performTestGenerationStub.calledOnce,
+                "Generation should proceed after user confirms locked descendants warning"
+            );
+            assert(
+                executeClearInternalDirIfNeededStub.calledOnce,
+                "Internal directory cleanup should run only when generation proceeds"
+            );
+        });
+
+        test("should cancel generation when descendants are locked and user cancels", async function () {
+            testEnv.sandbox.stub(treeView as any, "getGenerationScopeLockInfo").resolves({
+                lockedDescendantNames: ["Locked Child"],
+                isSelectedScopeLocked: false
+            });
+            const performTestGenerationStub = testEnv.sandbox
+                .stub(treeView as any, "performTestGeneration")
+                .resolves(true);
+            testEnv.vscodeMocks.showWarningMessageStub.resolves("Cancel" as any);
+
+            await treeView.generateTestCases(mockGenerationItem);
+
+            assert(
+                testEnv.vscodeMocks.showWarningMessageStub.calledOnce,
+                "Expected warning prompt when descendants are locked"
+            );
+            assert(
+                performTestGenerationStub.notCalled,
+                "Generation should not start when user cancels locked descendants warning"
+            );
+            assert(
+                executeClearInternalDirIfNeededStub.notCalled,
+                "Internal directory cleanup should not run when generation is cancelled"
+            );
+        });
+
+        test("should block generation when selected scope is locked by another user", async function () {
+            testEnv.sandbox.stub(treeView as any, "getGenerationScopeLockInfo").resolves({
+                lockedDescendantNames: ["Theme A"],
+                isSelectedScopeLocked: true
+            });
+            const performTestGenerationStub = testEnv.sandbox
+                .stub(treeView as any, "performTestGeneration")
+                .resolves(true);
+
+            await treeView.generateTestCases(mockGenerationItem);
+
+            assert(
+                testEnv.vscodeMocks.showWarningMessageStub.calledOnce,
+                "Expected warning message when selected generation scope is locked"
+            );
+            assert(performTestGenerationStub.notCalled, "Generation should not start when selected scope is locked");
+            assert(
+                executeClearInternalDirIfNeededStub.notCalled,
+                "Internal directory cleanup should not run when selected scope is locked"
+            );
         });
     });
 });

@@ -7,6 +7,7 @@ import * as assert from "assert";
 import * as vscode from "vscode";
 import { TestElementsTreeView } from "../../../treeViews/implementations/testElements/TestElementsTreeView";
 import {
+    TestElementData,
     TestElementsTreeItem,
     TestElementType
 } from "../../../treeViews/implementations/testElements/TestElementsTreeItem";
@@ -64,7 +65,6 @@ suite("TestElementsTreeView", function () {
             lastRefresh: Date.now(),
             items: new Map(),
             rootItems: [],
-            customRoot: null,
             marking: null,
             expansion: null,
             filtering: null,
@@ -428,6 +428,253 @@ suite("TestElementsTreeView", function () {
         });
     });
 
+    suite("Initial Load and Refresh Marking Correctness", function () {
+        /**
+         * Builds a hierarchical TestElementData structure with a parent folder
+         * containing two resource subdivisions and one keyword.
+         */
+        const buildHierarchicalTestData = (): TestElementData[] => {
+            const child1: TestElementData = {
+                id: "res-1",
+                parentId: "folder-1",
+                displayName: "Resource1 [Robot-Resource]",
+                originalName: "Resource1 [Robot-Resource]",
+                hierarchicalName: "ParentFolder/Resource1 [Robot-Resource]",
+                uniqueID: "uid-res-1",
+                libraryKey: null,
+                jsonString: "{}",
+                details: {},
+                testElementType: TestElementType.Subdivision,
+                directRegexMatch: true,
+                isVirtual: false
+            };
+
+            const child2: TestElementData = {
+                id: "res-2",
+                parentId: "folder-1",
+                displayName: "Resource2 [Robot-Resource]",
+                originalName: "Resource2 [Robot-Resource]",
+                hierarchicalName: "ParentFolder/Resource2 [Robot-Resource]",
+                uniqueID: "uid-res-2",
+                libraryKey: null,
+                jsonString: "{}",
+                details: {},
+                testElementType: TestElementType.Subdivision,
+                directRegexMatch: true,
+                isVirtual: false
+            };
+
+            const keyword: TestElementData = {
+                id: "kw-1",
+                parentId: "res-1",
+                displayName: "TestKeyword",
+                originalName: "TestKeyword",
+                hierarchicalName: "ParentFolder/Resource1 [Robot-Resource]/TestKeyword",
+                uniqueID: "uid-kw-1",
+                libraryKey: null,
+                jsonString: "{}",
+                details: {},
+                testElementType: TestElementType.Keyword,
+                directRegexMatch: false,
+                isVirtual: false
+            };
+
+            child1.children = [keyword];
+
+            const parentFolder: TestElementData = {
+                id: "folder-1",
+                parentId: null,
+                displayName: "ParentFolder",
+                originalName: "ParentFolder",
+                hierarchicalName: "ParentFolder",
+                uniqueID: "uid-folder-1",
+                libraryKey: null,
+                jsonString: "{}",
+                details: {},
+                testElementType: TestElementType.Subdivision,
+                directRegexMatch: false,
+                isVirtual: false,
+                children: [child1, child2]
+            };
+
+            return [parentFolder];
+        };
+
+        /**
+         * Stubs the data provider and resource file service for loadTov tests.
+         * @param allAvailable If true, all resource paths exist. If false, none exist.
+         */
+        const setupLoadTovStubs = (allAvailable: boolean) => {
+            const hierarchicalData = buildHierarchicalTestData();
+            const dataProvider = (treeView as any).dataProvider;
+            testEnv.sandbox.stub(dataProvider, "fetchTestElements").resolves(hierarchicalData);
+            testEnv.sandbox.stub(dataProvider, "clearCache").returns(undefined);
+
+            mockResourceFileService.constructAbsolutePath.callsFake(async (name: string) => {
+                return `/workspace/${name}`;
+            });
+            mockResourceFileService.pathExists.resolves(allAvailable);
+        };
+
+        test("loadTov should set hasLocalChildren=true on parent when all child resources are available", async function () {
+            setupLoadTovStubs(true);
+
+            await treeView.loadTov("tov-1", "TOV Label", "ProjectName", "TOVName");
+
+            const rootItems = (treeView as any).rootItems as TestElementsTreeItem[];
+            assert.ok(rootItems.length > 0, "Should have root items after loading");
+
+            const parentFolder = rootItems[0];
+            assert.strictEqual(
+                parentFolder.data.testElementType,
+                TestElementType.Subdivision,
+                "Root item should be a Subdivision"
+            );
+            assert.strictEqual(
+                parentFolder.hasLocalChildren,
+                true,
+                "Parent folder should have hasLocalChildren=true when all child resources are available"
+            );
+
+            // Verify child resources are marked as available
+            const children = parentFolder.children as TestElementsTreeItem[];
+            assert.ok(children.length >= 2, "Parent folder should have at least 2 children");
+
+            const resourceChild1 = children.find((c) => c.data.id === "res-1");
+            const resourceChild2 = children.find((c) => c.data.id === "res-2");
+            assert.ok(resourceChild1, "Should find resource child 1");
+            assert.ok(resourceChild2, "Should find resource child 2");
+            assert.strictEqual(resourceChild1!.data.isLocallyAvailable, true, "Resource 1 should be locally available");
+            assert.strictEqual(resourceChild2!.data.isLocallyAvailable, true, "Resource 2 should be locally available");
+        });
+
+        test("loadTov should set hasLocalChildren=false on parent when not all child resources are available", async function () {
+            const hierarchicalData = buildHierarchicalTestData();
+            const dataProvider = (treeView as any).dataProvider;
+            testEnv.sandbox.stub(dataProvider, "fetchTestElements").resolves(hierarchicalData);
+            testEnv.sandbox.stub(dataProvider, "clearCache").returns(undefined);
+
+            mockResourceFileService.constructAbsolutePath.callsFake(async (name: string) => {
+                return `/workspace/${name}`;
+            });
+            // Only res-1 path exists, res-2 does not
+            mockResourceFileService.pathExists.callsFake(async (p: string) => {
+                return p.includes("Resource1");
+            });
+
+            await treeView.loadTov("tov-2", "TOV Label", "ProjectName", "TOVName");
+
+            const rootItems = (treeView as any).rootItems as TestElementsTreeItem[];
+            const parentFolder = rootItems[0];
+
+            assert.strictEqual(
+                parentFolder.hasLocalChildren,
+                false,
+                "Parent folder should have hasLocalChildren=false when not all child resources are available"
+            );
+        });
+
+        test("loadTov should handle collapsed branches correctly for parent markings", async function () {
+            setupLoadTovStubs(true);
+
+            await treeView.loadTov("tov-3", "TOV Label", "ProjectName", "TOVName");
+
+            const rootItems = (treeView as any).rootItems as TestElementsTreeItem[];
+            const parentFolder = rootItems[0];
+
+            // Even though children may be in collapsed state, parent marking should still be correct
+            assert.strictEqual(
+                parentFolder.hasLocalChildren,
+                true,
+                "Parent marking should be correct even for collapsed branches"
+            );
+        });
+
+        test("refresh should recompute hasLocalChildren correctly after data reload", async function () {
+            // First load: all available
+            setupLoadTovStubs(true);
+            await treeView.loadTov("tov-4", "TOV Label", "ProjectName", "TOVName");
+
+            const rootItemsAfterLoad = (treeView as any).rootItems as TestElementsTreeItem[];
+            assert.strictEqual(
+                rootItemsAfterLoad[0].hasLocalChildren,
+                true,
+                "After initial load, parent should have hasLocalChildren=true"
+            );
+
+            // Restore stubs for second load with different availability
+            testEnv.sandbox.restore();
+            testEnv = setupTestEnvironment();
+
+            // Re-create treeView for fresh stubs
+            treeView = new TestElementsTreeView(testEnv.mockContext, getConnectionStub);
+            treeView.setTreeView(mockVSCodeTreeView);
+            (treeView as any).eventBus = testEnv.sandbox.createStubInstance(EventBus);
+            (treeView as any).stateManager = testEnv.sandbox.createStubInstance(StateManager);
+            (treeView as any).stateManager.getState.returns({
+                loading: false,
+                error: null,
+                initialized: false,
+                lastRefresh: Date.now(),
+                items: new Map(),
+                rootItems: [],
+                marking: null,
+                expansion: null,
+                filtering: null,
+                selectedItemId: null,
+                selectedProjectKey: null,
+                selectedCycleKey: null,
+                selectedTovKey: null,
+                metadata: {}
+            });
+            (treeView as any).logger = testEnv.sandbox.createStubInstance(TestBenchLogger);
+            (treeView as any).resourceFileService = testEnv.sandbox.createStubInstance(ResourceFileService);
+
+            const newResourceFileService = (treeView as any)
+                .resourceFileService as sinon.SinonStubbedInstance<ResourceFileService>;
+            const hierarchicalData2 = buildHierarchicalTestData();
+            const dataProvider2 = (treeView as any).dataProvider;
+            testEnv.sandbox.stub(dataProvider2, "fetchTestElements").resolves(hierarchicalData2);
+            testEnv.sandbox.stub(dataProvider2, "clearCache").returns(undefined);
+
+            newResourceFileService.constructAbsolutePath.callsFake(async (name: string) => {
+                return `/workspace/${name}`;
+            });
+            // Now no resources are available
+            newResourceFileService.pathExists.resolves(false);
+
+            await treeView.loadTov("tov-4", "TOV Label", "ProjectName", "TOVName");
+
+            const rootItemsAfterRefresh = (treeView as any).rootItems as TestElementsTreeItem[];
+            assert.strictEqual(
+                rootItemsAfterRefresh[0].hasLocalChildren,
+                false,
+                "After refresh with no resources available, parent should have hasLocalChildren=false"
+            );
+        });
+
+        test("keyword context value should reflect parent resource availability", async function () {
+            setupLoadTovStubs(true);
+
+            await treeView.loadTov("tov-5", "TOV Label", "ProjectName", "TOVName");
+
+            const rootItems = (treeView as any).rootItems as TestElementsTreeItem[];
+            const parentFolder = rootItems[0];
+            const resourceChild = (parentFolder.children as TestElementsTreeItem[]).find((c) => c.data.id === "res-1");
+            assert.ok(resourceChild, "Should find resource child");
+
+            const keywordChild = (resourceChild!.children as TestElementsTreeItem[]).find(
+                (c) => c.data.testElementType === TestElementType.Keyword
+            );
+            assert.ok(keywordChild, "Should find keyword child");
+            assert.strictEqual(
+                keywordChild!.data.isLocallyAvailable,
+                true,
+                "Keyword should inherit parent availability"
+            );
+        });
+    });
+
     suite("Keyword Click Handlers", function () {
         test("handleKeywordClick should handle keyword clicks via click handler", async function () {
             const mockKeyword = createMockTestElementItem(
@@ -460,6 +707,11 @@ suite("TestElementsTreeView", function () {
             await (treeView as any).handleKeywordSingleClick(mockKeyword);
 
             assert.ok(!mockResourceFileService.ensureFileExists.called, "Should not create file on single click");
+            assert.ok(testEnv.vscodeMocks.showInformationMessageStub.called, "Should show info message");
+            assert.ok(
+                testEnv.vscodeMocks.showInformationMessageStub.calledWithMatch("Resource file does not exist inside"),
+                "Should include resource directory information in info message"
+            );
         });
 
         test("handleKeywordDoubleClick should create file and reveal in explorer", async function () {

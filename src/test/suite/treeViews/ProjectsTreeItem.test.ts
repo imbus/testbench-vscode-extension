@@ -404,7 +404,7 @@ suite("ProjectsTreeItem", function () {
     });
 
     suite("Context Value Management", () => {
-        test("should update context value for project tree item", () => {
+        test("should set context value for project tree item", () => {
             const projectData: ProjectData = {
                 key: "PROJ-001",
                 name: "Test Project",
@@ -413,14 +413,9 @@ suite("ProjectsTreeItem", function () {
 
             const item = new ProjectsTreeItem(projectData, mockContext);
             assert.strictEqual(item.contextValue, "Project");
-
-            item.setMetadata("isCustomRoot", true);
-            item.updateContextValue();
-
-            assert.strictEqual(item.contextValue, "customRoot.Project");
         });
 
-        test("should update context value for version tree item", () => {
+        test("should set context value for version tree item", () => {
             const versionData: ProjectData = {
                 key: "VERSION-001",
                 name: "Test Version",
@@ -429,14 +424,9 @@ suite("ProjectsTreeItem", function () {
 
             const item = new ProjectsTreeItem(versionData, mockContext);
             assert.strictEqual(item.contextValue, "Version");
-
-            item.setMetadata("isCustomRoot", true);
-            item.updateContextValue();
-
-            assert.strictEqual(item.contextValue, "customRoot.Version");
         });
 
-        test("should update context value for cycle tree item", () => {
+        test("should set context value for cycle tree item", () => {
             const cycleData: ProjectData = {
                 key: "CYCLE-001",
                 name: "Test Cycle",
@@ -445,11 +435,6 @@ suite("ProjectsTreeItem", function () {
 
             const item = new ProjectsTreeItem(cycleData, mockContext);
             assert.strictEqual(item.contextValue, "Cycle");
-
-            item.setMetadata("isCustomRoot", true);
-            item.updateContextValue();
-
-            assert.strictEqual(item.contextValue, "customRoot.Cycle");
         });
 
         test("should handle unknown type in context value for tree item", () => {

@@ -15,7 +15,7 @@
 out/**
 **/*.map
 tsconfig.tsbuildinfo
-imbus.testbench-extension-*/
+imbus.testbench*/
 d-biehl.robotcode-*/
 ms-python.*/
 VSCode-win32-*/

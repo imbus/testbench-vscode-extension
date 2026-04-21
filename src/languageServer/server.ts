@@ -37,15 +37,24 @@ interface PendingOperation {
 export let client: LanguageClient | undefined;
 export let latestLsContextRequestId: number = 0;
 export let currentLsOperationId: number = 0;
-let virtualDocumentContent = "";
-const virtualDocumentScheme = "virtualdiff";
-const onVirtualDocumentChangeEmitter = new vscode.EventEmitter<vscode.Uri>();
-const virtualDocumentProvider: vscode.TextDocumentContentProvider = {
-    onDidChange: onVirtualDocumentChangeEmitter.event,
+let virtualTestBenchResourceContent = "";
+let virtualRobotResourceContent = "";
+const virtualTestBenchResourceScheme = "virtualtb";
+const virtualRobotResourceScheme = "virtualrobot";
+const onVirtualTestBenchResourceChangeEmitter = new vscode.EventEmitter<vscode.Uri>();
+const onVirtualRobotResourceChangeEmitter = new vscode.EventEmitter<vscode.Uri>();
+const virtualTestBenchResourceProvider: vscode.TextDocumentContentProvider = {
+    onDidChange: onVirtualTestBenchResourceChangeEmitter.event,
     provideTextDocumentContent(uri: vscode.Uri): string {
-        // uri parameter is required by VS Code API but not used in this implementation
         void uri;
-        return virtualDocumentContent;
+        return virtualTestBenchResourceContent;
+    }
+};
+const virtualRobotResourceProvider: vscode.TextDocumentContentProvider = {
+    onDidChange: onVirtualRobotResourceChangeEmitter.event,
+    provideTextDocumentContent(uri: vscode.Uri): string {
+        void uri;
+        return virtualRobotResourceContent;
     }
 };
 
@@ -681,15 +690,27 @@ function setupClientNotifications(
             });
     });
 
-    vscode.workspace.registerTextDocumentContentProvider(virtualDocumentScheme, virtualDocumentProvider);
+    vscode.workspace.registerTextDocumentContentProvider(
+        virtualTestBenchResourceScheme,
+        virtualTestBenchResourceProvider
+    );
+    vscode.workspace.registerTextDocumentContentProvider(virtualRobotResourceScheme, virtualRobotResourceProvider);
     client.onNotification("testbench-language-server/display-diff", (params) => {
         const realPath = params.path;
         const realUri = vscode.Uri.parse(realPath);
         const realFileName = realUri.path.split("/").pop() || "unknown";
-        const virtualUri = vscode.Uri.parse(`${virtualDocumentScheme}:${realPath}`);
-        virtualDocumentContent = params.virtualContent;
-        onVirtualDocumentChangeEmitter.fire(virtualUri);
-        vscode.commands.executeCommand("vscode.diff", virtualUri, realUri, `${realFileName} (TestBench Changes)`);
+        const testBenchVirtualUri = vscode.Uri.parse(`${virtualTestBenchResourceScheme}:testbench_diff`);
+        const robotVirtualUri = vscode.Uri.parse(`${virtualRobotResourceScheme}:robot_diff`);
+        virtualTestBenchResourceContent = params.virtualTestBenchContent;
+        virtualRobotResourceContent = params.virtualRobotContent;
+        onVirtualTestBenchResourceChangeEmitter.fire(testBenchVirtualUri);
+        onVirtualRobotResourceChangeEmitter.fire(robotVirtualUri);
+        vscode.commands.executeCommand(
+            "vscode.diff",
+            robotVirtualUri,
+            testBenchVirtualUri,
+            `${realFileName} (TestBench Changes)`
+        );
     });
 
     logger.trace(
@@ -1168,6 +1189,7 @@ export function configureLanguageServerIntegration(context: vscode.ExtensionCont
  * Updates or restarts the language server based on testbench/ls.config.json file
  * @param projectName the name of the project to update or restart the language server for.
  * @param tovName the name of the TOV to update or restart the language server for.
+ * @returns true if the language server was updated or restarted, false otherwise (e.g. if config is missing/invalid or update not needed).
  */
 export async function updateOrRestartLS(): Promise<boolean> {
     if (!getConnection()) {
@@ -1330,10 +1352,14 @@ export async function ensureLanguageServerReady(
     }
 
     try {
-        await updateOrRestartLS();
+        const lsUpdatedOrStarted = await updateOrRestartLS();
+        if (!lsUpdatedOrStarted) {
+            return false;
+        }
         await waitForLanguageServerReady(timeoutMs, checkIntervalMs);
         return true;
-    } catch {
+    } catch (error) {
+        logger.trace("[server] ensureLanguageServerReady failed:", error);
         return false;
     }
 }

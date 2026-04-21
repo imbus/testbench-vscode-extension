@@ -59,16 +59,6 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
      * Registers all command handlers for the projects tree view
      */
     private registerCommands(): void {
-        this.disposables.push(
-            vscode.commands.registerCommand(`${this.config.id}.makeRoot`, async (item: ProjectsTreeItem) =>
-                this.makeRoot(item)
-            )
-        );
-
-        this.disposables.push(
-            vscode.commands.registerCommand(`${this.config.id}.resetCustomRoot`, async () => this.resetCustomRoot())
-        );
-
         this.disposables.push(vscode.commands.registerCommand(`${this.config.id}.refresh`, () => this.refresh()));
 
         this.disposables.push(
@@ -103,7 +93,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
 
     /**
      * Registers event handlers for the projects tree view.
-     * Sets up listeners for project selection, data updates, and custom root events with debouncing
+     * Sets up listeners for project selection, data updates with debouncing
      */
     private registerEventHandlers(): void {
         // Listen for project selection events
@@ -691,7 +681,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         }
 
         if (!options?.skipDataReload) {
-            this.prepareForContextSwitchLoading();
+            this.stateManager.setState({ error: null, loading: true });
         }
 
         super.refresh(undefined, options);

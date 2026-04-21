@@ -13,7 +13,6 @@ export const testThemesConfig: TreeViewConfig = {
     contextValue: "testTheme",
 
     features: {
-        customRoot: true,
         marking: true,
         persistence: true,
         filtering: true,
@@ -22,13 +21,6 @@ export const testThemesConfig: TreeViewConfig = {
     },
 
     modules: {
-        customRoot: {
-            enabled: true,
-            contextKey: "testThemeTreeHasCustomRoot",
-            allowedItemTypes: [TestThemeItemTypes.TEST_THEME],
-            persistAcrossSessions: true
-        },
-
         marking: {
             enabled: true,
             strategies: ["generation", "import"],
@@ -41,7 +33,6 @@ export const testThemesConfig: TreeViewConfig = {
         persistence: {
             strategy: "workspace",
             autoSave: true,
-            includeCustomRoot: true,
             includeExpansion: true,
             includeMarking: true
         },

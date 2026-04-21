@@ -15,17 +15,17 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                os: [ubuntu-latest] # Test on multiple OS with [ubuntu-latest, windows-latest, macos-latest]
-                node-version: [20.x] # Test on multiple Node versions with [20.x, 18.x, 16.x]
+                os: [ubuntu-latest]
+                node-version: [20.x, 24.x]
 
         steps:
             # Checkout the repository
             - name: Checkout Code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
 
             # Set up Node.js
             - name: Set up Node.js ${{ matrix.node-version }}
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v6
               with:
                   node-version: ${{ matrix.node-version }}
                   cache: "npm"
@@ -60,7 +60,7 @@ jobs:
 
             # Cache VS Code test instance to speed up tests
             - name: Cache VS Code Test Instance
-              uses: actions/cache@v3
+              uses: actions/cache@v5
               with:
                   path: .vscode-test
                   key: vscode-test-${{ runner.os }}-${{ hashFiles('package.json') }}
@@ -97,11 +97,11 @@ jobs:
         steps:
             # Checkout the repository
             - name: Checkout Code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
 
             # Set up Node.js
             - name: Set up Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v6
               with:
                   node-version: "lts/*"
                   check-latest: true
@@ -133,12 +133,10 @@ jobs:
             - name: Generate requirements.txt for Python
               id: pip-compile
               run: pip-compile --resolver=backtracking --output-file=requirements.txt pyproject.toml
-              continue-on-error: true
 
             - name: Bundle Python Dependencies using Nox
               id: nox-bundle
               run: python -m nox --session bundle_dependencies
-              continue-on-error: true
 
             # Validate version format before building
             - name: Validate Version Format
@@ -202,7 +200,7 @@ jobs:
                   fi
                   # Sanitize branch name for artifact compatibility
                   SANITIZED_BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9._-]/-/g')
-                  echo "NAME=testbench-extension-v$VERSION-$SANITIZED_BRANCH_NAME-$SHA_SHORT" >> $GITHUB_OUTPUT
+                  echo "NAME=testbench-v$VERSION-$SANITIZED_BRANCH_NAME-$SHA_SHORT" >> $GITHUB_OUTPUT
 
             # Upload the VSIX as an artifact
             - name: Upload VSIX Artifact
@@ -220,7 +218,7 @@ jobs:
               if: github.ref == 'refs/heads/main'
               uses: actions/upload-artifact@v4
               with:
-                  name: testbench-extension-release
+                  name: testbench-release
                   path: ${{ steps.verify_vsix.outputs.VSIX_PATH }}
                   if-no-files-found: error
                   overwrite: true

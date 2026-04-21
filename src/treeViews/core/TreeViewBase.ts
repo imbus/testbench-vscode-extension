@@ -14,7 +14,6 @@ import { ModuleRegistry } from "./ModuleRegistry";
 import { StateManager } from "../state/StateManager";
 import { EventBus } from "../utils/EventBus";
 import { TestBenchLogger } from "../../testBenchLogger";
-import { CustomRootModule } from "../features/CustomRootModule";
 import { FilteringModule } from "../features/FilteringModule";
 import { TreeViewTiming } from "../../constants";
 import { IconModule } from "../features/IconModule";
@@ -27,15 +26,6 @@ const ROOT_ITEMS_CACHE_KEY = "root_items";
 export interface RefreshOptions {
     immediate?: boolean;
     skipDataReload?: boolean;
-}
-
-/**
- * Options for preparing a tree view when switching to a different context.
- * preserveUiState = true keeps expansion/filtering/marking state while clearing only visible data.
- * Set preserveUiState to false to perform a full clear/reset of tree state before loading.
- */
-export interface ContextSwitchLoadingOptions {
-    preserveUiState?: boolean;
 }
 
 export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.TreeDataProvider<T> {
@@ -284,11 +274,6 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
      * @returns The VS Code tree item
      */
     getTreeItem(element: T): vscode.TreeItem {
-        const customRootModule = this.getModule("customRoot");
-        if (customRootModule) {
-            (customRootModule as CustomRootModule).applyCustomRootContext(element);
-        }
-
         const markingModule = this.getModule("marking");
         if (markingModule && typeof markingModule.applyMarkingToItem === "function") {
             markingModule.applyMarkingToItem(element);
@@ -313,19 +298,11 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     }
 
     /**
-     * Gets the parent of a tree element, considering custom root module
+     * Gets the parent of a tree element
      * @param element The element to get the parent for
      * @returns The parent element or undefined
      */
     getParent(element: T): vscode.ProviderResult<T> {
-        const customRootModule = this.getModule("customRoot");
-        if (customRootModule && customRootModule.isActive()) {
-            const customParent = customRootModule.getParent(element);
-            if (customParent !== undefined) {
-                return customParent;
-            }
-        }
-
         return element.parent as T;
     }
 
@@ -337,13 +314,6 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     async getChildren(element?: T): Promise<T[]> {
         try {
             this.logger.trace(this.buildLogPrefix(`getChildren called for: ${element?.label || "root"}`));
-            const customRootModule = this.getModule("customRoot");
-            if (!element && customRootModule && customRootModule.isActive()) {
-                const customRoot = customRootModule.getCustomRoot();
-                if (customRoot) {
-                    return [customRoot as T];
-                }
-            }
 
             let children: T[];
 
@@ -545,33 +515,6 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     }
 
     /**
-     * Sets the given item as the custom root for this tree view.
-     * Delegates the core logic to the CustomRootModule.
-     * @param item The tree item to set as the new root.
-     */
-    public makeRoot(item: T): void {
-        const customRootModule = this.getModule("customRoot") as CustomRootModule | undefined;
-        if (customRootModule) {
-            customRootModule.setCustomRoot(item);
-        } else {
-            this.logger.warn(this.buildLogPrefix("CustomRootModule is not available for this tree view."));
-        }
-    }
-
-    /**
-     * Resets the custom root, restoring the tree view to its default state.
-     * Delegates the core logic to the CustomRootModule.
-     */
-    public resetCustomRoot(): void {
-        const customRootModule = this.getModule("customRoot") as CustomRootModule | undefined;
-        if (customRootModule) {
-            customRootModule.reset();
-        } else {
-            this.logger.warn(this.buildLogPrefix("CustomRootModule is not available for this tree view."));
-        }
-    }
-
-    /**
      * Clears the tree view by removing all root items and resetting state
      */
     public clearTree(): void {
@@ -598,21 +541,29 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     }
 
     /**
-     * Prepares the tree for loading data for a new context by clearing currently shown items and
+     * Prepares the tree for loading data for a new context by clearing currently shown tree items and
      * activating the loading state immediately.
-     * @param options Configuration for how much state should be preserved while clearing
+     * Preserves UI state (expansion, marking, filtering) by default.
+     * @param preserveUiState When false, additionally clears cached data (items, rootItems)
+     * but preserves persistent module state (expansion, marking, filtering).
      */
-    public prepareForContextSwitchLoading(options?: ContextSwitchLoadingOptions): void {
-        const preserveUiState = options?.preserveUiState ?? true;
+    public prepareForContextSwitchLoading(preserveUiState: boolean = true): void {
+        // Skip if already prepared
+        if (this.rootItems.length === 0 && this.stateManager.isLoading()) {
+            return;
+        }
 
         if (preserveUiState) {
-            this.clearTreeDataOnly();
+            // Clear data without touching module state
+            this.rootItems = [];
+            this.rootItemsCache.clearCache();
+            this._intentionallyCleared = true;
         } else {
             this.clearTree();
         }
 
-        this.stateManager.setError(null);
-        this.stateManager.setLoading(true);
+        this.stateManager.setState({ error: null, loading: true });
+        this._onDidChangeTreeData.fire(undefined);
         this.updateTreeViewMessage();
     }
 
@@ -642,16 +593,10 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             (filteringModule as any).clearAllFilters();
         }
 
-        const customRootModule = this.getModule("customRoot");
-        if (customRootModule && typeof (customRootModule as any).reset === "function") {
-            (customRootModule as any).reset();
-        }
-
         if (this.stateManager && typeof this.stateManager.setState === "function") {
             this.stateManager.setState({
                 expansion: null,
                 marking: null,
-                customRoot: null,
                 filtering: null
             });
         }

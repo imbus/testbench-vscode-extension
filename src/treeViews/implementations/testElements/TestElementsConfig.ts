@@ -12,7 +12,6 @@ export const testElementsConfig: TreeViewConfig = {
     contextValue: "testElement",
 
     features: {
-        customRoot: false,
         marking: false,
         persistence: true,
         filtering: true,
@@ -24,7 +23,6 @@ export const testElementsConfig: TreeViewConfig = {
         persistence: {
             strategy: "workspace",
             autoSave: true,
-            includeCustomRoot: false,
             includeExpansion: true,
             includeMarking: false
         },
