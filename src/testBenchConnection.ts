@@ -1565,6 +1565,14 @@ export async function importReportWithResultsToTestbench(
                 const importJobStatusUnknownMessageForUser: string = "Import job status unknown after polling.";
                 logger.warn(importJobStatusUnknownMessage, importJobStatus);
                 vscode.window.showWarningMessage(importJobStatusUnknownMessageForUser);
+            } else {
+                const importSummary = reportHandler.analyzeImportResult(importJobStatus);
+                if (importSummary.importedTestCaseCount === 0) {
+                    const noItemsImportedWarning =
+                        "Import completed, but no test cases were actually imported. This may happen when items are locked by another user in TestBench.";
+                    logger.warn(`[testBenchConnection] ${noItemsImportedWarning}`);
+                    vscode.window.showWarningMessage(noItemsImportedWarning);
+                }
             }
         } catch (error: any) {
             logger.error(
