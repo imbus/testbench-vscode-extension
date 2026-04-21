@@ -27,7 +27,7 @@ from .resource_utils import html_2_robot
 from .testbench_resource_model import TestBenchResourceModel
 
 
-def _get_subdivision_resource_path(test_elements, uid: str) -> Path:
+def _get_subdivision_resource_path(test_elements, uid: str) -> Path | None:
     subdivisions = {te.Subdivision_key.serial: te for te in test_elements if te.Subdivision_key}
     subdivision = next(
         (
@@ -56,6 +56,8 @@ def create_resource_from_subdivision(
     tb_connection = TestBenchResourceConnection.singleton()
     test_elements = get_test_elements(tb_connection)
     resource_path = _get_subdivision_resource_path(test_elements, uid)
+    if resource_path is None:
+        return None
     resource = TestBenchResourceModel(resource_path)
     resource.add_comment(f"tb:uid:{uid}")
     for test_element in test_elements:

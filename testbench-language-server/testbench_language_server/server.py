@@ -407,6 +407,9 @@ def show_testbench_diff(ls: LanguageServer, kwargs):
     testbench_resource = create_resource_from_subdivision(
         uid=subdivision_uid,
     )
+    if not testbench_resource:
+        show_error(ls, ERROR_FINDING_TESTBENCH_SUBDIVISION_WITH_UID.format(uid=subdivision_uid))
+        return
     change_identifier_tb = ChangeAnnotationIdentifier()
     change_identifier_vscode = ChangeAnnotationIdentifier()
     tb_edits = []
@@ -513,6 +516,9 @@ def attempt_push_subdivision(ls: LanguageServer, *args):
     testbench_resource = create_resource_from_subdivision(
         uid=subdivision_uid,
     )
+    if not testbench_resource:
+        show_error(ls, ERROR_FINDING_TESTBENCH_SUBDIVISION_WITH_UID.format(uid=subdivision_uid))
+        return
     change_identifier = ChangeAnnotationIdentifier()
     edits = []
     create_kw_section = not bool(get_keyword_section(vscode_resource.file))
@@ -712,6 +718,9 @@ def pull_testbench_subdivision(ls: LanguageServer, *args):
     new_resource = create_resource_from_subdivision(
         uid=subdivision_uid,
     )
+    if not new_resource:
+        show_error(ls, ERROR_FINDING_TESTBENCH_SUBDIVISION_WITH_UID.format(uid=subdivision_uid))
+        return
     change_identifier = ChangeAnnotationIdentifier()
     edits = []
     create_kw_section = not bool(get_keyword_section(existing_resource.file))
