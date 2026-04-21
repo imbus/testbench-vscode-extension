@@ -4,7 +4,7 @@ Thanks for taking the time to contribute to this project! 🧡
 
 ## 🐞 Reporting Bugs
 
-If you encounter a bug, please [open a GitHub issue](https://github.com/imbus/testbench-vs-code-extension/issues) and include the following information to help us debug it:
+If you encounter a bug, please [open a GitHub issue](https://github.com/imbus/testbench-vscode-extension/issues) and include the following information to help us debug it:
 
 - **VS Code version** (e.g., `1.96.0`)
 - **OS and version** (e.g., Windows 11 / macOS Ventura / Ubuntu 22.04)
@@ -26,7 +26,7 @@ Have an idea for a new feature or improvement? Please open an issue with the `en
 
 Pull requests are welcome! If you want to work on something:
 
-1. Check the [open issues](https://github.com/imbus/testbench-vs-code-extension/issues)
+1. Check the [open issues](https://github.com/imbus/testbench-vscode-extension/issues)
 2. Comment on the issue to let us know you're working on it
 3. Fork the repo, create a new branch, and open a pull request when ready
 
