@@ -145,33 +145,17 @@ export interface JobStatusResponse {
                 testCaseSets: Array<{
                     key: string;
                     executionKey: string;
-                    name?: string;
-                    uid?: string;
                     finished: boolean;
                     error: {
                         code: number;
                         message: string;
                         description: string;
-                    } | null;
-                    testCases: Array<{
-                        key?: string;
-                        executionKey?: string;
-                        uid?: string;
-                        importResult?: string;
-                        error: {
-                            code: number;
-                            message: string;
-                            description: string;
-                        } | null;
-                        warnings?: string[];
-                    }>;
+                    };
+                    testCases: any[];
                 }>;
-                checkedInTestStructureElements?: any[];
-                checkedInTestElements?: any[];
-                createdDefects?: any[];
             };
         };
-    } | null;
+    };
 }
 
 export interface Project {
