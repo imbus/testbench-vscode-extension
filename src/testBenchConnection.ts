@@ -46,7 +46,8 @@ let cachedCertificate: CachedCertificateData | null = null;
  */
 let isRetryNotificationActive = false;
 
-const SESSION_LOGOUT_WARNING_MESSAGE = "Your TestBench session has expired. You are being returned to the login view.";
+const SESSION_LOGOUT_WARNING_MESSAGE =
+    "Your TestBench session has expired or is invalid. You are being returned to the login view.";
 
 /**
  * Loads and caches certificate data from disk to avoid redundant reads.
@@ -1077,16 +1078,19 @@ export class PlayServerConnection {
             );
             logger.trace("[testBenchConnection] Keep-alive request sent.");
         } catch (error) {
-            logger.warn("[testBenchConnection] Keep-alive request failed after retries, attempting re-login:", error);
+            logger.warn("[testBenchConnection] Keep-alive request failed after retries.", error);
 
             const isAuthFailure =
                 axios.isAxiosError(error) && (error.response?.status === 401 || error.response?.status === 403);
             let shouldLogout = isAuthFailure;
 
             if (axios.isAxiosError(error) && error.response?.status === 401) {
+                logger.warn("[testBenchConnection] Keep-alive returned 401. Attempting silent re-login.");
                 shouldLogout =
                     !(await this.trySilentReloginWithStoredPassword()) &&
                     !(await this.tryFallbackReloginWithAuthProvider());
+            } else if (axios.isAxiosError(error) && error.response?.status === 403) {
+                logger.warn("[testBenchConnection] Keep-alive returned 403. Session is invalid and will be cleared.");
             }
 
             if (shouldLogout) {
@@ -1217,10 +1221,10 @@ export class PlayServerConnection {
  * Used to retry API calls in case of network errors. To disable retries for an API call, set maxRetries to 0.
  *
  * @template T - The type returned by the asynchronous function.
- * @param {Promise<T>} asyncFunction - The asynchronous function to execute.
+ * @param {() => Promise<T>} asyncFunction - The asynchronous function to execute.
  * @param {number} maxAllowedRetryCount - Maximum number of retry attempts (default is 3).
  * @param {number} delayMs - Delay in milliseconds between retries (default is 2000ms).
- * @param {boolean} shouldRetry - Optional predicate function that receives the error and returns whether to retry.
+ * @param {(error: any) => boolean} [shouldRetry] - Optional predicate function that receives the error and returns whether to retry.
  * @param {boolean} showProgressBar - Optional flag to control whether to show a VS Code progress bar (default is true).
  * @param {boolean} forceLogoutOnAuthFailure - Whether unrecoverable auth failures should force logout (default is true).
  * @returns {Promise<T>} A promise resolving to the function's return value.
