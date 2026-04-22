@@ -28,6 +28,16 @@
     "categories": [
         "Testing"
     ],
+    "files": [
+        "dist/extension.js",
+        "dist/extension.js.LICENSE.txt",
+        "dist/webview/**",
+        "bundled/**",
+        "resources/icons/**",
+        "README.md",
+        "LICENSE",
+        "userGuideImages/**"
+    ],
     "activationEvents": [],
     "main": "./dist/extension.js",
     "contributes": {
