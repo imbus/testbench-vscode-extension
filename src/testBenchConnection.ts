@@ -46,8 +46,7 @@ let cachedCertificate: CachedCertificateData | null = null;
  */
 let isRetryNotificationActive = false;
 
-const SESSION_LOGOUT_WARNING_MESSAGE =
-    "Your TestBench session has expired or the server is unavailable. You are being returned to the login view.";
+const SESSION_LOGOUT_WARNING_MESSAGE = "Your TestBench session has expired. You are being returned to the login view.";
 
 /**
  * Loads and caches certificate data from disk to avoid redundant reads.
@@ -200,8 +199,7 @@ export interface TestBenchLoginResult {
 }
 
 /**
- * Custom error that will be throwed in case an API request fails (including all of its retries)
- * to indicate that the session has expired or the server is unreachable.
+ * Custom error that is thrown when an API request fails due to unrecoverable authentication issues.
  * Used to trigger a logout and return to the login view.
  */
 export class TestBenchConnectionError extends Error {
@@ -1032,8 +1030,8 @@ export class PlayServerConnection {
      * Sends a lightweight GET request to the server to keep the session alive, which normally times out after 5 minutes.
      * The keep-alive process is started automatically when the PlayServerConnection object is created.
      * If the request fails, retries are attempted up to 3 times with a delay of 2 second between each attempt.
-     * If the keep alive request fails with an error code other than 401, the user is logged out automatically.
-     * If the keep alive request fails with an error code 401, extension tries to re-authenticate same user silently using stored credentials.
+     * If the keep-alive request fails due to an auth error, extension tries to re-authenticate silently.
+     * Logout is performed only when auth can no longer be recovered.
      */
     private async sendKeepAliveRequest(): Promise<void> {
         if (this.isKeepAliveInProgress) {
@@ -1073,13 +1071,17 @@ export class PlayServerConnection {
                 },
                 3,
                 2000,
-                RetryPredicateFactory.createDefaultPredicate()
+                RetryPredicateFactory.createDefaultPredicate(),
+                true,
+                false
             );
             logger.trace("[testBenchConnection] Keep-alive request sent.");
         } catch (error) {
             logger.warn("[testBenchConnection] Keep-alive request failed after retries, attempting re-login:", error);
 
-            let shouldLogout = true;
+            const isAuthFailure =
+                axios.isAxiosError(error) && (error.response?.status === 401 || error.response?.status === 403);
+            let shouldLogout = isAuthFailure;
 
             if (axios.isAxiosError(error) && error.response?.status === 401) {
                 shouldLogout =
@@ -1090,6 +1092,10 @@ export class PlayServerConnection {
             if (shouldLogout) {
                 vscode.window.showWarningMessage(SESSION_LOGOUT_WARNING_MESSAGE);
                 await vscode.commands.executeCommand(`${allExtensionCommands.logout}`);
+            } else {
+                logger.warn(
+                    "[testBenchConnection] Keep-alive request failed due to temporary server/network issue. Session is preserved."
+                );
             }
         } finally {
             this.isKeepAliveInProgress = false;
@@ -1216,6 +1222,7 @@ export class PlayServerConnection {
  * @param {number} delayMs - Delay in milliseconds between retries (default is 2000ms).
  * @param {boolean} shouldRetry - Optional predicate function that receives the error and returns whether to retry.
  * @param {boolean} showProgressBar - Optional flag to control whether to show a VS Code progress bar (default is true).
+ * @param {boolean} forceLogoutOnAuthFailure - Whether unrecoverable auth failures should force logout (default is true).
  * @returns {Promise<T>} A promise resolving to the function's return value.
  * @throws The error from the last failed attempt if all retries fail.
  */
@@ -1225,7 +1232,8 @@ export async function withRetry<T>(
     maxAllowedRetryCount: number = 3,
     delayMs: number = 2000,
     shouldRetry?: (error: any) => boolean,
-    showProgressBar: boolean = true
+    showProgressBar: boolean = true,
+    forceLogoutOnAuthFailure: boolean = true
 ): Promise<T> {
     let retryCount: number = 0;
     const totalAttempts = maxAllowedRetryCount + 1;
@@ -1305,15 +1313,18 @@ export async function withRetry<T>(
     };
 
     /**
-     * Checks if the given error indicates an expired session or server unavailability,
+     * Checks if the given error indicates an unrecoverable auth failure
      * and forces a local logout if so. Excludes authentication endpoint errors.
      * @param error - The error to check.
      * @returns True if a logout was performed, false otherwise.
      */
     const checkAndForceLogout = async (error: any) => {
+        if (!forceLogoutOnAuthFailure) {
+            return false;
+        }
+
         if (axios.isAxiosError(error)) {
             const status = error.response?.status;
-            const isNetworkError = !error.response;
             const isAuthEndpoint = error.config?.url?.includes("/2/login/session");
             const requestDescription = getRequestDescription(error);
 
@@ -1326,9 +1337,9 @@ export async function withRetry<T>(
                 return false;
             }
 
-            if (!isAuthEndpoint && (status === 401 || status === 403 || isNetworkError)) {
+            if (!isAuthEndpoint && (status === 401 || status === 403)) {
                 logger.warn(
-                    `[testBenchConnection] Unrecoverable API error detected for ${requestDescription} (status: ${status}, networkError: ${isNetworkError}, code: ${getErrorCodeDescription(
+                    `[testBenchConnection] Unrecoverable authentication error detected for ${requestDescription} (status: ${status}, code: ${getErrorCodeDescription(
                         error
                     )}). Forcing a local logout.`
                 );
@@ -1361,9 +1372,7 @@ export async function withRetry<T>(
                 );
                 const loggedOut = await checkAndForceLogout(error);
                 if (loggedOut) {
-                    throw new TestBenchConnectionError(
-                        "Session expired or server unavailable. User has been logged out."
-                    );
+                    throw new TestBenchConnectionError("Session expired or invalid. User has been logged out.");
                 }
                 throw error;
             }
@@ -1375,9 +1384,7 @@ export async function withRetry<T>(
                 );
                 const loggedOut = await checkAndForceLogout(error);
                 if (loggedOut) {
-                    throw new TestBenchConnectionError(
-                        "Session expired or server unavailable. User has been logged out."
-                    );
+                    throw new TestBenchConnectionError("Session expired or invalid. User has been logged out.");
                 }
                 throw error;
             }

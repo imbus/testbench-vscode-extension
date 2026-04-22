@@ -128,7 +128,8 @@ export class LegacyPlayServerClient {
                 2, // maxRetries
                 1000, // delayMs
                 RetryPredicateFactory.createDefaultPredicate(),
-                false // Don't show progress bar for fallback attempts
+                false, // Don't show progress bar for fallback attempts
+                false // Don't force global logout for port discovery failure
             );
 
             if (serverLocationsResponse.status === 200 && serverLocationsResponse.data) {
@@ -277,7 +278,9 @@ export class LegacyPlayServerClient {
                 () => session.get(requestPath),
                 3, // maxRetries
                 2000, // delayMs
-                this.getRetryPredicate()
+                this.getRetryPredicate(),
+                true,
+                false
             );
         } catch (error: unknown) {
             if (!this.isCertificateValidationError(error)) {
@@ -303,6 +306,7 @@ export class LegacyPlayServerClient {
                     1, // maxRetries
                     1000, // delayMs
                     RetryPredicateFactory.createDefaultPredicate(),
+                    false,
                     false
                 );
             } catch (insecureError: unknown) {
