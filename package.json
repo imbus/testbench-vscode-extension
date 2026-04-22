@@ -1,5 +1,5 @@
 {
-    "name": "testbench",
+    "name": "testbench-extension",
     "publisher": "imbus",
     "displayName": "TestBench",
     "description": "A Visual Studio Code extension for imbus TestBench.",
