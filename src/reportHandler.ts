@@ -1251,7 +1251,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     increment: 30
                 });
 
-                await importReportWithResultsToTestbenchWithSpecificUID(
+                const importResult = await importReportWithResultsToTestbenchWithSpecificUID(
                     connection!,
                     resolvedTargetProjectKey,
                     resolvedTargetCycleKey,
