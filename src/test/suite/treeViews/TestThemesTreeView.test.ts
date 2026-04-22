@@ -517,7 +517,7 @@ suite("TestThemesTreeView", function () {
         });
     });
 
-    suite("Generation Lock Confirmation", function () {
+    suite("Generation Lock Independence", function () {
         let mockGenerationItem: any;
         let executeClearInternalDirIfNeededStub: sinon.SinonStub;
 
@@ -547,77 +547,22 @@ suite("TestThemesTreeView", function () {
             testEnv.sandbox.stub(treeView as any, "handleSuccessfulGeneration").resolves();
         });
 
-        test("should warn and proceed with generation when descendants are locked and user confirms", async function () {
-            testEnv.sandbox.stub(treeView as any, "getGenerationScopeLockInfo").resolves({
-                lockedDescendantNames: ["Locked Child 1", "Locked Child 2"],
-                isSelectedScopeLocked: false
-            });
+        test("should generate tests even when selected scope is locked by another user", async function () {
+            mockGenerationItem.lockedByOther = true;
             const performTestGenerationStub = testEnv.sandbox
                 .stub(treeView as any, "performTestGeneration")
                 .resolves(true);
-            testEnv.vscodeMocks.showWarningMessageStub.resolves("Proceed" as any);
 
             await treeView.generateTestCases(mockGenerationItem);
 
             assert(
-                testEnv.vscodeMocks.showWarningMessageStub.calledOnce,
-                "Expected warning prompt when descendants are locked"
+                testEnv.vscodeMocks.showWarningMessageStub.notCalled,
+                "No lock warning should be shown for test generation"
             );
-            assert(
-                performTestGenerationStub.calledOnce,
-                "Generation should proceed after user confirms locked descendants warning"
-            );
+            assert(performTestGenerationStub.calledOnce, "Generation should proceed for locked tree items");
             assert(
                 executeClearInternalDirIfNeededStub.calledOnce,
-                "Internal directory cleanup should run only when generation proceeds"
-            );
-        });
-
-        test("should cancel generation when descendants are locked and user cancels", async function () {
-            testEnv.sandbox.stub(treeView as any, "getGenerationScopeLockInfo").resolves({
-                lockedDescendantNames: ["Locked Child"],
-                isSelectedScopeLocked: false
-            });
-            const performTestGenerationStub = testEnv.sandbox
-                .stub(treeView as any, "performTestGeneration")
-                .resolves(true);
-            testEnv.vscodeMocks.showWarningMessageStub.resolves("Cancel" as any);
-
-            await treeView.generateTestCases(mockGenerationItem);
-
-            assert(
-                testEnv.vscodeMocks.showWarningMessageStub.calledOnce,
-                "Expected warning prompt when descendants are locked"
-            );
-            assert(
-                performTestGenerationStub.notCalled,
-                "Generation should not start when user cancels locked descendants warning"
-            );
-            assert(
-                executeClearInternalDirIfNeededStub.notCalled,
-                "Internal directory cleanup should not run when generation is cancelled"
-            );
-        });
-
-        test("should block generation when selected scope is locked by another user", async function () {
-            testEnv.sandbox.stub(treeView as any, "getGenerationScopeLockInfo").resolves({
-                lockedDescendantNames: ["Theme A"],
-                isSelectedScopeLocked: true
-            });
-            const performTestGenerationStub = testEnv.sandbox
-                .stub(treeView as any, "performTestGeneration")
-                .resolves(true);
-
-            await treeView.generateTestCases(mockGenerationItem);
-
-            assert(
-                testEnv.vscodeMocks.showWarningMessageStub.calledOnce,
-                "Expected warning message when selected generation scope is locked"
-            );
-            assert(performTestGenerationStub.notCalled, "Generation should not start when selected scope is locked");
-            assert(
-                executeClearInternalDirIfNeededStub.notCalled,
-                "Internal directory cleanup should not run when selected scope is locked"
+                "Internal directory cleanup should run when generation starts"
             );
         });
     });

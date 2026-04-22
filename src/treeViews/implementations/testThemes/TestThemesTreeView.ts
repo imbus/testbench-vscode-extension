@@ -26,7 +26,7 @@ import { TreeViewEventTypes } from "../../utils/EventBus";
 import { PersistenceModule } from "../../features/PersistenceModule";
 import { ClickHandler } from "../../core/ClickHandler";
 import { ProjectsTreeItem } from "../projects/ProjectsTreeItem";
-import { LockerValue, normalizeLockerKey, SYSTEM_LOCK_KEY } from "./lockUtils";
+import { LockerValue, normalizeLockerKey, SYSTEM_LOCK_KEY, isTestThemeNodeVisible } from "./lockUtils";
 
 /**
  * Interface for filter storage
@@ -949,30 +949,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Resolves lock information for test generation scope using freshest available server data.
-     * @param item Selected generation root item.
-     * @param context Active generation context.
-     * @returns Lock information for generation prompt logic.
-     */
-    private async getGenerationScopeLockInfo(
-        item: TestThemesTreeItem,
-        context: GenerationContext
-    ): Promise<ScopeLockInfo> {
-        if (context.isOpenedFromCycle && context.cycleKey) {
-            return this.getScopeLockInfo(item, context.projectKey, context.cycleKey, "cycle");
-        }
-
-        if (context.tovKey) {
-            return this.getScopeLockInfo(item, context.projectKey, context.tovKey, "tov");
-        }
-
-        return {
-            lockedDescendantNames: this.getLockedDescendantNames(item),
-            isSelectedScopeLocked: item.lockedByOther
-        };
-    }
-
-    /**
      * Collects names of descendant tree items (and the item itself) that are locked by another user.
      * @param item The root tree item to check
      * @returns Array of names of locked items
@@ -1268,36 +1244,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * @returns `true` if the item should be visible, otherwise `false`.
      */
     private _isVisible(nodeData: TestStructureNode): boolean {
-        // A test theme tree item is not visible in test theme view if:
-        // - It is a "Test Case"
-        // - Execution status is "NotPlanned"
-        // - Item is locked by system (-2)
-        // - When filter diff mode is OFF and matchesFilter is false
-        if (nodeData.elementType === TestThemeItemTypes.TEST_CASE) {
-            return false;
-        }
-
-        if (nodeData.exec?.status === "NotPlanned") {
-            return false;
-        }
-
-        // Check if item is locked by system (-2)
-        // The locker can be either a string or an object with a key property
-        const lockerValue = nodeData.exec?.locker;
-        if (lockerValue !== null && lockerValue !== undefined) {
-            const lockerKey = typeof lockerValue === "string" ? lockerValue : lockerValue.key;
-            if (lockerKey === "-2") {
-                return false;
-            }
-        }
-
-        // If filter diff mode is disabled and there are filters applied,
-        // hide items that don't match the filter
-        if (!this.filterDiffMode && nodeData.base?.matchesFilter === false) {
-            return false;
-        }
-
-        return true;
+        return isTestThemeNodeVisible(nodeData, { filterDiffModeEnabled: this.filterDiffMode });
     }
 
     /**
@@ -1332,11 +1279,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 return;
             }
 
-            const canProceed = await this.confirmTestGenerationScope(item, context);
-            if (!canProceed) {
-                return;
-            }
-
             await this.executeClearInternalDirIfNeeded();
 
             const testGenerationSuccessful = await this.performTestGeneration(item, context);
@@ -1347,45 +1289,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         } catch (error) {
             this.handleTestGenerationError(error);
         }
-    }
-
-    /**
-     * Validates lock state before generation and asks for confirmation when only descendants are locked.
-     * @param item Selected generation root item.
-     * @param context Active generation context.
-     * @returns True when generation should proceed.
-     */
-    private async confirmTestGenerationScope(item: TestThemesTreeItem, context: GenerationContext): Promise<boolean> {
-        const itemLabel = item.label?.toString() || item.data.base.name || "Unknown Item";
-        const lockInfo = await this.getGenerationScopeLockInfo(item, context);
-        const lockedDescendantNames = lockInfo.lockedDescendantNames;
-
-        if (lockedDescendantNames.length === 0) {
-            return true;
-        }
-
-        if (lockInfo.isSelectedScopeLocked) {
-            const scopeLockedMessage = `Cannot generate tests for "${itemLabel}" because the selected scope is locked by another user.`;
-            vscode.window.showWarningMessage(scopeLockedMessage);
-            this.logger.warn(`[TestThemesTreeView] ${scopeLockedMessage}`);
-            return false;
-        }
-
-        const lockedList = lockedDescendantNames.join(", ");
-        const proceed = await vscode.window.showWarningMessage(
-            `Some items are locked by another user and will not be generated: ${lockedList}. Do you want to proceed with the remaining items?`,
-            "Proceed",
-            "Cancel"
-        );
-
-        if (proceed !== "Proceed") {
-            this.logger.debug(
-                `[TestThemesTreeView] Test generation cancelled by user due to locked descendants: ${lockedList}`
-            );
-            return false;
-        }
-
-        return true;
     }
 
     /**

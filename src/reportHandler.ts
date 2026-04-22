@@ -30,6 +30,7 @@ import { TestThemesTreeItem } from "./treeViews/implementations/testThemes/TestT
 import { ProjectsTreeItem } from "./treeViews/implementations/projects/ProjectsTreeItem";
 import { TreeItemBase } from "./treeViews/core/TreeItemBase";
 import { TestThemesTreeView } from "./treeViews/implementations/testThemes/TestThemesTreeView";
+import { isTestThemeNodeVisible } from "./treeViews/implementations/testThemes/lockUtils";
 
 /**
  * Summary of an import operation result, extracted from the server's ExecutionImportingSuccess response.
@@ -760,10 +761,15 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
             basedOnExecution: defaultExecutionMode === testBenchTypes.ExecutionMode.Execute,
             treeRootUID: UIDforRequest,
             suppressFilteredData: true, // Hides tree items after filtering
-            suppressNotExecutable: true, // Exclude not executable tests (including NotPlanned)
+            // We want tobe be able to generate tests for tree items that are locked by other users.
+            // But setting suppressNotExecutable to true would cause the server to classify locked items as not executable
+            // and exclude them from the report.
+            // NotPlanned and system-locked items that the server returns are removed locally after generation if they are hidden in the Test Themes view.
+            suppressNotExecutable: false,
             suppressEmptyTestThemes: false,
             filters: currentFilters
         };
+
         await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
@@ -831,7 +837,7 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
  * @param {testBenchTypes.OptionalJobIDRequestParameter} cycleStructureOptionsRequestParams Request parameters for the cycle report.
  * @param {vscode.Progress} progress The VS Code progress reporter.
  * @param {vscode.CancellationToken} cancellationToken The cancellation token.
- * @returns {Promise<void | null>} Resolves when the process completes, or null if errors occur.
+ * @returns {Promise<boolean>} True when at least one Robot Framework file was created or modified.
  */
 async function runRobotFrameworkTestGenerationProcess(
     context: vscode.ExtensionContext,
@@ -875,9 +881,26 @@ async function runRobotFrameworkTestGenerationProcess(
         return false;
     }
 
-    if (!generationResult.testsWereGenerated) {
+    // Remove `.robot` files for items that are hidden in the Test Themes tree view (NotPlanned,
+    // locked by the system or excluded by the active filter). The server-side report cannot express
+    // this filter precisely while still including items locked by other users, so prune locally.
+    const removedHiddenFiles = await pruneHiddenGeneratedRobotFiles(
+        projectKey,
+        cycleKey,
+        cycleStructureOptionsRequestParams.treeRootUID,
+        generationResult.newOrModifiedFiles
+    );
+    const remainingGeneratedFiles = generationResult.newOrModifiedFiles.filter(
+        (filePath) => !removedHiddenFiles.has(filePath)
+    );
+    const testsWereGenerated =
+        remainingGeneratedFiles.length > 0 ||
+        (generationResult.newOrModifiedFiles.length === 0 && generationResult.testsWereGenerated);
+
+    if (!testsWereGenerated) {
         const noTestsWarning =
-            "No Robot Framework test suites were generated. No test data was found for generation. This can happen when selected items are locked by another user, excluded by active Test Theme filters, or marked as not executable.";
+            "No Robot Framework test suites were generated. No test data was found for generation. " +
+            "This can happen when selected items are excluded by active Test Theme filters or marked as not executable.";
         logger.warn(`[reportHandler] ${noTestsWarning}`);
         vscode.window.showWarningMessage(noTestsWarning);
         return false;
@@ -888,6 +911,138 @@ async function runRobotFrameworkTestGenerationProcess(
 
     logger.debug("[reportHandler] Test generation process completed successfully.");
     return true;
+}
+
+/**
+ * Computes the set of `uniqueID`s that are hidden in the Test Themes tree view, restricted to the
+ * subtree rooted at `treeRootUID` (or the entire cycle if `treeRootUID` is empty/undefined).
+ * A node is considered hidden when {@link isTestThemeNodeVisible} returns `false` for it.
+ *
+ * @param projectKey Project key of the cycle.
+ * @param cycleKey Cycle key.
+ * @param treeRootUID Optional uniqueID of the subtree root.
+ * @returns Set of hidden `uniqueID`s, or `null` when the structure could not be fetched.
+ */
+async function collectHiddenTestStructureUIDs(
+    projectKey: string,
+    cycleKey: string,
+    treeRootUID: string | undefined
+): Promise<Set<string> | null> {
+    if (!connection) {
+        return null;
+    }
+    // Fetch the full structure (no server-side filtering) so we can evaluate visibility ourselves
+    // using the same predicate the Test Themes view uses.
+    const structure = await connection.fetchTestStructureOfCycleFromServer(projectKey, cycleKey, false);
+    if (!structure || !structure.nodes || structure.nodes.length === 0) {
+        return null;
+    }
+
+    const filterDiffModeEnabled = treeViews?.testThemesTree?.isFilterDiffModeEnabled?.() ?? false;
+
+    // Build parent-key -> children map for descendant traversal.
+    const childrenByParentKey = new Map<string, testBenchTypes.TestStructureNode[]>();
+    for (const node of structure.nodes) {
+        const parentKey = node.base.parentKey || "";
+        const bucket = childrenByParentKey.get(parentKey);
+        if (bucket) {
+            bucket.push(node);
+        } else {
+            childrenByParentKey.set(parentKey, [node]);
+        }
+    }
+
+    // Determine which nodes form the considered subtree.
+    let consideredNodes: testBenchTypes.TestStructureNode[];
+    if (treeRootUID) {
+        const rootNode = structure.nodes.find((node) => node.base.uniqueID === treeRootUID);
+        if (!rootNode) {
+            return null;
+        }
+        consideredNodes = [];
+        const stack: testBenchTypes.TestStructureNode[] = [rootNode];
+        while (stack.length > 0) {
+            const current = stack.pop()!;
+            consideredNodes.push(current);
+            const children = childrenByParentKey.get(current.base.key);
+            if (children) {
+                for (const child of children) {
+                    stack.push(child);
+                }
+            }
+        }
+    } else {
+        consideredNodes = structure.nodes;
+    }
+
+    const hiddenUIDs = new Set<string>();
+    for (const node of consideredNodes) {
+        if (!isTestThemeNodeVisible(node, { filterDiffModeEnabled })) {
+            hiddenUIDs.add(node.base.uniqueID);
+        }
+    }
+    return hiddenUIDs;
+}
+
+/**
+ * Reads the `Metadata UniqueID` value from a generated `.robot` file.
+ *
+ * @param filePath Absolute path to the `.robot` file.
+ * @returns The uniqueID embedded in the file, or `null` when none is present or the file is unreadable.
+ */
+async function readUniqueIdFromRobotFile(filePath: string): Promise<string | null> {
+    try {
+        const content = await fsPromise.readFile(filePath, "utf-8");
+        const match = content.match(/Metadata\s+UniqueID\s+(.+)/);
+        return match ? match[1].trim() : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Deletes generated `.robot` files whose embedded `UniqueID` corresponds to a tree item that is not
+ * visible in the Test Themes tree view (e.g. NotPlanned or system-locked).
+ *
+ * @param projectKey Project key.
+ * @param cycleKey Cycle key.
+ * @param treeRootUID UID of the generation root (empty for cycle-wide generation).
+ * @param newOrModifiedFiles Absolute paths of `.robot` files produced by the current generation run.
+ * @returns Set of file paths that were deleted.
+ */
+async function pruneHiddenGeneratedRobotFiles(
+    projectKey: string,
+    cycleKey: string,
+    treeRootUID: string | undefined,
+    newOrModifiedFiles: string[]
+): Promise<Set<string>> {
+    const removed = new Set<string>();
+    if (newOrModifiedFiles.length === 0) {
+        return removed;
+    }
+
+    const hiddenUIDs = await collectHiddenTestStructureUIDs(projectKey, cycleKey, treeRootUID);
+    if (!hiddenUIDs || hiddenUIDs.size === 0) {
+        return removed;
+    }
+
+    for (const filePath of newOrModifiedFiles) {
+        const uniqueId = await readUniqueIdFromRobotFile(filePath);
+        if (uniqueId && hiddenUIDs.has(uniqueId)) {
+            try {
+                await fsPromise.unlink(filePath);
+                removed.add(filePath);
+                logger.debug(
+                    `[reportHandler] Removed generated robot file for hidden tree item (UID=${uniqueId}): ${filePath}`
+                );
+            } catch (error) {
+                logger.warn(
+                    `[reportHandler] Failed to remove generated robot file for hidden tree item (UID=${uniqueId}) at ${filePath}: ${error instanceof Error ? error.message : String(error)}`
+                );
+            }
+        }
+    }
+    return removed;
 }
 
 /**
@@ -1535,7 +1690,7 @@ export async function startTestGenerationUsingTOV(
                 const tovStructureOptions: testBenchTypes.TovStructureOptions = {
                     treeRootUID: rootUIDToUse,
                     suppressFilteredData: true,
-                    //suppressNotExecutable: true,
+                    // Intentionally not suppressing non-executable entries to keep generation inclusive.
                     suppressEmptyTestThemes: false,
                     filters: tovFilters
                 };
@@ -1600,7 +1755,7 @@ export async function startTestGenerationUsingTOV(
 
                 if (!generationResult.testsWereGenerated) {
                     const noTestsMessage = generateTestForSpecificTestThemeTreeItem
-                        ? `No Robot Framework test suites were generated from ${rootUIDToUse} ('${treeItem.label}'). No eligible test data was found for generation. This can happen when selected items are locked by another user, excluded by active Test Theme filters, or marked as not executable.`
+                        ? `No Robot Framework test suites were generated from ${rootUIDToUse} ('${treeItem.label}'). No eligible test data was found for generation. This can happen when selected items are excluded by active Test Theme filters or marked as not executable.`
                         : `No Robot Framework test suites were generated from Test Object Version '${treeItem.label}'. The report may not contain test data.`;
                     logger.warn(`[reportHandler] ${noTestsMessage}`);
                     vscode.window.showWarningMessage(noTestsMessage);

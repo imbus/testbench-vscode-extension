@@ -22,6 +22,8 @@ export interface TestGenerationResult {
     commandSucceeded: boolean;
     /** Whether any .robot files were actually created or modified in the output directory */
     testsWereGenerated: boolean;
+    /** Absolute paths of `.robot` files that were created or modified by this generation run */
+    newOrModifiedFiles: string[];
 }
 
 interface RobotFileSnapshot {
@@ -69,31 +71,28 @@ async function collectRobotFileTimestamps(dir: string): Promise<Map<string, Robo
 }
 
 /**
- * Checks if any .robot files were created or modified by comparing before/after snapshots.
- *
- * @param {Map<string, RobotFileSnapshot>} before Snapshot collected before generation, keyed by absolute file path.
- * @param {Map<string, RobotFileSnapshot>} after Snapshot collected after generation, keyed by absolute file path.
- * @returns {boolean} `true` if at least one `.robot` file is new or has changed metadata.
+ * Computes the absolute paths of `.robot` files that were created or modified between two snapshots.
+ * @param before Map of file paths to metadata before generation.
+ * @param after Map of file paths to metadata after generation.
+ * @return Array of absolute file paths that are new or have different metadata, indicating they were created or modified.
  */
-function wereRobotFilesCreatedOrModified(
+function collectNewOrModifiedRobotFiles(
     before: Map<string, RobotFileSnapshot>,
     after: Map<string, RobotFileSnapshot>
-): boolean {
+): string[] {
+    const changed: string[] = [];
     for (const [filePath, currentSnapshot] of after) {
         const previousSnapshot = before.get(filePath);
-        if (previousSnapshot === undefined) {
-            return true;
-        }
-
         if (
+            previousSnapshot === undefined ||
             currentSnapshot.mtimeMs !== previousSnapshot.mtimeMs ||
             currentSnapshot.ctimeMs !== previousSnapshot.ctimeMs ||
             currentSnapshot.size !== previousSnapshot.size
         ) {
-            return true;
+            changed.push(filePath);
         }
     }
-    return false;
+    return changed;
 }
 
 /**
@@ -180,14 +179,16 @@ export class tb2robotLib {
         });
 
         if (!isGenerateTestsCommandSuccessful) {
-            return { commandSucceeded: false, testsWereGenerated: false };
+            return { commandSucceeded: false, testsWereGenerated: false, newOrModifiedFiles: [] };
         }
 
         // Check if any .robot files were actually created or modified.
         let testsWereGenerated = true; // Default true when we cannot verify.
+        let newOrModifiedFiles: string[] = [];
         if (outputDirFullPath) {
             const robotFilesAfter = await collectRobotFileTimestamps(outputDirFullPath);
-            testsWereGenerated = wereRobotFilesCreatedOrModified(robotFilesBefore, robotFilesAfter);
+            newOrModifiedFiles = collectNewOrModifiedRobotFiles(robotFilesBefore, robotFilesAfter);
+            testsWereGenerated = newOrModifiedFiles.length > 0;
             if (!testsWereGenerated) {
                 logger.warn(
                     "[testbench2robotframeworkLib] Test generation command succeeded but no .robot files were created or modified in the output directory."
@@ -195,7 +196,7 @@ export class tb2robotLib {
             }
         }
 
-        return { commandSucceeded: true, testsWereGenerated };
+        return { commandSucceeded: true, testsWereGenerated, newOrModifiedFiles };
     }
 
     /**

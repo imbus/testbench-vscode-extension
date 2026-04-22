@@ -1,10 +1,18 @@
 /**
- * Shared lock utilities for test theme tree view/item logic.
+ * @file lockUtils.ts
+ * @description Shared lock and visibility utilities for test theme tree view/item logic.
  */
+
+import { TestThemeItemTypes } from "../../../constants";
+import { TestStructureNode } from "../../../testBenchTypes";
 
 export type LockerValue = string | { key: string; name: string } | null | undefined;
 
 export const SYSTEM_LOCK_KEY = "-2";
+
+export interface TestThemeVisibilityOptions {
+    filterDiffModeEnabled?: boolean;
+}
 
 /**
  * Normalizes locker value into a comparable locker key.
@@ -28,4 +36,37 @@ export function normalizeLockerKey(locker: LockerValue): string | null {
 
     const normalized = String(rawKey).trim();
     return normalized === "" ? null : normalized;
+}
+
+/**
+ * Evaluates whether a test theme node is visible according to Test Themes view rules.
+ *
+ * @param node Structure node to evaluate.
+ * @param options Visibility evaluation options.
+ * @returns True when the node is visible.
+ */
+export function isTestThemeNodeVisible(
+    node: Pick<TestStructureNode, "elementType" | "exec" | "base">,
+    options: TestThemeVisibilityOptions = {}
+): boolean {
+    const { filterDiffModeEnabled = false } = options;
+
+    if (node.elementType === TestThemeItemTypes.TEST_CASE) {
+        return false;
+    }
+
+    if (node.exec?.status === "NotPlanned") {
+        return false;
+    }
+
+    const lockerKey = normalizeLockerKey(node.exec?.locker);
+    if (lockerKey === SYSTEM_LOCK_KEY) {
+        return false;
+    }
+
+    if (!filterDiffModeEnabled && node.base?.matchesFilter === false) {
+        return false;
+    }
+
+    return true;
 }
