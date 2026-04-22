@@ -1138,13 +1138,24 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
                 undefined,
                 cancellationToken
             );
-
             if (!importJobStatus || isImportJobFailed(importJobStatus)) {
                 const importJobFailedMessageForUser: string = "Import job could not be completed.";
                 vscode.window.showErrorMessage(importJobFailedMessageForUser);
                 return null;
             } else if (!isImportJobCompletedSuccessfully(importJobStatus)) {
                 logger.warn("[reportHandler] Import job finished polling but status is unknown.", importJobStatus);
+            }
+            let importError = false;
+            for (const tcs of importJobStatus?.completion?.result?.ExecutionImportingSuccess?.testCaseSets ?? []) {
+                const errorMessage = tcs?.error?.message;
+                const tcsName = tcs?.name ?? "Unknown TestCaseSet";
+                if (errorMessage && typeof errorMessage === "string") {
+                    vscode.window.showErrorMessage(`Import of TestCaseSet '${tcsName}' failed: ${errorMessage}`);
+                }
+                importError = true;
+            }
+            if (importError) {
+                return null;
             }
         } catch (error: any) {
             logger.error(
@@ -1240,7 +1251,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     increment: 30
                 });
 
-                await importReportWithResultsToTestbenchWithSpecificUID(
+                const importResult = await importReportWithResultsToTestbenchWithSpecificUID(
                     connection!,
                     resolvedTargetProjectKey,
                     resolvedTargetCycleKey,
@@ -1248,6 +1259,9 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     resolvedReportRootUID,
                     cancellationToken
                 );
+                if (importResult === null) {
+                    return false;
+                }
 
                 if (cancellationToken.isCancellationRequested) {
                     logger.debug("[reportHandler] Fetch and import process cancelled.");
