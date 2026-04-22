@@ -605,9 +605,9 @@ export async function openTestBenchSidebar(driver?: WebDriver): Promise<void> {
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
-            // Do a proactive overlay dismissal only once.
-            // On VS Code versions without this overlay, this stays a fast no-op.
-            if (driver && attempt === 0) {
+            // Proactively dismiss onboarding/sign-in overlay on each retry.
+            // This remains a fast no-op on VS Code versions where the overlay is absent.
+            if (driver) {
                 await dismissStartupSignInOverlay(driver);
             }
 
@@ -698,6 +698,9 @@ export async function openTestBenchSidebar(driver?: WebDriver): Promise<void> {
                         "Sidebar",
                         `Stale element detected on control, will retry (attempt ${attempt + 1}/${maxRetries})`
                     );
+                    if (driver) {
+                        await dismissStartupSignInOverlay(driver);
+                    }
                     lastError = error as Error;
                     break; // Break inner loop to retry outer loop
                 }

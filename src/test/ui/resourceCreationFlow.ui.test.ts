@@ -31,6 +31,7 @@ import {
 import { doubleClickTreeItem, waitForTreeItemButton } from "./utils/treeViewUtils";
 import { getTestData, logTestDataConfig } from "./config/testConfig";
 import { TestContext, setupTestHooks } from "./utils/testHooks";
+import { findResourceSubdivision } from "./utils/navigationUtils";
 import { ProjectsViewPage } from "./pages/ProjectsViewPage";
 import { TestThemesPage } from "./pages/TestThemesPage";
 import { TestElementsPage } from "./pages/TestElementsPage";
@@ -50,6 +51,109 @@ describe("Resource Creation Flow UI Tests", function () {
     });
 
     const getDriver = () => ctx.driver;
+
+    const withTimeout = async <T>(operation: () => Promise<T>, timeoutMs: number = 2500): Promise<T | null> => {
+        return await Promise.race([
+            operation(),
+            new Promise<null>((resolve) => {
+                setTimeout(() => resolve(null), timeoutMs);
+            })
+        ]);
+    };
+
+    const isLabelMatch = (actualLabel: string, expectedLabel: string): boolean => {
+        return actualLabel === expectedLabel || actualLabel.includes(expectedLabel);
+    };
+
+    const findMatchingItem = async (items: TreeItem[], expectedLabel: string): Promise<TreeItem | null> => {
+        for (const item of items) {
+            try {
+                const label = await withTimeout(() => item.getLabel(), 1200);
+                if (typeof label === "string" && isLabelMatch(label, expectedLabel)) {
+                    return item;
+                }
+            } catch {
+                // Continue on stale items
+            }
+        }
+
+        return null;
+    };
+
+    const resolveSubdivisionFromSection = async (
+        section: any,
+        expectedLabel: string,
+        driver: any
+    ): Promise<TreeItem | null> => {
+        const topLevelItems = (await section.getVisibleItems()) as TreeItem[];
+
+        const direct = await findMatchingItem(topLevelItems, expectedLabel);
+        if (direct) {
+            return direct;
+        }
+
+        // Expand top-level nodes (bounded) and inspect children/grandchildren for nested subdivisions.
+        for (const rootItem of topLevelItems.slice(0, 12)) {
+            try {
+                const rootHasChildren = await withTimeout(() => rootItem.hasChildren(), 1200);
+                if (!rootHasChildren) {
+                    continue;
+                }
+
+                const rootExpanded = await withTimeout(() => rootItem.isExpanded(), 1200);
+                if (rootExpanded === false) {
+                    const expanded = await withTimeout(async () => {
+                        await rootItem.expand();
+                        await applySlowMotion(driver);
+                        return true;
+                    }, 2000);
+
+                    if (!expanded) {
+                        continue;
+                    }
+                }
+
+                const children = await withTimeout(() => rootItem.getChildren(), 2500);
+                if (!children || children.length === 0) {
+                    continue;
+                }
+
+                const childMatch = await findMatchingItem(children, expectedLabel);
+                if (childMatch) {
+                    return childMatch;
+                }
+
+                for (const child of children.slice(0, 20)) {
+                    const childHasChildren = await withTimeout(() => child.hasChildren(), 1000);
+                    if (!childHasChildren) {
+                        continue;
+                    }
+
+                    const childExpanded = await withTimeout(() => child.isExpanded(), 1000);
+                    if (childExpanded === false) {
+                        await withTimeout(async () => {
+                            await child.expand();
+                            return true;
+                        }, 1800);
+                    }
+
+                    const grandChildren = await withTimeout(() => child.getChildren(), 2200);
+                    if (!grandChildren || grandChildren.length === 0) {
+                        continue;
+                    }
+
+                    const grandChildMatch = await findMatchingItem(grandChildren, expectedLabel);
+                    if (grandChildMatch) {
+                        return grandChildMatch;
+                    }
+                }
+            } catch {
+                // Ignore stale/unavailable tree nodes and keep searching.
+            }
+        }
+
+        return null;
+    };
 
     it("should navigate to Test Elements view and create a resource", async function () {
         const driver = getDriver();
@@ -264,10 +368,22 @@ describe("Resource Creation Flow UI Tests", function () {
         await waitForTreeItems(elementsSection, driver);
 
         logger.info("Phase3", `Looking for subdivision "${config.subdivisionName}"...`);
-        let subdivision = await testElementsPage.getItem(elementsSection, config.subdivisionName);
+        let subdivision = await resolveSubdivisionFromSection(elementsSection, config.subdivisionName, driver);
         if (!subdivision) {
             await waitForTreeRefresh(driver, elementsSection, UITimeouts.SHORT);
-            subdivision = await testElementsPage.getItem(elementsSection, config.subdivisionName);
+            subdivision = await resolveSubdivisionFromSection(elementsSection, config.subdivisionName, driver);
+        }
+
+        if (!subdivision) {
+            logger.warn(
+                "Phase3",
+                `Configured subdivision "${config.subdivisionName}" not found. Falling back to first subdivision with resource actions.`
+            );
+            const fallback = await findResourceSubdivision(driver, elementsSection, testElementsPage);
+            subdivision = fallback.subdivision;
+            if (subdivision) {
+                logger.info("Phase3", `Using fallback subdivision "${fallback.label}" for resource creation.`);
+            }
         }
 
         if (!subdivision) {

@@ -37,8 +37,104 @@ export class TestElementsPage extends BasePage {
      */
     public async getItem(section: ViewSection, label: string): Promise<TreeItem | null> {
         const items = await section.getVisibleItems();
-        const found = await this.findTreeItem(items as TreeItem[], label);
-        return found || null;
+        const found = await this.findInItems(items as TreeItem[], label);
+        if (found) {
+            return found;
+        }
+
+        // Fallback: expand collapsed parents to find nested items that are not yet materialized.
+        return await this.findTreeItemWithExpansion(items as TreeItem[], label);
+    }
+
+    private async findInItems(items: TreeItem[], targetLabel: string): Promise<TreeItem | null> {
+        for (const item of items) {
+            try {
+                const label = await item.getLabel();
+                if (label === targetLabel || label.includes(targetLabel)) {
+                    return item;
+                }
+            } catch {
+                // Ignore stale items and continue.
+            }
+        }
+
+        return null;
+    }
+
+    private async withTimeout<T>(operation: () => Promise<T>, timeoutMs: number = 2500): Promise<T | null> {
+        return await Promise.race([
+            operation(),
+            new Promise<null>((resolve) => {
+                setTimeout(() => resolve(null), timeoutMs);
+            })
+        ]);
+    }
+
+    /**
+     * Searches with bounded expansion depth to discover nested items without traversing huge trees.
+     */
+    private async findTreeItemWithExpansion(items: TreeItem[], targetLabel: string): Promise<TreeItem | null> {
+        const maxDepth = 2;
+        return await this.findTreeItemWithExpansionAtDepth(items, targetLabel, 0, maxDepth);
+    }
+
+    private async findTreeItemWithExpansionAtDepth(
+        items: TreeItem[],
+        targetLabel: string,
+        currentDepth: number,
+        maxDepth: number
+    ): Promise<TreeItem | null> {
+        for (const item of items) {
+            try {
+                const label = await item.getLabel();
+                if (label === targetLabel || label.includes(targetLabel)) {
+                    return item;
+                }
+
+                if (currentDepth >= maxDepth) {
+                    continue;
+                }
+
+                const hasChildren = await this.withTimeout(() => item.hasChildren());
+                if (!hasChildren) {
+                    continue;
+                }
+
+                const isExpanded = await this.withTimeout(() => item.isExpanded());
+                if (isExpanded === null) {
+                    continue;
+                }
+
+                if (!isExpanded) {
+                    const expanded = await this.withTimeout(async () => {
+                        await item.expand();
+                        return true;
+                    });
+                    if (!expanded) {
+                        continue;
+                    }
+                }
+
+                const children = await this.withTimeout(() => item.getChildren());
+                if (!children || children.length === 0) {
+                    continue;
+                }
+
+                const found = await this.findTreeItemWithExpansionAtDepth(
+                    children,
+                    targetLabel,
+                    currentDepth + 1,
+                    maxDepth
+                );
+                if (found) {
+                    return found;
+                }
+            } catch {
+                // Ignore stale/missing tree items and continue searching.
+            }
+        }
+
+        return null;
     }
 
     /**
