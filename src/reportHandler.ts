@@ -328,8 +328,10 @@ export async function pollJobStatus(
                     return null;
                 }
             }
-        } catch (error) {
+        } catch (error: any) {
             logger.error(`[reportHandler] Failed to get job status at polling attempt ${pollingAttemptAmount}:`, error);
+            vscode.window.showErrorMessage(`Failed to get job status from the TestBench server: ${error.message}`);
+            return null; // Abort polling on server error since getJobStatus already retries 3 times
         }
 
         // Check if the maximum polling time has been exceeded.
