@@ -48,7 +48,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     private dataProvider: TestThemesDataProvider;
     private disposables: vscode.Disposable[] = [];
     public testCaseSetClickHandler: ClickHandler<TestThemesTreeItem>;
-
     private currentProjectKey: string | null = null;
     private currentProjectName: string | null = null;
     private currentTovKey: string | null = null;
@@ -714,8 +713,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 this.extensionContext.workspaceState.update(lastImportedItemKey, item.id);
 
                 if (!ALLOW_PERSISTENT_IMPORT_BUTTON) {
-                    // Update: Since import is now item-scoped rather than root-scoped,
-                    // we unmark only the successfully imported item, even if it is part of a hierarchy.
+                    // Import is item-scoped rather than root-scoped,
+                    // unmark only the successfully imported item, even if it is part of a hierarchy.
                     // If it is a root, it unmarks the root and clears the hierarchy state.
                     markingModule.unmarkItemByID(item.id!);
                 } else {
@@ -2264,5 +2263,5 @@ export async function displayTestThemeTreeView(): Promise<void> {
     if (!treeViews) {
         return;
     }
-    vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_THEMES_TREE, true);
+    await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_THEMES_TREE, true);
 }
