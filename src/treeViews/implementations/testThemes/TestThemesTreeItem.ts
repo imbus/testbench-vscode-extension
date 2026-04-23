@@ -278,10 +278,6 @@ export class TestThemesTreeItem extends TreeItemBase {
      * @returns A lock summary line when locked by another user, otherwise null.
      */
     private buildLockSummary(): string | null {
-        if (!this.lockedByOther) {
-            return null;
-        }
-
         const currentUserKey = userSessionManager.getCurrentUserId();
         const groupedByOwner = new Map<string, { displayName: string; scopes: string[] }>();
         const lockEntries: Array<{ scope: string; locker: LockerValue }> = [
@@ -312,7 +308,7 @@ export class TestThemesTreeItem extends TreeItemBase {
         }
 
         if (groupedByOwner.size === 0) {
-            return "Locked by another user";
+            return null;
         }
 
         const ownerDetails = Array.from(groupedByOwner.values()).map((ownerInfo) => {

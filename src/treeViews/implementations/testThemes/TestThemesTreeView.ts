@@ -1774,29 +1774,21 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Checks whether any locker field in a TestTheme tree item is owned by another user.
+     * Checks whether any execution-relevant locker field in a TestTheme tree item is owned by another user.
      * @param data Tree item data containing spec/aut/exec lockers.
-     * @returns True when any layer is locked by another user.
+     * @returns True when the execution or automation layer is locked by another user.
      */
     private isLockedByOtherUser(data: TestThemeData): boolean {
-        return (
-            this.isLockerLockedByOtherUser(data.spec?.locker) ||
-            this.isLockerLockedByOtherUser(data.aut?.locker) ||
-            this.isLockerLockedByOtherUser(data.exec?.locker)
-        );
+        return this.isLockerLockedByOtherUser(data.aut?.locker) || this.isLockerLockedByOtherUser(data.exec?.locker);
     }
 
     /**
-     * Checks whether any locker field in a server node is owned by another user.
+     * Checks whether any execution-relevant locker field in a server node is owned by another user.
      * @param node Server node data containing spec/aut/exec lockers.
-     * @returns True when any layer is locked by another user.
+     * @returns True when the execution or automation layer is locked by another user.
      */
     private isNodeLockedByOtherUser(node: TestStructureNode): boolean {
-        return (
-            this.isLockerLockedByOtherUser(node.spec?.locker) ||
-            this.isLockerLockedByOtherUser(node.aut?.locker) ||
-            this.isLockerLockedByOtherUser(node.exec?.locker)
-        );
+        return this.isLockerLockedByOtherUser(node.aut?.locker) || this.isLockerLockedByOtherUser(node.exec?.locker);
     }
 
     /**
