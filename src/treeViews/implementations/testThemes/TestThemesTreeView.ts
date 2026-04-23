@@ -671,6 +671,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             if (lastImportedItem === item.id) {
                 const result = await vscode.window.showWarningMessage(
                     `You have already imported test results for "${itemLabel}". Do you want to import it again?`,
+                    { modal: true },
                     "Yes, Import Again",
                     "Cancel"
                 );
@@ -725,6 +726,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 // Some descendants are locked
                 const proceed = await vscode.window.showWarningMessage(
                     `Some items are locked by another user and will not be imported: ${lockedList}. Do you want to proceed with the remaining items?`,
+                    { modal: true },
                     "Proceed",
                     "Cancel"
                 );
@@ -1374,6 +1376,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         const lockedList = lockedDescendantNames.join(", ");
         const proceed = await vscode.window.showWarningMessage(
             `Some items are locked by another user and will not be generated: ${lockedList}. Do you want to proceed with the remaining items?`,
+            { modal: true },
             "Proceed",
             "Cancel"
         );
