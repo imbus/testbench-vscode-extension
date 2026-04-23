@@ -12,6 +12,7 @@ import { getExtensionSetting } from "../../../configuration";
 import { ConfigKeys } from "../../../constants";
 import * as vscode from "vscode";
 import { ResourceFileService } from "./ResourceFileService";
+import { ensureLanguageServerReady } from "../../../languageServer/server";
 
 interface RawTestElement {
     id: string;
@@ -353,7 +354,17 @@ export class TestElementsDataProvider {
         const resourceDirectoryMarker =
             getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER) || "";
 
+        // Ensure language server is ready before attempting to call LS commands
         let lsCommandUnavailable = false;
+        if (resourceDirectoryMarker) {
+            lsCommandUnavailable = !(await ensureLanguageServerReady());
+            if (lsCommandUnavailable) {
+                this.logger.warn(
+                    "[TestElementsDataProvider] Language server not ready. " +
+                        "Subdivision folders that only exist for organizational purposes will not show file system actions."
+                );
+            }
+        }
 
         /**
          * Checks if a folder should be marked as virtual based on marker position.
@@ -382,10 +393,12 @@ export class TestElementsDataProvider {
                     return folderDepth <= markerPosition + 1;
                 }
                 return true; // Entire hierarchy is virtual
-            } catch {
+            } catch (error) {
                 lsCommandUnavailable = true;
                 this.logger.warn(
-                    "[TestElementsDataProvider] LS command unavailable. Marking ancestor folders of resources as virtual."
+                    "[TestElementsDataProvider] Failed to determine folder structure from language server. " +
+                        "Subdivision folders that only exist for organizational purposes will not show file system actions.",
+                    error
                 );
                 return true;
             }
@@ -509,11 +522,11 @@ export class TestElementsDataProvider {
 
     /**
      * Generates a unique element ID for a test element.
-     * @param raw The raw test element data.
+     * @param rawTestElementData The raw test element data.
      * @returns A unique string identifier for the element.
      */
-    private _generateElementId(raw: RawTestElement): string {
-        const elementType = this._getTestElementType(raw);
+    private _generateElementId(rawTestElementData: RawTestElement): string {
+        const elementType = this._getTestElementType(rawTestElementData);
         switch (elementType) {
             case TestElementType.Subdivision:
             case TestElementType.Condition:
@@ -524,28 +537,34 @@ export class TestElementsDataProvider {
                     [TestElementType.DataType]: "DataType_key"
                 };
                 const keyField = keyFieldMap[elementType];
-                const specificKey = raw[keyField as keyof RawTestElement] as { serial: string } | undefined;
-                if (specificKey?.serial && raw.uniqueID) {
-                    return `${specificKey.serial}_${raw.uniqueID}`;
+                const testElementKey = rawTestElementData[keyField as keyof RawTestElement] as
+                    | { serial: string }
+                    | undefined;
+                if (testElementKey?.serial && rawTestElementData.uniqueID) {
+                    return `${testElementKey.serial}_${rawTestElementData.uniqueID}`;
                 }
                 this.logger.warn(
-                    `[TestElementsDataProvider] Test element tree item with UID ${raw.uniqueID} and type ${elementType} is missing specific key serial.`
+                    `[TestElementsDataProvider] Element "${rawTestElementData.name}" (type: ${elementType}) has incomplete identification data: ` +
+                        `uniqueID=${rawTestElementData.uniqueID || "<empty>"}, ${keyField}.serial=${testElementKey?.serial || "<empty>"}. ` +
+                        `Using fallback ID, the element may not appear in the correct position in the tree.`
                 );
-                return raw.uniqueID || `fallback_${Date.now()}_${Math.random()}`;
+                return rawTestElementData.uniqueID || `fallback_${Date.now()}_${Math.random()}`;
             }
             case TestElementType.Keyword: {
                 // Check both Keyword_key and Interaction_key (API v1)
-                const keywordKey = raw.Keyword_key || raw.Interaction_key;
-                if (keywordKey?.serial && raw.uniqueID) {
-                    return `${keywordKey.serial}_${raw.uniqueID}`;
+                const keywordKey = rawTestElementData.Keyword_key || rawTestElementData.Interaction_key;
+                if (keywordKey?.serial && rawTestElementData.uniqueID) {
+                    return `${keywordKey.serial}_${rawTestElementData.uniqueID}`;
                 }
                 this.logger.warn(
-                    `[TestElementsDataProvider] Test element tree item with UID ${raw.uniqueID} and type ${elementType} is missing specific key serial.`
+                    `[TestElementsDataProvider] Element "${rawTestElementData.name}" (type: ${elementType}) has incomplete identification data: ` +
+                        `uniqueID=${rawTestElementData.uniqueID || "<empty>"}, keyword key serial=${keywordKey?.serial || "<empty>"}. ` +
+                        `Using fallback ID; the element may not appear in the correct position in the tree.`
                 );
-                return raw.uniqueID || `fallback_${Date.now()}_${Math.random()}`;
+                return rawTestElementData.uniqueID || `fallback_${Date.now()}_${Math.random()}`;
             }
             default:
-                return raw.uniqueID || `fallback_other_${Date.now()}_${Math.random()}`;
+                return rawTestElementData.uniqueID || `fallback_other_${Date.now()}_${Math.random()}`;
         }
     }
 

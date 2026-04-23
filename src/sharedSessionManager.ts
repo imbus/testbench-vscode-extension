@@ -19,6 +19,7 @@ interface SharedSessionData {
     createdAt: number;
     lastValidated: number;
     isInsecure: boolean;
+    serverVersion?: string;
 }
 
 const SHARED_SESSION_KEY = "testbenchExtension.sharedSession";
@@ -48,7 +49,8 @@ export class SharedSessionManager {
         serverName: string,
         portNumber: number,
         username: string,
-        isInsecure: boolean
+        isInsecure: boolean,
+        serverVersion: string = ""
     ): Promise<void> {
         const sessionData: SharedSessionData = {
             sessionId,
@@ -60,6 +62,7 @@ export class SharedSessionManager {
             portNumber,
             username,
             isInsecure,
+            serverVersion,
             createdAt: Date.now(),
             lastValidated: Date.now()
         };

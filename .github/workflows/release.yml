@@ -18,13 +18,13 @@ jobs:
         steps:
             # Step 1: Checkout the source code from the repository
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
               with:
                   fetch-depth: 0 # Important for semantic-release to analyze all commits
 
             # Step 2: Set up Node.js environment with the specified version
             - name: Set up Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v6
               with:
                   # Use the latest LTS Node.js version
                   node-version: "lts/*"
@@ -58,12 +58,10 @@ jobs:
             - name: Generate requirements.txt for Python
               id: pip-compile
               run: pip-compile --resolver=backtracking --output-file=requirements.txt pyproject.toml
-              continue-on-error: true
 
             - name: Bundle Python Dependencies using Nox
               id: nox-bundle
               run: python -m nox --session bundle_dependencies
-              continue-on-error: true
 
             # Step 4: Install VS Code Extension Manager
             - name: Install VSCE

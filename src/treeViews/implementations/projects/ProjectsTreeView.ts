@@ -4,7 +4,7 @@
  */
 
 import * as vscode from "vscode";
-import { TreeViewBase } from "../../core/TreeViewBase";
+import { RefreshOptions, TreeViewBase } from "../../core/TreeViewBase";
 import { TreeItemBase } from "../../core/TreeItemBase";
 import { ProjectData, ProjectsTreeItem } from "./ProjectsTreeItem";
 import { TreeViewConfig } from "../../core/TreeViewConfig";
@@ -59,16 +59,6 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
      * Registers all command handlers for the projects tree view
      */
     private registerCommands(): void {
-        this.disposables.push(
-            vscode.commands.registerCommand(`${this.config.id}.makeRoot`, async (item: ProjectsTreeItem) =>
-                this.makeRoot(item)
-            )
-        );
-
-        this.disposables.push(
-            vscode.commands.registerCommand(`${this.config.id}.resetCustomRoot`, async () => this.resetCustomRoot())
-        );
-
         this.disposables.push(vscode.commands.registerCommand(`${this.config.id}.refresh`, () => this.refresh()));
 
         this.disposables.push(
@@ -103,7 +93,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
 
     /**
      * Registers event handlers for the projects tree view.
-     * Sets up listeners for project selection, data updates, and custom root events with debouncing
+     * Sets up listeners for project selection, data updates with debouncing
      */
     private registerEventHandlers(): void {
         // Listen for project selection events
@@ -398,6 +388,10 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
             return null;
         }
 
+        // Clear old tree items before switching views
+        treeViews.testThemesTree.prepareForContextSwitchLoading();
+        treeViews.testElementsTree.prepareForContextSwitchLoading();
+
         // Display tree views first and then load data for responsive UI
         await displayTestThemeTreeView();
         await displayTestElementsTreeView();
@@ -678,12 +672,16 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
      * @param item Optional specific item to refresh
      * @param options Optional refresh options
      */
-    public override refresh(item?: ProjectsTreeItem, options?: { immediate?: boolean }): void {
+    public override refresh(item?: ProjectsTreeItem, options?: RefreshOptions): void {
         this.logger.debug(`[ProjectsTreeView] Refreshing projects tree view${item ? ` for item: ${item.label}` : ""}`);
 
         if (item) {
             super.refresh(item, options);
             return;
+        }
+
+        if (!options?.skipDataReload) {
+            this.stateManager.setState({ error: null, loading: true });
         }
 
         super.refresh(undefined, options);

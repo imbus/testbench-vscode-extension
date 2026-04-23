@@ -15,7 +15,17 @@ export class PersistenceModule implements TreeViewModule {
     private context!: TreeViewContext;
     private saveTimeout: NodeJS.Timeout | null = null;
     private readonly STORAGE_KEY_PREFIX = "treeView.state.";
-    private readonly STORAGE_VERSION = 1;
+    /**
+     * Bump this version when a code change makes old persisted state incompatible.
+     *
+     * VS Code stores workspaceState in its own database
+     * (%APPDATA%/Code/User/workspaceStorage/).
+     * Reinstalling the extension does not clear it, only a version bump (or the
+     * clearAllExtensionData command) discards stale state.
+     * Workspace storage of Extension Development Host (F5) is fresh,
+     * but an installed vsix version will use old state.
+     */
+    private readonly STORAGE_VERSION = 2;
     private readonly SAVE_DEBOUNCE_MS = 100; // Save quickly but avoid excessive writes
     private isSaving = false;
 
@@ -199,10 +209,6 @@ export class PersistenceModule implements TreeViewModule {
             lastRefresh: state.lastRefresh
         };
 
-        if (persistenceConfig.includeCustomRoot && state.customRoot) {
-            dataToSave.customRoot = state.customRoot;
-        }
-
         if (persistenceConfig.includeExpansion && state.expansion) {
             dataToSave.expansion = {
                 expandedItems: Array.from(state.expansion.expandedItems),
@@ -251,22 +257,19 @@ export class PersistenceModule implements TreeViewModule {
         }
 
         if (data.version && data.version !== this.STORAGE_VERSION) {
-            this.context.logger.warn(
+            this.context.logger.info(
                 this.context.buildLogPrefix(
                     "PersistenceModule",
-                    `Storage version mismatch: expected ${this.STORAGE_VERSION}, got ${data.version}`
+                    `Storage version mismatch: expected ${this.STORAGE_VERSION}, got ${data.version}. Discarding old state.`
                 )
             );
+            return null;
         }
 
         const state: Partial<TreeViewState> = {};
 
         if (data.lastRefresh) {
             state.lastRefresh = data.lastRefresh;
-        }
-
-        if (data.customRoot) {
-            state.customRoot = data.customRoot;
         }
 
         if (data.expansion) {

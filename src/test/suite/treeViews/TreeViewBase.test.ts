@@ -5,6 +5,7 @@
 
 import * as assert from "assert";
 import * as vscode from "vscode";
+import * as sinon from "sinon";
 import { TreeViewBase } from "../../../treeViews/core/TreeViewBase";
 import { TreeItemBase } from "../../../treeViews/core/TreeItemBase";
 import { TreeViewConfig } from "../../../treeViews/core/TreeViewConfig";
@@ -155,7 +156,6 @@ suite("TreeViewBase", function () {
             title: "Test Tree View",
             contextValue: "testTreeView",
             features: {
-                customRoot: true,
                 marking: true,
                 persistence: true,
                 filtering: true,
@@ -289,7 +289,6 @@ suite("TreeViewBase", function () {
             const modules = treeView.getModules();
 
             // Check that expected modules are registered
-            assert.ok(modules.has("customRoot"));
             assert.ok(modules.has("marking"));
             assert.ok(modules.has("persistence"));
             assert.ok(modules.has("expansion"));
@@ -300,12 +299,9 @@ suite("TreeViewBase", function () {
         test("should get module by ID", async () => {
             await treeView.initialize();
 
-            const customRootModule = treeView.getModule("customRoot");
             const markingModule = treeView.getModule("marking");
 
-            assert.ok(customRootModule);
             assert.ok(markingModule);
-            assert.strictEqual(customRootModule!.id, "customRoot");
             assert.strictEqual(markingModule!.id, "marking");
         });
 
@@ -556,36 +552,6 @@ suite("TreeViewBase", function () {
         });
     });
 
-    suite("Custom Root Management", () => {
-        test("should make item root", async () => {
-            await treeView.initialize();
-
-            const item = new TestTreeItem(
-                "Test",
-                "Description",
-                "test",
-                vscode.TreeItemCollapsibleState.None,
-                mockContext
-            );
-
-            treeView.makeRoot(item);
-
-            // Should delegate to custom root module
-            const customRootModule = treeView.getModule("customRoot");
-            assert.ok(customRootModule);
-        });
-
-        test("should reset custom root", async () => {
-            await treeView.initialize();
-
-            treeView.resetCustomRoot();
-
-            // Should delegate to custom root module
-            const customRootModule = treeView.getModule("customRoot");
-            assert.ok(customRootModule);
-        });
-    });
-
     suite("Tree Clearing", () => {
         test("should clear tree", async () => {
             await treeView.initialize();
@@ -626,6 +592,78 @@ suite("TreeViewBase", function () {
 
             assert.ok(clearSpy.called);
         });
+
+        test("should prepare context switch loading with UI state preserved by default", async () => {
+            await treeView.initialize();
+
+            const mockItem = new TestTreeItem(
+                "TestLabel",
+                "Description",
+                "testContextValue",
+                vscode.TreeItemCollapsibleState.None,
+                mockContext
+            );
+            treeView.setRootItems([mockItem]);
+
+            const stateManager = treeView.getProtectedStateManager();
+            stateManager.setError(new Error("existing error"));
+
+            const clearTreeSpy = testEnv.sandbox.spy(treeView, "clearTree");
+            const clearStateSpy = testEnv.sandbox.spy(stateManager, "clear");
+            const setStateSpy = testEnv.sandbox.spy(stateManager, "setState");
+
+            treeView.prepareForContextSwitchLoading();
+
+            assert.ok(clearTreeSpy.notCalled, "clearTree should not be called when preserving UI state");
+            assert.ok(clearStateSpy.notCalled, "stateManager.clear should not be called when preserving UI state");
+            assert.strictEqual(treeView.getRootItemsArray().length, 0);
+            assert.strictEqual(stateManager.getState().loading, true);
+            assert.strictEqual(stateManager.getState().error, null);
+            // Verify single state transition for loading + error clear
+            assert.ok(
+                setStateSpy.calledWith(sinon.match({ error: null, loading: true })),
+                "Should set loading and clear error in a single setState call"
+            );
+        });
+
+        test("should prepare context switch loading with full clear when preserveUiState is false", async () => {
+            await treeView.initialize();
+
+            const mockItem = new TestTreeItem(
+                "Test",
+                "Description",
+                "test",
+                vscode.TreeItemCollapsibleState.None,
+                mockContext
+            );
+            treeView.setRootItems([mockItem]);
+
+            const stateManager = treeView.getProtectedStateManager();
+            const clearTreeSpy = testEnv.sandbox.spy(treeView, "clearTree");
+
+            treeView.prepareForContextSwitchLoading(false);
+
+            assert.ok(clearTreeSpy.calledOnce);
+            assert.strictEqual(treeView.getRootItemsArray().length, 0);
+            assert.strictEqual(stateManager.getState().loading, true);
+            assert.strictEqual(stateManager.getState().error, null);
+        });
+
+        test("should skip preparation if already in loading state with no items", async () => {
+            await treeView.initialize();
+
+            const stateManager = treeView.getProtectedStateManager();
+
+            // First call: triggers full preparation
+            treeView.prepareForContextSwitchLoading();
+            assert.strictEqual(stateManager.getState().loading, true);
+
+            const setStateSpy = testEnv.sandbox.spy(stateManager, "setState");
+
+            // Second call: should be a no-op since tree is already prepared
+            treeView.prepareForContextSwitchLoading();
+            assert.ok(setStateSpy.notCalled, "Should skip preparation when already in loading state with no items");
+        });
     });
 
     suite("Configuration Updates", () => {
@@ -665,7 +703,6 @@ suite("TreeViewBase", function () {
 
             const newConfig = {
                 features: {
-                    customRoot: false,
                     marking: true,
                     persistence: false,
                     filtering: true,

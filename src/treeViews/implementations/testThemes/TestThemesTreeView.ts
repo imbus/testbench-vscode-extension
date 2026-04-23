@@ -48,7 +48,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     private dataProvider: TestThemesDataProvider;
     private disposables: vscode.Disposable[] = [];
     public testCaseSetClickHandler: ClickHandler<TestThemesTreeItem>;
-
     private currentProjectKey: string | null = null;
     private currentProjectName: string | null = null;
     private currentTovKey: string | null = null;
@@ -536,16 +535,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      */
     private registerCommands(): void {
         this.disposables.push(
-            vscode.commands.registerCommand(`${this.config.id}.makeRoot`, async (item: TestThemesTreeItem) =>
-                this.makeRoot(item)
-            )
-        );
-
-        this.disposables.push(
-            vscode.commands.registerCommand(`${this.config.id}.resetCustomRoot`, async () => this.resetCustomRoot())
-        );
-
-        this.disposables.push(
             vscode.commands.registerCommand(`${this.config.id}.refresh`, () => this.refreshWithCacheClear())
         );
 
@@ -702,44 +691,32 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 return;
             }
 
-            // Determine which UID to use for the import
-            // If this is a descendant of a marked hierarchy, use the root UID
-            const rootId = markingModule.getRootIDForDescendant(item.id!);
-            let reportRootUID = itemUID;
+            const { importUID, rootId } = this.resolveImportScope(item, itemUID, markingModule);
 
-            if (rootId) {
-                // This item is a descendant, get the root's UID
-                const rootMarkingInfo = markingModule.getMarkingInfo(rootId);
-                if (rootMarkingInfo && rootMarkingInfo.metadata?.uniqueID) {
-                    reportRootUID = rootMarkingInfo.metadata.uniqueID;
-                }
-            }
+            this.logger.debug(
+                `[TestThemesTreeView] Import scope resolved for '${itemLabel}': itemUID='${itemUID}', importUID='${importUID}', rootId='${rootId ?? "none"}', elementType='${item.data.elementType}'`
+            );
 
             const importSuccessful = await reportHandler.fetchTestResultsAndCreateResultsAndImportToTestbench(
                 this.extensionContext,
                 item,
                 projectKey,
                 cycleKey || tovKey || "",
-                reportRootUID
+                importUID
             );
 
             if (importSuccessful) {
-                const importSuccessfulMessageForUser = `Successfully imported Robot Framework test results for ${reportRootUID} (${itemLabel}) to TestBench.`;
+                const importSuccessfulMessageForUser = `Successfully imported Robot Framework test results for ${importUID} (${itemLabel}) to TestBench.`;
                 this.logger.info(`[TestThemesTreeView] ${importSuccessfulMessageForUser}`);
                 vscode.window.showInformationMessage(importSuccessfulMessageForUser);
 
                 this.extensionContext.workspaceState.update(lastImportedItemKey, item.id);
 
                 if (!ALLOW_PERSISTENT_IMPORT_BUTTON) {
-                    // If this was a root item with descendants, unmark the entire hierarchy
-                    const hierarchy = markingModule.getHierarchy(item.id!);
-                    if (hierarchy) {
-                        markingModule.unmarkItemByID(item.id!);
-                    } else if (rootId) {
-                        markingModule.unmarkItemByID(rootId);
-                    } else {
-                        markingModule.unmarkItemByID(item.id!);
-                    }
+                    // Import is item-scoped rather than root-scoped,
+                    // unmark only the successfully imported item, even if it is part of a hierarchy.
+                    // If it is a root, it unmarks the root and clears the hierarchy state.
+                    markingModule.unmarkItemByID(item.id!);
                 } else {
                     const markingContext = this.getCurrentMarkingContext();
                     markingModule.markItemWithDescendants(item, markingContext, "imported");
@@ -751,7 +728,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 this.refresh();
             } else {
                 const importFailedMessageForUser = `Import was cancelled or did not complete successfully for ${itemLabel}`;
-                const importFailedMessage = `[TestThemesTreeView] Import process for item ${itemLabel} (UID: ${reportRootUID}) did not complete successfully or was cancelled.`;
+                const importFailedMessage = `[TestThemesTreeView] Import process for item ${itemLabel} (UID: ${importUID}) did not complete successfully or was cancelled.`;
                 this.logger.warn(importFailedMessage);
                 vscode.window.showWarningMessage(importFailedMessageForUser);
             }
@@ -769,6 +746,34 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      */
     public isImportFunctionalityAvailable(): boolean {
         return this.isOpenedFromCycle;
+    }
+
+    /**
+     * Resolves the UID scope used for importing execution results.
+     * Import always stays item scoped and uses the clicked item's UID.
+     * Resolves an optional hierarchy root ID for UI state handling.
+     * @param item The tree item being imported
+     * @param itemUID The unique ID of the item being imported
+     * @param markingModule The marking module instance to use for hierarchy resolution
+     */
+    private resolveImportScope(
+        item: TestThemesTreeItem,
+        itemUID: string,
+        markingModule: MarkingModule
+    ): { importUID: string; rootId: string | null } {
+        const rootId = markingModule.getRootIDForDescendant(item.id!);
+
+        this.logger.trace(
+            `[TestThemesTreeView] resolveImportScope: item='${item.label?.toString() || "Unknown"}', itemId='${item.id}', itemUID='${itemUID}', elementType='${item.data.elementType}', hierarchyRootId='${rootId ?? "none"}'`
+        );
+
+        if (rootId) {
+            this.logger.trace(
+                `[TestThemesTreeView] Import remains item-scoped despite hierarchy root '${rootId}'. Using clicked item UID '${itemUID}'.`
+            );
+        }
+
+        return { importUID: itemUID, rootId: rootId ?? null };
     }
 
     /**
@@ -859,9 +864,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             this.logger.trace(
                 `[TestThemesTreeView] Loading Test Cycle '${cycleLabel}' from project '${projectName}' to get Test Theme information...`
             );
-            this.stateManager.setLoading(true);
-            // Clear old tree items immediately to prevent showing stale data during loading
-            this.clearTree();
+            this.prepareForContextSwitchLoading();
             this.dataProvider.clearCache();
 
             // Set context before fetching data so filters can be applied correctly
@@ -984,9 +987,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     public async loadTov(projectKey: string, tovKey: string, projectName: string, tovName: string): Promise<void> {
         try {
             this.logger.debug(`[TestThemesTreeView] Loading TOV ${tovKey} for project ${projectKey}`);
-            this.stateManager.setLoading(true);
-            // Clear old tree items immediately to prevent showing stale data during loading
-            this.clearTree();
+            this.prepareForContextSwitchLoading();
             this.dataProvider.clearCache();
 
             // Set context BEFORE fetching data so filters can be applied correctly
@@ -2262,5 +2263,5 @@ export async function displayTestThemeTreeView(): Promise<void> {
     if (!treeViews) {
         return;
     }
-    vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_THEMES_TREE, true);
+    await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_THEMES_TREE, true);
 }

@@ -143,6 +143,8 @@ export interface JobStatusResponse {
             };
             ExecutionImportingSuccess?: {
                 testCaseSets: Array<{
+                    name: string;
+                    uid: string;
                     key: string;
                     executionKey: string;
                     finished: boolean;
