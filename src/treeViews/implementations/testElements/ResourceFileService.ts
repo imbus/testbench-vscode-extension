@@ -173,10 +173,6 @@ export class ResourceFileService {
         if (resourceDirectoryMarkerIndex !== -1) {
             // Marker is found, ignore everything up to and including the marker itself
             relativePathComponents = normalizedPathComponents.slice(resourceDirectoryMarkerIndex + 1);
-            if (relativePathComponents.length === 0) {
-                // If the marker was on the last element, use that element itself
-                relativePathComponents = [normalizedPathComponents[resourceDirectoryMarkerIndex]];
-            }
         } else {
             // No marker match, create resource file directly under resource directory without subdivision folder hierarchy
             relativePathComponents = [normalizedPathComponents[normalizedPathComponents.length - 1]];
