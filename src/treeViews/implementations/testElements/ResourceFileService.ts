@@ -127,7 +127,7 @@ export class ResourceFileService {
     }
 
     /**
-     * Constructs the absolute for the resource file to be created using the hierarchical name of tree,
+     * Constructs the absolute path for the resource file to be created using the hierarchical name of tree,
      * respecting the configured Resource Directory Marker and Resource Directory Path.
      *
      * When a Resource Directory Marker is found in the hierarchical name, the folder structure below the marker
