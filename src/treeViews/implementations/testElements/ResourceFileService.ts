@@ -86,9 +86,10 @@ export class ResourceFileService {
     }
 
     /**
-     * Checks if a string contains any configured resource markers.
-     * @param str The string to check for resource markers
-     * @returns True if the string contains any configured resource markers
+     * Checks whether a string ends with any configured resource marker.
+     * Trailing whitespace in the input string is ignored.
+     * @param str The string to check for a resource marker suffix
+     * @returns True if the string ends with any configured resource marker
      */
     public static hasResourceMarker(str: string): boolean {
         const resourceMarkers = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER);
