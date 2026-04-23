@@ -945,26 +945,37 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private async hasAllChildResourcesAvailable(item: TestElementsTreeItem): Promise<boolean> {
         if (!item.children || item.children.length === 0) {
             // Leaf
-            return item.data.directRegexMatch ? item.data.isLocallyAvailable === true : true;
+            return false;
         }
 
-        for (const child of item.children as TestElementsTreeItem[]) {
-            if (child.data.testElementType === TestElementType.Subdivision) {
-                if (child.data.directRegexMatch) {
-                    if (!child.data.isLocallyAvailable) {
-                        return false;
-                    }
-                } else {
-                    // Folder, recursively check all its children
-                    const allChildrenAvailable = await this.hasAllChildResourcesAvailable(child);
-                    if (!allChildrenAvailable) {
-                        return false;
+        let hasAnyResource = false;
+        let allAvailable = true;
+
+        const checkChildren = async (children: TestElementsTreeItem[]) => {
+            for (const child of children) {
+                if (child.data.testElementType === TestElementType.Subdivision) {
+                    if (child.data.directRegexMatch) {
+                        hasAnyResource = true;
+                        if (!child.data.isLocallyAvailable) {
+                            allAvailable = false;
+                            return; // Early exit once we find a missing resource
+                        }
+                    } else {
+                        // Folder, recursively check all its children
+                        if (child.children && child.children.length > 0) {
+                            await checkChildren(child.children as TestElementsTreeItem[]);
+                            if (!allAvailable) {
+                                return;
+                            }
+                        }
                     }
                 }
             }
-        }
+        };
 
-        return true;
+        await checkChildren(item.children as TestElementsTreeItem[]);
+
+        return hasAnyResource && allAvailable;
     }
 
     /**

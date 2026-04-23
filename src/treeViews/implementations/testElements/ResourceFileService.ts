@@ -97,7 +97,7 @@ export class ResourceFileService {
         }
 
         return resourceMarkers.some(
-            (marker) => typeof marker === "string" && marker.length > 0 && str.includes(marker)
+            (marker) => typeof marker === "string" && marker.length > 0 && str.trimEnd().endsWith(marker)
         );
     }
 
