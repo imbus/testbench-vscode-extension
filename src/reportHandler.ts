@@ -1153,8 +1153,8 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
                 const tcsName = tcs?.name ?? "Unknown TestCaseSet";
                 if (errorMessage && typeof errorMessage === "string") {
                     vscode.window.showErrorMessage(`Import of TestCaseSet '${tcsName}' failed: ${errorMessage}`);
+                    importError = true;
                 }
-                importError = true;
             }
             if (importError) {
                 return null;
