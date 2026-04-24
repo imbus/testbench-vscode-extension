@@ -129,7 +129,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             if (error instanceof UserCancelledError) {
                 logger.debug(`[AuthenticationProvider] ${error.message}`);
             } else {
-                logger.error(`[AuthenticationProvider] Error during session creation: ${error.message || error}`);
+                logger.error("[AuthenticationProvider] Error during session creation:", error);
                 if (!isSilentLogin) {
                     await connectionManager.clearActiveConnection(this.context);
                 }

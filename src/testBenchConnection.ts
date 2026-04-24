@@ -351,7 +351,8 @@ export class PlayServerConnection {
         // Initialize legacy server port discovery in the background
         this.legacyInitPromise = this.legacyClient.initialize().catch((error) => {
             logger.warn(
-                `[testBenchConnection] Legacy Play server initialization failed, but main connection is still functional: ${error?.message || error}`
+                `[testBenchConnection] Legacy Play server initialization failed, but main connection is still functional:`,
+                error
             );
         });
 
@@ -539,7 +540,7 @@ export class PlayServerConnection {
                 return null;
             }
         } catch (error) {
-            logger.error(`[testBenchConnection] Error fetching project tree: ${error}`);
+            logger.error(`[testBenchConnection] Error fetching project tree:`, error);
             return null;
         }
     }
@@ -663,7 +664,7 @@ export class PlayServerConnection {
                         );
                 }
             } else {
-                logger.error(`[testBenchConnection] Error fetching TOV report job ID: ${error}`);
+                logger.error(`[testBenchConnection] Error fetching TOV report job ID:`, error);
             }
             return null;
         }
@@ -1556,7 +1557,7 @@ export async function importReportWithResultsToTestbench(
                 const importJobStatusUnknownMessage: string =
                     "[testBenchConnection] Import job finished polling but status is unknown.";
                 const importJobStatusUnknownMessageForUser: string = "Import job status unknown after polling.";
-                logger.warn(importJobStatusUnknownMessage, importJobStatus);
+                logger.warn(importJobStatusUnknownMessage);
                 vscode.window.showWarningMessage(importJobStatusUnknownMessageForUser);
             }
         } catch (error: any) {

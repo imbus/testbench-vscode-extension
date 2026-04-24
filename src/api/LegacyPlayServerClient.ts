@@ -148,7 +148,7 @@ export class LegacyPlayServerClient {
                     `[LegacyPlayServerClient] Server locations endpoint returned 404. The legacy server port cannot be discovered dynamically.`
                 );
             } else {
-                logger.error(`[LegacyPlayServerClient] Error fetching server locations: ${error?.message || error}`);
+                logger.error(`[LegacyPlayServerClient] Error fetching server locations:`, error);
             }
             return null;
         }
@@ -385,7 +385,7 @@ export class LegacyPlayServerClient {
                 return null;
             }
         } catch (error) {
-            logger.error(`[LegacyPlayServerClient] Error fetching test elements for TOV key ${tovKey}: ${error}`);
+            logger.error(`[LegacyPlayServerClient] Error fetching test elements for TOV key ${tovKey}:`, error);
             vscode.window.showErrorMessage("Error fetching test elements. Please check the logs for details.");
             return null;
         }
@@ -419,7 +419,7 @@ export class LegacyPlayServerClient {
                 return null;
             }
         } catch (error) {
-            logger.error(`[LegacyPlayServerClient] Error fetching filters: ${error}`);
+            logger.error(`[LegacyPlayServerClient] Error fetching filters:`, error);
             vscode.window.showErrorMessage("Error fetching filters. Please check the logs for details.");
             return null;
         }

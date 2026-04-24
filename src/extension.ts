@@ -425,7 +425,7 @@ async function validateStoredSession(
 
         return isValid;
     } catch (error: any) {
-        logger.warn("[extension] Session validation failed:", error.message || error);
+        logger.warn("[extension] Session validation failed:", error);
         const sharedSessionManager = SharedSessionManager.getInstance(context);
         await sharedSessionManager.clearSharedSession();
         return false;
