@@ -1482,10 +1482,9 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
         const markingModule = this.getModule("marking") as MarkingModule | undefined;
         if (!markingModule || !item.id || !this.currentProjectKey || !this.currentCycleKey) {
-            this.logger.warn("[TestThemesTreeView] Cannot mark item: Marking module or context is not available.", {
-                hasModule: !!markingModule,
-                id: item.id
-            });
+            this.logger.warn(
+                `[TestThemesTreeView] Cannot mark item: Marking module or context is not available. hasModule=${!!markingModule}, id=${item.id || "unknown"}`
+            );
             return;
         }
 

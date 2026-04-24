@@ -109,7 +109,9 @@ function getLastGeneratedReportParams(
             storedParams.executionMode !== undefined &&
             storedParams.alreadyImported !== undefined
         ) {
-            logger.debug("[reportHandler] Retrieved last generated report params from workspace state:", storedParams);
+            logger.debug(
+                `[reportHandler] Retrieved last generated report params from workspace state. UID=${storedParams.UID}, projectKey=${storedParams.projectKey}, cycleKey=${storedParams.cycleKey}, executionMode=${storedParams.executionMode}, alreadyImported=${storedParams.alreadyImported}`
+            );
             return storedParams;
         } else {
             logger.warn("[reportHandler] No valid last generated report params found in workspace state.");
@@ -226,7 +228,7 @@ export async function pollJobStatus(
                 }
             }
         } catch (error: any) {
-            logger.error(`[reportHandler] Failed to get job status at polling attempt ${pollingAttemptAmount}:`, error);
+            logger.error(`[reportHandler] Failed to get job status at polling attempt ${pollingAttemptAmount}`);
             vscode.window.showErrorMessage(`Failed to get job status from the TestBench server: ${error.message}`);
             return null; // Abort polling on server error since getJobStatus already retries 3 times
         }
@@ -569,8 +571,8 @@ export async function fetchReportZipOfCycleFromServer(
             logger.warn("[reportHandler] Downloading report failed or was canceled.");
             return null;
         }
-    } catch (error) {
-        logger.error(`[reportHandler] Error while fetching report zip from server: ${error}`);
+    } catch (_error) {
+        logger.error(`[reportHandler] Error while fetching report zip from server`);
         return null;
     }
 }
@@ -597,7 +599,7 @@ async function setLastImportedItem(context: vscode.ExtensionContext, reportRootU
             `[reportHandler] Set last imported item UID to ${reportRootUID} for user ${userSessionManager.getCurrentUserId()}.`
         );
     } catch (error) {
-        logger.error(`[reportHandler] Error setting last imported item UID: ${error}`);
+        logger.error(`[reportHandler] Error setting last imported item UID:`, error);
     }
 }
 
@@ -933,9 +935,10 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 await vscode.workspace.fs.createDirectory(
                     vscode.Uri.file(testbenchWorkingDirectoryPathInsideWorkspace)
                 );
-            } catch (e) {
+            } catch (error) {
                 logger.warn(
-                    `[reportHandler] Failed to ensure reports directory exists at ${testbenchWorkingDirectoryPathInsideWorkspace}: ${e}`
+                    `[reportHandler] Failed to ensure reports directory exists at ${testbenchWorkingDirectoryPathInsideWorkspace}:`,
+                    error
                 );
             }
 
@@ -1141,7 +1144,7 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
                 vscode.window.showErrorMessage(importJobFailedMessageForUser);
                 return null;
             } else if (!isImportJobCompletedSuccessfully(importJobStatus)) {
-                logger.warn("[reportHandler] Import job finished polling but status is unknown.", importJobStatus);
+                logger.warn("[reportHandler] Import job finished polling but status is unknown.");
             }
             let importError = false;
             for (const tcs of importJobStatus?.completion?.result?.ExecutionImportingSuccess?.testCaseSets ?? []) {
@@ -1275,7 +1278,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     error instanceof Error ? error.message : String(error)
                 }`;
                 const fetchAndImportErrorMsgForUser: string = "Error during fetch and import process.";
-                logger.error(fetchAndImportErrorMsg, error);
+                logger.error(fetchAndImportErrorMsg);
                 vscode.window.showErrorMessage(fetchAndImportErrorMsgForUser);
                 return false;
             }

@@ -125,8 +125,9 @@ export function safeCommandHandler(handler: (...args: any[]) => any): (...args: 
         try {
             await handler(...args);
         } catch (error) {
-            const errorMessage: string = error instanceof Error ? error.message : "An unknown error occurred";
-            logger.error(`[extension] Error executing command: ${errorMessage}`, error);
+            const handlerName: string = handler.name || "anonymous";
+            const errorType: string = error instanceof Error ? error.name : typeof error;
+            logger.error("[extension] Error executing command", { handlerName, errorType });
             vscode.window.showErrorMessage("The action could not be completed.");
         }
     };
@@ -334,8 +335,8 @@ function initializeAuthentication(
                     { createIfNone: false, silent: true }
                 );
                 await handleTestBenchSessionChange(context, currentSession);
-            } catch (error) {
-                logger.error("[extension] Error getting session in onDidChangeSessions listener:", error);
+            } catch (_error) {
+                logger.error("[extension] Error getting session in onDidChangeSessions listener");
                 await handleTestBenchSessionChange(context, undefined);
             } finally {
                 isHandlingSessionChange = false;
@@ -424,8 +425,8 @@ async function validateStoredSession(
         }
 
         return isValid;
-    } catch (error: any) {
-        logger.warn("[extension] Session validation failed:", error.message || error);
+    } catch (_error: any) {
+        logger.warn("[extension] Session validation failed");
         const sharedSessionManager = SharedSessionManager.getInstance(context);
         await sharedSessionManager.clearSharedSession();
         return false;
@@ -467,8 +468,8 @@ async function handleInitialSession(context: vscode.ExtensionContext): Promise<v
         } else {
             getLoginWebViewProvider()?.updateWebviewHTMLContent();
         }
-    } catch (error) {
-        logger.warn("[extension] Error trying to get initial TestBench session silently:", error);
+    } catch (_error) {
+        logger.warn("[extension] Error trying to get initial TestBench session silently");
         getLoginWebViewProvider()?.updateWebviewHTMLContent();
     }
 }
@@ -498,8 +499,8 @@ async function performAutomaticLogin(context: vscode.ExtensionContext): Promise<
         if (session) {
             await handleTestBenchSessionChange(context, session);
         }
-    } catch (error) {
-        logger.trace("[extension] Automatic login failed silently:", error);
+    } catch (_error) {
+        logger.trace("[extension] Automatic login failed silently");
     }
 }
 
@@ -571,7 +572,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
         // Ensure logger is initialized, or fall back to console
         const log = logger ? logger.error : console.error;
-        log(`[extension] Failed to activate extension. ${errorMessage}`, error);
+        log(`[extension] Failed to activate extension. ${errorMessage}`);
         vscode.window.showErrorMessage("TestBench extension could not start. Reload VS Code and try again.");
     }
 }
@@ -603,8 +604,8 @@ export async function clearAllExtensionData(
         if (connection) {
             try {
                 await connection.teardownAfterLogout();
-            } catch (error) {
-                logger.error("[extension] Error logging out from server while clearing all extension data:", error);
+            } catch (_error) {
+                logger.error("[extension] Error logging out from server while clearing all extension data");
             }
             setConnection(null);
         }
@@ -616,15 +617,14 @@ export async function clearAllExtensionData(
                 try {
                     await context.secrets.delete(StorageKeys.CONNECTION_PASSWORD_SECRET_PREFIX + conn.id);
                     logger.debug(`[extension] Cleared password for connection: ${conn.label}`);
-                } catch (error) {
+                } catch (_error) {
                     logger.error(
-                        `[extension] Error clearing password for connection ${conn.label} while clearing all extension data:`,
-                        error
+                        `[extension] Error clearing password for connection ${conn.label} while clearing all extension data`
                     );
                 }
             }
-        } catch (error) {
-            logger.error("[extension] Error clearing connection passwords while clearing all extension data:", error);
+        } catch (_error) {
+            logger.error("[extension] Error clearing connection passwords while clearing all extension data");
         }
 
         try {
@@ -636,8 +636,8 @@ export async function clearAllExtensionData(
             if (session && authProviderInstance) {
                 await authProviderInstance.removeSession(session.id);
             }
-        } catch (error) {
-            logger.error("[extension] Error clearing authentication session while clearing all extension data:", error);
+        } catch (_error) {
+            logger.error("[extension] Error clearing authentication session while clearing all extension data");
         }
 
         // State Clearing Logic
@@ -654,7 +654,7 @@ export async function clearAllExtensionData(
                 await context.workspaceState.update(key, undefined);
                 logger.trace(`[extension] Cleared workspace state key: ${key}`);
             } catch (error) {
-                logger.error(`[extension] Error clearing workspace state key ${key}:`, error);
+                logger.error(`[extension] Error clearing workspace state key ${key}`, error);
             }
         }
 
@@ -710,8 +710,8 @@ export async function clearAllExtensionData(
         for (const [command, key, value] of contextUpdates) {
             try {
                 await vscode.commands.executeCommand(command as string, key, value);
-            } catch (error) {
-                logger.error(`[extension] Error updating context ${key}:`, error);
+            } catch (_error) {
+                logger.error(`[extension] Error updating context ${key}`);
             }
         }
 
@@ -725,8 +725,8 @@ export async function clearAllExtensionData(
             logger.debug("[extension] Stopping language client...");
             try {
                 await stopLanguageClient(true);
-            } catch (error) {
-                logger.error("[extension] Error stopping language client while clearing all extension data:", error);
+            } catch (_error) {
+                logger.error("[extension] Error stopping language client while clearing all extension data");
             }
         }
 
@@ -776,7 +776,7 @@ export async function clearAllExtensionData(
         return true;
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
-        logger.error(`[extension] Error during clear all extension data operation: ${errorMessage}`, error);
+        logger.error(`[extension] Error during clear all extension data operation: ${errorMessage}`);
 
         if (showConfirmation) {
             vscode.window.showErrorMessage(`Error clearing extension data: ${errorMessage}`);

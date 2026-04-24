@@ -63,12 +63,12 @@ export class ProjectsDataProvider {
             for (const project of projectsFetchedFromServer) {
                 try {
                     if (!project || typeof project !== "object") {
-                        this.logger.warn("[ProjectsDataProvider] Invalid project data received:", project);
+                        this.logger.warn(`[ProjectsDataProvider] Invalid project data received.`);
                         continue;
                     }
 
                     if (!project.key || typeof project.key !== "string") {
-                        this.logger.warn("[ProjectsDataProvider] Project missing key or invalid key:", project);
+                        this.logger.warn("[ProjectsDataProvider] Project missing key or invalid key.");
                         continue;
                     }
 
