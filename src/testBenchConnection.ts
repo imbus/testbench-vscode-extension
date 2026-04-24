@@ -52,6 +52,11 @@ const SESSION_LOGOUT_WARNING_MESSAGE =
 const REDACTED_LOG_VALUE = "[REDACTED]";
 
 /**
+ * Maximum time to wait for the initial TestBench login request to complete.
+ */
+const LOGIN_REQUEST_TIMEOUT_MS = 60_000;
+
+/**
  * Determines whether a key name represents sensitive information that must not be logged.
  *
  * Key names are normalized to make matching robust for common naming styles
@@ -1785,7 +1790,8 @@ export async function loginToServerAndGetSessionDetails(
                 "Content-Type": "application/vnd.testbench+json"
             },
             proxy: false,
-            httpsAgent: agent
+            httpsAgent: agent,
+            timeout: LOGIN_REQUEST_TIMEOUT_MS
         });
     };
 
@@ -1837,7 +1843,7 @@ export async function loginToServerAndGetSessionDetails(
                             "Content-Type": "application/vnd.testbench+json"
                         },
                         httpsAgent: insecureAgent,
-                        timeout: 60000,
+                        timeout: LOGIN_REQUEST_TIMEOUT_MS,
                         validateStatus: () => true,
                         proxy: false
                     });
@@ -1853,6 +1859,8 @@ export async function loginToServerAndGetSessionDetails(
                             serverVersion: insecureLoginResponse.data.serverVersion || ""
                         };
                     } else {
+                        // Insecure attempt did not yield a session
+                        tlsManager.disableInsecureMode();
                         logger.error(
                             `[testBenchConnection] Insecure login returned status ${insecureLoginResponse.status}`
                         );
@@ -1861,6 +1869,8 @@ export async function loginToServerAndGetSessionDetails(
                         );
                     }
                 } catch (insecureError: any) {
+                    // Insecure attempt failed
+                    tlsManager.disableInsecureMode();
                     vscode.window.showErrorMessage(`${insecureError.code}: ${insecureError.message}`);
                     logger.error(
                         `[testBenchConnection] Insecure login attempt failed for ${username} on ${serverName}:`,
