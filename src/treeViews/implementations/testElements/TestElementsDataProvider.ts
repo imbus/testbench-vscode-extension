@@ -478,7 +478,8 @@ export class TestElementsDataProvider {
         roots.forEach(check);
         if (nestedResourceWarnings.length > 0) {
             this.logger.warn(
-                `[TestElementsDataProvider] Nested robot resources found: ${nestedResourceWarnings.join(" | ")}`
+                `[TestElementsDataProvider] Nested robot resources found (${nestedResourceWarnings.length}).`,
+                nestedResourceWarnings
             );
         }
     }

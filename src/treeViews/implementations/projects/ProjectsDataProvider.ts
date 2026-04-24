@@ -63,9 +63,7 @@ export class ProjectsDataProvider {
             for (const project of projectsFetchedFromServer) {
                 try {
                     if (!project || typeof project !== "object") {
-                        this.logger.warn(
-                            `[ProjectsDataProvider] Invalid project data received. Type: ${typeof project}`
-                        );
+                        this.logger.warn(`[ProjectsDataProvider] Invalid project data received.`);
                         continue;
                     }
 
