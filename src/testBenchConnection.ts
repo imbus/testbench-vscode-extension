@@ -805,9 +805,6 @@ export class PlayServerConnection {
             );
 
             if (response.data) {
-                logger.trace(`[testBenchConnection] Received ${structureType} structure:`, {
-                    response: response.data
-                });
                 logger.trace(`[testBenchConnection] Received ${structureType} structure`);
                 this.testStructureCache.setEntryInCache(cacheKey, response.data);
                 return response.data;
