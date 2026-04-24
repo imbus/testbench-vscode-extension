@@ -228,7 +228,7 @@ export async function pollJobStatus(
                 }
             }
         } catch (error: any) {
-            logger.error(`[reportHandler] Failed to get job status at polling attempt ${pollingAttemptAmount}:`, error);
+            logger.error(`[reportHandler] Failed to get job status at polling attempt ${pollingAttemptAmount}`);
             vscode.window.showErrorMessage(`Failed to get job status from the TestBench server: ${error.message}`);
             return null; // Abort polling on server error since getJobStatus already retries 3 times
         }
@@ -571,8 +571,8 @@ export async function fetchReportZipOfCycleFromServer(
             logger.warn("[reportHandler] Downloading report failed or was canceled.");
             return null;
         }
-    } catch (error) {
-        logger.error(`[reportHandler] Error while fetching report zip from server:`, error);
+    } catch (_error) {
+        logger.error(`[reportHandler] Error while fetching report zip from server`);
         return null;
     }
 }
@@ -1278,7 +1278,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     error instanceof Error ? error.message : String(error)
                 }`;
                 const fetchAndImportErrorMsgForUser: string = "Error during fetch and import process.";
-                logger.error(fetchAndImportErrorMsg, error);
+                logger.error(fetchAndImportErrorMsg);
                 vscode.window.showErrorMessage(fetchAndImportErrorMsgForUser);
                 return false;
             }

@@ -349,10 +349,9 @@ export class PlayServerConnection {
         );
 
         // Initialize legacy server port discovery in the background
-        this.legacyInitPromise = this.legacyClient.initialize().catch((error) => {
+        this.legacyInitPromise = this.legacyClient.initialize().catch((_error) => {
             logger.warn(
-                `[testBenchConnection] Legacy Play server initialization failed, but main connection is still functional:`,
-                error
+                `[testBenchConnection] Legacy Play server initialization failed, but main connection is still functional`
             );
         });
 
@@ -413,8 +412,8 @@ export class PlayServerConnection {
             const tlsManager = TLSSecurityManager.getInstance();
             tlsManager.disableInsecureMode();
             this.sessionToken = "";
-        } catch (error) {
-            logger.error("[testBenchConnection] Error during teardown after logout:", error);
+        } catch (_error) {
+            logger.error("[testBenchConnection] Error during teardown after logout");
             return false;
         }
 
@@ -472,9 +471,9 @@ export class PlayServerConnection {
                 logger.error("[testBenchConnection] Project list data is not available.");
                 return null;
             }
-        } catch (error) {
+        } catch (_error) {
             // Axios throws an error automatically if the response status is not 2xx
-            logger.error("[testBenchConnection] Error fetching projects:", error);
+            logger.error("[testBenchConnection] Error fetching projects");
             return null;
         }
     }
@@ -539,8 +538,8 @@ export class PlayServerConnection {
                 logger.error("[testBenchConnection] Project tree data is not available.");
                 return null;
             }
-        } catch (error) {
-            logger.error(`[testBenchConnection] Error fetching project tree:`, error);
+        } catch (_error) {
+            logger.error(`[testBenchConnection] Error fetching project tree`);
             return null;
         }
     }
@@ -664,7 +663,7 @@ export class PlayServerConnection {
                         );
                 }
             } else {
-                logger.error(`[testBenchConnection] Error fetching TOV report job ID:`, error);
+                logger.error(`[testBenchConnection] Error fetching TOV report job ID`);
             }
             return null;
         }
@@ -814,11 +813,8 @@ export class PlayServerConnection {
                 );
                 return null;
             }
-        } catch (error) {
-            logger.error(
-                `[testBenchConnection] Error fetching test structure for ${structureType} using ${url}:`,
-                error
-            );
+        } catch (_error) {
+            logger.error(`[testBenchConnection] Error fetching test structure for ${structureType} using ${url}`);
             return null;
         }
     }
@@ -1647,8 +1643,8 @@ export async function extractDataFromReport(zipFilePath: string): Promise<{
             `[testBenchConnection] Extracted data from zip file "${zipFilePath}": uniqueID = ${uniqueID}, projectKey = ${projectKey}, cycleName = ${cycleNameOfProject}, cycleKey = ${cycleKey}`
         );
         return { uniqueID, projectKey, cycleNameOfProject, cycleKey };
-    } catch (error) {
-        logger.error(`[testBenchConnection] Error extracting JSON data from zip file "${zipFilePath}":`, error);
+    } catch (_error) {
+        logger.error(`[testBenchConnection] Error extracting JSON data from zip file "${zipFilePath}"`);
         return { uniqueID: null, projectKey: null, cycleNameOfProject: null, cycleKey: null };
     }
 }
