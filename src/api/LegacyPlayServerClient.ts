@@ -378,9 +378,7 @@ export class LegacyPlayServerClient {
             );
             const response: AxiosResponse = await this.executeLegacyGetWithPortAndTlsFallback(getTestElementsURL);
             if (response.data) {
-                logger.trace(`[LegacyPlayServerClient] Successfully fetched test elements data for TOV ${tovKey}:`, {
-                    response: response.data
-                });
+                logger.trace(`[LegacyPlayServerClient] Successfully fetched test elements data for TOV ${tovKey}`);
                 return response.data;
             } else {
                 logger.error(`[LegacyPlayServerClient] Test elements data is not available for TOV key ${tovKey}.`);
@@ -414,9 +412,7 @@ export class LegacyPlayServerClient {
             const response: AxiosResponse = await this.executeLegacyGetWithPortAndTlsFallback(getFiltersPath);
 
             if (response.data) {
-                logger.trace(`[LegacyPlayServerClient] Successfully fetched filters data:`, {
-                    response: response.data
-                });
+                logger.trace(`[LegacyPlayServerClient] Successfully fetched filters data`);
                 return response.data;
             } else {
                 logger.error(`[LegacyPlayServerClient] Filters data is not available.`);
