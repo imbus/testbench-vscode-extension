@@ -125,8 +125,9 @@ export function safeCommandHandler(handler: (...args: any[]) => any): (...args: 
         try {
             await handler(...args);
         } catch (error) {
-            const errorMessage: string = error instanceof Error ? error.message : "An unknown error occurred";
-            logger.error(`[extension] Error executing command: ${errorMessage}`);
+            const handlerName: string = handler.name || "anonymous";
+            const errorType: string = error instanceof Error ? error.name : typeof error;
+            logger.error("[extension] Error executing command", { handlerName, errorType });
             vscode.window.showErrorMessage("The action could not be completed.");
         }
     };
