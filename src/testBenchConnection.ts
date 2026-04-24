@@ -49,6 +49,91 @@ let isRetryNotificationActive = false;
 const SESSION_LOGOUT_WARNING_MESSAGE =
     "Your TestBench session has expired or the server is unavailable. You are being returned to the login view.";
 
+const REDACTED_LOG_VALUE = "[REDACTED]";
+
+/**
+ * Determines whether a key name represents sensitive information that must not be logged.
+ *
+ * Key names are normalized to make matching robust for common naming styles
+ * such as `session_token`, `session-token`, or `sessionToken`.
+ *
+ * @param key The object key name to evaluate.
+ * @returns True if the key is considered sensitive and its value must be redacted.
+ */
+function isSensitiveKeyForLogs(key: string): boolean {
+    const normalizedKey = key.toLowerCase().replace(/[_-]/g, "");
+    return (
+        normalizedKey.includes("password") ||
+        normalizedKey.includes("token") ||
+        normalizedKey.includes("secret") ||
+        normalizedKey.includes("authorization") ||
+        normalizedKey.includes("cookie")
+    );
+}
+
+/**
+ * Recursively redacts sensitive fields in values used for diagnostic logging.
+ *
+ * Objects are traversed by enumerable keys. Any key classified as sensitive is
+ * replaced with a redacted marker. Circular references are handled safely by
+ * returning a marker value for already-visited objects.
+ *
+ * @param input The value to sanitize before logging.
+ * @param seen Internal set used for cycle detection during recursive traversal.
+ * @returns A sanitized clone of the input suitable for logs.
+ */
+function sanitizeForLogging(input: unknown, seen: WeakSet<object> = new WeakSet<object>()): unknown {
+    if (input === null || input === undefined) {
+        return input;
+    }
+
+    if (Array.isArray(input)) {
+        return input.map((item) => sanitizeForLogging(item, seen));
+    }
+
+    if (typeof input === "object") {
+        if (seen.has(input)) {
+            return "[CIRCULAR]";
+        }
+
+        seen.add(input);
+        const source = input as Record<string, unknown>;
+        const sanitized: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(source)) {
+            sanitized[key] = isSensitiveKeyForLogs(key) ? REDACTED_LOG_VALUE : sanitizeForLogging(value, seen);
+        }
+        return sanitized;
+    }
+
+    return input;
+}
+
+/**
+ * Builds a minimal and sanitized Axios config payload for error diagnostics.
+ *
+ * This intentionally logs only safe, low-risk request metadata and sanitized
+ * headers while omitting request bodies to avoid exposing credentials.
+ *
+ * @param config Raw Axios request config from an error object.
+ * @returns A sanitized object with selected config metadata for logging.
+ */
+function buildSanitizedAxiosConfigForLogging(config: unknown): Record<string, unknown> {
+    if (!config || typeof config !== "object") {
+        return {};
+    }
+
+    const cfg = config as Record<string, unknown>;
+    return {
+        method: cfg.method,
+        url: cfg.url,
+        baseURL: cfg.baseURL,
+        timeout: cfg.timeout,
+        proxy: cfg.proxy,
+        hasHttpsAgent: !!cfg.httpsAgent,
+        headers: sanitizeForLogging(cfg.headers)
+    };
+}
+
 /**
  * Loads and caches certificate data from disk to avoid redundant reads.
  * @param absolutePath The absolute path to the certificate file
@@ -1752,7 +1837,7 @@ export async function loginToServerAndGetSessionDetails(
                             "Content-Type": "application/vnd.testbench+json"
                         },
                         httpsAgent: insecureAgent,
-                        timeout: 10000,
+                        timeout: 60000,
                         validateStatus: () => true,
                         proxy: false
                     });
@@ -1782,8 +1867,12 @@ export async function loginToServerAndGetSessionDetails(
                         insecureError.message
                     );
                     if (axios.isAxiosError(insecureError)) {
+                        const sanitizedResponse = sanitizeForLogging(insecureError.response?.data);
+                        const sanitizedConfig = buildSanitizedAxiosConfigForLogging(insecureError.config);
                         logger.error(
-                            `[testBenchConnection] Insecure Axios error details:\nCode=${insecureError.code},\nResponse=${JSON.stringify(insecureError.response?.data)},\nConfig=${JSON.stringify(insecureError.config)}`
+                            `[testBenchConnection] Insecure Axios error details:\nCode=${insecureError.code},\nResponse=${JSON.stringify(
+                                sanitizedResponse
+                            )},\nConfig=${JSON.stringify(sanitizedConfig)}`
                         );
                     }
                 }
