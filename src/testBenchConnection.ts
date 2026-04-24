@@ -465,9 +465,7 @@ export class PlayServerConnection {
                 `[testBenchConnection] Response status of project list request for URL ${projectsURL}: ${projectsResponse.status}`
             );
             if (projectsResponse.data) {
-                logger.trace(`[testBenchConnection] Fetched project list for request ${projectsURL}:`, {
-                    response: projectsResponse.data
-                });
+                logger.trace(`[testBenchConnection] Fetched project list for request ${projectsURL}`);
                 return projectsResponse.data;
             } else {
                 logger.error("[testBenchConnection] Project list data is not available.");
@@ -534,9 +532,7 @@ export class PlayServerConnection {
                 `[testBenchConnection] Response status of project tree request for URL ${projectTreeURL}: ${projectTreeResponse.status}`
             );
             if (projectTreeResponse.data) {
-                logger.trace(`[testBenchConnection] Fetched project tree for request ${projectTreeURL}:`, {
-                    response: projectTreeResponse.data
-                });
+                logger.trace(`[testBenchConnection] Fetched project tree for request ${projectTreeURL}`);
                 return projectTreeResponse.data;
             } else {
                 logger.error("[testBenchConnection] Project tree data is not available.");
@@ -639,9 +635,7 @@ export class PlayServerConnection {
                 `[testBenchConnection] Response status of TOV report job ID request for URL ${tovReportUrl}: ${tovReportJobResponse.status}`
             );
             if (tovReportJobResponse.data.jobID) {
-                logger.trace(`[testBenchConnection] Received TOV report Job ID for URL ${tovReportUrl}:`, {
-                    response: tovReportJobResponse.data
-                });
+                logger.trace(`[testBenchConnection] Received TOV report Job ID for URL ${tovReportUrl}`);
                 return tovReportJobResponse.data.jobID;
             } else {
                 logger.error(
@@ -813,6 +807,7 @@ export class PlayServerConnection {
                 logger.trace(`[testBenchConnection] Received ${structureType} structure:`, {
                     response: response.data
                 });
+                logger.trace(`[testBenchConnection] Received ${structureType} structure`);
                 this.testStructureCache.setEntryInCache(cacheKey, response.data);
                 return response.data;
             } else {
@@ -901,11 +896,9 @@ export class PlayServerConnection {
             }
         } catch (error) {
             if (axios.isAxiosError(error)) {
-                logger.error(
-                    `[testBenchConnection] Error when importing report: Axios error: ${error.message}. Error response data: ${error?.response?.data}`
-                );
+                logger.error(`[testBenchConnection] Error when importing report: Axios error: ${error.message}.`);
             } else {
-                logger.error(`[testBenchConnection] Unexpected error when importing report:`, error);
+                logger.error(`[testBenchConnection] Unexpected error when importing report.`);
             }
             throw error;
         }
@@ -994,10 +987,10 @@ export class PlayServerConnection {
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 logger.error(
-                    `[testBenchConnection] Error when fetching job ID of import job: Axios error: ${error.message}. Error response data: ${error?.response?.data}`
+                    `[testBenchConnection] Error when fetching job ID of import job: Axios error: ${error.message}.`
                 );
             } else {
-                logger.error(`[testBenchConnection] Unexpected error when fetching job ID of import job:`, error);
+                logger.error(`[testBenchConnection] Unexpected error when fetching job ID of import job.`);
             }
             throw error;
         }
@@ -1077,7 +1070,7 @@ export class PlayServerConnection {
             );
             logger.trace("[testBenchConnection] Keep-alive request sent.");
         } catch (error) {
-            logger.warn("[testBenchConnection] Keep-alive request failed after retries, attempting re-login:", error);
+            logger.warn("[testBenchConnection] Keep-alive request failed after retries, attempting re-login");
 
             let shouldLogout = true;
 
@@ -1171,8 +1164,8 @@ export class PlayServerConnection {
 
             logger.info("[testBenchConnection] Successfully re-authenticated after 401 in keep-alive");
             return true;
-        } catch (reloginError) {
-            logger.warn("[testBenchConnection] Silent re-authentication failed:", reloginError);
+        } catch (_reloginError) {
+            logger.warn("[testBenchConnection] Silent re-authentication failed.");
             return false;
         }
     }
@@ -1782,9 +1775,7 @@ export async function loginToServerAndGetSessionDetails(
                         insecureError.message
                     );
                     if (axios.isAxiosError(insecureError)) {
-                        logger.error(
-                            `[testBenchConnection] Insecure Axios error details:\nCode=${insecureError.code},\nResponse=${JSON.stringify(insecureError.response?.data)},\nConfig=${JSON.stringify(insecureError.config)}`
-                        );
+                        logger.error(`[testBenchConnection] Insecure Axios error.`);
                     }
                 }
             }
