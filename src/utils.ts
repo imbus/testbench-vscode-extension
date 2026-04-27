@@ -354,8 +354,11 @@ export async function extractAndParseJsonContent(zipContents: JSZip, fileName: s
 }
 
 /**
- * For windows systems, sanitizes a file path string by replacing invalid characters with underscores.
- * Special characters are technically allowed in file names on Unix-based systems.
+ * For windows systems, sanitizes a file path string by replacing invalid path-segment
+ * characters with underscores while preserving path separators.
+ *
+ * This is used for user-provided path settings and must not flatten nested paths.
+ * Therefore, separator characters (`/` and `\\`) are intentionally kept.
  *
  * @param {string} filePath - The file path to sanitize.
  * @returns {string} The sanitized file path.
@@ -364,9 +367,45 @@ export function sanitizeFilePath(filePath: string): string {
     if (!filePath) {
         return "";
     }
+
     if (os.platform() === "win32") {
-        const sanitizedPath = filePath.replace(/[<>:"/\\|?*]/g, "_");
-        return sanitizedPath;
+        // Keep separators untouched so nested paths remain intact.
+        const separatorPattern = /([/\\]+)/;
+        const separatorOnlyPattern = /^[/\\]+$/;
+        const drivePrefixPattern = /^[A-Za-z]:$/;
+        const invalidWindowsChars = new Set(["<", ">", '"', "|", "?", "*"]);
+
+        // Sanitize only the inside of each path segment.
+        return (
+            filePath
+                // Split the path into segments and separators (e.g. ["folder", "/", "subfolder"])
+                .split(separatorPattern)
+                // Process each segment and separator individually
+                .map((segment, index) => {
+                    // Skip processing if the segment is empty or is a path separator
+                    if (!segment || separatorOnlyPattern.test(segment)) {
+                        return segment;
+                    }
+
+                    // In "C:", the colon is valid only for the first segment.
+                    const isDrivePrefix = index === 0 && drivePrefixPattern.test(segment);
+
+                    // Check each character in the current folder/file name
+                    return Array.from(segment)
+                        .map((char) => {
+                            const code = char.charCodeAt(0);
+                            const isControlChar = code <= 31; // Catch unprintable characters
+                            const isInvalidChar = invalidWindowsChars.has(char); // Catch <, >, ", |, ?, *
+                            const isInvalidColon = char === ":" && !isDrivePrefix; // Catch invalid colons
+
+                            // Replace if invalid, otherwise keep the original character
+                            return isControlChar || isInvalidChar || isInvalidColon ? "_" : char;
+                        })
+                        .join(""); // Recombine the characters into a sanitized segment
+                })
+                .join("")
+        ); // Recombine the segments and separators back into a full path
     }
+
     return filePath;
 }
