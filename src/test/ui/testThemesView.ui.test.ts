@@ -11,7 +11,16 @@
  */
 
 import { expect } from "chai";
-import { SideBarView, TreeItem, WebDriver, By, EditorView, TextEditor, ViewSection } from "vscode-extension-tester";
+import {
+    SideBarView,
+    TreeItem,
+    WebDriver,
+    By,
+    EditorView,
+    TextEditor,
+    ViewSection,
+    BottomBarPanel
+} from "vscode-extension-tester";
 import { getTestLogger } from "./utils/testLogger";
 import {
     openTestBenchSidebar,
@@ -24,15 +33,13 @@ import {
     waitForCondition,
     waitForTooltip,
     waitForTestingViewReady,
-    waitForTerminalOutput,
     waitForTreeRefresh,
     waitForNotification,
-    waitForQuickInput,
     verifyGeneratedFilesExist,
     countGeneratedRobotFiles,
     getGeneratedRobotFiles,
     readRobotFileContent,
-    verifyRobotFileMetadata,
+    releaseModifierKeys,
     FilesystemVerificationResult
 } from "./utils/testUtils";
 import { getRobotOutputXmlPath, getTestData, logTestDataConfig } from "./config/testConfig";
@@ -87,6 +94,99 @@ async function logTreeStructureOnce(
  */
 function resetTreeStructureLoggingFlag(): void {
     treeStructureLoggedForSession = false;
+}
+
+/**
+ * Waits for the upload success notification with dynamic counts and item name.
+ *
+ * Expected format example:
+ * Successfully imported 1 test case set(s) with 1 test case(s) for "ZFS" to TestBench.
+ *
+ * @param driver - The WebDriver instance
+ * @param timeout - Maximum time to wait (default: 60000ms)
+ * @param expectedItemName - Optional expected item name in the success message
+ * @returns Promise<boolean> - True if matching notification appeared, false if timeout
+ */
+async function waitForUploadSuccessNotification(
+    driver: WebDriver,
+    timeout: number = 60000,
+    expectedItemName?: string
+): Promise<boolean> {
+    const expectedLabelPattern = expectedItemName ? escapeRegex(expectedItemName) : ".+";
+    const uploadSuccessPattern = new RegExp(
+        `Successfully imported\\s+\\d+\\s+test case set\\(s\\)\\s+with\\s+\\d+\\s+test case\\(s\\)\\s+for\\s+"${expectedLabelPattern}"\\s+to TestBench\\.`,
+        "i"
+    );
+    const legacyUploadSuccessPattern = /Successfully imported Robot Framework test results/i;
+
+    try {
+        await driver.switchTo().defaultContent();
+        logger.trace(
+            "Notification",
+            expectedItemName
+                ? `Waiting for upload success notification for item "${expectedItemName}"...`
+                : "Waiting for upload success notification with dynamic counters..."
+        );
+
+        await driver.wait(
+            async () => {
+                try {
+                    const notificationContainers = await driver.findElements(
+                        By.css(
+                            ".notifications-toasts, .notification-toast, " +
+                                ".monaco-dialog, .notification-list-item, " +
+                                ".notification-list-item-message, [class*='notification']"
+                        )
+                    );
+
+                    for (const container of notificationContainers) {
+                        try {
+                            const text = await container.getText();
+                            if (uploadSuccessPattern.test(text) || legacyUploadSuccessPattern.test(text)) {
+                                logger.trace(
+                                    "Notification",
+                                    `Found upload success notification: "${text.substring(0, 140)}..."`
+                                );
+                                return true;
+                            }
+                        } catch {
+                            // Element may be stale, continue
+                        }
+                    }
+
+                    const notificationItems = await driver.findElements(
+                        By.css(".notification-list-item, .notifications-list-container .monaco-list-row")
+                    );
+
+                    for (const item of notificationItems) {
+                        try {
+                            const text = await item.getText();
+                            if (uploadSuccessPattern.test(text) || legacyUploadSuccessPattern.test(text)) {
+                                logger.trace(
+                                    "Notification",
+                                    `Found upload success notification in center: "${text.substring(0, 140)}..."`
+                                );
+                                return true;
+                            }
+                        } catch {
+                            // Element may be stale, continue
+                        }
+                    }
+
+                    return false;
+                } catch {
+                    return false;
+                }
+            },
+            timeout,
+            "Waiting for upload success notification"
+        );
+
+        return true;
+    } catch (error) {
+        logger.debug("Notification", `Upload success notification not found within timeout: ${error}`);
+        return false;
+    }
 }
 
 /**
@@ -194,50 +294,56 @@ async function getTreeItemTooltip(item: TreeItem, driver: WebDriver): Promise<st
         const actions = driver.actions({ async: true });
         await actions.move({ origin: elementToHover as any }).perform();
 
-        const tooltipText = await waitForTooltip(driver, UITimeouts.MEDIUM);
-        if (tooltipText) {
-            // Verify the tooltip is for the correct item by checking the Name field
-            const nameMatch = tooltipText.match(/Name:\s*(.+)/);
-            const tooltipName = nameMatch ? nameMatch[1].trim() : null;
-            // Verify this is the item tooltip, not an action button tooltip
-            const isItemTooltip =
-                tooltipText.includes("Execution Status") ||
-                tooltipText.includes("Type:") ||
-                (!tooltipText.includes("Upload") &&
-                    !tooltipText.includes("Generate") &&
-                    !tooltipText.includes("Delete"));
+        const startTime = Date.now();
+        let validTooltip: string | null = null;
 
-            if (isItemTooltip) {
-                if (tooltipName && tooltipName !== itemLabel) {
-                    logger.warn(
-                        "Tooltip",
-                        `Tooltip may not match item: expected "${itemLabel}", found Name: "${tooltipName}"`
-                    );
-                }
+        while (Date.now() - startTime < UITimeouts.MEDIUM) {
+            const tooltipText = await waitForTooltip(driver, 1000);
 
-                logger.trace("Tooltip", `Found tooltip text: ${tooltipText.substring(0, 100)}...`);
-                logger.debug("Tooltip", `Full tooltip text for "${itemLabel}":\n${tooltipText}`);
-                return tooltipText;
-            } else {
-                logger.trace("Tooltip", `Found button tooltip instead: "${tooltipText}", retrying...`);
+            if (tooltipText) {
+                // Verify the tooltip is for the correct item by checking the Name field
+                const nameMatch = tooltipText.match(/Name:\s*([^\r\n]+)/);
+                const tooltipName = nameMatch ? nameMatch[1].trim() : null;
 
-                // Move mouse away and try hovering on a different part
-                await actions.move({ x: 0, y: 0 }).perform();
-                await driver.sleep(200);
+                // Verify this is the item tooltip, not an action button tooltip
+                const isItemTooltip =
+                    tooltipText.includes("Execution Status") ||
+                    tooltipText.includes("Type:") ||
+                    (!tooltipText.includes("Upload") &&
+                        !tooltipText.includes("Generate") &&
+                        !tooltipText.includes("Delete"));
 
-                // Try hovering on the left side of the label element
-                if (treeRowElement) {
-                    await actions.move({ origin: treeRowElement as any, x: -50, y: 0 }).perform();
-                    const retryTooltip = await waitForTooltip(driver, UITimeouts.SHORT);
-                    if (
-                        retryTooltip &&
-                        (retryTooltip.includes("Execution Status") || retryTooltip.includes(itemLabel))
-                    ) {
-                        logger.trace("Tooltip", `Found tooltip on retry: ${retryTooltip.substring(0, 100)}...`);
-                        return retryTooltip;
+                if (isItemTooltip) {
+                    if (tooltipName && tooltipName !== itemLabel) {
+                        logger.trace(
+                            "Tooltip",
+                            `Stale tooltip: expected "${itemLabel}", found Name: "${tooltipName}". Retrying...`
+                        );
+                        // Jiggle mouse slightly to trigger update
+                        await actions.move({ origin: elementToHover as any, x: 5, y: 5 }).perform();
+                        await actions.move({ origin: elementToHover as any }).perform();
+                        await driver.sleep(200);
+                        continue;
                     }
+
+                    logger.trace("Tooltip", `Found valid tooltip text: ${tooltipText.substring(0, 100)}...`);
+                    logger.debug("Tooltip", `Full tooltip text for "${itemLabel}":\n${tooltipText}`);
+                    validTooltip = tooltipText;
+                    break;
+                } else {
+                    logger.trace(
+                        "Tooltip",
+                        `Found button tooltip instead: "${tooltipText.substring(0, 50)}". Retrying...`
+                    );
+                    await driver.sleep(200);
                 }
+            } else {
+                await driver.sleep(200);
             }
+        }
+
+        if (validTooltip) {
+            return validTooltip;
         }
 
         // Try getting the title attribute directly from the tree row
@@ -333,6 +439,27 @@ function parseTooltipMetadata(tooltipText: string): {
     return metadata;
 }
 
+type TooltipNodeType = "testTheme" | "testCaseSet" | "unknown";
+
+/**
+ * Parses the logical node type from a Test Themes tooltip.
+ */
+function parseTooltipNodeType(tooltipText: string): TooltipNodeType {
+    if (!tooltipText) {
+        return "unknown";
+    }
+
+    if (/Type:\s*TestThemeNode/i.test(tooltipText)) {
+        return "testTheme";
+    }
+
+    if (/Type:\s*TestCaseSetNode/i.test(tooltipText)) {
+        return "testCaseSet";
+    }
+
+    return "unknown";
+}
+
 /**
  * Escapes special regex characters in a string.
  *
@@ -388,132 +515,273 @@ async function verifyTooltipContains(item: TreeItem, driver: WebDriver, expected
 }
 
 /**
- * Clicks the Generate button for a tree item using JavaScript to avoid stale element issues.
- * Finds the row by label and clicks the Generate button in one atomic operation.
+ * Verifies tooltip text for a freshly resolved item label in a single pass.
+ *
+ * @param driver - The WebDriver instance
+ * @param testThemesPage - The TestThemesPage instance
+ * @param sideBar - The SideBarView instance
+ * @param itemLabel - The tree item label to re-resolve
+ * @param expectedText - The text expected in tooltip
+ * @returns Promise<boolean> - True if tooltip contains expected text
+ */
+async function verifyTooltipContainsForLabel(
+    driver: WebDriver,
+    testThemesPage: TestThemesPage,
+    sideBar: SideBarView,
+    itemLabel: string,
+    expectedText: string
+): Promise<boolean> {
+    const content = sideBar.getContent();
+    const section = await testThemesPage.getSection(content);
+    if (!section) {
+        logger.warn("Tooltip", "Test Themes section not available for tooltip verification");
+        return false;
+    }
+
+    const item = await testThemesPage.getItem(section, itemLabel);
+    if (!item) {
+        logger.warn("Tooltip", `Item "${itemLabel}" not found for tooltip verification`);
+        return false;
+    }
+
+    return await verifyTooltipContains(item, driver, expectedText);
+}
+
+/**
+ * Verifies tooltip text for an item resolved by UniqueID.
+ *
+ * @param driver - The WebDriver instance
+ * @param testThemesPage - The TestThemesPage instance
+ * @param sideBar - The SideBarView instance
+ * @param uniqueId - The test item UniqueID
+ * @param expectedText - The text expected in tooltip
+ * @returns Promise<boolean> - True if tooltip contains expected text
+ */
+async function verifyTooltipContainsForUniqueId(
+    driver: WebDriver,
+    testThemesPage: TestThemesPage,
+    sideBar: SideBarView,
+    uniqueId: string,
+    expectedText: string
+): Promise<boolean> {
+    const content = sideBar.getContent();
+    const section = await testThemesPage.getSection(content);
+    if (!section) {
+        logger.warn("Tooltip", "Test Themes section not available for tooltip verification by UniqueID");
+        return false;
+    }
+
+    const item = await findTreeItemByUniqueId(section, driver, uniqueId);
+    if (!item) {
+        logger.warn("Tooltip", `Item with UniqueID "${uniqueId}" not found for tooltip verification`);
+        return false;
+    }
+
+    return await verifyTooltipContains(item, driver, expectedText);
+}
+
+/**
+ * Clicks the Generate button for a tree item in a single pass.
  *
  * @param driver - The WebDriver instance
  * @param itemLabel - The label of the item
  * @returns Promise<boolean> - True if button was clicked successfully
  */
 async function clickGenerateButton(driver: WebDriver, itemLabel: string): Promise<boolean> {
-    const maxRetries = 3;
+    try {
+        await driver.switchTo().defaultContent();
+        logger.trace("TestGeneration", `Looking for Generate button near item: "${itemLabel}"`);
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-            await driver.switchTo().defaultContent();
-            logger.trace(
-                "TestGeneration",
-                `Looking for Generate button near item: "${itemLabel}" (attempt ${attempt}/${maxRetries})`
-            );
+        const scrollAndHoverSucceeded = (await driver.executeScript(`
+            function scrollAndHoverItem(itemLabel) {
+                const rows = document.querySelectorAll('.monaco-list-row');
+                for (const row of rows) {
+                    const labelElement = row.querySelector('.monaco-icon-label .label-name');
+                    const labelText = labelElement ? labelElement.textContent : '';
+                    if (labelText === itemLabel || row.textContent.includes(itemLabel)) {
+                        row.scrollIntoView({ block: 'center' });
+                        row.click();
+                        row.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+                        row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+                        return true;
+                    }
+                }
+                return false;
+            }
+            return scrollAndHoverItem('${itemLabel.replace(/'/g, "\\'")}');
+        `)) as boolean;
 
-            // Scroll the item into view and hover over it using JavaScript
-            const scrollAndHoverSucceeded = (await driver.executeScript(`
-                function scrollAndHoverItem(itemLabel) {
-                    const rows = document.querySelectorAll('.monaco-list-row');
-                    for (const row of rows) {
-                        const labelElement = row.querySelector('.monaco-icon-label .label-name');
-                        const labelText = labelElement ? labelElement.textContent : '';
-                        if (labelText === itemLabel || row.textContent.includes(itemLabel)) {
-                            // Scroll into view
-                            row.scrollIntoView({ block: 'center' });
-                            // Click to select the row (this ensures action buttons appear)
-                            row.click();
-                            // Dispatch mouse events to trigger hover state
-                            row.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-                            row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+        if (!scrollAndHoverSucceeded) {
+            logger.debug("TestGeneration", `Could not find item "${itemLabel}" in tree`);
+            return false;
+        }
+
+        await driver.sleep(300);
+
+        const clickSucceeded = (await driver.executeScript(`
+            function findAndClickGenerateButton(itemLabel) {
+                const rows = document.querySelectorAll('.monaco-list-row');
+                for (const row of rows) {
+                    const rowText = row.textContent || row.innerText || '';
+                    if (!rowText.includes(itemLabel)) {
+                        continue;
+                    }
+
+                    const actionButtons = row.querySelectorAll('a.action-item, button.action-item, a[class*="action"], button[class*="action"]');
+                    for (const btn of actionButtons) {
+                        const ariaLabel = btn.getAttribute('aria-label') || '';
+                        const title = btn.getAttribute('title') || '';
+                        const buttonText = (ariaLabel + ' ' + title).toLowerCase();
+
+                        if (buttonText.includes('generate') || buttonText.includes('robot framework')) {
+                            btn.scrollIntoView({ block: 'center' });
+                            btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                            btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                            btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                            return true;
+                        }
+
+                        const codicon = btn.querySelector('.codicon-robot, .codicon-play, [class*="codicon-robot"], [class*="codicon-play"]');
+                        if (codicon) {
+                            btn.scrollIntoView({ block: 'center' });
+                            btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                            btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                            btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
                             return true;
                         }
                     }
-                    return false;
-                }
-                return scrollAndHoverItem('${itemLabel.replace(/'/g, "\\'")}');
-            `)) as boolean;
-
-            if (!scrollAndHoverSucceeded) {
-                logger.debug("TestGeneration", `Could not find item "${itemLabel}" in tree, attempt ${attempt}`);
-                if (attempt < maxRetries) {
-                    await driver.sleep(500);
-                    continue;
                 }
                 return false;
             }
+            return findAndClickGenerateButton('${itemLabel.replace(/'/g, "\\'")}');
+        `)) as boolean;
 
-            // Wait for action buttons to appear
-            await driver.sleep(300);
+        if (!clickSucceeded) {
+            logger.debug("TestGeneration", "Generate button not found or click failed");
+            return false;
+        }
 
-            // Use JavaScript to find and click the Generate button in one atomic operation
-            const clickSucceeded = (await driver.executeScript(`
-                function findAndClickGenerateButton(itemLabel) {
-                    const rows = document.querySelectorAll('.monaco-list-row');
-                    for (const row of rows) {
-                        const rowText = row.textContent || row.innerText || '';
-                        if (!rowText.includes(itemLabel)) {
-                            continue;
-                        }
-                        
-                        // Look for action buttons with Generate-related icons or labels
-                        const actionButtons = row.querySelectorAll('a.action-item, button.action-item, a[class*="action"], button[class*="action"]');
-                        for (const btn of actionButtons) {
-                            // Check aria-label or title for "Generate"
-                            const ariaLabel = btn.getAttribute('aria-label') || '';
-                            const title = btn.getAttribute('title') || '';
-                            const buttonText = (ariaLabel + ' ' + title).toLowerCase();
-                            
-                            if (buttonText.includes('generate') || buttonText.includes('robot framework')) {
-                                btn.scrollIntoView({ block: 'center' });
-                                btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-                                btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-                                btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-                                return true;
-                            }
-                            
-                            // Check for robot framework icon (codicon-robot or similar)
-                            const codicon = btn.querySelector('.codicon-robot, .codicon-play, [class*="codicon-robot"], [class*="codicon-play"]');
-                            if (codicon) {
-                                btn.scrollIntoView({ block: 'center' });
-                                btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-                                btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-                                btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-                                return true;
-                            }
-                        }
+        logger.trace("TestGeneration", "Successfully clicked Generate button");
+        await applySlowMotion(driver);
+        return true;
+    } catch (error) {
+        logger.error("TestGeneration", "Error clicking Generate button", error);
+        return false;
+    }
+}
+
+/**
+ * Searches the Test Themes tree recursively for an item with the specified UniqueID.
+ * This avoids ambiguous label-only matching when identical labels exist in multiple branches.
+ *
+ * @param section - The Test Themes view section
+ * @param driver - The WebDriver instance
+ * @param uniqueId - The UniqueID to search for
+ * @returns Promise<TreeItem | null> - The matching tree item or null
+ */
+async function findTreeItemByUniqueId(
+    section: ViewSection,
+    driver: WebDriver,
+    uniqueId: string
+): Promise<TreeItem | null> {
+    const findRecursive = async (items: TreeItem[]): Promise<TreeItem | null> => {
+        for (const item of items) {
+            try {
+                const tooltip = await getTreeItemTooltip(item, driver);
+                const metadata = parseTooltipMetadata(tooltip || "");
+                if (metadata.uniqueID === uniqueId) {
+                    return item;
+                }
+
+                if (await item.hasChildren()) {
+                    const isExpanded = await item.isExpanded();
+                    if (!isExpanded) {
+                        await item.expand();
+                        await applySlowMotion(driver);
                     }
-                    return false;
+
+                    const children = await item.getChildren();
+                    const foundInChildren = await findRecursive(children);
+                    if (foundInChildren) {
+                        return foundInChildren;
+                    }
                 }
-                return findAndClickGenerateButton('${itemLabel.replace(/'/g, "\\'")}');
-            `)) as boolean;
-
-            if (clickSucceeded) {
-                logger.trace("TestGeneration", "Successfully clicked Generate button");
-                await applySlowMotion(driver);
-                return true;
-            }
-
-            logger.debug("TestGeneration", `Button not found or click failed on attempt ${attempt}`);
-
-            if (attempt < maxRetries) {
-                await driver.sleep(500);
-            }
-        } catch (error: any) {
-            const isStaleError =
-                error.name === "StaleElementReferenceError" || error.message?.includes("stale element");
-
-            if (isStaleError && attempt < maxRetries) {
-                logger.debug("TestGeneration", `Stale element error on attempt ${attempt}, retrying...`);
-                await driver.sleep(500);
-                continue;
-            }
-
-            logger.error("TestGeneration", `Error on attempt ${attempt}`, error);
-
-            if (attempt === maxRetries) {
-                return false;
+            } catch {
+                // Ignore item-level errors and continue scanning.
             }
         }
+
+        return null;
+    };
+
+    await waitForTreeItems(section, driver);
+    const visibleItems = (await section.getVisibleItems()) as TreeItem[];
+    return await findRecursive(visibleItems);
+}
+
+/**
+ * Checks whether the inline Upload action is currently available for a specific tree item.
+ *
+ * @param item - The tree item
+ * @returns Promise<boolean> - True if upload action is visible for the item
+ */
+async function hasUploadAction(item: TreeItem): Promise<boolean> {
+    try {
+        await item.click();
+
+        const actionButtons = await item.findElements(By.className("action-label"));
+        for (const button of actionButtons) {
+            const title = (await button.getAttribute("title")) || "";
+            const ariaLabel = (await button.getAttribute("aria-label")) || "";
+            const normalized = `${title} ${ariaLabel}`.toLowerCase();
+
+            if (
+                normalized.includes("upload") ||
+                normalized.includes("execution results") ||
+                normalized.includes("import")
+            ) {
+                return true;
+            }
+        }
+    } catch {
+        // Ignore transient UI interaction errors.
     }
 
-    logger.warn("TestGeneration", "Failed to click Generate button after all retries");
     return false;
+}
+
+/**
+ * Clicks the Upload button for a specific tree item using a single interaction strategy.
+ *
+ * @param testThemesPage - The TestThemesPage instance
+ * @param item - The target tree item
+ * @returns Promise<boolean> - True if button was clicked successfully
+ */
+async function clickUploadButton(testThemesPage: TestThemesPage, item: TreeItem): Promise<boolean> {
+    try {
+        let itemLabel = "unknown";
+        try {
+            itemLabel = await item.getLabel();
+        } catch {
+            // Keep fallback label when item becomes stale between resolve and click.
+        }
+        logger.trace("Upload", `Clicking Upload button for item: "${itemLabel}"`);
+
+        const clicked = await testThemesPage.clickItemAction(item, "Upload");
+        if (!clicked) {
+            logger.debug(
+                "Upload",
+                `Upload action not available for "${itemLabel}". Item may not be marked for import in current context.`
+            );
+            return false;
+        }
+
+        logger.trace("Upload", "Successfully clicked Upload button");
+        return true;
+    } catch (error) {
+        logger.error("Upload", "Error clicking Upload button", error);
+        return false;
+    }
 }
 
 /**
@@ -622,12 +890,8 @@ async function verifyGeneratedRobotFile(
 
     const refreshedParent = await testThemesPage.getItem(section, parentItemLabel);
     if (!refreshedParent) {
-        await waitForTreeRefresh(driver, section, UITimeouts.SHORT);
-        const retryParent = await testThemesPage.getItem(section, parentItemLabel);
-        if (!retryParent) {
-            logger.warn("Verification", `Parent item "${parentItemLabel}" not found for verification`);
-            return false;
-        }
+        logger.warn("Verification", `Parent item "${parentItemLabel}" not found for verification`);
+        return false;
     }
 
     const itemToCheck = refreshedParent || parentItem;
@@ -912,6 +1176,7 @@ async function isTestingViewVisible(driver: WebDriver): Promise<boolean> {
 async function openTestingView(driver: WebDriver): Promise<boolean> {
     try {
         await driver.switchTo().defaultContent();
+        await releaseModifierKeys(driver, "TestingView");
         logger.info("TestingView", "Opening Testing View...");
 
         const activityBarItems = await driver.findElements(By.css(".activitybar .action-item"));
@@ -938,6 +1203,38 @@ async function openTestingView(driver: WebDriver): Promise<boolean> {
             } catch {
                 // Continue searching
             }
+        }
+
+        // Fallback: open Testing view from Command Palette when the activity icon is unavailable.
+        try {
+            const { Workbench } = await import("vscode-extension-tester");
+            const workbench = new Workbench();
+            const commandPalette = await workbench.openCommandPrompt();
+
+            await commandPalette.setText(">Testing: Focus on Test Explorer View");
+            await driver.sleep(400);
+
+            const picks = await commandPalette.getQuickPicks();
+            if (picks.length > 0) {
+                await picks[0].select();
+
+                const isVisible = await waitForCondition(
+                    driver,
+                    async () => await isTestingViewVisible(driver),
+                    UITimeouts.MEDIUM,
+                    200,
+                    "Testing View to become visible via command palette"
+                );
+
+                if (isVisible) {
+                    logger.info("TestingView", " Testing View opened via command palette");
+                    return true;
+                }
+            }
+
+            await commandPalette.cancel();
+        } catch (fallbackError) {
+            logger.debug("TestingView", `Command palette fallback failed: ${fallbackError}`);
         }
 
         logger.warn("TestingView", "Testing icon not found in Activity Bar");
@@ -1124,76 +1421,57 @@ async function waitForTestExecutionComplete(driver: WebDriver, timeout: number =
 async function executeRobotTestsViaTerminal(driver: WebDriver, _config: { testThemeName: string }): Promise<boolean> {
     try {
         await driver.switchTo().defaultContent();
+        await releaseModifierKeys(driver, "Terminal");
         logger.info("Terminal", "Executing Robot Framework tests via terminal...");
 
-        // Open terminal via command palette
-        const workbench = await driver.findElement(By.css(".monaco-workbench"));
-        if (!workbench) {
-            logger.warn("Terminal", "Workbench not found");
-            return false;
-        }
-
-        await driver.actions().keyDown("\uE009").sendKeys("`").keyUp("\uE009").perform();
-
-        const terminalVisible = await driver.wait(
-            async () => {
-                const terminals = await driver.findElements(
-                    By.css('.terminal-wrapper, .integrated-terminal, [class*="terminal"]')
-                );
-                for (const term of terminals) {
-                    if (await term.isDisplayed()) {
-                        return true;
-                    }
-                }
-                return false;
-            },
-            UITimeouts.MEDIUM,
-            "Waiting for terminal to open"
-        );
-
-        if (!terminalVisible) {
-            logger.warn("Terminal", "Terminal did not open");
-            return false;
-        }
+        // Open terminal using ExTester API
+        const bottomBar = new BottomBarPanel();
+        const terminalView = await bottomBar.openTerminalView();
 
         // Get dynamic paths from extension settings
         const { getExtensionSetting } = await import("./config/testConfig");
-        const outputDir = getExtensionSetting<string>("testbenchExtension.outputDirectory", "tests");
-        const outputXmlPath = getExtensionSetting<string>("testbenchExtension.outputXmlFilePath", "results/output.xml");
+        const outputDir = getExtensionSetting<string>("testbenchExtension.outputDirectory", "tests") || "tests";
+        const outputXmlPath =
+            getExtensionSetting<string>("testbenchExtension.outputXmlFilePath", "results/output.xml") ||
+            "results/output.xml";
         // Extract directory from full path (e.g., "results/output.xml" -> "results")
-        const resultsDir = path.dirname(outputXmlPath!);
+        const resultsDir = path.dirname(outputXmlPath);
 
-        const robotCommand = `robot --dryrun --outputdir ${resultsDir} ${outputDir}`;
+        // Release modifiers again after terminal focus was moved.
+        await releaseModifierKeys(driver, "Terminal");
+
+        const robotCommand = `robot --dryrun --outputdir "${resultsDir}" "${outputDir}"`;
         logger.info("Terminal", `Executing: ${robotCommand}`);
 
-        await driver.actions().sendKeys(robotCommand).perform();
-        await waitForCondition(driver, async () => true, 100, 50, "command input");
-        await driver.actions().sendKeys("\uE007").perform();
+        await terminalView.executeCommand(robotCommand);
 
-        const commandCompleted = await waitForTerminalOutput(driver, "Output:", UITimeouts.LONG);
+        const commandCompleted = await waitForCondition(
+            driver,
+            async () => {
+                try {
+                    const text = await terminalView.getText();
+                    if (
+                        text.includes("Output:") ||
+                        text.includes("PASS") ||
+                        text.includes("FAIL") ||
+                        text.includes("Error") ||
+                        text.includes("output.xml") ||
+                        text.includes("WARN")
+                    ) {
+                        return true;
+                    }
+                } catch {
+                    // Ignore errors reading terminal text
+                }
+                return false;
+            },
+            UITimeouts.LONG,
+            500,
+            "robot command completion"
+        );
 
         if (!commandCompleted) {
-            await waitForCondition(
-                driver,
-                async () => {
-                    const terminalContent = await driver.findElements(By.css(".xterm-rows"));
-                    for (const content of terminalContent) {
-                        const text = await content.getText();
-                        if (
-                            text.includes("PASS") ||
-                            text.includes("FAIL") ||
-                            text.includes("Error") ||
-                            text.includes("output.xml")
-                        ) {
-                            return true;
-                        }
-                    }
-                    return false;
-                },
-                UITimeouts.LONG,
-                500,
-                "robot command completion"
-            );
+            logger.warn("Terminal", "Timeout waiting for robot command completion, but continuing...");
         }
 
         logger.info("Terminal", " Robot command executed (dry-run mode)");
@@ -1228,18 +1506,17 @@ async function verifyOutputXmlFileExists(): Promise<{ exists: boolean; path: str
  */
 async function handleSelectOutputXmlFilePrompt(driver: WebDriver): Promise<boolean> {
     try {
-        const quickInput = await waitForQuickInput(driver, UITimeouts.SHORT);
-        if (!quickInput) {
-            return false;
+        const { InputBox } = await import("vscode-extension-tester");
+        const inputBox = await InputBox.create();
+
+        let titleText = "";
+        try {
+            titleText = (await inputBox.getTitle()) || "";
+        } catch {
+            titleText = "";
         }
 
-        const quickWidgets = await driver.findElements(By.css(".quick-input-widget, .monaco-quick-open-widget"));
-        if (quickWidgets.length === 0) {
-            return false;
-        }
-
-        const quickInputText = (await quickWidgets[0].getText()) || "";
-        if (!quickInputText.toLowerCase().includes("select output xml file")) {
+        if (!titleText.toLowerCase().includes("select output xml file")) {
             return false;
         }
 
@@ -1254,10 +1531,12 @@ async function handleSelectOutputXmlFilePrompt(driver: WebDriver): Promise<boole
 
         logger.info("Upload", `Detected output XML picker, selecting: ${outputXmlCheck.path}`);
 
-        await quickInput.click();
-        await driver.actions().keyDown("\uE009").sendKeys("a").keyUp("\uE009").perform();
-        await quickInput.sendKeys(outputXmlCheck.path);
-        await quickInput.sendKeys("\uE007");
+        // Ensure no modifier keys are stuck before typing in quick input.
+        await releaseModifierKeys(driver, "Upload");
+
+        await inputBox.clear();
+        await inputBox.setText(outputXmlCheck.path);
+        await inputBox.confirm();
         await driver.sleep(500);
 
         return true;
@@ -1459,11 +1738,18 @@ async function executeTestGenerationScenario(
     }
 
     const itemLabel = await targetItem.getLabel();
+    let tooltipTargetLabel: string = itemLabel;
     result.details.itemLabel = itemLabel;
     logger.info("Scenario", `Found target item: "${itemLabel}" at ${scenario.level} level`);
 
     // Get tooltip for metadata verification later
     const itemTooltip = await getTreeItemTooltip(targetItem, driver);
+    const initialTooltipMetadata = parseTooltipMetadata(itemTooltip || "");
+    const targetUniqueId = initialTooltipMetadata.uniqueID;
+    const stableTargetLabel = initialTooltipMetadata.name || itemLabel;
+    if (targetUniqueId) {
+        logger.info("Scenario", `Resolved target UniqueID: "${targetUniqueId}"`);
+    }
     logger.debug("Scenario", `Item tooltip: ${itemTooltip?.substring(0, 200) || "(none)"}...`);
 
     // ============================================
@@ -1553,33 +1839,57 @@ async function executeTestGenerationScenario(
 
         // Extract expected metadata from tooltip
         const tooltipMetadata = parseTooltipMetadata(itemTooltip);
+        const tooltipNodeType = parseTooltipNodeType(itemTooltip);
         logger.debug("Scenario", `Expected metadata from tooltip: ${JSON.stringify(tooltipMetadata)}`);
+        logger.debug("Scenario", `Tooltip node type: ${tooltipNodeType}`);
 
-        // Check at least one file for metadata
-        for (const file of generatedFiles) {
+        // For TestTheme nodes, generated __init__.robot often omits Name metadata.
+        // Therefore Name is required only for TestCaseSet nodes.
+        const expectedMetadata = {
+            uniqueID: tooltipMetadata.uniqueID || undefined,
+            numbering: tooltipMetadata.numbering || undefined,
+            name: tooltipNodeType === "testCaseSet" ? tooltipMetadata.name || undefined : undefined
+        };
+
+        const candidateFiles =
+            tooltipNodeType === "testTheme"
+                ? [
+                      ...generatedFiles.filter((file) => path.basename(file).toLowerCase() === "__init__.robot"),
+                      ...generatedFiles.filter((file) => path.basename(file).toLowerCase() !== "__init__.robot")
+                  ]
+                : generatedFiles;
+
+        // Check at least one file for matching metadata.
+        for (const file of candidateFiles) {
             const content = readRobotFileContent(file);
             if (content && content.includes("*** Settings ***")) {
-                const verifyResult = verifyRobotFileMetadata(file, {
-                    uniqueID: tooltipMetadata.uniqueID || undefined,
-                    name: tooltipMetadata.name || undefined,
-                    numbering: tooltipMetadata.numbering || undefined
-                });
+                const foundMetadata = {
+                    uniqueID: extractMetadataFromFile(content, "UniqueID"),
+                    name: extractMetadataFromFile(content, "Name"),
+                    numbering: extractMetadataFromFile(content, "Numbering")
+                };
 
-                if (verifyResult.valid) {
+                const uniqueIdMatches =
+                    !expectedMetadata.uniqueID || foundMetadata.uniqueID === expectedMetadata.uniqueID;
+                const nameMatches = !expectedMetadata.name || foundMetadata.name === expectedMetadata.name;
+                const numberingMatches =
+                    !expectedMetadata.numbering || foundMetadata.numbering === expectedMetadata.numbering;
+
+                if (uniqueIdMatches && nameMatches && numberingMatches) {
                     metadataVerified = true;
                     logger.info("Scenario", `Metadata verified in ${path.basename(file)}`);
                     break;
                 } else {
                     logger.debug(
                         "Scenario",
-                        `Metadata check failed for ${path.basename(file)}: ${verifyResult.errors.join(", ")}`
+                        `Metadata check failed for ${path.basename(file)}: expected ${JSON.stringify(expectedMetadata)}, found ${JSON.stringify(foundMetadata)}`
                     );
                 }
             }
         }
 
         result.details.metadataVerified = metadataVerified;
-        if (!metadataVerified && generatedFiles.length > 0) {
+        if (!metadataVerified && candidateFiles.length > 0) {
             logger.warn("Scenario", "Metadata verification did not match any file (non-fatal)");
         }
     }
@@ -1657,6 +1967,7 @@ async function executeTestGenerationScenario(
     // ============================================
     if (uploadResults) {
         logger.info("Scenario", "Step 9: Uploading results to TestBench...");
+        result.details.resultsUploaded = false;
 
         // Ensure we're back in TestBench sidebar
         await openTestBenchSidebar(driver);
@@ -1669,43 +1980,124 @@ async function executeTestGenerationScenario(
         if (testThemesSection) {
             await waitForTreeItems(testThemesSection, driver);
 
-            const itemForUpload = await testThemesPage.getItem(testThemesSection, itemLabel);
-            if (itemForUpload) {
-                await itemForUpload.click();
-                await applySlowMotion(driver);
+            const outputXmlCheck = await verifyOutputXmlFileExists();
+            if (!outputXmlCheck.exists) {
+                logger.warn(
+                    "Scenario",
+                    `Skipping upload: configured output XML file does not exist at ${outputXmlCheck.path}`
+                );
+            } else {
+                logger.info("Scenario", `Upload precondition met. Using output XML: ${outputXmlCheck.path}`);
 
-                const outputXmlCheck = await verifyOutputXmlFileExists();
-                if (!outputXmlCheck.exists) {
-                    logger.warn(
-                        "Scenario",
-                        `Skipping upload: configured output XML file does not exist at ${outputXmlCheck.path}`
-                    );
+                let currentSection: ViewSection | null = testThemesSection;
+                let itemForUpload: TreeItem | null = null;
+
+                if (targetUniqueId) {
+                    itemForUpload = await findTreeItemByUniqueId(currentSection, driver, targetUniqueId);
+                }
+
+                if (!itemForUpload) {
+                    itemForUpload = await testThemesPage.getItem(currentSection, itemLabel);
+                }
+
+                if (!itemForUpload) {
+                    logger.warn("Scenario", `Upload target item not found (label="${itemLabel}")`);
                 } else {
-                    logger.info("Scenario", `Upload precondition met. Using output XML: ${outputXmlCheck.path}`);
+                    const uploadActionVisible = await waitForCondition(
+                        driver,
+                        async () => {
+                            const refreshedContent = sideBar.getContent();
+                            currentSection = await testThemesPage.getSection(refreshedContent);
+                            if (!currentSection) {
+                                return false;
+                            }
 
-                    logger.info("Scenario", 'Clicking "Upload Execution Results To TestBench" button...');
-                    const uploadButtonClicked = await testThemesPage.clickItemAction(itemForUpload, "Upload");
+                            if (targetUniqueId) {
+                                itemForUpload = await findTreeItemByUniqueId(currentSection, driver, targetUniqueId);
+                            } else {
+                                itemForUpload = await testThemesPage.getItem(currentSection, itemLabel);
+                            }
 
-                    if (uploadButtonClicked) {
-                        await handleSelectOutputXmlFilePrompt(driver);
+                            if (!itemForUpload) {
+                                return false;
+                            }
 
-                        const uploadNotificationAppeared = await waitForNotification(
-                            driver,
-                            "Successfully imported Robot Framework test results",
-                            60000
+                            return await hasUploadAction(itemForUpload);
+                        },
+                        15000,
+                        1000,
+                        `Upload button appearance for ${itemLabel}`
+                    );
+
+                    if (!uploadActionVisible || !itemForUpload) {
+                        logger.warn(
+                            "Scenario",
+                            `Upload action did not appear for target "${itemLabel}". Item may not be marked for import.`
                         );
-
-                        if (uploadNotificationAppeared) {
-                            result.details.resultsUploaded = true;
-                            logger.info("Scenario", "Results uploaded successfully");
-                        } else {
-                            logger.warn("Scenario", "Upload notification did not appear");
-                        }
                     } else {
-                        logger.warn("Scenario", "Failed to click Upload button");
+                        logger.info("Scenario", `Using upload target item: "${stableTargetLabel}"`);
+                        logger.info("Scenario", 'Clicking "Upload Execution Results To TestBench" button...');
+
+                        // Re-resolve right before click to avoid stale tree item references after UI updates.
+                        const refreshedContent = sideBar.getContent();
+                        currentSection = await testThemesPage.getSection(refreshedContent);
+                        if (currentSection) {
+                            itemForUpload = targetUniqueId
+                                ? await findTreeItemByUniqueId(currentSection, driver, targetUniqueId)
+                                : await testThemesPage.getItem(currentSection, itemLabel);
+                        }
+
+                        let uploadButtonClicked = false;
+                        for (let attempt = 1; attempt <= 3; attempt++) {
+                            if (!itemForUpload) {
+                                break;
+                            }
+
+                            uploadButtonClicked = await clickUploadButton(testThemesPage, itemForUpload);
+                            if (uploadButtonClicked) {
+                                break;
+                            }
+
+                            if (attempt < 3) {
+                                await driver.sleep(250);
+                                const retryContent = sideBar.getContent();
+                                currentSection = await testThemesPage.getSection(retryContent);
+                                if (!currentSection) {
+                                    break;
+                                }
+
+                                itemForUpload = targetUniqueId
+                                    ? await findTreeItemByUniqueId(currentSection, driver, targetUniqueId)
+                                    : await testThemesPage.getItem(currentSection, itemLabel);
+                            }
+                        }
+
+                        if (!uploadButtonClicked) {
+                            logger.warn("Scenario", `Failed to click Upload button for target "${stableTargetLabel}"`);
+                        } else {
+                            await handleSelectOutputXmlFilePrompt(driver);
+
+                            const uploadNotificationAppeared = await waitForUploadSuccessNotification(
+                                driver,
+                                60000,
+                                stableTargetLabel
+                            );
+                            if (uploadNotificationAppeared) {
+                                result.details.resultsUploaded = true;
+                                tooltipTargetLabel = stableTargetLabel;
+                                logger.info(
+                                    "Scenario",
+                                    `Results uploaded successfully using target "${tooltipTargetLabel}"`
+                                );
+                            } else {
+                                logger.warn("Scenario", "Upload notification did not appear");
+                            }
+                        }
                     }
                 }
             }
+        } else {
+            logger.warn("Scenario", "Test Themes section not available during upload step");
         }
     }
 
@@ -1715,6 +2107,8 @@ async function executeTestGenerationScenario(
     if (verifyExecutionStatus && uploadResults && result.details.resultsUploaded === true) {
         logger.info("Scenario", "Step 10: Verifying execution status in tooltip...");
 
+        result.details.executionStatusVerified = false;
+
         await waitForTreeRefresh(driver, null, UITimeouts.MEDIUM);
 
         content = sideBar.getContent();
@@ -1723,18 +2117,29 @@ async function executeTestGenerationScenario(
         if (testThemesSection) {
             await waitForTreeItems(testThemesSection, driver);
 
-            const itemForTooltip = await testThemesPage.getItem(testThemesSection, itemLabel);
-            if (itemForTooltip) {
-                const expectedTooltipText = "Execution Status: Performed";
-                const tooltipVerified = await verifyTooltipContains(itemForTooltip, driver, expectedTooltipText);
+            const expectedTooltipText = "Execution Status: Performed";
+            const tooltipVerified = targetUniqueId
+                ? await verifyTooltipContainsForUniqueId(
+                      driver,
+                      testThemesPage,
+                      sideBar,
+                      targetUniqueId,
+                      expectedTooltipText
+                  )
+                : await verifyTooltipContainsForLabel(
+                      driver,
+                      testThemesPage,
+                      sideBar,
+                      tooltipTargetLabel,
+                      expectedTooltipText
+                  );
 
-                result.details.executionStatusVerified = tooltipVerified;
+            result.details.executionStatusVerified = tooltipVerified;
 
-                if (tooltipVerified) {
-                    logger.info("Scenario", "Execution status verified in tooltip");
-                } else {
-                    logger.warn("Scenario", "Execution status not found in tooltip (non-fatal)");
-                }
+            if (tooltipVerified) {
+                logger.info("Scenario", `Execution status verified in tooltip for "${tooltipTargetLabel}"`);
+            } else {
+                logger.warn("Scenario", `Execution status not found in tooltip for "${tooltipTargetLabel}"`);
             }
         }
     }
@@ -1742,6 +2147,24 @@ async function executeTestGenerationScenario(
     // ============================================
     // Final Summary
     // ============================================
+    if (executeTests && result.details.testsExecuted !== true) {
+        result.reason = "Test execution failed";
+        logger.warn("Scenario", result.reason);
+        return result;
+    }
+
+    if (uploadResults && result.details.resultsUploaded !== true) {
+        result.reason = "Result upload failed";
+        logger.warn("Scenario", result.reason);
+        return result;
+    }
+
+    if (verifyExecutionStatus && uploadResults && result.details.executionStatusVerified !== true) {
+        result.reason = "Execution status tooltip verification failed";
+        logger.warn("Scenario", result.reason);
+        return result;
+    }
+
     result.success = true;
 
     logger.info("Scenario", "========================================");
@@ -1796,6 +2219,8 @@ describe("Test Themes View UI Tests", function () {
             logTestDataConfig();
             const testThemesPage = new TestThemesPage(driver);
             const projectsPage = new ProjectsViewPage(driver);
+            let targetTestThemeUniqueId: string | null = null;
+            let targetThemeNameForTooltip: string = config.testThemeName;
 
             // ============================================
             // Phase 1: Login and View Detection
@@ -2106,12 +2531,7 @@ describe("Test Themes View UI Tests", function () {
             }
 
             logger.info("Phase4", `Looking for test theme "${config.testThemeName}"...`);
-            // Use a retry mechanism to find the item
-            let targetTestTheme = await testThemesPage.getItem(testThemesSectionVerify, config.testThemeName);
-            if (!targetTestTheme) {
-                await waitForTreeRefresh(driver, testThemesSectionVerify, UITimeouts.SHORT);
-                targetTestTheme = await testThemesPage.getItem(testThemesSectionVerify, config.testThemeName);
-            }
+            const targetTestTheme = await testThemesPage.getItem(testThemesSectionVerify, config.testThemeName);
 
             if (!targetTestTheme) {
                 logger.warn("Phase4", `Test theme "${config.testThemeName}" not found`);
@@ -2121,6 +2541,14 @@ describe("Test Themes View UI Tests", function () {
 
             const testThemeLabel = await targetTestTheme.getLabel();
             logger.info("Phase4", `Found test theme: "${testThemeLabel}"`);
+
+            const targetThemeTooltip = await getTreeItemTooltip(targetTestTheme, driver);
+            const targetThemeMetadata = parseTooltipMetadata(targetThemeTooltip || "");
+            targetTestThemeUniqueId = targetThemeMetadata.uniqueID;
+            targetThemeNameForTooltip = targetThemeMetadata.name || testThemeLabel;
+            if (targetTestThemeUniqueId) {
+                logger.info("Phase4", `Resolved target test theme UniqueID: "${targetTestThemeUniqueId}"`);
+            }
 
             await targetTestTheme.click();
             await applySlowMotion(driver);
@@ -2169,17 +2597,10 @@ describe("Test Themes View UI Tests", function () {
             await waitForTreeRefresh(driver, testThemesSectionAfterGen, UITimeouts.MEDIUM);
 
             // Re-find the test theme
-            let testThemeForVerification = await testThemesPage.getItem(
+            const testThemeForVerification = await testThemesPage.getItem(
                 testThemesSectionAfterGen,
                 config.testThemeName
             );
-            if (!testThemeForVerification) {
-                await waitForTreeRefresh(driver, testThemesSectionAfterGen, UITimeouts.SHORT);
-                testThemeForVerification = await testThemesPage.getItem(
-                    testThemesSectionAfterGen,
-                    config.testThemeName
-                );
-            }
 
             if (!testThemeForVerification) {
                 logger.warn("Phase5", `Test theme "${config.testThemeName}" not found for verification`);
@@ -2503,9 +2924,15 @@ describe("Test Themes View UI Tests", function () {
             }
 
             logger.info("Phase8", `Looking for test theme "${config.testThemeName}"...`);
-            let targetTestThemeForUpload = await testThemesPage.getItem(testThemesSectionUpload, config.testThemeName);
+            let targetTestThemeForUpload: TreeItem | null = null;
+            if (targetTestThemeUniqueId) {
+                targetTestThemeForUpload = await findTreeItemByUniqueId(
+                    testThemesSectionUpload,
+                    driver,
+                    targetTestThemeUniqueId
+                );
+            }
             if (!targetTestThemeForUpload) {
-                await waitForTreeRefresh(driver, testThemesSectionUpload, UITimeouts.SHORT);
                 targetTestThemeForUpload = await testThemesPage.getItem(testThemesSectionUpload, config.testThemeName);
             }
 
@@ -2522,34 +2949,63 @@ describe("Test Themes View UI Tests", function () {
             let uploadNotificationAppeared = false;
 
             if (!outputXmlCheck.exists) {
-                logger.warn(
-                    "Phase8",
-                    `Skipping upload: configured output XML file does not exist at ${outputXmlCheck.path}`
-                );
+                expect(
+                    outputXmlCheck.exists,
+                    `Configured output XML file should exist at ${outputXmlCheck.path}`
+                ).to.equal(true);
             } else {
                 logger.info("Phase8", `Upload precondition met. Using output XML: ${outputXmlCheck.path}`);
 
                 logger.info("Phase8", 'Clicking "Upload Execution Results To TestBench" button...');
-                const uploadButtonClicked = await testThemesPage.clickItemAction(targetTestThemeForUpload, "Upload");
+                const uploadLabel = await targetTestThemeForUpload.getLabel();
+                let itemForUpload: TreeItem | null = targetTestThemeForUpload;
 
-                if (!uploadButtonClicked) {
-                    logger.warn("Phase8", "Failed to click Upload button");
-                    this.skip();
+                // Add wait wrapper since file watchers take time to update context value -> MarkedForImport
+                const uploadActionVisible = await waitForCondition(
+                    driver,
+                    async () => {
+                        const refreshedContent = sideBar.getContent();
+                        const refreshedSection = await testThemesPage.getSection(refreshedContent);
+                        if (!refreshedSection) {
+                            return false;
+                        }
+
+                        itemForUpload = targetTestThemeUniqueId
+                            ? await findTreeItemByUniqueId(refreshedSection, driver, targetTestThemeUniqueId)
+                            : await testThemesPage.getItem(refreshedSection, config.testThemeName);
+
+                        if (!itemForUpload) {
+                            return false;
+                        }
+
+                        return await hasUploadAction(itemForUpload);
+                    },
+                    15000,
+                    1000,
+                    `Upload button appearance for ${uploadLabel}`
+                );
+
+                expect(uploadActionVisible, "Upload button should be visible after generation").to.equal(true);
+                expect(!!itemForUpload, "Upload target tree item should be available").to.equal(true);
+
+                if (!itemForUpload) {
                     return;
                 }
+
+                const uploadButtonClicked = await clickUploadButton(testThemesPage, itemForUpload);
+                expect(uploadButtonClicked, "Upload button should be clickable").to.equal(true);
 
                 await handleSelectOutputXmlFilePrompt(driver);
 
                 logger.info("Phase8", "Waiting for upload success notification...");
-                uploadNotificationAppeared = await waitForNotification(
+                uploadNotificationAppeared = await waitForUploadSuccessNotification(
                     driver,
-                    "Successfully imported Robot Framework test results",
-                    60000
+                    60000,
+                    targetThemeNameForTooltip
                 );
 
                 if (!uploadNotificationAppeared) {
-                    logger.warn("Phase8", "Upload notification did not appear within timeout");
-                    // Continue, notification might have been missed
+                    expect(uploadNotificationAppeared, "Upload success notification should appear").to.equal(true);
                 } else {
                     logger.info("Phase8", " Results upload completed successfully");
                 }
@@ -2558,61 +3014,43 @@ describe("Test Themes View UI Tests", function () {
             // ============================================
             // Phase 9: Verify Execution Status in Tooltip
             // ============================================
-            if (uploadNotificationAppeared) {
-                logger.info("Phase9", "Verifying execution status in tooltip...");
+            expect(uploadNotificationAppeared, "Upload must be confirmed before tooltip verification").to.equal(true);
+            logger.info("Phase9", "Verifying execution status in tooltip...");
 
-                try {
-                    await waitForTreeRefresh(driver, null, UITimeouts.MEDIUM);
+            await waitForTreeRefresh(driver, null, UITimeouts.MEDIUM);
 
-                    const updatedContent4 = sideBar.getContent();
-                    const testThemesSectionTooltip = await testThemesPage.getSection(updatedContent4);
+            const updatedContent4 = sideBar.getContent();
+            const testThemesSectionTooltip = await testThemesPage.getSection(updatedContent4);
 
-                    if (!testThemesSectionTooltip) {
-                        throw new Error("[Phase 9] Test Themes section not found for tooltip verification");
-                    }
-
-                    const tooltipTreeLoaded = await waitForTreeItems(testThemesSectionTooltip, driver);
-                    if (!tooltipTreeLoaded) {
-                        throw new Error("[Phase 9] Test Themes tree items did not load for tooltip verification");
-                    }
-
-                    logger.info("Phase9", `Looking for test theme "${config.testThemeName}"...`);
-                    let targetTestThemeForTooltip = await testThemesPage.getItem(
-                        testThemesSectionTooltip,
-                        config.testThemeName
-                    );
-                    if (!targetTestThemeForTooltip) {
-                        await waitForTreeRefresh(driver, testThemesSectionTooltip, UITimeouts.SHORT);
-                        targetTestThemeForTooltip = await testThemesPage.getItem(
-                            testThemesSectionTooltip,
-                            config.testThemeName
-                        );
-                    }
-
-                    if (!targetTestThemeForTooltip) {
-                        throw new Error(
-                            `[Phase 9] Test theme "${config.testThemeName}" not found for tooltip verification`
-                        );
-                    }
-
-                    const expectedTooltipText = "Execution Status: Performed";
-                    const tooltipVerified = await verifyTooltipContains(
-                        targetTestThemeForTooltip,
-                        driver,
-                        expectedTooltipText
-                    );
-
-                    expect(tooltipVerified, `Tooltip should contain "${expectedTooltipText}"`).to.equal(true);
-                    logger.info("Phase9", " Execution status verified in tooltip");
-                } catch (error) {
-                    logger.warn("Phase9", `Execution status verification failed (non-fatal): ${error}`);
-                }
-            } else {
-                logger.warn(
-                    "Phase9",
-                    "Skipping execution-status tooltip verification because upload was not confirmed"
-                );
+            expect(!!testThemesSectionTooltip, "[Phase 9] Test Themes section should be available").to.equal(true);
+            if (!testThemesSectionTooltip) {
+                return;
             }
+
+            const tooltipTreeLoaded = await waitForTreeItems(testThemesSectionTooltip, driver);
+            expect(tooltipTreeLoaded, "[Phase 9] Test Themes tree items should load for tooltip verification").to.equal(
+                true
+            );
+
+            const expectedTooltipText = "Execution Status: Performed";
+            const tooltipVerified = targetTestThemeUniqueId
+                ? await verifyTooltipContainsForUniqueId(
+                      driver,
+                      testThemesPage,
+                      sideBar,
+                      targetTestThemeUniqueId,
+                      expectedTooltipText
+                  )
+                : await verifyTooltipContainsForLabel(
+                      driver,
+                      testThemesPage,
+                      sideBar,
+                      targetThemeNameForTooltip,
+                      expectedTooltipText
+                  );
+
+            expect(tooltipVerified, `Tooltip should contain "${expectedTooltipText}"`).to.equal(true);
+            logger.info("Phase9", " Execution status verified in tooltip");
 
             logger.info("TestThemesView", "\n========================================");
             logger.info("TestThemesView", "Test Themes View Test - COMPLETE");
@@ -2895,6 +3333,12 @@ describe("Test Themes View UI Tests", function () {
             // Verify all steps completed
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
             expect(result.details.generationSuccess, "Test generation should succeed").to.be.true;
+            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+            expect(result.details.testsExecuted, "Generated tests should execute successfully").to.be.true;
+            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+            expect(result.details.resultsUploaded, "Execution results should upload successfully").to.be.true;
+            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+            expect(result.details.executionStatusVerified, "Execution status tooltip should be verified").to.be.true;
 
             if (result.details.filesystemResult) {
                 expect(

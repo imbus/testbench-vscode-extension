@@ -1246,6 +1246,44 @@ export async function applySlowMotion(driver: WebDriver, customDelay?: number): 
 }
 
 /**
+ * Releases any stuck modifier keys (Ctrl/Shift/Alt/Cmd) in the current WebDriver session.
+ * This prevents accidental shortcut execution (for example Ctrl+- zoom out) when typing text.
+ *
+ * @param driver - The WebDriver instance
+ * @param logContext - Logging context label (default: "Keyboard")
+ * @returns Promise<void>
+ */
+export async function releaseModifierKeys(driver: WebDriver, logContext: string = "Keyboard"): Promise<void> {
+    try {
+        await driver.switchTo().defaultContent();
+    } catch {
+        // Ignore context switch errors during safety cleanup
+    }
+
+    try {
+        await driver
+            .actions()
+            .keyUp(Key.SHIFT)
+            .keyUp(Key.CONTROL)
+            .keyUp(Key.ALT)
+            .keyUp(Key.COMMAND)
+            .sendKeys(Key.NULL)
+            .perform();
+    } catch {
+        // keyUp can fail if the driver state has no active keyboard target
+    }
+
+    try {
+        // Second NULL send provides an extra safety reset for sticky webdriver key state.
+        await driver.actions().sendKeys(Key.NULL).perform();
+    } catch {
+        // Ignore best-effort cleanup failure
+    }
+
+    logger.trace(logContext, "Released modifier keys using Key.NULL safety reset");
+}
+
+/**
  * Export ConnectionPage for POM pattern.
  */
 export { ConnectionPage } from "../pages/ConnectionPage";

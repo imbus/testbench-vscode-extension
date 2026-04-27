@@ -272,7 +272,35 @@ export async function findResourceSubdivision(
     const { hasActionButton } = await import("./treeItemUtils");
 
     // Collect labels first to avoid stale element issues
-    const items = await elementsSection.getVisibleItems();
+    let items: TreeItem[] = [];
+    const sideBar = new SideBarView();
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+            items = (await elementsSection.getVisibleItems()) as TreeItem[];
+            break;
+        } catch (error) {
+            logger.debug(
+                "Navigation",
+                `Failed to read visible test element items (attempt ${attempt}/3): ${String(error)}`
+            );
+
+            const content = sideBar.getContent();
+            const refreshedSection = await testElementsPage.getSection(content);
+            if (refreshedSection) {
+                elementsSection = refreshedSection;
+            }
+
+            if (attempt < 3) {
+                await driver.sleep(200);
+            }
+        }
+    }
+
+    if (items.length === 0) {
+        return { subdivision: null, label: "" };
+    }
+
     const labels: string[] = [];
 
     for (const item of items) {
@@ -285,7 +313,6 @@ export async function findResourceSubdivision(
     }
 
     // Check each item for resource buttons
-    const sideBar = new SideBarView();
     for (const label of labels) {
         try {
             const content = sideBar.getContent();

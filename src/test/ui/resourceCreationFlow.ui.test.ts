@@ -26,7 +26,8 @@ import {
     clickCodeLens,
     waitForRefactorPreview,
     ensureRefactorPreviewItemChecked,
-    clickRefactorPreviewApply
+    clickRefactorPreviewApply,
+    releaseModifierKeys
 } from "./utils/testUtils";
 import { doubleClickTreeItem, waitForTreeItemButton } from "./utils/treeViewUtils";
 import { getTestData, logTestDataConfig } from "./config/testConfig";
@@ -85,7 +86,20 @@ describe("Resource Creation Flow UI Tests", function () {
         expectedLabel: string,
         driver: any
     ): Promise<TreeItem | null> => {
-        const topLevelItems = (await section.getVisibleItems()) as TreeItem[];
+        let topLevelItems: TreeItem[] = [];
+        for (let attempt = 1; attempt <= 3 && topLevelItems.length === 0; attempt++) {
+            try {
+                topLevelItems = (await section.getVisibleItems()) as TreeItem[];
+            } catch {
+                if (attempt < 3) {
+                    await driver.sleep(200);
+                }
+            }
+        }
+
+        if (topLevelItems.length === 0) {
+            return null;
+        }
 
         const direct = await findMatchingItem(topLevelItems, expectedLabel);
         if (direct) {
@@ -369,9 +383,17 @@ describe("Resource Creation Flow UI Tests", function () {
 
         logger.info("Phase3", `Looking for subdivision "${config.subdivisionName}"...`);
         let subdivision = await resolveSubdivisionFromSection(elementsSection, config.subdivisionName, driver);
+        let subdivisionLabelForActions = config.subdivisionName;
+        let subdivisionCandidateResolved = false;
         if (!subdivision) {
             await waitForTreeRefresh(driver, elementsSection, UITimeouts.SHORT);
             subdivision = await resolveSubdivisionFromSection(elementsSection, config.subdivisionName, driver);
+        }
+
+        if (subdivision) {
+            // Keep a stable label and avoid depending on this potentially stale TreeItem instance later.
+            subdivisionLabelForActions = config.subdivisionName;
+            subdivisionCandidateResolved = true;
         }
 
         if (!subdivision) {
@@ -379,35 +401,128 @@ describe("Resource Creation Flow UI Tests", function () {
                 "Phase3",
                 `Configured subdivision "${config.subdivisionName}" not found. Falling back to first subdivision with resource actions.`
             );
-            const fallback = await findResourceSubdivision(driver, elementsSection, testElementsPage);
-            subdivision = fallback.subdivision;
-            if (subdivision) {
-                logger.info("Phase3", `Using fallback subdivision "${fallback.label}" for resource creation.`);
+
+            let fallbackSection = elementsSection;
+            for (let attempt = 1; attempt <= 3 && !subdivision; attempt++) {
+                const contentForFallback = sideBar.getContent();
+                const sectionForFallback = await testElementsPage.getSection(contentForFallback);
+                if (sectionForFallback) {
+                    fallbackSection = sectionForFallback;
+                }
+
+                const fallback = await findResourceSubdivision(driver, fallbackSection, testElementsPage);
+                subdivision = fallback.subdivision;
+                if (subdivision) {
+                    subdivisionLabelForActions = fallback.label || config.subdivisionName;
+                    subdivisionCandidateResolved = true;
+                    logger.info(
+                        "Phase3",
+                        `Using fallback subdivision "${subdivisionLabelForActions}" for resource creation.`
+                    );
+                    break;
+                }
+
+                if (attempt < 3) {
+                    logger.debug("Phase3", `Fallback subdivision lookup attempt ${attempt}/3 failed; retrying...`);
+                    await waitForTreeRefresh(driver, fallbackSection, UITimeouts.SHORT);
+                }
+            }
+
+            if (!subdivisionCandidateResolved) {
+                logger.warn(
+                    "Phase3",
+                    "Fallback lookup with action buttons did not find a subdivision. Trying label-based fallback."
+                );
+
+                let visibleItems: TreeItem[] = [];
+                for (let attempt = 1; attempt <= 3 && visibleItems.length === 0; attempt++) {
+                    try {
+                        const contentForLabelFallback = sideBar.getContent();
+                        const sectionForLabelFallback = await testElementsPage.getSection(contentForLabelFallback);
+                        if (!sectionForLabelFallback) {
+                            continue;
+                        }
+
+                        visibleItems = (await sectionForLabelFallback.getVisibleItems()) as TreeItem[];
+                    } catch (error) {
+                        logger.debug(
+                            "Phase3",
+                            `Label-based fallback failed to read visible items (attempt ${attempt}/3): ${String(error)}`
+                        );
+                        await waitForTreeRefresh(driver, elementsSection, UITimeouts.SHORT);
+                    }
+                }
+
+                for (const item of visibleItems.slice(0, 40)) {
+                    try {
+                        const label = await withTimeout(() => item.getLabel(), 1200);
+                        if (typeof label === "string" && /\[Robot-Resource\]/i.test(label)) {
+                            subdivisionLabelForActions = label;
+                            subdivisionCandidateResolved = true;
+                            logger.info(
+                                "Phase3",
+                                `Using label-based fallback subdivision "${label}" for resource creation.`
+                            );
+                            break;
+                        }
+                    } catch {
+                        // Ignore stale item labels and keep scanning.
+                    }
+                }
             }
         }
 
-        if (!subdivision) {
+        if (!subdivisionCandidateResolved) {
             throw new Error(`Subdivision "${config.subdivisionName}" not found in Test Elements view`);
         }
 
-        logger.info("Phase3", `Found subdivision "${config.subdivisionName}", clicking to expand it...`);
+        logger.info("Phase3", `Found subdivision "${subdivisionLabelForActions}", clicking to expand it...`);
 
-        const expectedResourceFileName = config.resourceFileName || `${config.subdivisionName}.resource`;
+        const selectedSubdivisionBaseName = subdivisionLabelForActions.replace(/\s*\[[^\]]+\]\s*$/, "").trim();
+        const usingConfiguredSubdivision = subdivisionLabelForActions === config.subdivisionName;
+        const expectedResourceFileName = usingConfiguredSubdivision
+            ? config.resourceFileName || `${selectedSubdivisionBaseName}.resource`
+            : `${selectedSubdivisionBaseName}.resource`;
         logger.debug("Phase3", `Expected resource file: "${expectedResourceFileName}"`);
 
-        const subdivisionLabel = await subdivision.getLabel();
+        // Re-resolve a fresh tree item by label immediately before interacting to avoid stale references.
+        const contentForSubdivisionAction = sideBar.getContent();
+        const elementsSectionForAction = await testElementsPage.getSection(contentForSubdivisionAction);
+        if (!elementsSectionForAction) {
+            throw new Error("Test Elements section not found before resource creation action");
+        }
 
-        await subdivision.click();
+        await waitForTreeItems(elementsSectionForAction, driver);
+
+        let freshSubdivision = await testElementsPage.getItem(elementsSectionForAction, subdivisionLabelForActions);
+        if (!freshSubdivision) {
+            freshSubdivision = await resolveSubdivisionFromSection(
+                elementsSectionForAction,
+                subdivisionLabelForActions,
+                driver
+            );
+        }
+
+        if (!freshSubdivision) {
+            throw new Error(`Subdivision "${subdivisionLabelForActions}" not found for resource creation action`);
+        }
+
+        await freshSubdivision.click();
         await applySlowMotion(driver);
 
-        const buttonVisible = await waitForTreeItemButton(subdivision, driver, "Create Resource", UITimeouts.MEDIUM);
+        const buttonVisible = await waitForTreeItemButton(
+            freshSubdivision,
+            driver,
+            "Create Resource",
+            UITimeouts.MEDIUM
+        );
         if (!buttonVisible) {
             logger.warn("Phase3", "Create Resource button did not become visible");
         }
 
         logger.info("Phase3", "Clicking Create Resource button...");
 
-        const createClicked = await testElementsPage.clickCreateResource(subdivision, subdivisionLabel);
+        const createClicked = await testElementsPage.clickCreateResource(freshSubdivision, subdivisionLabelForActions);
         if (!createClicked) {
             throw new Error('Failed to click "Create Resource" button on subdivision');
         }
@@ -424,7 +539,15 @@ describe("Resource Creation Flow UI Tests", function () {
                 } catch (_err) {
                     // clear can fail on some widgets; continue with select-all overwrite
                 }
-                await quickInput.sendKeys(Key.chord(Key.CONTROL, "a"));
+
+                // Use explicit key down/up plus safety reset to avoid sticky Ctrl state in later tests.
+                await releaseModifierKeys(driver, "QuickInput");
+                try {
+                    await driver.actions().keyDown(Key.CONTROL).sendKeys("a").keyUp(Key.CONTROL).perform();
+                } finally {
+                    await releaseModifierKeys(driver, "QuickInput");
+                }
+
                 await quickInput.sendKeys(expectedResourceFileName);
                 await quickInput.sendKeys(Key.ENTER);
                 await applySlowMotion(driver);
@@ -446,7 +569,7 @@ describe("Resource Creation Flow UI Tests", function () {
 
         logger.info("Phase3", `Resource file "${expectedResourceFileName}" opened in editor`);
 
-        const newResourceName = config.subdivisionName;
+        const newResourceName = selectedSubdivisionBaseName;
 
         logger.info("Phase4", "Verifying Created Resource...");
 
@@ -476,7 +599,7 @@ describe("Resource Creation Flow UI Tests", function () {
 
         const openEditorTitles = await editorView2.getOpenEditorTitles();
         for (const title of openEditorTitles) {
-            if (title.includes(config.resourceFileName || "") || title.includes(config.subdivisionName)) {
+            if (title.includes(expectedResourceFileName) || title.includes(newResourceName)) {
                 resourceEditor = (await editorView2.openEditor(title)) as TextEditor;
                 await applySlowMotion(driver);
                 break;
@@ -486,9 +609,7 @@ describe("Resource Creation Flow UI Tests", function () {
         if (!resourceEditor) {
             logger.warn("Phase4", "Resource editor not found. Trying to open file...");
             try {
-                resourceEditor = (await editorView2.openEditor(
-                    config.resourceFileName || config.subdivisionName + ".resource"
-                )) as TextEditor;
+                resourceEditor = (await editorView2.openEditor(expectedResourceFileName)) as TextEditor;
             } catch {
                 logger.warn("Phase4", "Could not open resource file. Continuing...");
             }
@@ -555,10 +676,7 @@ describe("Resource Creation Flow UI Tests", function () {
             this.skip();
         }
 
-        const checkboxReady = await ensureRefactorPreviewItemChecked(
-            driver,
-            config.resourceFileName || config.subdivisionName + ".resource"
-        );
+        const checkboxReady = await ensureRefactorPreviewItemChecked(driver, expectedResourceFileName);
         if (!checkboxReady) {
             logger.warn("Phase4", "Warning: Could not ensure checkbox is checked, Apply might fail.");
         }

@@ -7,7 +7,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { VSBrowser, WebDriver, EditorView, Workbench, By, until } from "vscode-extension-tester";
-import { openTestBenchSidebar, ensureLoggedIn, UITimeouts } from "./testUtils";
+import { openTestBenchSidebar, ensureLoggedIn, UITimeouts, releaseModifierKeys } from "./testUtils";
 import { isSlowMotionEnabled, getSlowMotionDelay, hasTestCredentials, TEST_PATHS } from "../config/testConfig";
 import { getTestLogger } from "./testLogger";
 import { ProjectsViewPage } from "../pages/ProjectsViewPage";
@@ -481,6 +481,15 @@ export function createAfterEachHook(
                 await driver.actions().sendKeys(Key.ESCAPE).perform();
             },
             "Close dialogs with Escape key",
+            opts.suiteName
+        );
+
+        // Reset keyboard modifier state so one test cannot affect the next test's input actions.
+        await safeExecute(
+            async () => {
+                await releaseModifierKeys(driver, "Cleanup");
+            },
+            "Release modifier keys",
             opts.suiteName
         );
     };
