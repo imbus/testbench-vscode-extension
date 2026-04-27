@@ -8,7 +8,6 @@ import * as fsPromises from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
 import * as fs from "fs";
-import * as os from "os";
 import JSZip from "jszip";
 import { folderNameOfInternalTestbenchFolder, LS_CONFIG_FILE_NAME } from "./constants";
 
@@ -354,7 +353,7 @@ export async function extractAndParseJsonContent(zipContents: JSZip, fileName: s
 }
 
 /**
- * For windows systems, sanitizes a file path string by replacing invalid path-segment
+ * For Windows systems, sanitizes a file path string by replacing invalid path-segment
  * characters with underscores while preserving path separators.
  *
  * This is used for user-provided path settings and must not flatten nested paths.
@@ -368,12 +367,14 @@ export function sanitizeFilePath(filePath: string): string {
         return "";
     }
 
-    if (os.platform() === "win32") {
+    if (process.platform === "win32") {
         // Keep separators untouched so nested paths remain intact.
         const separatorPattern = /([/\\]+)/;
         const separatorOnlyPattern = /^[/\\]+$/;
         const drivePrefixPattern = /^[A-Za-z]:$/;
         const invalidWindowsChars = new Set(["<", ">", '"', "|", "?", "*"]);
+
+        let isFirstNonSeparatorSegment = true;
 
         // Sanitize only the inside of each path segment.
         return (
@@ -381,14 +382,15 @@ export function sanitizeFilePath(filePath: string): string {
                 // Split the path into segments and separators (e.g. ["folder", "/", "subfolder"])
                 .split(separatorPattern)
                 // Process each segment and separator individually
-                .map((segment, index) => {
+                .map((segment) => {
                     // Skip processing if the segment is empty or is a path separator
                     if (!segment || separatorOnlyPattern.test(segment)) {
                         return segment;
                     }
 
-                    // In "C:", the colon is valid only for the first segment.
-                    const isDrivePrefix = index === 0 && drivePrefixPattern.test(segment);
+                    // Allow a drive prefix only if it is the first non-separator segment
+                    const isDrivePrefix = isFirstNonSeparatorSegment && drivePrefixPattern.test(segment);
+                    isFirstNonSeparatorSegment = false;
 
                     // Check each character in the current folder/file name
                     return Array.from(segment)
