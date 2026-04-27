@@ -215,6 +215,20 @@ function compareExpansionStates(
 
         const expectedExpanded = expectedStates.filter((state) => state).length;
         const actualExpanded = actualStates.filter((state) => state).length;
+        const expectedCollapsed = expectedStates.length - expectedExpanded;
+        const actualCollapsed = actualStates.length - actualExpanded;
+
+        // Label-based tracking can become ambiguous after restoration when additional
+        // same-label items become visible. In that case, require that actual states can
+        // still satisfy the expected expanded/collapsed counts for at least one match.
+        if (hasTrackedLabels && actualStates.length > expectedStates.length) {
+            if (actualExpanded < expectedExpanded || actualCollapsed < expectedCollapsed) {
+                differences.push(
+                    `Item "${label}" ambiguous-count mismatch: expected at least ${expectedExpanded} expanded and ${expectedCollapsed} collapsed, got ${actualExpanded} expanded and ${actualCollapsed} collapsed across ${actualStates.length} visible items`
+                );
+            }
+            continue;
+        }
 
         if (expectedExpanded !== actualExpanded) {
             differences.push(
@@ -382,6 +396,26 @@ async function reloadVSCodeWindow(driver: WebDriver): Promise<boolean> {
     logger.info("Reload", "Reloading VS Code window...");
 
     try {
+        const originalWindowHandle = await driver.getWindowHandle().catch(() => null);
+
+        const switchToWorkbenchWindow = async (): Promise<boolean> => {
+            try {
+                const handles = await driver.getAllWindowHandles();
+                for (const handle of handles) {
+                    try {
+                        await driver.switchTo().window(handle);
+                        await driver.findElement(By.className("monaco-workbench"));
+                        return true;
+                    } catch {
+                        // Try next handle
+                    }
+                }
+            } catch {
+                // Ignore and return false below
+            }
+            return false;
+        };
+
         // Capture reference to current workbench to detect when reload starts
         let oldWorkbench: any;
         try {
@@ -390,67 +424,95 @@ async function reloadVSCodeWindow(driver: WebDriver): Promise<boolean> {
             // Element might not exist
         }
 
-        // Open command palette with retry logic
-        let commandPalette;
-        for (let attempt = 1; attempt <= 3; attempt++) {
+        // Retry the full command-palette flow because quick picks can intermittently lag.
+        let reloadCommandTriggered = false;
+        const commandQueries = ["Developer: Reload Window", ">Developer: Reload Window", "Reload Window"];
+
+        for (let attempt = 1; attempt <= 3 && !reloadCommandTriggered; attempt++) {
+            let commandPalette: any;
+
             try {
                 const workbench = new Workbench();
                 commandPalette = await workbench.openCommandPrompt();
-                break;
             } catch (error) {
                 logger.warn("Reload", `Command palette open attempt ${attempt} failed: ${error}`);
                 if (attempt === 3) {
                     throw error;
                 }
                 await driver.sleep(1000);
+                continue;
+            }
+
+            for (const query of commandQueries) {
+                try {
+                    await commandPalette.setText(query);
+
+                    const picksReady = await driver.wait(
+                        async () => {
+                            try {
+                                const picks = await commandPalette.getQuickPicks();
+                                return picks.length > 0;
+                            } catch {
+                                return false;
+                            }
+                        },
+                        UITimeouts.VERY_LONG,
+                        `Waiting for quick picks to populate for query: ${query}`
+                    );
+
+                    if (!picksReady) {
+                        continue;
+                    }
+
+                    const picks = await commandPalette.getQuickPicks();
+                    for (const pick of picks) {
+                        try {
+                            const text = await pick.getText();
+                            if (text.includes("Reload Window") || text.includes("Developer: Reload Window")) {
+                                await pick.select();
+                                reloadCommandTriggered = true;
+                                break;
+                            }
+                        } catch (error) {
+                            logger.debug("Reload", `Error reading pick text: ${error}`);
+                        }
+                    }
+
+                    if (reloadCommandTriggered) {
+                        break;
+                    }
+                } catch (error) {
+                    logger.debug("Reload", `Query '${query}' failed on attempt ${attempt}: ${error}`);
+                }
+            }
+
+            if (!reloadCommandTriggered) {
+                logger.warn("Reload", `Reload command not found on attempt ${attempt}; retrying...`);
+                try {
+                    await commandPalette.cancel();
+                } catch {
+                    // Ignore cancel errors
+                }
+                await driver.sleep(500);
             }
         }
 
-        if (!commandPalette) {
-            logger.error("Reload", "Failed to open command palette");
+        if (!reloadCommandTriggered) {
+            logger.warn("Reload", "Reload Window command could not be triggered after retries");
             return false;
         }
 
-        await commandPalette.setText(">Developer: Reload Window");
-
-        // Wait for quick picks to populate
-        await driver.wait(
-            async () => {
-                try {
-                    const picks = await commandPalette!.getQuickPicks();
-                    return picks.length > 0;
-                } catch {
+        // If the original window handle is gone after reload trigger, move to an active workbench window.
+        if (originalWindowHandle) {
+            try {
+                await driver.switchTo().window(originalWindowHandle);
+            } catch {
+                const switched = await switchToWorkbenchWindow();
+                if (!switched) {
+                    logger.warn("Reload", "Could not switch to an active workbench window after reload trigger");
                     return false;
                 }
-            },
-            UITimeouts.MEDIUM,
-            "Waiting for quick picks to populate"
-        );
-
-        const picks = await commandPalette.getQuickPicks();
-        let reloadCommandFound = false;
-
-        for (const pick of picks) {
-            try {
-                const text = await pick.getText();
-                if (text.includes("Reload Window") || text.includes("Developer: Reload Window")) {
-                    reloadCommandFound = true;
-                    await pick.select();
-                    break;
-                }
-            } catch (error) {
-                logger.debug("Reload", `Error reading pick: ${error}`);
             }
-        }
-
-        if (!reloadCommandFound) {
-            logger.warn("Reload", "Reload Window command not found in quick picks");
-            try {
-                await commandPalette.cancel();
-            } catch {
-                // Ignore cancel errors
-            }
-            return false;
         }
 
         // Wait for reload to start (old workbench becomes stale)
@@ -469,6 +531,11 @@ async function reloadVSCodeWindow(driver: WebDriver): Promise<boolean> {
             UITimeouts.WORKSPACE_LOAD,
             "Waiting for workbench to reload"
         );
+
+        if (!(await switchToWorkbenchWindow())) {
+            logger.warn("Reload", "Could not confirm active workbench window after reload");
+            return false;
+        }
 
         // Wait for status bar to appear (indicates UI is ready)
         await driver.wait(
