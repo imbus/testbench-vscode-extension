@@ -70,8 +70,8 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                     "[AuthenticationProvider] Loaded existing shared session for: " + sessionData.accountLabel
                 );
             }
-        } catch (error) {
-            logger.error("[AuthenticationProvider] Error loading shared sessions:", error);
+        } catch (_error) {
+            logger.error("[AuthenticationProvider] Error loading shared sessions");
         }
     }
 
@@ -129,7 +129,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             if (error instanceof UserCancelledError) {
                 logger.debug(`[AuthenticationProvider] ${error.message}`);
             } else {
-                logger.error(`[AuthenticationProvider] Error during session creation: ${error.message || error}`);
+                logger.error("[AuthenticationProvider] Error during session creation");
                 if (!isSilentLogin) {
                     await connectionManager.clearActiveConnection(this.context);
                 }
@@ -624,8 +624,8 @@ export async function getSessionToProcess(
             createIfNone: false,
             silent: true
         });
-    } catch (error) {
-        logger.warn("[AuthenticationProvider] Error getting current session:", error);
+    } catch (_error) {
+        logger.warn("[AuthenticationProvider] Error getting current session");
         return undefined;
     }
 }
