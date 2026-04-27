@@ -169,6 +169,76 @@ describe("Resource Creation Flow UI Tests", function () {
         return null;
     };
 
+    const clickOpenResourceByLabelWithRetries = async (
+        testElementsPage: TestElementsPage,
+        subdivisionLabel: string,
+        driver: any,
+        maxAttempts = 3
+    ): Promise<boolean> => {
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                await openTestBenchSidebar(driver);
+
+                const sideBar = new SideBarView();
+                const content = sideBar.getContent();
+                const elementsSection = await testElementsPage.getSection(content);
+                if (!elementsSection) {
+                    continue;
+                }
+
+                await waitForTreeRefresh(driver, elementsSection, UITimeouts.SHORT);
+
+                const resourceItem = await testElementsPage.getItem(elementsSection, subdivisionLabel);
+                if (!resourceItem) {
+                    continue;
+                }
+
+                await resourceItem.click();
+                await applySlowMotion(driver);
+
+                const openClicked = await testElementsPage.clickOpenResource(resourceItem);
+                if (openClicked) {
+                    return true;
+                }
+            } catch (error) {
+                logger.debug(
+                    "Phase4",
+                    `Open Resource retry failed for "${subdivisionLabel}" (attempt ${attempt}/${maxAttempts}): ${String(error)}`
+                );
+            }
+
+            if (attempt < maxAttempts) {
+                await driver.sleep(250);
+            }
+        }
+
+        return false;
+    };
+
+    const getElementsSectionWithRetries = async (
+        testElementsPage: TestElementsPage,
+        sideBar: SideBarView,
+        driver: any,
+        maxAttempts = 4
+    ) => {
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            await openTestBenchSidebar(driver);
+
+            const content = sideBar.getContent();
+            const section = await testElementsPage.getSection(content);
+            if (section) {
+                return section;
+            }
+
+            if (attempt < maxAttempts) {
+                logger.debug("Phase3", `Test Elements section lookup retry ${attempt}/${maxAttempts}`);
+                await driver.sleep(250);
+            }
+        }
+
+        return null;
+    };
+
     it("should navigate to Test Elements view and create a resource", async function () {
         const driver = getDriver();
         const config = getTestData();
@@ -374,7 +444,7 @@ describe("Resource Creation Flow UI Tests", function () {
 
         logger.info("Phase3", "Creating New Resource...");
 
-        const elementsSection = await testElementsPage.getSection(updatedContent);
+        const elementsSection = await getElementsSectionWithRetries(testElementsPage, sideBar, driver);
         if (!elementsSection) {
             throw new Error("Test Elements section not found");
         }
@@ -486,8 +556,7 @@ describe("Resource Creation Flow UI Tests", function () {
         logger.debug("Phase3", `Expected resource file: "${expectedResourceFileName}"`);
 
         // Re-resolve a fresh tree item by label immediately before interacting to avoid stale references.
-        const contentForSubdivisionAction = sideBar.getContent();
-        const elementsSectionForAction = await testElementsPage.getSection(contentForSubdivisionAction);
+        const elementsSectionForAction = await getElementsSectionWithRetries(testElementsPage, sideBar, driver);
         if (!elementsSectionForAction) {
             throw new Error("Test Elements section not found before resource creation action");
         }
@@ -576,8 +645,11 @@ describe("Resource Creation Flow UI Tests", function () {
         await openTestBenchSidebar(driver);
 
         const sideBarRefreshed = new SideBarView();
-        const contentRefreshed = sideBarRefreshed.getContent();
-        const elementsSectionRefreshed = await testElementsPage.getSection(contentRefreshed);
+        const elementsSectionRefreshed = await getElementsSectionWithRetries(
+            testElementsPage,
+            sideBarRefreshed,
+            driver
+        );
 
         if (!elementsSectionRefreshed) {
             throw new Error("Test Elements section not found after refresh");
@@ -589,12 +661,28 @@ describe("Resource Creation Flow UI Tests", function () {
         // eslint-disable-next-line @typescript-eslint/no-unused-expressions
         expect(newResource, `New resource "${newResourceName}" should exist in the tree`).to.not.be.undefined;
 
+        const editorView2 = new EditorView();
+        const openEditorTitlesBeforeOpen = await editorView2.getOpenEditorTitles();
+        const resourceAlreadyOpen = openEditorTitlesBeforeOpen.some(
+            (title) => title.includes(expectedResourceFileName) || title.includes(newResourceName)
+        );
+
         if (newResource) {
             logger.info("Phase4", ` Found new resource: "${newResourceName}"`);
-            await testElementsPage.clickOpenResource(newResource);
+            if (resourceAlreadyOpen) {
+                logger.debug("Phase4", "Resource editor already open; skipping Open Resource tree action");
+            } else {
+                const openClicked = await clickOpenResourceByLabelWithRetries(
+                    testElementsPage,
+                    newResourceName,
+                    driver
+                );
+                if (!openClicked) {
+                    logger.warn("Phase4", `Could not click Open Resource for "${newResourceName}" after retries`);
+                }
+            }
         }
 
-        const editorView2 = new EditorView();
         let resourceEditor: TextEditor | null = null;
 
         const openEditorTitles = await editorView2.getOpenEditorTitles();

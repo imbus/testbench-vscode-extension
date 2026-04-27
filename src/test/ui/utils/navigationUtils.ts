@@ -58,7 +58,7 @@ export async function navigateToTestView(
     logger.info(logPrefix, "Ensuring user is logged in...");
     const loggedIn = await ensureLoggedIn(driver);
     if (!loggedIn) {
-        return { success: false, section: null, error: "Failed to log in" };
+        return { success: false, section: null, error: "User login failed" };
     }
     logger.info(logPrefix, "User is logged in");
 
@@ -312,32 +312,40 @@ export async function findResourceSubdivision(
         }
     }
 
-    // Check each item for resource buttons
-    for (const label of labels) {
-        try {
-            const content = sideBar.getContent();
-            const section = await testElementsPage.getSection(content);
-            if (!section) {
-                continue;
+    const labelBuckets: string[][] = [
+        labels.filter((label) => /\[Robot-Resource\]/i.test(label)),
+        labels.filter((label) => !/\[Robot-Resource\]/i.test(label) && /resource/i.test(label)),
+        labels.filter((label) => !/\[Robot-Resource\]/i.test(label) && !/resource/i.test(label))
+    ];
+
+    // Prefer Robot-Resource and resource-like labels first to avoid selecting unrelated subdivisions.
+    for (const bucket of labelBuckets) {
+        for (const label of bucket) {
+            try {
+                const content = sideBar.getContent();
+                const section = await testElementsPage.getSection(content);
+                if (!section) {
+                    continue;
+                }
+
+                const item = await testElementsPage.getItem(section, label);
+                if (!item) {
+                    continue;
+                }
+
+                await item.click();
+                await driver.sleep(200);
+
+                const hasCreate = await hasActionButton(item, "Create Resource", driver);
+                const hasOpen = await hasActionButton(item, "Open Resource", driver);
+
+                if (hasCreate || hasOpen) {
+                    logger.info("Navigation", `Found resource subdivision: "${label}"`);
+                    return { subdivision: item, label };
+                }
+            } catch {
+                // Element became stale, continue
             }
-
-            const item = await testElementsPage.getItem(section, label);
-            if (!item) {
-                continue;
-            }
-
-            await item.click();
-            await driver.sleep(200);
-
-            const hasCreate = await hasActionButton(item, "Create Resource", driver);
-            const hasOpen = await hasActionButton(item, "Open Resource", driver);
-
-            if (hasCreate || hasOpen) {
-                logger.info("Navigation", `Found resource subdivision: "${label}"`);
-                return { subdivision: item, label };
-            }
-        } catch {
-            // Element became stale, continue
         }
     }
 
