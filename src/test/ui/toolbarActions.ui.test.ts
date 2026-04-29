@@ -60,6 +60,12 @@ describe("Toolbar Actions UI Tests", function () {
     }
 
     describe("Projects View Toolbar", function () {
+        /*
+         * 1. Open the Projects view toolbar in the TestBench sidebar.
+         * 2. Read the visible toolbar button labels.
+         * 3. Check whether a Logout action is present.
+         * 4. Log the result
+         */
         it("should have Logout button in toolbar", async function () {
             const driver = getDriver();
 
@@ -91,6 +97,11 @@ describe("Toolbar Actions UI Tests", function () {
             }
         });
 
+        /*
+         * 1. Open the Projects view toolbar.
+         * 2. Look for a Refresh action.
+         * 3. Confirm whether the refresh control is available.
+         */
         it("should have Refresh button in toolbar", async function () {
             const driver = getDriver();
 
@@ -109,6 +120,11 @@ describe("Toolbar Actions UI Tests", function () {
             }
         });
 
+        /*
+         * 1. Open the Projects view toolbar.
+         * 2. Look for a Search action.
+         * 3. Confirm whether users can start a tree search from the toolbar.
+         */
         it("should have Search button in toolbar", async function () {
             const driver = getDriver();
 
@@ -127,6 +143,11 @@ describe("Toolbar Actions UI Tests", function () {
             }
         });
 
+        /*
+         * 1. Open the Projects view toolbar.
+         * 2. Read available toolbar button labels.
+         * 3. Check whether a Settings/Extension Settings action exists.
+         */
         it("should have Settings button in toolbar", async function () {
             const driver = getDriver();
 
@@ -144,6 +165,12 @@ describe("Toolbar Actions UI Tests", function () {
             logger.info("Toolbar", `Settings button found: ${hasSettings}`);
         });
 
+        /*
+         * 1. Open the Projects view and record the current visible items.
+         * 2. Click the Refresh toolbar button.
+         * 3. Wait until the tree finishes updating.
+         * 4. Verify the Projects tree is still populated after refresh.
+         */
         it("should refresh projects when Refresh button is clicked", async function () {
             const driver = getDriver();
 
@@ -185,6 +212,11 @@ describe("Toolbar Actions UI Tests", function () {
     });
 
     describe("TOV and Cycle Action Buttons", function () {
+        /*
+         * 1. Open the configured project and test object version (TOV).
+         * 2. Read action buttons shown on the TOV row.
+         * 3. Verify an Open action is available to move into test themes.
+         */
         it("should have 'Open' action button on TOV", async function () {
             const driver = getDriver();
             const config = getTestData();
@@ -223,6 +255,11 @@ describe("Toolbar Actions UI Tests", function () {
             logger.info("Toolbar", "Open action button found on TOV");
         });
 
+        /*
+         * 1. Open the configured project and test object version (TOV).
+         * 2. Read action buttons shown on the TOV row.
+         * 3. Verify a Generate action is available for creating Robot tests.
+         */
         it("should have 'Generate' action button on TOV", async function () {
             const driver = getDriver();
             const config = getTestData();
@@ -258,6 +295,11 @@ describe("Toolbar Actions UI Tests", function () {
             logger.info("Toolbar", "Generate action button found on TOV");
         });
 
+        /*
+         * 1. Open the configured project, version, and cycle.
+         * 2. Read action buttons shown on the cycle row.
+         * 3. Verify that at least one actionable button is present.
+         */
         it("should have action buttons on Cycle", async function () {
             const driver = getDriver();
             const config = getTestData();
@@ -307,6 +349,11 @@ describe("Toolbar Actions UI Tests", function () {
             }
         });
 
+        /*
+         * 1. Open the Test Themes view toolbar.
+         * 2. Read visible toolbar button labels.
+         * 3. Check whether an "Open Projects View" action exists.
+         */
         it("should have 'Open Projects View' button in toolbar", async function () {
             const driver = getDriver();
 
@@ -320,7 +367,6 @@ describe("Toolbar Actions UI Tests", function () {
             const labels = await getToolbarButtonLabels(testThemesSection, driver);
             logger.info("Toolbar", `Test Themes View toolbar buttons: ${labels.join(", ")}`);
 
-            // According to package.json, the button has title "Open Projects View"
             const hasOpenProjects = labels.some(
                 (l) => l.toLowerCase().includes("projects") || l.toLowerCase().includes("back")
             );
@@ -331,6 +377,11 @@ describe("Toolbar Actions UI Tests", function () {
             }
         });
 
+        /*
+         * 1. Open the Test Themes view toolbar.
+         * 2. Look for a Refresh action
+         * 3. Confirm whether the refresh control is available.
+         */
         it("should have Refresh button in Test Themes toolbar", async function () {
             const driver = getDriver();
 
@@ -340,7 +391,6 @@ describe("Toolbar Actions UI Tests", function () {
                 return;
             }
 
-            // According to package.json, the button has title "Refresh Test Themes"
             const hasRefresh = await hasToolbarButton(testThemesSection, "Refresh", driver);
             logger.info("Toolbar", `Refresh button found: ${hasRefresh}`);
 
@@ -349,6 +399,12 @@ describe("Toolbar Actions UI Tests", function () {
             }
         });
 
+        /*
+         * 1. Start in Test Themes view.
+         * 2. Click the "Open Projects View" toolbar action.
+         * 3. Wait for the Projects view to appear.
+         * 4. Confirm navigation back to Projects was successful.
+         */
         it("should navigate back to Projects View when clicking 'Open Projects View'", async function () {
             const driver = getDriver();
             const projectsPage = new ProjectsViewPage(driver);
@@ -360,7 +416,6 @@ describe("Toolbar Actions UI Tests", function () {
                 return;
             }
 
-            // Use the TestThemesPage clickOpenProjectsView method for reliable clicking
             const isOpenProjectsViewClicked = await testThemesPage.clickOpenProjectsView();
             if (!isOpenProjectsViewClicked) {
                 // Fallback: try clicking toolbar button by name
@@ -386,6 +441,13 @@ describe("Toolbar Actions UI Tests", function () {
     });
 
     describe("Logout and State Persistence", function () {
+        /*
+         * 1. Open the Projects view while logged in.
+         * 2. Trigger Logout from the toolbar (or fallback logout flow).
+         * 3. Wait for the login webview to become visible.
+         * 4. Confirm the user is logged out.
+         * 5. Log in again so other tests can continue.
+         */
         it("should logout when Logout button is clicked", async function () {
             const driver = getDriver();
 
