@@ -425,6 +425,28 @@ suite("TestBenchLogger Tests", function () {
         assert.ok(!fsStubs.appendFile.called);
     });
 
+    test("should sanitize error-like details to message across log levels", async () => {
+        const err = new Error("session validation failed");
+
+        await logger.warn("Warn with error", err);
+
+        assert.ok(fsStubs.appendFile.calledOnce);
+        const logContent = fsStubs.appendFile.getCall(0).args[1];
+        assert.ok(logContent.includes("session validation failed"));
+        assert.ok(!logContent.includes("stack"));
+    });
+
+    test("should keep non-error objects fully logged", async () => {
+        const responsePayload = { message: "ok", items: [{ id: 1, name: "node" }] };
+
+        await logger.info("Response payload", responsePayload);
+
+        assert.ok(fsStubs.appendFile.calledOnce);
+        const logContent = fsStubs.appendFile.getCall(0).args[1];
+        assert.ok(logContent.includes("items"));
+        assert.ok(logContent.includes("node"));
+    });
+
     test("should handle concurrent log writes with missing file", async () => {
         fsStubs.mkdir.reset();
         fsStubs.writeFile.reset();

@@ -32,109 +32,6 @@ import { TreeItemBase } from "./treeViews/core/TreeItemBase";
 import { TestThemesTreeView } from "./treeViews/implementations/testThemes/TestThemesTreeView";
 
 /**
- * Summary of an import operation result, extracted from the server's ExecutionImportingSuccess response.
- */
-export interface ImportResultSummary {
-    /** Whether the import job completed with ExecutionImportingSuccess */
-    success: boolean;
-    /** Number of test case sets where at least one test case was imported */
-    importedTestCaseSetCount: number;
-    /** Number of individual test cases that were imported */
-    importedTestCaseCount: number;
-    /** Names of test case sets that were imported */
-    importedTestCaseSetNames: string[];
-    /** Test case sets that had errors */
-    testCaseSetErrors: string[];
-    /** Individual test cases that had non-"Imported" results */
-    testCaseWarnings: string[];
-}
-
-/**
- * Analyzes the import job status response and produces a summary of what was actually imported.
- * This detects situations where the server returns ExecutionImportingSuccess but items were silently
- * skipped (e.g., due to being locked by another user in TestBench).
- *
- * @param {testBenchTypes.JobStatusResponse} jobStatus The completed import job status.
- * @returns {ImportResultSummary} A summary of the import result.
- */
-export function analyzeImportResult(jobStatus: testBenchTypes.JobStatusResponse): ImportResultSummary {
-    const successData = jobStatus?.completion?.result?.ExecutionImportingSuccess;
-
-    if (!successData) {
-        return {
-            success: false,
-            importedTestCaseSetCount: 0,
-            importedTestCaseCount: 0,
-            importedTestCaseSetNames: [],
-            testCaseSetErrors: [],
-            testCaseWarnings: []
-        };
-    }
-
-    const testCaseSets = successData.testCaseSets || [];
-    const seenTestCaseSetIdentifiers = new Set<string>();
-    const importedTestCaseSetNames: string[] = [];
-    let importedTestCaseSetCount = 0;
-    let importedTestCaseCount = 0;
-    const testCaseSetErrors: string[] = [];
-    const testCaseWarnings: string[] = [];
-
-    for (const testCaseSet of testCaseSets) {
-        const testCaseSetIdentifier = testCaseSet.executionKey || testCaseSet.key || testCaseSet.uid || "";
-        if (testCaseSetIdentifier) {
-            if (seenTestCaseSetIdentifiers.has(testCaseSetIdentifier)) {
-                continue;
-            }
-            seenTestCaseSetIdentifiers.add(testCaseSetIdentifier);
-        }
-
-        const testCaseSetName = testCaseSet.name || testCaseSet.uid || testCaseSet.key || "Unknown test case set";
-        let importedInCurrentSet = 0;
-
-        if (testCaseSet.error) {
-            testCaseSetErrors.push(
-                `Test case set "${testCaseSetName}": ${testCaseSet.error.message || testCaseSet.error.description}`
-            );
-        }
-
-        if (!testCaseSet.finished) {
-            testCaseSetErrors.push(`Test case set "${testCaseSetName}" did not finish.`);
-        }
-
-        for (const testCase of testCaseSet.testCases || []) {
-            const testCaseIdentifier = testCase.uid || testCase.key || "Unknown";
-
-            if (testCase.importResult === "Imported") {
-                importedTestCaseCount++;
-                importedInCurrentSet++;
-            } else {
-                testCaseWarnings.push(
-                    `Test case ${testCaseIdentifier}: import result "${testCase.importResult || "Unknown"}"${testCase.error ? ` - ${testCase.error.message || testCase.error.description}` : ""}`
-                );
-            }
-
-            if (testCase.warnings && testCase.warnings.length > 0) {
-                testCaseWarnings.push(`Test case ${testCaseIdentifier}: ${testCase.warnings.join(", ")}`);
-            }
-        }
-
-        if (importedInCurrentSet > 0) {
-            importedTestCaseSetCount++;
-            importedTestCaseSetNames.push(testCaseSetName);
-        }
-    }
-
-    return {
-        success: true,
-        importedTestCaseSetCount,
-        importedTestCaseCount,
-        importedTestCaseSetNames,
-        testCaseSetErrors,
-        testCaseWarnings
-    };
-}
-
-/**
  * Saves the last generated report parameters to workspace storage.
  *
  * @param {vscode.ExtensionContext} context The extension context providing access to workspaceState.
@@ -212,7 +109,9 @@ function getLastGeneratedReportParams(
             storedParams.executionMode !== undefined &&
             storedParams.alreadyImported !== undefined
         ) {
-            logger.debug("[reportHandler] Retrieved last generated report params from workspace state:", storedParams);
+            logger.debug(
+                `[reportHandler] Retrieved last generated report params from workspace state. UID=${storedParams.UID}, projectKey=${storedParams.projectKey}, cycleKey=${storedParams.cycleKey}, executionMode=${storedParams.executionMode}, alreadyImported=${storedParams.alreadyImported}`
+            );
             return storedParams;
         } else {
             logger.warn("[reportHandler] No valid last generated report params found in workspace state.");
@@ -328,8 +227,10 @@ export async function pollJobStatus(
                     return null;
                 }
             }
-        } catch (error) {
-            logger.error(`[reportHandler] Failed to get job status at polling attempt ${pollingAttemptAmount}:`, error);
+        } catch (error: any) {
+            logger.error(`[reportHandler] Failed to get job status at polling attempt ${pollingAttemptAmount}`);
+            vscode.window.showErrorMessage(`Failed to get job status from the TestBench server: ${error.message}`);
+            return null; // Abort polling on server error since getJobStatus already retries 3 times
         }
 
         // Check if the maximum polling time has been exceeded.
@@ -383,9 +284,7 @@ export async function getJobIdOfCycleReport(
         );
 
         logger.trace(`[reportHandler] Job ID response status for URL: ${getJobIDUrl}:`, jobIdResponse.status);
-        logger.trace(`[reportHandler] Job ID response data for URL: ${getJobIDUrl}:`, {
-            response: jobIdResponse.data
-        });
+        logger.trace(`[reportHandler] Job ID successfully fetched for URL: ${getJobIDUrl}`);
 
         if (jobIdResponse.status !== 200) {
             const errorMsg: string = `[reportHandler] Failed to fetch job ID, status code: ${jobIdResponse.status}`;
@@ -437,9 +336,7 @@ export async function getJobStatus(
     );
 
     logger.trace(`[reportHandler] Job status response status for URL: ${getJobStatusUrl}:`, jobStatusResponse.status);
-    logger.trace(`[reportHandler] Job status response data for URL: ${getJobStatusUrl}:`, {
-        response: jobStatusResponse.data
-    });
+    logger.trace(`[reportHandler] Job status successfully fetched for URL: ${getJobStatusUrl}`);
     if (jobStatusResponse.status !== 200) {
         const errorMsg: string = `[reportHandler] Failed to fetch job status, status code: ${jobStatusResponse.status}`;
         logger.error(errorMsg);
@@ -662,11 +559,7 @@ export async function fetchReportZipOfCycleFromServer(
             return null;
         }
         logger.debug(`[reportHandler] Successfully finished TestBench report generation.`);
-        const reportName: string | undefined = jobStatus.completion?.result.ReportingSuccess?.reportName;
-        if (!reportName) {
-            logger.error("[reportHandler] Report generation completed but report name is missing.");
-            return null;
-        }
+        const reportName: string = jobStatus.completion.result.ReportingSuccess!.reportName;
         const downloadedFilePath: string | null = await downloadReport(
             projectKey,
             reportName,
@@ -678,8 +571,8 @@ export async function fetchReportZipOfCycleFromServer(
             logger.warn("[reportHandler] Downloading report failed or was canceled.");
             return null;
         }
-    } catch (error) {
-        logger.error(`[reportHandler] Error while fetching report zip from server: ${error}`);
+    } catch (_error) {
+        logger.error(`[reportHandler] Error while fetching report zip from server`);
         return null;
     }
 }
@@ -706,7 +599,7 @@ async function setLastImportedItem(context: vscode.ExtensionContext, reportRootU
             `[reportHandler] Set last imported item UID to ${reportRootUID} for user ${userSessionManager.getCurrentUserId()}.`
         );
     } catch (error) {
-        logger.error(`[reportHandler] Error setting last imported item UID: ${error}`);
+        logger.error(`[reportHandler] Error setting last imported item UID:`, error);
     }
 }
 
@@ -869,17 +762,9 @@ async function runRobotFrameworkTestGenerationProcess(
         return false;
     }
 
-    const generationResult: testbench2robotframeworkLib.TestGenerationResult =
+    const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
         await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(downloadedReportZipPath);
-    if (!generationResult.commandSucceeded) {
-        return false;
-    }
-
-    if (!generationResult.testsWereGenerated) {
-        const noTestsWarning =
-            "No Robot Framework test suites were generated. No test data was found for generation. This can happen when selected items are locked by another user, excluded by active Test Theme filters, or marked as not executable.";
-        logger.warn(`[reportHandler] ${noTestsWarning}`);
-        vscode.window.showWarningMessage(noTestsWarning);
+    if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
         return false;
     }
 
@@ -1050,9 +935,10 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 await vscode.workspace.fs.createDirectory(
                     vscode.Uri.file(testbenchWorkingDirectoryPathInsideWorkspace)
                 );
-            } catch (e) {
+            } catch (error) {
                 logger.warn(
-                    `[reportHandler] Failed to ensure reports directory exists at ${testbenchWorkingDirectoryPathInsideWorkspace}: ${e}`
+                    `[reportHandler] Failed to ensure reports directory exists at ${testbenchWorkingDirectoryPathInsideWorkspace}:`,
+                    error
                 );
             }
 
@@ -1188,7 +1074,7 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
  * @param {string} cycleKeyString The cycle key as a string.
  * @param {string} reportWithResultsZipFilePath The path to the report zip file with results.
  * @param {string} reportRootUID The specific UID for the report root tree item.
- * @returns {Promise<ImportResultSummary | null>} The import result summary, or null if an error occurs.
+ * @returns {Promise<void | null>} Resolves when the import is complete, or null if an error occurs.
  */
 async function importReportWithResultsToTestbenchWithSpecificUID(
     connection: PlayServerConnection,
@@ -1197,7 +1083,7 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
     reportWithResultsZipFilePath: string,
     reportRootUID: string,
     cancellationToken?: vscode.CancellationToken
-): Promise<ImportResultSummary | null> {
+): Promise<void | null> {
     try {
         logger.debug(
             `[reportHandler] Starting import for specific UID: ${reportRootUID}, Report file: ${reportWithResultsZipFilePath}, Project key: ${projectKeyString}, Cycle key: ${cycleKeyString}`
@@ -1253,31 +1139,25 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
                 undefined,
                 cancellationToken
             );
-
             if (!importJobStatus || isImportJobFailed(importJobStatus)) {
                 const importJobFailedMessageForUser: string = "Import job could not be completed.";
                 vscode.window.showErrorMessage(importJobFailedMessageForUser);
                 return null;
             } else if (!isImportJobCompletedSuccessfully(importJobStatus)) {
-                logger.warn("[reportHandler] Import job finished polling but status is unknown.", importJobStatus);
+                logger.warn("[reportHandler] Import job finished polling but status is unknown.");
+            }
+            let importError = false;
+            for (const tcs of importJobStatus?.completion?.result?.ExecutionImportingSuccess?.testCaseSets ?? []) {
+                const errorMessage = tcs?.error?.message;
+                const tcsName = tcs?.name ?? "Unknown TestCaseSet";
+                if (errorMessage && typeof errorMessage === "string") {
+                    vscode.window.showErrorMessage(`Import of TestCaseSet '${tcsName}' failed: ${errorMessage}`);
+                    importError = true;
+                }
+            }
+            if (importError) {
                 return null;
             }
-
-            const importSummary = analyzeImportResult(importJobStatus);
-            logger.debug(
-                `[reportHandler] Import result summary: ${importSummary.importedTestCaseSetCount} test case set(s), ${importSummary.importedTestCaseCount} test case(s) imported. Sets: [${importSummary.importedTestCaseSetNames.join(", ")}]`
-            );
-            if (importSummary.testCaseSetErrors.length > 0) {
-                logger.warn(
-                    `[reportHandler] Import had test case set errors: ${importSummary.testCaseSetErrors.join("; ")}`
-                );
-            }
-            if (importSummary.testCaseWarnings.length > 0) {
-                logger.warn(
-                    `[reportHandler] Import had test case warnings: ${importSummary.testCaseWarnings.join("; ")}`
-                );
-            }
-            return importSummary;
         } catch (error: any) {
             logger.error(
                 `[reportHandler] Error during import job for specific tree item UID ${reportRootUID}:`,
@@ -1332,7 +1212,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
     resolvedTargetProjectKey: string,
     resolvedTargetCycleKey: string,
     resolvedReportRootUID: string
-): Promise<ImportResultSummary | null> {
+): Promise<boolean> {
     logger.trace(`[reportHandler] Fetching results and importing to Testbench for tree item: ${invokedOnItem.label}`);
     return vscode.window.withProgress(
         {
@@ -1345,13 +1225,13 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 if (cancellationToken.isCancellationRequested) {
                     logger.debug("[reportHandler] User cancelled the fetch and import process.");
                     vscode.window.showInformationMessage("Import process cancelled.");
-                    return null;
+                    return false;
                 }
 
                 progress.report({ message: "Step 1/4: Validating parameters...", increment: 10 });
 
                 if (cancellationToken.isCancellationRequested) {
-                    return null;
+                    return false;
                 }
 
                 progress.report({ message: "Step 2/4: Creating report with local test results...", increment: 30 });
@@ -1363,7 +1243,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 );
                 if (cancellationToken.isCancellationRequested || !reportCreationDetails?.createdReportPath) {
                     logger.error("[reportHandler] Failed to create report with results, or process was cancelled.");
-                    return null;
+                    return false;
                 }
 
                 const { createdReportPath } = reportCreationDetails!;
@@ -1380,28 +1260,27 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     resolvedReportRootUID,
                     cancellationToken
                 );
+                if (importResult === null) {
+                    return false;
+                }
 
                 if (cancellationToken.isCancellationRequested) {
                     logger.debug("[reportHandler] Fetch and import process cancelled.");
-                    return null;
-                }
-
-                if (!importResult) {
-                    return null;
+                    return false;
                 }
 
                 progress.report({ message: "Step 4/4: Cleaning up and updating state...", increment: 30 });
                 await setLastImportedItem(context, resolvedReportRootUID);
                 logger.debug("[reportHandler] Fetch and import process completed.");
-                return importResult;
+                return true;
             } catch (error) {
                 const fetchAndImportErrorMsg: string = `[reportHandler] Error during fetch and import process: ${
                     error instanceof Error ? error.message : String(error)
                 }`;
                 const fetchAndImportErrorMsgForUser: string = "Error during fetch and import process.";
-                logger.error(fetchAndImportErrorMsg, error);
+                logger.error(fetchAndImportErrorMsg);
                 vscode.window.showErrorMessage(fetchAndImportErrorMsgForUser);
-                return null;
+                return false;
             }
         }
     );
@@ -1569,12 +1448,8 @@ export async function startTestGenerationUsingTOV(
                     return false;
                 }
                 logger.debug(`[reportHandler] Successfully finished TestBench report generation job.`);
-                const downloadedTovReportName: string | undefined =
-                    tovReportJobStatus.completion?.result.ReportingSuccess?.reportName;
-                if (!downloadedTovReportName) {
-                    logger.error("[reportHandler] TOV report generation completed but report name is missing.");
-                    return false;
-                }
+                const downloadedTovReportName: string =
+                    tovReportJobStatus.completion.result.ReportingSuccess!.reportName;
 
                 const downloadedTovReportPath: string | null = await downloadReport(
                     projectKey,
@@ -1589,21 +1464,12 @@ export async function startTestGenerationUsingTOV(
 
                 progress.report({ increment: 20, message: "Generating Robot Framework test suites..." });
 
-                const generationResult: testbench2robotframeworkLib.TestGenerationResult =
+                const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
                     await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(
                         downloadedTovReportPath
                     );
 
-                if (!generationResult.commandSucceeded) {
-                    return false;
-                }
-
-                if (!generationResult.testsWereGenerated) {
-                    const noTestsMessage = generateTestForSpecificTestThemeTreeItem
-                        ? `No Robot Framework test suites were generated from ${rootUIDToUse} ('${treeItem.label}'). No eligible test data was found for generation. This can happen when selected items are locked by another user, excluded by active Test Theme filters, or marked as not executable.`
-                        : `No Robot Framework test suites were generated from Test Object Version '${treeItem.label}'. The report may not contain test data.`;
-                    logger.warn(`[reportHandler] ${noTestsMessage}`);
-                    vscode.window.showWarningMessage(noTestsMessage);
+                if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
                     return false;
                 }
 

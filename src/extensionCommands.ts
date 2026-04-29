@@ -1045,14 +1045,14 @@ const handleUpdateOrRestartLS = () => {
 };
 
 const handleShowExtensionSettings = () => {
-    vscode.commands.executeCommand("workbench.action.openSettings", "@ext:imbus.testbench");
+    vscode.commands.executeCommand("workbench.action.openSettings", "@ext:imbus.testbench-extension");
 };
 
 const handleOpenIssueReporter = async () => {
     getLogger().trace(`[extensionCommands] Command called: ${allExtensionCommands.openIssueReporter}`);
     try {
         await vscode.commands.executeCommand("workbench.action.openIssueReporter", {
-            extensionId: "imbus.testbench"
+            extensionId: "imbus.testbench-extension"
         });
         getLogger().trace(`[extensionCommands] Opened VS Code issue reporter with TestBench extension preselected`);
     } catch (error) {

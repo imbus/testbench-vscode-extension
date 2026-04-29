@@ -157,10 +157,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             }
             this.logger.trace(this.buildLogPrefix("Tree view initialized successfully"));
         } catch (error) {
-            this.logger.error(
-                this.buildLogPrefix("Error during initialization"),
-                error instanceof Error ? error : new Error(String(error))
-            );
+            this.logger.error(this.buildLogPrefix("Error during initialization"), error);
             throw error;
         }
     }
@@ -352,7 +349,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             return children;
         } catch (error) {
             const emptyArray: T[] = [];
-            this.logger.error(this.buildLogPrefix("Failed to get children"), error as Error);
+            this.logger.error(this.buildLogPrefix("Failed to get children"), error);
             return emptyArray;
         }
     }

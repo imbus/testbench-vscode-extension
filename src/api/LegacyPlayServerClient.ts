@@ -148,7 +148,7 @@ export class LegacyPlayServerClient {
                     `[LegacyPlayServerClient] Server locations endpoint returned 404. The legacy server port cannot be discovered dynamically.`
                 );
             } else {
-                logger.error(`[LegacyPlayServerClient] Error fetching server locations: ${error?.message || error}`);
+                logger.error(`[LegacyPlayServerClient] Error fetching server locations`);
             }
             return null;
         }
@@ -378,16 +378,14 @@ export class LegacyPlayServerClient {
             );
             const response: AxiosResponse = await this.executeLegacyGetWithPortAndTlsFallback(getTestElementsURL);
             if (response.data) {
-                logger.trace(`[LegacyPlayServerClient] Successfully fetched test elements data for TOV ${tovKey}:`, {
-                    response: response.data
-                });
+                logger.trace(`[LegacyPlayServerClient] Successfully fetched test elements data for TOV ${tovKey}`);
                 return response.data;
             } else {
                 logger.error(`[LegacyPlayServerClient] Test elements data is not available for TOV key ${tovKey}.`);
                 return null;
             }
-        } catch (error) {
-            logger.error(`[LegacyPlayServerClient] Error fetching test elements for TOV key ${tovKey}: ${error}`);
+        } catch (_error) {
+            logger.error(`[LegacyPlayServerClient] Error fetching test elements for TOV key ${tovKey}`);
             vscode.window.showErrorMessage("Error fetching test elements. Please check the logs for details.");
             return null;
         }
@@ -414,16 +412,14 @@ export class LegacyPlayServerClient {
             const response: AxiosResponse = await this.executeLegacyGetWithPortAndTlsFallback(getFiltersPath);
 
             if (response.data) {
-                logger.trace(`[LegacyPlayServerClient] Successfully fetched filters data:`, {
-                    response: response.data
-                });
+                logger.trace(`[LegacyPlayServerClient] Successfully fetched filters data`);
                 return response.data;
             } else {
                 logger.error(`[LegacyPlayServerClient] Filters data is not available.`);
                 return null;
             }
-        } catch (error) {
-            logger.error(`[LegacyPlayServerClient] Error fetching filters: ${error}`);
+        } catch (_error) {
+            logger.error(`[LegacyPlayServerClient] Error fetching filters`);
             vscode.window.showErrorMessage("Error fetching filters. Please check the logs for details.");
             return null;
         }
