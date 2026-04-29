@@ -2191,6 +2191,215 @@ async function executeTestGenerationScenario(
     return result;
 }
 
+/**
+ * Shared navigation helper for scenario tests to ensure the extension is in Test Themes view.
+ *
+ * @param driver The WebDriver instance.
+ * @param config Project context (project, version, cycle).
+ * @param logTree Whether to log tree structure once during navigation.
+ * @returns TestThemes page object and sidebar view used by scenario execution.
+ */
+async function ensureInTestThemesView(
+    driver: WebDriver,
+    config: { projectName: string; versionName: string; cycleName: string },
+    logTree: boolean = false
+): Promise<{ testThemesPage: TestThemesPage; sideBar: SideBarView }> {
+    const testThemesPage = new TestThemesPage(driver);
+    const projectsPage = new ProjectsViewPage(driver);
+    const sideBar = new SideBarView();
+    const content = sideBar.getContent();
+
+    // Check if we're already in Test Themes view with correct context
+    const testThemesSection = await testThemesPage.getSection(content);
+    if (testThemesSection) {
+        const testThemesTitle = await testThemesPage.getTitle(testThemesSection);
+        if (
+            testThemesTitle &&
+            testThemesTitle.includes(config.projectName) &&
+            testThemesTitle.includes(config.cycleName)
+        ) {
+            logger.info("Navigation", "Already in Test Themes View with correct context");
+
+            // Log tree structure if requested (only once per session)
+            if (logTree) {
+                await logTreeStructureOnce(testThemesSection, driver, "Test Themes View");
+            }
+
+            return { testThemesPage, sideBar };
+        }
+    }
+
+    // Navigate to Test Themes view
+    logger.info("Navigation", "Navigating to Test Themes View...");
+    const projectsSection = await projectsPage.getSection(content);
+    if (!projectsSection) {
+        throw new Error("Projects section not found");
+    }
+
+    await waitForTreeItems(projectsSection, driver);
+    const targetProject = await projectsPage.getProject(projectsSection, config.projectName);
+    if (!targetProject) {
+        throw new Error(`Project "${config.projectName}" not found`);
+    }
+
+    const targetVersion = await projectsPage.getVersion(targetProject, config.versionName);
+    if (!targetVersion) {
+        throw new Error(`Version "${config.versionName}" not found`);
+    }
+
+    const targetCycle = await projectsPage.getCycle(targetVersion, config.cycleName);
+    if (!targetCycle) {
+        throw new Error(`Cycle "${config.cycleName}" not found`);
+    }
+
+    await handleCycleConfigurationPrompt(
+        targetCycle,
+        driver,
+        config.projectName,
+        config.versionName,
+        projectsSection,
+        targetProject,
+        targetVersion
+    );
+
+    // Re-locate cycle after configuration
+    const refreshedContent = sideBar.getContent();
+    const refreshedProjectsSection = await projectsPage.getSection(refreshedContent);
+    if (refreshedProjectsSection) {
+        const refreshedProject = await projectsPage.getProject(refreshedProjectsSection, config.projectName);
+        if (refreshedProject) {
+            const refreshedVersion = await projectsPage.getVersion(refreshedProject, config.versionName);
+            if (refreshedVersion) {
+                const refreshedCycle = await projectsPage.getCycle(refreshedVersion, config.cycleName);
+                if (refreshedCycle) {
+                    await doubleClickTreeItem(refreshedCycle, driver);
+                    await waitForTestThemesAndElementsViews(driver);
+
+                    // Log tree structure if requested (only once per session)
+                    if (logTree) {
+                        const contentAfterNav = sideBar.getContent();
+                        const testThemesSectionAfterNav = await testThemesPage.getSection(contentAfterNav);
+                        if (testThemesSectionAfterNav) {
+                            await logTreeStructureOnce(testThemesSectionAfterNav, driver, "Test Themes View");
+                        }
+                    }
+
+                    return { testThemesPage, sideBar };
+                }
+            }
+        }
+    }
+
+    // Fallback to original cycle
+    await doubleClickTreeItem(targetCycle, driver);
+    await waitForTestThemesAndElementsViews(driver);
+
+    // Log tree structure if requested (only once per session)
+    if (logTree) {
+        const contentAfterNav = sideBar.getContent();
+        const testThemesSectionAfterNav = await testThemesPage.getSection(contentAfterNav);
+        if (testThemesSectionAfterNav) {
+            await logTreeStructureOnce(testThemesSectionAfterNav, driver, "Test Themes View");
+        }
+    }
+
+    return { testThemesPage, sideBar };
+}
+
+/**
+ * Optional controls for shared scenario execution.
+ */
+interface RunScenarioOptions {
+    /** Whether to log the tree structure during navigation setup. */
+    logTree?: boolean;
+    /** Optional explanatory message to log when a scenario is skipped. */
+    skipInfoMessage?: string;
+}
+
+/**
+ * Creates a scenario using consistent defaults so tests only specify differences.
+ *
+ * @param level The hierarchy level to target (root, middle, or leaf).
+ * @param description Human-readable scenario description for logs.
+ * @param overrides Optional scenario fields that should override defaults.
+ * @returns A fully populated test generation scenario object.
+ */
+function createDefaultScenario(
+    level: TreeItemLevel,
+    description: string,
+    overrides: Partial<TestGenerationScenario> = {}
+): TestGenerationScenario {
+    return {
+        level,
+        description,
+        verifyRobotFile: true,
+        verifyFilesystem: true,
+        verifyMetadata: true,
+        verifyChildren: level !== TreeItemLevel.LEAF,
+        executeTests: false,
+        uploadResults: false,
+        ...overrides
+    };
+}
+
+/**
+ * Executes a scenario with shared setup, navigation, and skip handling.
+ *
+ * @param driver The active test WebDriver instance.
+ * @param mochaContext Mocha test context, used to mark tests as skipped when needed.
+ * @param scenario Scenario definition to execute.
+ * @param options Optional runtime controls for logging and skip messaging.
+ * @returns Scenario result, or null when the test was skipped.
+ */
+async function runScenarioForTest(
+    driver: WebDriver,
+    mochaContext: Mocha.Context,
+    scenario: TestGenerationScenario,
+    options: RunScenarioOptions = {}
+): Promise<ScenarioExecutionResult | null> {
+    const config = getTestData();
+    logTestDataConfig();
+
+    const { testThemesPage, sideBar } = await ensureInTestThemesView(driver, config, options.logTree ?? false);
+    const result = await executeTestGenerationScenario(driver, testThemesPage, sideBar, scenario, config);
+
+    if (result.skipped) {
+        logger.warn("Test", `Test skipped: ${result.reason}`);
+        if (options.skipInfoMessage) {
+            logger.info("Test", options.skipInfoMessage);
+        }
+        mochaContext.skip();
+        return null;
+    }
+
+    return result;
+}
+
+/**
+ * Asserts that scenario execution produced at least one generated Robot Framework file.
+ *
+ * @param result Scenario execution result to validate.
+ */
+function assertFilesystemGeneration(result: ScenarioExecutionResult): void {
+    if (result.details.filesystemResult) {
+        expect(
+            result.details.filesystemResult.totalCount,
+            "Should have generated at least one .robot file"
+        ).to.be.greaterThan(0);
+    }
+}
+
+/**
+ * Asserts overall scenario success with a caller-provided failure context message.
+ *
+ * @param result Scenario execution result to validate.
+ * @param message Assertion prefix message shown on failure.
+ */
+function assertScenarioSuccess(result: ScenarioExecutionResult, message: string): void {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    expect(result.success, `${message}. Reason: ${result.reason || "none"}`).to.be.true;
+}
+
 describe("Test Themes View UI Tests", function () {
     const ctx: TestContext = {} as TestContext;
 
@@ -2213,6 +2422,16 @@ describe("Test Themes View UI Tests", function () {
     const getDriver = () => ctx.driver;
 
     describe("Test Generation and Result Upload Flow", function () {
+        /*
+         * 1. Open the TestBench area and make sure the test is in the correct project context.
+         * 2. Navigate to the Test Themes view if the screen is currently on Projects.
+         * 3. Confirm the Test Themes title (context) matches the selected project, version, and cycle.
+         * 4. Generate Robot Framework tests for the selected test theme.
+         * 5. Verify generated files and key metadata are available inside generated files.
+         * 6. Execute tests and return to the TestBench view.
+         * 7. Upload execution results back to TestBench.
+         * 8. Verify the tooltip shows execution status as performed.
+         */
         it("should navigate to Test Themes view, generate tests, and upload results", async function () {
             const driver = getDriver();
             const config = getTestData();
@@ -3065,268 +3284,102 @@ describe("Test Themes View UI Tests", function () {
     });
 
     describe("Test Generation Scenarios - Different Hierarchy Levels", function () {
-        /**
-         * Shared navigation function to ensure we're in Test Themes view.
+        /*
+         * 1. Open the Test Themes view for the configured project context.
+         * 2. Select a root-level test theme (top of the hierarchy).
+         * 3. Generate Robot Framework tests for the entire tree under that root.
+         * 4. Check that generated files exist.
+         * 5. Verify child items are marked as generated where applicable.
          */
-        async function ensureInTestThemesView(
-            driver: WebDriver,
-            config: { projectName: string; versionName: string; cycleName: string },
-            logTree: boolean = false
-        ): Promise<{ testThemesPage: TestThemesPage; sideBar: SideBarView }> {
-            const testThemesPage = new TestThemesPage(driver);
-            const projectsPage = new ProjectsViewPage(driver);
-            const sideBar = new SideBarView();
-            const content = sideBar.getContent();
-
-            // Check if we're already in Test Themes view with correct context
-            const testThemesSection = await testThemesPage.getSection(content);
-            if (testThemesSection) {
-                const testThemesTitle = await testThemesPage.getTitle(testThemesSection);
-                if (
-                    testThemesTitle &&
-                    testThemesTitle.includes(config.projectName) &&
-                    testThemesTitle.includes(config.cycleName)
-                ) {
-                    logger.info("Navigation", "Already in Test Themes View with correct context");
-
-                    // Log tree structure if requested (only once per session)
-                    if (logTree) {
-                        await logTreeStructureOnce(testThemesSection, driver, "Test Themes View");
-                    }
-
-                    return { testThemesPage, sideBar };
-                }
-            }
-
-            // Navigate to Test Themes view
-            logger.info("Navigation", "Navigating to Test Themes View...");
-            const projectsSection = await projectsPage.getSection(content);
-            if (!projectsSection) {
-                throw new Error("Projects section not found");
-            }
-
-            await waitForTreeItems(projectsSection, driver);
-            const targetProject = await projectsPage.getProject(projectsSection, config.projectName);
-            if (!targetProject) {
-                throw new Error(`Project "${config.projectName}" not found`);
-            }
-
-            const targetVersion = await projectsPage.getVersion(targetProject, config.versionName);
-            if (!targetVersion) {
-                throw new Error(`Version "${config.versionName}" not found`);
-            }
-
-            const targetCycle = await projectsPage.getCycle(targetVersion, config.cycleName);
-            if (!targetCycle) {
-                throw new Error(`Cycle "${config.cycleName}" not found`);
-            }
-
-            await handleCycleConfigurationPrompt(
-                targetCycle,
-                driver,
-                config.projectName,
-                config.versionName,
-                projectsSection,
-                targetProject,
-                targetVersion
-            );
-
-            // Re-locate cycle after configuration
-            const refreshedContent = sideBar.getContent();
-            const refreshedProjectsSection = await projectsPage.getSection(refreshedContent);
-            if (refreshedProjectsSection) {
-                const refreshedProject = await projectsPage.getProject(refreshedProjectsSection, config.projectName);
-                if (refreshedProject) {
-                    const refreshedVersion = await projectsPage.getVersion(refreshedProject, config.versionName);
-                    if (refreshedVersion) {
-                        const refreshedCycle = await projectsPage.getCycle(refreshedVersion, config.cycleName);
-                        if (refreshedCycle) {
-                            await doubleClickTreeItem(refreshedCycle, driver);
-                            await waitForTestThemesAndElementsViews(driver);
-
-                            // Log tree structure if requested (only once per session)
-                            if (logTree) {
-                                const contentAfterNav = sideBar.getContent();
-                                const testThemesSectionAfterNav = await testThemesPage.getSection(contentAfterNav);
-                                if (testThemesSectionAfterNav) {
-                                    await logTreeStructureOnce(testThemesSectionAfterNav, driver, "Test Themes View");
-                                }
-                            }
-
-                            return { testThemesPage, sideBar };
-                        }
-                    }
-                }
-            }
-
-            // Fallback to original cycle
-            await doubleClickTreeItem(targetCycle, driver);
-            await waitForTestThemesAndElementsViews(driver);
-
-            // Log tree structure if requested (only once per session)
-            if (logTree) {
-                const contentAfterNav = sideBar.getContent();
-                const testThemesSectionAfterNav = await testThemesPage.getSection(contentAfterNav);
-                if (testThemesSectionAfterNav) {
-                    await logTreeStructureOnce(testThemesSectionAfterNav, driver, "Test Themes View");
-                }
-            }
-
-            return { testThemesPage, sideBar };
-        }
-
         it("should generate tests for root-level test theme (entire tree)", async function () {
             const driver = getDriver();
-            const config = getTestData();
-            logTestDataConfig();
-
-            const { testThemesPage, sideBar } = await ensureInTestThemesView(driver, config, true); // Log tree structure
-
-            const scenario: TestGenerationScenario = {
-                level: TreeItemLevel.ROOT,
-                description: "Generate tests for root-level test theme (entire tree)",
-                verifyRobotFile: true,
-                verifyFilesystem: true,
-                verifyMetadata: true,
-                verifyChildren: true,
-                executeTests: false,
-                uploadResults: false
-            };
-
-            const result = await executeTestGenerationScenario(driver, testThemesPage, sideBar, scenario, config);
-
-            if (result.skipped) {
-                logger.warn("Test", `Test skipped: ${result.reason}`);
-                this.skip();
+            const scenario = createDefaultScenario(
+                TreeItemLevel.ROOT,
+                "Generate tests for root-level test theme (entire tree)"
+            );
+            const result = await runScenarioForTest(driver, this, scenario, { logTree: true });
+            if (!result) {
                 return;
             }
 
-            // Verify filesystem results
-            if (result.details.filesystemResult) {
-                expect(
-                    result.details.filesystemResult.totalCount,
-                    "Should have generated at least one .robot file"
-                ).to.be.greaterThan(0);
-            }
+            assertFilesystemGeneration(result);
 
             // Verify children were checked (for root level, should have children)
             if (result.details.childrenVerified !== undefined) {
                 logger.info("Test", `Children verified: ${result.details.childrenVerified}`);
             }
 
-            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-            expect(result.success, `Root-level test generation should succeed. Reason: ${result.reason || "none"}`).to
-                .be.true;
+            assertScenarioSuccess(result, "Root-level test generation should succeed");
         });
 
+        /*
+         * 1. Open the Test Themes view in the target project context.
+         * 2. Select a middle-level test theme (a subtree node).
+         * 3. Generate tests for that subtree only.
+         * 4. Verify generated Robot Framework files are present.
+         * 5. Confirm the scenario completes successfully, or skip when this hierarchy level is not available.
+         */
         it("should generate tests for middle-level test theme (subtree)", async function () {
             const driver = getDriver();
-            const config = getTestData();
-            logTestDataConfig();
-
-            const { testThemesPage, sideBar } = await ensureInTestThemesView(driver, config);
-
-            const scenario: TestGenerationScenario = {
-                level: TreeItemLevel.MIDDLE,
-                description: "Generate tests for middle-level test theme (subtree)",
-                verifyRobotFile: true,
-                verifyFilesystem: true,
-                verifyMetadata: true,
-                verifyChildren: true,
-                executeTests: false,
-                uploadResults: false
-            };
-
-            const result = await executeTestGenerationScenario(driver, testThemesPage, sideBar, scenario, config);
-
-            if (result.skipped) {
-                logger.warn("Test", `Test skipped: ${result.reason}`);
-                logger.info(
-                    "Test",
+            const scenario = createDefaultScenario(
+                TreeItemLevel.MIDDLE,
+                "Generate tests for middle-level test theme (subtree)"
+            );
+            const result = await runScenarioForTest(driver, this, scenario, {
+                skipInfoMessage:
                     "This is expected if the tree structure only has root items with direct test case sets, or only a single test theme."
-                );
-                this.skip();
+            });
+            if (!result) {
                 return;
             }
 
-            // Verify filesystem results
-            if (result.details.filesystemResult) {
-                expect(
-                    result.details.filesystemResult.totalCount,
-                    "Should have generated at least one .robot file"
-                ).to.be.greaterThan(0);
-            }
-
-            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-            expect(result.success, `Middle-level test generation should succeed. Reason: ${result.reason || "none"}`).to
-                .be.true;
+            assertFilesystemGeneration(result);
+            assertScenarioSuccess(result, "Middle-level test generation should succeed");
         });
 
+        /*
+         * 1. Open the Test Themes view and locate a leaf-level test case set.
+         * 2. Generate tests for only that single leaf item.
+         * 3. Verify the expected Robot Framework file output exists.
+         * 4. Confirm metadata checks pass for the generated result.
+         * 5. Ensure the single-item generation scenario succeeds.
+         */
         it("should generate tests for leaf test case set (single item)", async function () {
             const driver = getDriver();
-            const config = getTestData();
-            logTestDataConfig();
-
-            const { testThemesPage, sideBar } = await ensureInTestThemesView(driver, config);
-
-            const scenario: TestGenerationScenario = {
-                level: TreeItemLevel.LEAF,
-                description: "Generate tests for leaf test case set (single item)",
-                verifyRobotFile: true,
-                verifyFilesystem: true,
-                verifyMetadata: true,
-                verifyChildren: false, // Leaf items have no children
-                executeTests: false,
-                uploadResults: false
-            };
-
-            const result = await executeTestGenerationScenario(driver, testThemesPage, sideBar, scenario, config);
-
-            if (result.skipped) {
-                logger.warn("Test", `Test skipped: ${result.reason}`);
-                this.skip();
+            const scenario = createDefaultScenario(
+                TreeItemLevel.LEAF,
+                "Generate tests for leaf test case set (single item)"
+            );
+            const result = await runScenarioForTest(driver, this, scenario);
+            if (!result) {
                 return;
             }
 
-            // Verify filesystem results
-            if (result.details.filesystemResult) {
-                expect(
-                    result.details.filesystemResult.totalCount,
-                    "Should have generated at least one .robot file"
-                ).to.be.greaterThan(0);
-            }
-
-            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-            expect(result.success, `Leaf-level test generation should succeed. Reason: ${result.reason || "none"}`).to
-                .be.true;
+            assertFilesystemGeneration(result);
+            assertScenarioSuccess(result, "Leaf-level test generation should succeed");
         });
 
+        /*
+         * 1. Open the Test Themes view and pick a leaf-level test case set.
+         * 2. Generate Robot Framework tests for that item.
+         * 3. Execute the generated tests.
+         * 4. Upload execution results to TestBench.
+         * 5. Confirm the tooltip reflects the performed execution status.
+         */
         it("should generate, execute, and upload results for leaf test case set", async function () {
             const driver = getDriver();
-            const config = getTestData();
-            logTestDataConfig();
-
-            const { testThemesPage, sideBar } = await ensureInTestThemesView(driver, config);
-
-            // This test does the full workflow: generate, execute, upload, and verify
-            // Similar to the main Phase 4-9 test but using the scenario framework
-            const scenario: TestGenerationScenario = {
-                level: TreeItemLevel.LEAF,
-                description: "Full workflow: generate, execute, and upload for leaf test case set",
-                verifyRobotFile: true,
-                verifyFilesystem: true,
-                verifyMetadata: true,
-                verifyChildren: false,
-                executeTests: true,
-                uploadResults: true,
-                verifyExecutionStatus: true
-            };
-
-            const result = await executeTestGenerationScenario(driver, testThemesPage, sideBar, scenario, config);
-
-            if (result.skipped) {
-                logger.warn("Test", `Test skipped: ${result.reason}`);
-                this.skip();
+            const scenario = createDefaultScenario(
+                TreeItemLevel.LEAF,
+                "Full workflow: generate, execute, and upload for leaf test case set",
+                {
+                    verifyChildren: false,
+                    executeTests: true,
+                    uploadResults: true,
+                    verifyExecutionStatus: true
+                }
+            );
+            const result = await runScenarioForTest(driver, this, scenario);
+            if (!result) {
                 return;
             }
 
@@ -3340,12 +3393,7 @@ describe("Test Themes View UI Tests", function () {
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
             expect(result.details.executionStatusVerified, "Execution status tooltip should be verified").to.be.true;
 
-            if (result.details.filesystemResult) {
-                expect(
-                    result.details.filesystemResult.totalCount,
-                    "Should have generated at least one .robot file"
-                ).to.be.greaterThan(0);
-            }
+            assertFilesystemGeneration(result);
 
             // Log detailed results
             logger.info("Test", "Full workflow test completed:");
@@ -3357,8 +3405,7 @@ describe("Test Themes View UI Tests", function () {
                 `  - Execution status verified: ${result.details.executionStatusVerified ? "Yes" : "No"}`
             );
 
-            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-            expect(result.success, `Full workflow test should succeed. Reason: ${result.reason || "none"}`).to.be.true;
+            assertScenarioSuccess(result, "Full workflow test should succeed");
         });
     });
 });
