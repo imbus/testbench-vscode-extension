@@ -200,6 +200,12 @@ describe("Test Elements View UI Tests", function () {
     });
 
     describe("Test Elements View Detection", function () {
+        /*
+         * 1. Open the TestBench side panel in VS Code.
+         * 2. Get the Test Elements section.
+         * 3. Assert that the section is present.
+         * 4. Verify its title contains both configured project name and version name.
+         */
         it("should display Test Elements section with correct title", async function () {
             const driver = getDriver();
             const config = getTestData();
@@ -221,6 +227,12 @@ describe("Test Elements View UI Tests", function () {
             }
         });
 
+        /*
+         * 1. Get the Test Elements section.
+         * 2. Wait for tree items to load.
+         * 3. Retrieve all visible subdivisions.
+         * 4. Verify that at least one subdivision is shown.
+         */
         it("should display subdivisions in the tree", async function () {
             const driver = getDriver();
 
@@ -244,6 +256,13 @@ describe("Test Elements View UI Tests", function () {
     });
 
     describe("Subdivision with Resource Marker", function () {
+        /*
+         * 1. Get the Test Elements section.
+         * 2. Wait for tree items to appear.
+         * 3. Look for a configured subdivision label (e.g., "[Robot-Resource]").
+         * 4. If the configured subdivision isn't found, find any subdivision with the resource marker.
+         * 5. Verify that the matching subdivision is present in the tree.
+         */
         it("should find subdivision with Resource Marker in name", async function () {
             const driver = getDriver();
             const config = getTestData();
@@ -279,6 +298,13 @@ describe("Test Elements View UI Tests", function () {
             expect(targetSubdivision, "Subdivision should exist").to.not.be.undefined;
         });
 
+        /*
+         * 1. Get the Test Elements section and wait for items.
+         * 2. Try selecting the configured test/resource subdivision.
+         * 3. Look for "Create Resource" or "Open Resource" action buttons on the item.
+         * 4. If none are found, fallback to any available resource subdivision.
+         * 5. Verify the item has either the "Create Resource" or "Open Resource" button.
+         */
         it("should show Create Resource or Open Resource button on resource subdivision", async function () {
             const driver = getDriver();
             const config = getTestData();
@@ -340,6 +366,12 @@ describe("Test Elements View UI Tests", function () {
     });
 
     describe("Visual Indicators for Local Resources", function () {
+        /*
+         * 1. Get the Test Elements section and wait for tree items.
+         * 2. Read the first visible items in the tree.
+         * 3. Collect icon information (colors/types) for each item.
+         * 4. Verify that icon info can be retrieved to ensure different icon states are present for locally available resources vs non-local ones.
+         */
         it("should show different icon color for locally available resources", async function () {
             const driver = getDriver();
 
@@ -374,6 +406,13 @@ describe("Test Elements View UI Tests", function () {
     });
 
     describe("Keyword Navigation", function () {
+        /*
+         * 1. Get the Test Elements section and look for the resource subdivision.
+         * 2. Ensure the subdivision has children (i.e. keywords).
+         * 3. Expand the subdivision item if it's collapsed.
+         * 4. Retrieve its children items.
+         * 5. Verify at least one keyword child is present.
+         */
         it("should expand subdivision to reveal keywords", async function () {
             const driver = getDriver();
             const config = getTestData();
@@ -422,6 +461,13 @@ describe("Test Elements View UI Tests", function () {
             collectedSubdivisionLabels.forEach((label) => logger.debug("TestElements", `  Keyword: ${label}`));
         });
 
+        /*
+         * 1. Get the Test Elements section and expand a resource subdivision.
+         * 2. Ensure a keyword child exists under it.
+         * 3. Confirm the Open Resource action is visible on the parent (to guarantee it has a local file).
+         * 4. Single-click the keyword item.
+         * 5. Check if an active text editor opens indicating the resource file is shown.
+         */
         it("should attempt to open resource file when clicking a keyword (single-click)", async function () {
             const driver = getDriver();
             const config = getTestData();
@@ -486,6 +532,12 @@ describe("Test Elements View UI Tests", function () {
             }
         });
 
+        /*
+         * 1. Get the Test Elements section and expand a resource subdivision.
+         * 2. Assure a child keyword is present and resource is available locally.
+         * 3. Double-click the keyword.
+         * 4. Verify that VS Code's active text editor switches to the file context, or sidebar switches out.
+         */
         it("should attempt to open and reveal in Explorer when double-clicking keyword", async function () {
             const driver = getDriver();
             const config = getTestData();
@@ -543,6 +595,12 @@ describe("Test Elements View UI Tests", function () {
     });
 
     describe("Open Resource Button", function () {
+        /*
+         * 1. Check for the "Open Resource" action on a subdivision.
+         * 2. If it's "Create Resource" instead, try creating a dummy file first or fallback.
+         * 3. Click the "Open Resource" button.
+         * 4. Check if the active editor tab matches the resource file name.
+         */
         it("should open existing resource file when clicking Open Resource button", async function () {
             const driver = getDriver();
             const config = getTestData();
