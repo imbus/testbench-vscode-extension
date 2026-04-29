@@ -52,6 +52,13 @@ describe("Projects View UI Tests", function () {
     });
 
     describe("Projects View Detection and Expansion", function () {
+        /*
+         * 1. Open the TestBench Projects view in the sidebar.
+         * 2. Wait until project items are visible.
+         * 3. Expand all project-related tree items.
+         * 4. Check that every expandable item is now opened.
+         * 5. Confirm the project tree can be fully explored by the user.
+         */
         it("should detect Projects view and expand all collapsible tree items", async function () {
             const driver = getDriver();
             const sideBar = new SideBarView();
@@ -103,6 +110,13 @@ describe("Projects View UI Tests", function () {
             logger.info("ProjectsView", "All collapsible tree items have been expanded");
         });
 
+        /*
+         * 1. Open the Projects view and load available project entries.
+         * 2. Select the first project and inspect its versions.
+         * 3. Open the first version and inspect its cycles.
+         * 4. Verify that cycles are end nodes (they do not contain child entries).
+         * 5. Confirm the expected hierarchy: Project -> Version -> Cycle.
+         */
         it("should verify Projects view structure (Projects -> Versions -> Cycles)", async function () {
             const driver = getDriver();
             const sideBar = new SideBarView();
@@ -172,6 +186,13 @@ describe("Projects View UI Tests", function () {
     });
 
     describe("Cycle Configuration Notification", function () {
+        /*
+         * 1. Open the Projects view and prepare a clean workspace.
+         * 2. Locate the target project, version, and cycle (or use the first available ones).
+         * 3. Click a cycle item to trigger configuration guidance.
+         * 4. Wait for the TestBench configuration notification to appear.
+         * 5. Click the "Create" action in the notification to create ls.config.
+         */
         it("should click cycle tree item and handle configuration notification", async function () {
             const driver = getDriver();
             const testData = getTestData();
