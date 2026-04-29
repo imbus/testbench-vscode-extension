@@ -63,6 +63,11 @@ interface SubdivisionMarkingState {
  * Gets the icon source for a tree item to determine if it's marked.
  * Marked subdivisions use 'localSubdivision' icon, unmarked use 'missingSubdivision'.
  *
+ * 1. Locate the icon shown for a specific subdivision row.
+ * 2. Read the icon source from the rendered tree item.
+ * 3. Check whether it points to the "local subdivision" icon.
+ * 4. Return both the raw icon source and the local/non-local result.
+ *
  * @param item - The tree item to check
  * @param driver - The WebDriver instance
  * @returns Promise<{ iconSrc: string | null; isLocal: boolean }> - Icon source and whether it indicates local availability
@@ -104,6 +109,10 @@ async function getSubdivisionIconInfo(
 
 /**
  * Captures the marking state of a subdivision tree item.
+ * 1. Select a subdivision item in the tree.
+ * 2. Read the action buttons shown for that item.
+ * 3. Read the icon that represents its local/remote state.
+ * 4. Combine this information into one comparable state object.
  *
  * @param item - The tree item
  * @param driver - The WebDriver instance
@@ -142,6 +151,10 @@ async function captureSubdivisionMarkingState(item: TreeItem, driver: WebDriver)
 /**
  * Finds a subdivision that can have a resource created (has "Create Resource" button).
  * Will expand parent items if necessary to find resource subdivisions.
+ * 1. Expand visible parent nodes to reveal more subdivisions.
+ * 2. Check each visible item for the "Create Resource" action.
+ * 3. Return the first subdivision where a resource can still be created.
+ * 4. Return null if no suitable subdivision is available.
  *
  * @param driver - The WebDriver instance
  * @param elementsSection - The Test Elements section
@@ -214,6 +227,10 @@ async function findUnmarkedResourceSubdivision(
 
 /**
  * Reloads the VS Code window using Developer: Reload Window command.
+ * 1. Open the command palette.
+ * 2. Run "Developer: Reload Window".
+ * 3. Wait until the old workbench disappears and the new one appears.
+ * 4. Confirm VS Code is interactive again before continuing.
  *
  * @param driver - The WebDriver instance
  * @returns Promise<boolean> - True if reload was successful
@@ -344,6 +361,10 @@ async function reloadVSCodeWindow(driver: WebDriver): Promise<boolean> {
 
 /**
  * Verifies that a subdivision is marked correctly after an action.
+ * 1. Open the Test Elements tree after a specific user action.
+ * 2. Find the same subdivision by its label.
+ * 3. Read its current marking state.
+ * 4. Report whether it is still marked.
  *
  * @param driver - The WebDriver instance
  * @param elementsSection - The Test Elements section
@@ -402,6 +423,9 @@ describe("Subdivision Marking Persistence UI Tests", function () {
 
     /**
      * Helper to get Test Elements section.
+     * 1. Open the TestBench side panel.
+     * 2. Locate the Test Elements section.
+     * 3. Return that section so tests can interact with it.
      */
     async function getElementsSection(): Promise<ViewSection | null> {
         const driver = getDriver();
@@ -413,6 +437,9 @@ describe("Subdivision Marking Persistence UI Tests", function () {
 
     /**
      * Helper to navigate to Test Elements view.
+     * 1. Navigate to the Test Elements view from the current UI state.
+     * 2. Wait until tree items are loaded.
+     * 3. Return whether navigation succeeded and the resolved section.
      */
     async function navigateToTestElements(): Promise<{ section: ViewSection | null; success: boolean }> {
         const driver = getDriver();
@@ -442,6 +469,13 @@ describe("Subdivision Marking Persistence UI Tests", function () {
     });
 
     describe("Resource Creation and Marking Verification", function () {
+        /*
+         * 1. Open the Test Elements view.
+         * 2. Expand visible parent nodes so hidden subdivisions become visible.
+         * 3. Read a sample of visible subdivisions.
+         * 4. Capture and log whether each sampled subdivision is marked or unmarked.
+         * 5. Confirm that the tree contains at least one subdivision.
+         */
         it("should navigate to Test Elements view and capture initial marking states", async function () {
             const driver = getDriver();
             logTestDataConfig();
@@ -492,6 +526,14 @@ describe("Subdivision Marking Persistence UI Tests", function () {
             expect(items.length).to.be.greaterThan(0, "Should have at least one subdivision in tree");
         });
 
+        /*
+         * 1. Open the Test Elements view.
+         * 2. Find a subdivision that still shows "Create Resource" (unmarked state).
+         * 3. Verify it starts as unmarked.
+         * 4. Create the resource file from that subdivision.
+         * 5. Confirm the file opens in the editor.
+         * 6. Return to the tree and verify the same subdivision is now marked.
+         */
         it("should create a resource file from an unmarked subdivision and verify marking", async function () {
             const driver = getDriver();
             const testElementsPage = new TestElementsPage(driver);
@@ -664,6 +706,12 @@ describe("Subdivision Marking Persistence UI Tests", function () {
     });
 
     describe("Marking Persistence After VS Code Window Reload", function () {
+        /*
+         * 1. Reload the entire VS Code window.
+         * 2. Wait for the extension UI to become available again.
+         * 3. Return to the Test Elements view.
+         * 4. Verify that the previously marked subdivision is still marked.
+         */
         it("should persist subdivision marking after Developer: Reload Window", async function () {
             const driver = getDriver();
             const testElementsPage = new TestElementsPage(driver);
@@ -707,6 +755,12 @@ describe("Subdivision Marking Persistence UI Tests", function () {
     });
 
     describe("Marking Persistence After Logout/Login Cycle", function () {
+        /*
+         * 1. Log out from TestBench.
+         * 2. Log back in using test credentials.
+         * 3. Open Test Elements again.
+         * 4. Verify that the same subdivision remains marked after re-authentication.
+         */
         it("should persist subdivision marking after logout and login", async function () {
             const driver = getDriver();
             const testElementsPage = new TestElementsPage(driver);
@@ -758,6 +812,12 @@ describe("Subdivision Marking Persistence UI Tests", function () {
     });
 
     describe("Marking Persistence After Tree View Refresh", function () {
+        /*
+         * 1. Open the Test Elements view.
+         * 2. Click the toolbar refresh action for this tree.
+         * 3. Wait for refresh to complete.
+         * 4. Verify that the previously marked subdivision is still marked.
+         */
         it("should persist subdivision marking after clicking Refresh Test Elements toolbar button", async function () {
             const driver = getDriver();
             const testElementsPage = new TestElementsPage(driver);
@@ -806,6 +866,11 @@ describe("Subdivision Marking Persistence UI Tests", function () {
     });
 
     describe("Summary Verification", function () {
+        /*
+         * 1. Confirm that a subdivision was actually used for this suite.
+         * 2. Print a readable summary of all persistence checks.
+         * 3. Provide a quick overview for reviewers of what was validated.
+         */
         it("should verify all persistence scenarios passed", async function () {
             if (!createdResourceSubdivisionLabel) {
                 logger.warn("Summary", "No resource was created - test suite did not run completely");
@@ -818,10 +883,10 @@ describe("Subdivision Marking Persistence UI Tests", function () {
             logger.info("Summary", "=".repeat(60));
             logger.info("Summary", `Tested subdivision: "${createdResourceSubdivisionLabel}"`);
             logger.info("Summary", "Persistence scenarios verified:");
-            logger.info("Summary", "  ✓ Resource creation - subdivision marked correctly");
-            logger.info("Summary", "  ✓ VS Code window reload - marking persisted");
-            logger.info("Summary", "  ✓ Logout/login cycle - marking persisted");
-            logger.info("Summary", "  ✓ Tree view refresh - marking persisted");
+            logger.info("Summary", "  Resource creation - subdivision marked correctly");
+            logger.info("Summary", "  VS Code window reload - marking persisted");
+            logger.info("Summary", "  Logout/login cycle - marking persisted");
+            logger.info("Summary", "  Tree view refresh - marking persisted");
             logger.info("Summary", "=".repeat(60));
         });
     });
