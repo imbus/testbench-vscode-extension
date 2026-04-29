@@ -54,6 +54,12 @@ describe("Search Feature UI Tests", function () {
     }
 
     describe("Search in Projects View", function () {
+        /*
+         * 1. Open the Projects tree in the TestBench sidebar.
+         * 2. Confirm that at least one project item is visible.
+         * 3. Click the Search button in the view toolbar.
+         * 4. Verify that search mode is enabled successfully.
+         */
         it("should activate search when Search button is clicked", async function () {
             const driver = getDriver();
 
@@ -80,6 +86,13 @@ describe("Search Feature UI Tests", function () {
             logger.info("Search", "Search activated successfully");
         });
 
+        /*
+         * 1. Open the Projects tree and remember how many items are visible.
+         * 2. Enable search mode from the toolbar.
+         * 3. Type part of a project name into the search field.
+         * 4. Verify the visible items are filtered based on the typed text.
+         * 5. Clear the search so the view returns to normal.
+         */
         it("should filter tree items as user types in search", async function () {
             const driver = getDriver();
             const config = getTestData();
@@ -123,6 +136,13 @@ describe("Search Feature UI Tests", function () {
             logger.info("Search", "Search filtering works correctly");
         });
 
+        /*
+         * 1. Open Projects and capture the initial number of visible items.
+         * 2. Enable search and enter text that should match nothing.
+         * 3. Confirm the list is reduced by the search filter.
+         * 4. Clear the search field.
+         * 5. Verify the original number of items is restored.
+         */
         it("should restore all items when search is cleared", async function () {
             const driver = getDriver();
 
@@ -161,6 +181,13 @@ describe("Search Feature UI Tests", function () {
             logger.info("Search", "Items restored after clearing search");
         });
 
+        /*
+         * 1. Open Projects and enable search.
+         * 2. Enter the full configured project name.
+         * 3. Locate the matching project in the filtered results.
+         * 4. Verify the found item exactly matches the expected project name.
+         * 5. Clear the search at the end.
+         */
         it("should find project by exact name match", async function () {
             const driver = getDriver();
             const config = getTestData();
@@ -199,6 +226,10 @@ describe("Search Feature UI Tests", function () {
     });
 
     describe("Search in Test Themes View", function () {
+        /*
+         * 1. Switch from the current view to Test Themes.
+         * 2. Ensure navigation completed so theme search tests can run.
+         */
         // Navigate to Test Themes view before tests
         before(async function () {
             logger.info("Search", "Navigating to Test Themes View...");
@@ -208,6 +239,13 @@ describe("Search Feature UI Tests", function () {
             }
         });
 
+        /*
+         * 1. Open Test Themes and note the initial number of visible items.
+         * 2. Activate the Search input from the toolbar.
+         * 3. Enter part of the configured test theme name.
+         * 4. Verify the list is filtered while typing.
+         * 5. Clear the search to reset the view.
+         */
         it("should filter test themes as user types", async function () {
             const driver = getDriver();
             const config = getTestData();
@@ -247,6 +285,13 @@ describe("Search Feature UI Tests", function () {
             logger.info("Search", "Test Themes search filtering works");
         });
 
+        /*
+         * 1. Open Test Themes and activate search.
+         * 2. Enter the full configured test theme name.
+         * 3. Find the matching theme in the filtered list.
+         * 4. Verify the label equals or clearly contains the expected name.
+         * 5. Clear the search field.
+         */
         it("should find test theme by name", async function () {
             const driver = getDriver();
             const config = getTestData();
@@ -292,6 +337,10 @@ describe("Search Feature UI Tests", function () {
     });
 
     describe("Search Options", function () {
+        /*
+         * 1. Navigate back to Projects view.
+         * 2. Prepare the UI for search options checks in the Projects toolbar.
+         */
         // Navigate back to Projects view before tests
         before(async function () {
             logger.info("Search", "Navigating back to Projects View for Search Options tests...");
@@ -301,6 +350,12 @@ describe("Search Feature UI Tests", function () {
             }
         });
 
+        /*
+         * 1. Open Projects and activate the search widget.
+         * 2. Check whether a search options/filter control is visible.
+         * 3. Record the result.
+         * 4. Clear search mode to leave the UI clean.
+         */
         it("should have search options gear icon", async function () {
             const driver = getDriver();
 
