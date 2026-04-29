@@ -81,6 +81,11 @@ describe("Login Webview - Connection Management Tests", function () {
     const getDriver = () => ctx.driver;
 
     describe("View Structure", function () {
+        /*
+         * 1. Open the TestBench side panel in VS Code.
+         * 2. Read the visible sections in that panel.
+         * 3. Confirm that a section named "Login to TestBench" is shown.
+         */
         it("should display login section when not connected", async function () {
             const driver = getDriver();
             // Ensure we are in default content to interact with VS Code UI (Sidebar)
@@ -105,6 +110,12 @@ describe("Login Webview - Connection Management Tests", function () {
             expect(foundLoginSection).to.be.true;
         });
 
+        /*
+         * 1. Open the login webview.
+         * 2. Reset the form to a clean state.
+         * 3. Check the "Store Password" option.
+         * 4. Verify it is enabled by default.
+         */
         it("should have 'Store Password' checked by default", async function () {
             await withWebviewContext(
                 getDriver(),
@@ -131,6 +142,11 @@ describe("Login Webview - Connection Management Tests", function () {
     });
 
     describe("Form Validation", function () {
+        /*
+         * 1. Open the login webview and clear all form fields.
+         * 2. Try to save an empty connection.
+         * 3. Verify an error appears saying required data is missing.
+         */
         it("should show validation error when required fields are missing", async function () {
             await withWebviewContext(
                 getDriver(),
@@ -154,6 +170,12 @@ describe("Login Webview - Connection Management Tests", function () {
             });
         });
 
+        /*
+         * 1. Open the login form and enter connection details.
+         * 2. Enter an invalid port value (letters instead of numbers).
+         * 3. Try to save the connection.
+         * 4. Verify a port-related validation error is shown.
+         */
         it("should validate port number is numeric", async function () {
             await withWebviewContext(
                 getDriver(),
@@ -192,6 +214,13 @@ describe("Login Webview - Connection Management Tests", function () {
     });
 
     describe("Creating Connections", function () {
+        /*
+         * 1. Open the login webview.
+         * 2. Fill in all connection fields, including a custom label.
+         * 3. Save the connection.
+         * 4. Verify the list now contains one more entry.
+         * 5. Confirm the new connection appears with the expected label.
+         */
         it("should create a new connection with all fields", async function () {
             await withWebviewContext(
                 getDriver(),
@@ -238,6 +267,12 @@ describe("Login Webview - Connection Management Tests", function () {
             });
         });
 
+        /*
+         * 1. Open the login webview.
+         * 2. Fill required fields but leave the optional label empty.
+         * 3. Save the connection.
+         * 4. Verify the connection still appears using its default display format.
+         */
         it("should create a connection without optional label", async function () {
             await withWebviewContext(
                 getDriver(),
@@ -276,6 +311,13 @@ describe("Login Webview - Connection Management Tests", function () {
     });
 
     describe("Editing Connections", function () {
+        /*
+         * 1. Create a sample connection.
+         * 2. Find that connection in the list.
+         * 3. Click its edit action.
+         * 4. Verify the form switches to edit mode.
+         * 5. Confirm the cancel-edit button becomes visible.
+         */
         it("should enter edit mode when edit button is clicked", async function () {
             await withWebviewContext(
                 getDriver(),
@@ -321,6 +363,13 @@ describe("Login Webview - Connection Management Tests", function () {
             });
         });
 
+        /*
+         * 1. Create a connection with an initial label.
+         * 2. Open edit mode for that connection.
+         * 3. Change the label to a new value.
+         * 4. Save the changes.
+         * 5. Verify the updated label is shown in the list.
+         */
         it("should update connection when changes are saved", async function () {
             await withWebviewContext(
                 getDriver(),
@@ -381,6 +430,13 @@ describe("Login Webview - Connection Management Tests", function () {
             });
         });
 
+        /*
+         * 1. Create a connection and open it in edit mode.
+         * 2. Type a temporary change in the form.
+         * 3. Cancel the edit instead of saving.
+         * 4. Verify the form returns to "Add New Connection" mode.
+         * 5. Confirm the original connection remains unchanged.
+         */
         it("should cancel edit mode and reset form", async function () {
             await withWebviewContext(
                 getDriver(),
@@ -439,6 +495,13 @@ describe("Login Webview - Connection Management Tests", function () {
     });
 
     describe("Removing Connections", function () {
+        /*
+         * 1. Create a sample connection.
+         * 2. Confirm it appears in the list.
+         * 3. Trigger delete and confirm the deletion dialog.
+         * 4. Verify the total number of connections decreases.
+         * 5. Confirm the deleted connection is no longer present.
+         */
         it("should delete a connection when delete button is clicked and confirmed", async function () {
             await withWebviewContext(
                 getDriver(),
@@ -502,6 +565,12 @@ describe("Login Webview - Connection Management Tests", function () {
     });
 
     describe("Logging In", function () {
+        /*
+         * 1. Create a valid saved connection.
+         * 2. Start login using that connection.
+         * 3. Handle security/authorization prompts if they appear.
+         * 4. Complete the login flow without errors.
+         */
         it("should login with an existing connection", async function () {
             await withWebviewContext(
                 getDriver(),
@@ -544,6 +613,12 @@ describe("Login Webview - Connection Management Tests", function () {
     });
 
     describe("Form State Management", function () {
+        /*
+         * 1. Create two separate connections.
+         * 2. Start editing the first connection.
+         * 3. Check action buttons on the second connection.
+         * 4. Verify conflicting actions (like delete) are disabled during edit mode.
+         */
         it("should disable other actions when editing a connection", async function () {
             await withWebviewContext(
                 getDriver(),
@@ -599,6 +674,12 @@ describe("Login Webview - Connection Management Tests", function () {
             });
         });
 
+        /*
+         * 1. Create a sample connection.
+         * 2. Open that connection in edit mode.
+         * 3. Read the primary save button text.
+         * 4. Verify the button communicates update behavior ("Save Changes").
+         */
         it("should show correct button text in edit mode", async function () {
             await withWebviewContext(
                 getDriver(),
