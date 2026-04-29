@@ -53,6 +53,12 @@ describe("Resource Creation Flow UI Tests", function () {
 
     const getDriver = () => ctx.driver;
 
+    /*
+     * Helper Steps:
+     * 1. Run a UI action.
+     * 2. Stop waiting if it takes too long.
+     * 3. Return null on timeout so the test can continue safely.
+     */
     const withTimeout = async <T>(operation: () => Promise<T>, timeoutMs: number = 2500): Promise<T | null> => {
         return await Promise.race([
             operation(),
@@ -62,10 +68,22 @@ describe("Resource Creation Flow UI Tests", function () {
         ]);
     };
 
+    /*
+     * Helper Steps:
+     * 1. Compare a tree label with an expected name.
+     * 2. Accept exact match.
+     * 3. Also accept labels that include the expected name.
+     */
     const isLabelMatch = (actualLabel: string, expectedLabel: string): boolean => {
         return actualLabel === expectedLabel || actualLabel.includes(expectedLabel);
     };
 
+    /*
+     * Helper Steps:
+     * 1. Read labels from a list of tree items.
+     * 2. Find the first item that matches the target name.
+     * 3. Ignore temporary/stale UI errors and keep searching.
+     */
     const findMatchingItem = async (items: TreeItem[], expectedLabel: string): Promise<TreeItem | null> => {
         for (const item of items) {
             try {
@@ -81,6 +99,13 @@ describe("Resource Creation Flow UI Tests", function () {
         return null;
     };
 
+    /*
+     * Helper Steps:
+     * 1. Look for the target subdivision in currently visible items.
+     * 2. If not found, expand parent nodes step by step.
+     * 3. Search children and grandchildren until a match is found.
+     * 4. Return null if the subdivision cannot be found.
+     */
     const resolveSubdivisionFromSection = async (
         section: any,
         expectedLabel: string,
@@ -169,6 +194,12 @@ describe("Resource Creation Flow UI Tests", function () {
         return null;
     };
 
+    /*
+     * 1. Open the TestBench sidebar.
+     * 2. Re-find the target subdivision by label.
+     * 3. Try clicking Open Resource.
+     * 4. Retry several times to survive flaky UI timing.
+     */
     const clickOpenResourceByLabelWithRetries = async (
         testElementsPage: TestElementsPage,
         subdivisionLabel: string,
@@ -215,6 +246,11 @@ describe("Resource Creation Flow UI Tests", function () {
         return false;
     };
 
+    /*
+     * 1. Open the TestBench sidebar.
+     * 2. Try to locate the Test Elements section.
+     * 3. Retry a few times while the UI is still loading.
+     */
     const getElementsSectionWithRetries = async (
         testElementsPage: TestElementsPage,
         sideBar: SideBarView,
@@ -239,6 +275,15 @@ describe("Resource Creation Flow UI Tests", function () {
         return null;
     };
 
+    /*
+     * 1. Open the configured project, version, and cycle in TestBench views.
+     * 2. Navigate to Test Themes and select the configured test theme.
+     * 3. In Test Elements, find the target subdivision (or a fallback).
+     * 4. Create a new resource file from that subdivision.
+     * 5. Confirm the resource file opens in the editor.
+     * 6. Verify the new resource appears in the Test Elements tree.
+     * 7. Trigger "Pull changes from TestBench" and apply the refactor preview.
+     */
     it("should navigate to Test Elements view and create a resource", async function () {
         const driver = getDriver();
         const config = getTestData();
