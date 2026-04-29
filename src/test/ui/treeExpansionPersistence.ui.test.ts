@@ -866,6 +866,13 @@ describe("Tree Expansion State Persistence Tests", function () {
     // =========================================================================
 
     describe("Projects View Expansion State Persistence", function () {
+        /*
+         * 1. Open the Projects tree and wait until items are visible.
+         * 2. Expand the tree and change a few item expansion states.
+         * 3. Save the current expanded/collapsed state as baseline.
+         * 4. Log out and then log back in.
+         * 5. Return to Projects and verify the same expansion state is restored.
+         */
         it("should preserve expansion state after logout/login", async function () {
             const driver = getDriver();
             if (!hasTestCredentials()) {
@@ -899,6 +906,13 @@ describe("Tree Expansion State Persistence Tests", function () {
             await verifyStatePreserved(stateBefore, projectsPage, driver, "Projects", "logout/login");
         });
 
+        /*
+         * 1. Open the Projects tree and wait until items are visible.
+         * 2. Expand the tree and change a few item expansion states.
+         * 3. Save the current expanded/collapsed state as baseline.
+         * 4. Reload the VS Code window.
+         * 5. Open Projects again and verify the same expansion state is restored.
+         */
         it("should preserve expansion state after VS Code reload", async function () {
             const driver = getDriver();
             if (!hasTestCredentials()) {
@@ -926,6 +940,13 @@ describe("Tree Expansion State Persistence Tests", function () {
             await verifyStatePreserved(stateBefore, projectsPage, driver, "Projects", "reload");
         });
 
+        /*
+         * 1. Open the Projects tree and wait until items are visible.
+         * 2. Expand the tree and change a few item expansion states.
+         * 3. Save the current expanded/collapsed state as baseline.
+         * 4. Click the Projects refresh button.
+         * 5. Verify that the expansion state remains the same after refresh.
+         */
         it("should preserve expansion state after tree view refresh", async function () {
             const driver = getDriver();
             if (!hasTestCredentials()) {
@@ -971,6 +992,13 @@ describe("Tree Expansion State Persistence Tests", function () {
             }
         });
 
+        /*
+         * 1. Navigate to the Test Themes tree.
+         * 2. Expand items and change a few expansion states.
+         * 3. Save the current expanded/collapsed state as baseline.
+         * 4. Log out and then log back in.
+         * 5. Return to Test Themes and verify the same expansion state is restored.
+         */
         it("should preserve expansion state after logout/login", async function () {
             const driver = getDriver();
             if (!hasTestCredentials()) {
@@ -1003,6 +1031,13 @@ describe("Tree Expansion State Persistence Tests", function () {
             await verifyStatePreserved(stateBefore, testThemesPage, driver, "Test Themes", "logout/login");
         });
 
+        /*
+         * 1. Navigate to the Test Themes tree.
+         * 2. Expand items and change a few expansion states.
+         * 3. Save the current expanded/collapsed state as baseline.
+         * 4. Reload the VS Code window.
+         * 5. Reopen Test Themes and verify the same expansion state is restored.
+         */
         it("should preserve expansion state after VS Code reload", async function () {
             const driver = getDriver();
             if (!hasTestCredentials()) {
@@ -1031,6 +1066,13 @@ describe("Tree Expansion State Persistence Tests", function () {
             await verifyStatePreserved(stateBefore, testThemesPage, driver, "Test Themes", "reload");
         });
 
+        /*
+         * 1. Navigate to the Test Themes tree.
+         * 2. Expand items and change a few expansion states.
+         * 3. Save the current expanded/collapsed state as baseline.
+         * 4. Click the Test Themes refresh button.
+         * 5. Verify that the expansion state remains the same after refresh.
+         */
         it("should preserve expansion state after tree view refresh", async function () {
             const driver = getDriver();
             if (!hasTestCredentials()) {
@@ -1076,6 +1118,13 @@ describe("Tree Expansion State Persistence Tests", function () {
             }
         });
 
+        /*
+         * 1. Navigate to the Test Elements tree.
+         * 2. Expand items and change a few expansion states.
+         * 3. Save the current expanded/collapsed state as baseline.
+         * 4. Log out and then log back in.
+         * 5. Return to Test Elements and verify the same expansion state is restored.
+         */
         it("should preserve expansion state after logout/login", async function () {
             const driver = getDriver();
             if (!hasTestCredentials()) {
@@ -1105,6 +1154,13 @@ describe("Tree Expansion State Persistence Tests", function () {
             await verifyStatePreserved(stateBefore, testElementsPage, driver, "Test Elements", "logout/login");
         });
 
+        /*
+         * 1. Navigate to the Test Elements tree.
+         * 2. Expand items and change a few expansion states.
+         * 3. Save the current expanded/collapsed state as baseline.
+         * 4. Reload the VS Code window.
+         * 5. Reopen Test Elements and verify the same expansion state is restored.
+         */
         it("should preserve expansion state after VS Code reload", async function () {
             const driver = getDriver();
             if (!hasTestCredentials()) {
@@ -1133,6 +1189,13 @@ describe("Tree Expansion State Persistence Tests", function () {
             await verifyStatePreserved(stateBefore, testElementsPage, driver, "Test Elements", "reload");
         });
 
+        /*
+         * 1. Navigate to the Test Elements tree.
+         * 2. Expand items and change a few expansion states.
+         * 3. Save the current expanded/collapsed state as baseline.
+         * 4. Click the Test Elements refresh button.
+         * 5. Verify that the expansion state remains the same after refresh.
+         */
         it("should preserve expansion state after tree view refresh", async function () {
             this.timeout(TEST_ELEMENTS_REFRESH_TIMEOUT);
 
