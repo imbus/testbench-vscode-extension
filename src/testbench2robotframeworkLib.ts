@@ -8,6 +8,7 @@ import * as vscode from "vscode";
 import { logger } from "./extension";
 import { ConfigKeys } from "./constants";
 import { getExtensionSetting } from "./configuration";
+import { validateGenerationPathSettingsAndReturnError } from "./utils";
 
 /**
  * Class representing the Testbench2Robotframework library wrapper.
@@ -44,6 +45,14 @@ export class tb2robotLib {
         );
         const resourceMarker: string | undefined = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER);
         const resourceRoot: string[] | undefined = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_ROOT);
+
+        const settingError = validateGenerationPathSettingsAndReturnError(outputDirectory, resourceDirectory);
+        if (settingError) {
+            logger.warn(`[testbench2robotframeworkLib] ${settingError}`);
+            vscode.window.showErrorMessage(settingError);
+            return false;
+        }
+
         isGenerateTestsCommandSuccessful = await vscode.commands.executeCommand("testbench_ls.generateTestSuites", {
             use_config_file: use_config_file,
             clean: clean,

@@ -353,6 +353,97 @@ export async function extractAndParseJsonContent(zipContents: JSZip, fileName: s
 }
 
 /**
+ * Returns the first invalid character found in a Windows path string.
+ * Separators are allowed, and a colon is allowed only for a leading drive prefix (e.g. C:).
+ * Used to display the reason why a user-configured path setting is invalid on Windows and cannot be used.
+ *
+ * @param {string} filePath - The path string to inspect.
+ * @returns {string | undefined} The invalid character, "CONTROL" for control chars, or undefined if valid.
+ */
+export function getFirstInvalidWindowsPathCharacter(filePath: string): string | undefined {
+    if (process.platform !== "win32" || !filePath) {
+        return undefined;
+    }
+
+    const separatorPattern = /([/\\]+)/;
+    const separatorOnlyPattern = /^[/\\]+$/;
+    const drivePrefixPattern = /^[A-Za-z]:$/;
+    const invalidWindowsChars = new Set(["<", ">", '"', "|", "?", "*"]);
+
+    let isFirstNonSeparatorSegment = true;
+
+    for (const segment of filePath.split(separatorPattern)) {
+        if (!segment || separatorOnlyPattern.test(segment)) {
+            continue;
+        }
+
+        const isDrivePrefix = isFirstNonSeparatorSegment && drivePrefixPattern.test(segment);
+        isFirstNonSeparatorSegment = false;
+
+        for (const char of Array.from(segment)) {
+            const code = char.charCodeAt(0);
+            const isControlChar = code <= 31;
+            const isInvalidChar = invalidWindowsChars.has(char);
+            const isInvalidColon = char === ":" && !isDrivePrefix;
+
+            if (isControlChar) {
+                return "CONTROL";
+            }
+            if (isInvalidChar || isInvalidColon) {
+                return char;
+            }
+        }
+    }
+
+    return undefined;
+}
+
+/**
+ * Validates a user-configured path setting for the current platform and returns
+ * an actionable error string when the value is invalid.
+ *
+ * @param {string} settingDisplayName - User-facing setting name.
+ * @param {string | undefined} settingValue - Raw configured setting value.
+ * @returns {string | undefined} Error message if invalid, otherwise undefined.
+ */
+export function validateAndReturnPathSettingError(
+    settingDisplayName: string,
+    settingValue: string | undefined
+): string | undefined {
+    if (!settingValue || settingValue.trim().length === 0) {
+        return undefined;
+    }
+
+    const invalidCharacter = getFirstInvalidWindowsPathCharacter(settingValue);
+    if (!invalidCharacter) {
+        return undefined;
+    }
+
+    const formattedCharacter = invalidCharacter === "CONTROL" ? "a control character" : `'${invalidCharacter}'`;
+    return `The "${settingDisplayName}" setting contains invalid Windows path characters (${formattedCharacter}) in "${settingValue}". Update the setting and try again.`;
+}
+
+/**
+ * Validates generation-related path settings and returns the first user-facing error.
+ * Output Directory is validated first, then Resource Directory Path.
+ *
+ * @param outputDirectory Raw Output Directory setting value.
+ * @param resourceDirectory Raw Resource Directory Path setting value.
+ * @returns Error message if either setting is invalid, otherwise undefined.
+ */
+export function validateGenerationPathSettingsAndReturnError(
+    outputDirectory: string | undefined,
+    resourceDirectory: string | undefined
+): string | undefined {
+    const outputDirectoryError = validateAndReturnPathSettingError("Output Directory", outputDirectory);
+    if (outputDirectoryError) {
+        return outputDirectoryError;
+    }
+
+    return validateAndReturnPathSettingError("Resource Directory Path", resourceDirectory);
+}
+
+/**
  * For Windows systems, sanitizes a file path string by replacing invalid path-segment
  * characters with underscores while preserving path separators.
  *

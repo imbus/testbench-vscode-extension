@@ -7,7 +7,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import { TestBenchLogger } from "../../../testBenchLogger";
-import { validateAndReturnWorkspaceLocation } from "../../../utils";
+import { validateAndReturnPathSettingError, validateAndReturnWorkspaceLocation } from "../../../utils";
 import { getExtensionSetting } from "../../../configuration";
 import { ConfigKeys } from "../../../constants";
 import { TestThemesTreeItem } from "./TestThemesTreeItem";
@@ -30,7 +30,38 @@ export interface FolderInfo {
 }
 
 export class RobotFileService {
+    private static readonly notifiedInvalidOutputDirectories = new Set<string>();
+
     constructor(private readonly logger: TestBenchLogger) {}
+
+    /**
+     * Validates the configured Output Directory before filesystem operations.
+     * Shows a user-facing error at most once per unique invalid value to avoid notification spam.
+     */
+    private getValidatedOutputDirectorySetting(): {
+        outputDirectory?: string;
+        hasInvalidCharacters: boolean;
+    } {
+        const outputDirectory = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
+        if (!outputDirectory) {
+            return { outputDirectory: undefined, hasInvalidCharacters: false };
+        }
+
+        const settingError = validateAndReturnPathSettingError("Output Directory", outputDirectory);
+
+        if (!settingError) {
+            return { outputDirectory, hasInvalidCharacters: false };
+        }
+
+        const notificationKey = outputDirectory ?? "<undefined>";
+        if (!RobotFileService.notifiedInvalidOutputDirectories.has(notificationKey)) {
+            RobotFileService.notifiedInvalidOutputDirectories.add(notificationKey);
+            this.logger.warn(`[RobotFileService] ${settingError}`);
+            void vscode.window.showErrorMessage(settingError);
+        }
+
+        return { outputDirectory: undefined, hasInvalidCharacters: true };
+    }
 
     /**
      * Checks if a robot file exists locally for a given test theme or test case set
@@ -47,11 +78,14 @@ export class RobotFileService {
                 return { exists: false };
             }
 
-            const generatedRobotFilesOutputDirectory = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
+            const { outputDirectory: generatedRobotFilesOutputDirectory, hasInvalidCharacters } =
+                this.getValidatedOutputDirectorySetting();
             if (!generatedRobotFilesOutputDirectory) {
-                this.logger.warn(
-                    "[RobotFileService] Output directory is not configured while checking robot file existence"
-                );
+                if (!hasInvalidCharacters) {
+                    this.logger.warn(
+                        "[RobotFileService] Output directory is not configured while checking robot file existence"
+                    );
+                }
                 return { exists: false };
             }
 
@@ -372,11 +406,14 @@ export class RobotFileService {
                 return { exists: false };
             }
 
-            const generatedRobotFilesOutputDirectory = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
+            const { outputDirectory: generatedRobotFilesOutputDirectory, hasInvalidCharacters } =
+                this.getValidatedOutputDirectorySetting();
             if (!generatedRobotFilesOutputDirectory) {
-                this.logger.warn(
-                    "[RobotFileService] Output directory is not configured while checking folder existence"
-                );
+                if (!hasInvalidCharacters) {
+                    this.logger.warn(
+                        "[RobotFileService] Output directory is not configured while checking folder existence"
+                    );
+                }
                 return { exists: false };
             }
 

@@ -1,5 +1,10 @@
 import * as assert from "assert";
-import { sanitizeFilePath } from "../../utils";
+import {
+    getFirstInvalidWindowsPathCharacter,
+    validateAndReturnPathSettingError,
+    validateGenerationPathSettingsAndReturnError,
+    sanitizeFilePath
+} from "../../utils";
 
 suite("Utils Test Suite", () => {
     suite("sanitizeFilePath", () => {
@@ -53,6 +58,66 @@ suite("Utils Test Suite", () => {
             });
             const invalidWindowsPath = 'folder<>/file"|?*:C:.txt';
             assert.strictEqual(sanitizeFilePath(invalidWindowsPath), invalidWindowsPath);
+        });
+    });
+
+    suite("path setting validation", () => {
+        let originalPlatform: string;
+
+        setup(() => {
+            originalPlatform = process.platform;
+            Object.defineProperty(process, "platform", {
+                value: "win32"
+            });
+        });
+
+        teardown(() => {
+            Object.defineProperty(process, "platform", {
+                value: originalPlatform
+            });
+        });
+
+        test("should return undefined when path is valid on windows", () => {
+            assert.strictEqual(getFirstInvalidWindowsPathCharacter("resources/sub/folder"), undefined);
+            assert.strictEqual(
+                validateAndReturnPathSettingError("Resource Directory Path", "resources/sub/folder"),
+                undefined
+            );
+        });
+
+        test("should detect invalid windows path characters", () => {
+            assert.strictEqual(getFirstInvalidWindowsPathCharacter("resources?/sub"), "?");
+            const err = validateAndReturnPathSettingError("Resource Directory Path", "resources?/sub");
+            assert.ok(err?.includes("Resource Directory Path"));
+            assert.ok(err?.includes("'?'"));
+        });
+
+        test("should allow drive prefix and flag non-prefix colons", () => {
+            assert.strictEqual(getFirstInvalidWindowsPathCharacter("C:\\temp\\resources"), undefined);
+            assert.strictEqual(getFirstInvalidWindowsPathCharacter("resources:temp"), ":");
+        });
+
+        test("should skip windows validation on non-windows platforms", () => {
+            Object.defineProperty(process, "platform", {
+                value: "linux"
+            });
+
+            assert.strictEqual(getFirstInvalidWindowsPathCharacter("resources?/sub"), undefined);
+            assert.strictEqual(
+                validateAndReturnPathSettingError("Resource Directory Path", "resources?/sub"),
+                undefined
+            );
+        });
+
+        test("should return first generation path setting error in output/resource order", () => {
+            const outputError = validateGenerationPathSettingsAndReturnError("tests?", "resources");
+            assert.ok(outputError?.includes("Output Directory"));
+
+            const resourceError = validateGenerationPathSettingsAndReturnError("tests", "resources?");
+            assert.ok(resourceError?.includes("Resource Directory Path"));
+
+            const noError = validateGenerationPathSettingsAndReturnError("tests", "resources");
+            assert.strictEqual(noError, undefined);
         });
     });
 });
