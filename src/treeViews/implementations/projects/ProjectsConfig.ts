@@ -78,7 +78,7 @@ export const projectsConfig: TreeViewConfig = {
 
     ui: {
         emptyMessage: "No projects available.",
-        loadingMessage: "Loading projects...",
+        loadingMessage: "Loading projects view items...",
         errorMessage: "Failed to load projects",
         showTooltips: true,
         tooltipFormat: "detailed"

@@ -1,0 +1,58 @@
+{
+    "security.workspace.trust.enabled": false,
+    "files.autoSave": "afterDelay",
+    "files.autoSaveDelay": 100,
+    "window.titleBarStyle": "custom",
+    "workbench.colorTheme": "Default Dark+",
+
+    "update.mode": "none",
+    "update.showReleaseNotes": false,
+    "extensions.autoUpdate": false,
+    "extensions.autoCheckUpdates": false,
+
+    "workbench.startupEditor": "none",
+    "workbench.tips.enabled": false,
+
+    "telemetry.telemetryLevel": "off",
+    "workbench.enableExperiments": false,
+    "git.enabled": false,
+
+    "editor.minimap.enabled": false,
+    "editor.hover.enabled": false,
+    "editor.cursorBlinking": "solid",
+    "workbench.reduceMotion": "on",
+    "editor.renderIndentGuides": false,
+    "editor.matchBrackets": "never",
+
+    "editor.acceptSuggestionOnEnter": "off",
+    "editor.quickSuggestions": {
+        "other": false,
+        "comments": false,
+        "strings": false
+    },
+    "editor.parameterHints.enabled": false,
+
+    "window.restoreWindows": "none",
+    "files.hotExit": "off",
+
+    "testbenchExtension.automaticLoginAfterExtensionActivation": false,
+    "testbenchExtension.testbenchLogLevel": "Trace",
+    "testbenchExtension.UseConfigurationFile": false,
+    "testbenchExtension.cleanFilesBeforeTestGeneration": true,
+    "testbenchExtension.fullyQualifiedKeywords": false,
+    "testbenchExtension.outputDirectory": "tests",
+    "testbenchExtension.compoundKeywordLogging": "GROUP",
+    "testbenchExtension.logSuiteNumbering": true,
+    "testbenchExtension.resourceDirectoryPath": "resources",
+    "testbenchExtension.libraryMarker": ["[Robot-Library]"],
+    "testbenchExtension.libraryRoot": ["RF", "RF-Library"],
+    "testbenchExtension.resourceRootRegex": "resources",
+    "testbenchExtension.resourceMarker": ["[Robot-Resource]"],
+    "testbenchExtension.resourceRoot": ["RF-Resource"],
+    "testbenchExtension.libraryMapping": [],
+    "testbenchExtension.resourceMapping": [],
+    "testbenchExtension.outputXmlFilePath": "results/output.xml",
+    "testbenchExtension.clearInternalTestbenchDirectoryBeforeTestGeneration": false,
+    "testbenchExtension.openTestingViewAfterTestGeneration": false,
+    "testbenchExtension.certificatePath": ""
+}
