@@ -98,7 +98,7 @@ function validateGenerationPathSettingsBeforeStart(): boolean {
 
     const settingError = utils.validateGenerationPathSettingsAndReturnError(outputDirectory, resourceDirectory);
     if (settingError) {
-        getLogger().warn(`[extensionCommands] ${settingError}`);
+        getLogger().error(`[extensionCommands] ${settingError}`);
         void vscode.window.showErrorMessage(settingError);
         return false;
     }

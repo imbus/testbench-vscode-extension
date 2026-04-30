@@ -30,13 +30,13 @@ export interface FolderInfo {
 }
 
 export class RobotFileService {
-    private static readonly notifiedInvalidOutputDirectories = new Set<string>();
+    private static readonly loggedInvalidOutputDirectories = new Set<string>();
 
     constructor(private readonly logger: TestBenchLogger) {}
 
     /**
      * Validates the configured Output Directory before filesystem operations.
-     * Shows a user-facing error at most once per unique invalid value to avoid notification spam.
+     * Only logs once per unique invalid value to avoid noisy logs.
      */
     private getValidatedOutputDirectorySetting(): {
         outputDirectory?: string;
@@ -54,10 +54,11 @@ export class RobotFileService {
         }
 
         const notificationKey = outputDirectory ?? "<undefined>";
-        if (!RobotFileService.notifiedInvalidOutputDirectories.has(notificationKey)) {
-            RobotFileService.notifiedInvalidOutputDirectories.add(notificationKey);
-            this.logger.warn(`[RobotFileService] ${settingError}`);
-            void vscode.window.showErrorMessage(settingError);
+        if (!RobotFileService.loggedInvalidOutputDirectories.has(notificationKey)) {
+            RobotFileService.loggedInvalidOutputDirectories.add(notificationKey);
+            this.logger.error(
+                `[RobotFileService] Invalid Output Directory encountered during passive availability checks. ${settingError}`
+            );
         }
 
         return { outputDirectory: undefined, hasInvalidCharacters: true };

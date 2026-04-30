@@ -48,7 +48,7 @@ export class tb2robotLib {
 
         const settingError = validateGenerationPathSettingsAndReturnError(outputDirectory, resourceDirectory);
         if (settingError) {
-            logger.warn(`[testbench2robotframeworkLib] ${settingError}`);
+            logger.error(`[testbench2robotframeworkLib] ${settingError}`);
             vscode.window.showErrorMessage(settingError);
             return false;
         }

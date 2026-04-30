@@ -1127,7 +1127,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
         const settingError = validateGenerationPathSettingsAndReturnError(outputDirectory, resourceDirectory);
         if (settingError) {
-            this.logger.warn(`[TestThemesTreeView] ${settingError}`);
+            this.logger.error(`[TestThemesTreeView] ${settingError}`);
             void vscode.window.showErrorMessage(settingError);
             return false;
         }

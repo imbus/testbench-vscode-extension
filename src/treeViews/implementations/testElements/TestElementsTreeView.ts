@@ -429,7 +429,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             return true;
         }
 
-        this.logger.warn(`[TestElementsTreeView] ${settingError}`);
+        this.logger.error(`[TestElementsTreeView] ${settingError}`);
         vscode.window.showErrorMessage(settingError);
         return false;
     }
