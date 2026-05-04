@@ -27,8 +27,8 @@ function skipPrecondition(context: Mocha.Context, reason: string): never {
     return skipTest(context, "precondition", reason);
 }
 
-function skipError(context: Mocha.Context, reason: string): never {
-    return skipTest(context, "error", reason);
+function skipError(_context: Mocha.Context, reason: string): never {
+    throw new Error(reason);
 }
 
 describe("Search Feature UI Tests", function () {
@@ -133,7 +133,9 @@ describe("Search Feature UI Tests", function () {
                 `Filtered visible items: ${filteredProjectsItemCount} (was ${initialProjectsItemCount})`
             );
 
-            expect(filteredProjectsItemCount).to.be.at.least(0, "Filtered count should be valid");
+            expect(filteredProjectsItemCount, "Filtering should not increase visible item count").to.be.at.most(
+                initialProjectsItemCount
+            );
 
             await clearSearch(driver);
             logger.info("Search", "Search filtering works correctly");
@@ -234,7 +236,7 @@ describe("Search Feature UI Tests", function () {
             logger.info("Search", "Navigating to Test Themes View...");
             const testViewNavigationSuccess = await navigateToTestView(getDriver(), "testThemes");
             if (!testViewNavigationSuccess.success) {
-                logger.error("Search", `Failed to navigate: ${testViewNavigationSuccess.error}`);
+                skipPrecondition(this, `Failed to navigate to Test Themes View: ${testViewNavigationSuccess.error}`);
             }
         });
 
@@ -341,7 +343,7 @@ describe("Search Feature UI Tests", function () {
             logger.info("Search", "Navigating back to Projects View for Search Options tests...");
             const projectNavigationResult = await navigateToTestView(getDriver(), "projects");
             if (!projectNavigationResult.success) {
-                logger.error("Search", `Failed to navigate to Projects: ${projectNavigationResult.error}`);
+                skipPrecondition(this, `Failed to navigate to Projects View: ${projectNavigationResult.error}`);
             }
         });
 
@@ -386,8 +388,7 @@ describe("Search Feature UI Tests", function () {
             `);
 
             logger.info("Search", `Search options/filter icon exists: ${gearIconExists}`);
-            // Log but don't fail if not found
-            // as the gear icon may not exist in all VS Code versions
+            expect(gearIconExists, "Search options/filter icon should be present when search is active").to.equal(true);
 
             await clearSearch(driver);
         });

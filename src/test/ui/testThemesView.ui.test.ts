@@ -62,8 +62,8 @@ function skipPrecondition(context: Mocha.Context, reason: string): never {
     return skipTest(context, "precondition", reason);
 }
 
-function skipError(context: Mocha.Context, reason: string): never {
-    return skipTest(context, "error", reason);
+function skipError(_context: Mocha.Context, reason: string): never {
+    throw new Error(reason);
 }
 
 /**
@@ -1102,7 +1102,7 @@ async function verifyRobotFileOpensAndMetadata(
                 logger.info("Verification", `Verified UniqueID in file: "${metadata.uniqueID}"`);
             } else {
                 logger.warn("Verification", `UniqueID "${metadata.uniqueID}" not found in file content`);
-                // Don't fail, just warn - metadata format might vary
+                return false;
             }
         }
 
@@ -1113,6 +1113,7 @@ async function verifyRobotFileOpensAndMetadata(
                 logger.info("Verification", `Verified Name in file: "${metadata.name}"`);
             } else {
                 logger.warn("Verification", `Name "${metadata.name}" not found in file content`);
+                return false;
             }
         }
 
@@ -1123,10 +1124,12 @@ async function verifyRobotFileOpensAndMetadata(
                 logger.info("Verification", `Verified Numbering in file: "${metadata.numbering}"`);
             } else {
                 logger.warn("Verification", `Numbering "${metadata.numbering}" not found in file content`);
+                return false;
             }
         }
     } else {
         logger.warn("Verification", "No tooltip available to verify metadata");
+        return false;
     }
 
     logger.info("Verification", " .robot file verification complete");

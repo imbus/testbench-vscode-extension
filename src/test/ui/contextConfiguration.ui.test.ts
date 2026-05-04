@@ -25,8 +25,8 @@ function skipPrecondition(context: Mocha.Context, reason: string): never {
     return skipTest(context, "precondition", reason);
 }
 
-function skipError(context: Mocha.Context, reason: string): never {
-    return skipTest(context, "error", reason);
+function skipError(_context: Mocha.Context, reason: string): never {
+    throw new Error(reason);
 }
 
 /**
@@ -267,14 +267,16 @@ describe("Context Configuration UI Tests", function () {
                 const { clickNotificationButton } = await import("./utils/testUtils");
                 const createButtonClicked = await clickNotificationButton(driver, "Create");
 
-                if (createButtonClicked) {
-                    logger.info("Config", "Clicked Create button in notification");
-                    // Wait longer for config file to be written
-                    await driver.sleep(3000);
-                } else {
-                    logger.warn("Config", "Could not click Create button");
-                }
+                expect(createButtonClicked, "Should click Create button in configuration notification").to.equal(true);
+                logger.info("Config", "Clicked Create button in notification");
+                // Wait longer for config file to be written
+                await driver.sleep(3000);
             }
+
+            expect(
+                notificationAppeared,
+                "Configuration notification should appear when opening an unconfigured cycle"
+            ).to.equal(true);
 
             // Check if config file was created
             const configAfter = readLsConfig(workspacePath);
@@ -284,11 +286,7 @@ describe("Context Configuration UI Tests", function () {
                 expect(configAfter.projectName).to.equal(config.projectName);
                 expect(configAfter.tovName).to.equal(config.versionName);
             } else {
-                logger.warn(
-                    "Config",
-                    "ls.config.json was not created - this may be expected if config already existed"
-                );
-                // Don't fail - just log warning
+                throw new Error("ls.config.json should be created after accepting configuration prompt");
             }
         });
 
@@ -344,11 +342,8 @@ describe("Context Configuration UI Tests", function () {
             const hasSetActive = await hasMenuItem(contextMenu, "Set as Active");
             await closeContextMenu(contextMenu);
 
-            if (hasSetActive) {
-                logger.info("ContextMenu", "'Set as Active' menu item found on project");
-            } else {
-                logger.info("ContextMenu", "Set as Active menu item not found (may have different label)");
-            }
+            expect(hasSetActive, "Project context menu should include 'Set as Active' action").to.equal(true);
+            logger.info("ContextMenu", "'Set as Active' menu item found on project");
         });
 
         it("should have 'Set as Active TOV' in version context menu", async function () {
@@ -382,11 +377,8 @@ describe("Context Configuration UI Tests", function () {
             const hasSetActive = await hasMenuItem(contextMenu, "Set as Active");
             await closeContextMenu(contextMenu);
 
-            if (hasSetActive) {
-                logger.info("ContextMenu", "'Set as Active TOV' menu item found on version");
-            } else {
-                logger.info("ContextMenu", "Set as Active TOV menu item not found (may have different label)");
-            }
+            expect(hasSetActive, "Version context menu should include 'Set as Active' action").to.equal(true);
+            logger.info("ContextMenu", "'Set as Active TOV' menu item found on version");
         });
 
         it("should set project as active and show pin icon", async function () {
@@ -427,25 +419,31 @@ describe("Context Configuration UI Tests", function () {
             const refreshedContent = sideBar.getContent();
             const refreshedSection = await projectsPage.getSection(refreshedContent);
 
+            expect(
+                refreshedSection !== null && refreshedSection !== undefined,
+                "Projects section should refresh"
+            ).to.equal(true);
+
             if (refreshedSection) {
                 const refreshedProject = await projectsPage.getProject(refreshedSection, config.projectName);
+                expect(
+                    refreshedProject !== null && refreshedProject !== undefined,
+                    "Active project should still be visible after activation"
+                ).to.equal(true);
+
                 if (refreshedProject) {
                     const hasPin = await hasPinIcon(refreshedProject, driver);
-                    if (hasPin) {
-                        logger.info("ContextMenu", "Pin icon visible on active project");
-                    } else {
-                        logger.info("ContextMenu", "Pin icon not detected (visual indicator may differ)");
-                    }
+                    expect(hasPin, "Pin icon should be visible on active project").to.equal(true);
+                    logger.info("ContextMenu", "Pin icon visible on active project");
                 }
             }
 
             // Verify config was updated
             const updatedConfig = readLsConfig(workspacePath);
+            expect(updatedConfig !== null, "Config file should exist after setting active project").to.equal(true);
             if (updatedConfig) {
                 expect(updatedConfig.projectName).to.equal(config.projectName);
                 logger.info("ContextMenu", "Config updated with active project");
-            } else {
-                logger.info("ContextMenu", "Config file not found - may need to check workspace path");
             }
         });
     });
@@ -501,7 +499,7 @@ describe("Context Configuration UI Tests", function () {
 
             const hasPin = await hasPinIcon(activeProject, driver);
             logger.info("PinIcon", `Pin icon on "${projectName}": ${hasPin}`);
-            // Don't assert - just log the result
+            expect(hasPin, `Pin icon should be visible on active project '${projectName}'`).to.equal(true);
         });
 
         it("should show pin icon on active TOV", async function () {
@@ -533,6 +531,7 @@ describe("Context Configuration UI Tests", function () {
 
             const hasPin = await hasPinIcon(activeTov, driver);
             logger.info("PinIcon", `Pin icon on TOV "${tovName}": ${hasPin}`);
+            expect(hasPin, `Pin icon should be visible on active TOV '${tovName}'`).to.equal(true);
         });
     });
 
@@ -559,11 +558,10 @@ describe("Context Configuration UI Tests", function () {
 
             const validationNotification = await waitForNotification(driver, "configuration", UITimeouts.MEDIUM);
 
-            if (validationNotification) {
-                logger.info("Validation", "Configuration validation notification appeared");
-            } else {
-                logger.info("Validation", "No immediate validation notification (validation may be deferred)");
-            }
+            expect(validationNotification, "Validation notification should appear for invalid configuration").to.equal(
+                true
+            );
+            logger.info("Validation", "Configuration validation notification appeared");
 
             // Restore valid config
             const validConfig = {

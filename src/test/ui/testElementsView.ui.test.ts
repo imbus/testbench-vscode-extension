@@ -35,8 +35,8 @@ function skipPrecondition(context: Mocha.Context, reason: string): never {
     return skipTest(context, "precondition", reason);
 }
 
-function skipError(context: Mocha.Context, reason: string): never {
-    return skipTest(context, "error", reason);
+function skipError(_context: Mocha.Context, reason: string): never {
+    throw new Error(reason);
 }
 
 describe("Test Elements View UI Tests", function () {

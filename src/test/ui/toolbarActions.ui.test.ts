@@ -33,10 +33,6 @@ function skipPrecondition(context: Mocha.Context, reason: string): never {
     return skipTest(context, "precondition", reason);
 }
 
-function skipError(context: Mocha.Context, reason: string): never {
-    return skipTest(context, "error", reason);
-}
-
 describe("Toolbar Actions UI Tests", function () {
     const ctx: TestContext = {} as TestContext;
 
@@ -85,21 +81,13 @@ describe("Toolbar Actions UI Tests", function () {
             const toolbarButtonLabelsOfProjects = await getToolbarButtonLabels(projectsSection, driver);
             logger.info("Toolbar", `Projects View toolbar buttons: ${toolbarButtonLabelsOfProjects.join(", ")}`);
 
-            const hasLogout = toolbarButtonLabelsOfProjects.some((l) => l.toLowerCase().includes("logout"));
-            if (!hasLogout) {
-                // Try using hasToolbarButton as fallback
-                const hasLogoutBtn = await hasToolbarButton(projectsSection, "logout", driver);
-                if (!hasLogoutBtn) {
-                    logger.warn(
-                        "Toolbar",
-                        "Logout button not found in toolbar labels - may be using different selector"
-                    );
-                }
-            }
+            const hasLogoutByLabel = toolbarButtonLabelsOfProjects.some((l) => l.toLowerCase().includes("logout"));
+            const hasLogoutBySelector = await hasToolbarButton(projectsSection, "logout", driver);
+            const hasLogout = hasLogoutByLabel || hasLogoutBySelector;
 
-            // Don't fail test if button detection is unreliable - just log the result
             logger.info("Toolbar", `Logout button found: ${hasLogout}`);
-            if (hasLogout) {
+            expect(hasLogout, "Projects View toolbar should expose a Logout action").to.equal(true);
+            if (hasLogoutByLabel) {
                 logger.info("Toolbar", "Logout button found in Projects View toolbar");
             }
         });
@@ -121,6 +109,7 @@ describe("Toolbar Actions UI Tests", function () {
             const hasRefresh = await hasToolbarButton(projectsSection, "Refresh", driver);
             logger.info("Toolbar", `Refresh button found: ${hasRefresh}`);
 
+            expect(hasRefresh, "Projects View toolbar should expose Refresh Projects action").to.equal(true);
             if (hasRefresh) {
                 logger.info("Toolbar", "Refresh button found in Projects View toolbar");
             }
@@ -143,6 +132,7 @@ describe("Toolbar Actions UI Tests", function () {
             const hasSearch = await hasToolbarButton(projectsSection, "Search", driver);
             logger.info("Toolbar", `Search button found: ${hasSearch}`);
 
+            expect(hasSearch, "Projects View toolbar should expose a Search action").to.equal(true);
             if (hasSearch) {
                 logger.info("Toolbar", "Search button found in Projects View toolbar");
             }
@@ -162,11 +152,16 @@ describe("Toolbar Actions UI Tests", function () {
             }
 
             const toolbarButtonLabelsOfProjects = await getToolbarButtonLabels(projectsSection, driver);
-            const hasSettings = toolbarButtonLabelsOfProjects.some(
+            const hasSettingsByLabel = toolbarButtonLabelsOfProjects.some(
                 (l) => l.toLowerCase().includes("setting") || l.toLowerCase().includes("extension")
             );
+            const hasSettingsBySelector =
+                (await hasToolbarButton(projectsSection, "setting", driver)) ||
+                (await hasToolbarButton(projectsSection, "extension", driver));
+            const hasSettings = hasSettingsByLabel || hasSettingsBySelector;
 
             logger.info("Toolbar", `Settings button found: ${hasSettings}`);
+            expect(hasSettings, "Projects View toolbar should expose Open Extension Settings action").to.equal(true);
         });
 
         /*
@@ -185,12 +180,12 @@ describe("Toolbar Actions UI Tests", function () {
 
             await waitForTreeItems(projectsSection, driver);
             const initialProjectsItemCount = (await projectsSection.getVisibleItems()).length;
+            if (initialProjectsItemCount === 0) {
+                skipPrecondition(this, "Projects tree has no items to validate refresh behavior");
+            }
 
             const isRefreshButtonClicked = await clickToolbarButton(projectsSection, "refresh", driver);
-            if (!isRefreshButtonClicked) {
-                logger.warn("Toolbar", "Could not click Refresh button");
-                skipError(this, "Could not click Refresh toolbar button");
-            }
+            expect(isRefreshButtonClicked, "Refresh toolbar button should be clickable").to.equal(true);
 
             await applySlowMotion(driver);
 
@@ -208,7 +203,7 @@ describe("Toolbar Actions UI Tests", function () {
             const visibleProjectsItemsCount = (await projectsSection.getVisibleItems()).length;
             logger.info("Toolbar", `Items before: ${initialProjectsItemCount}, after: ${visibleProjectsItemsCount}`);
 
-            expect(visibleProjectsItemsCount).to.be.at.least(0, "Tree should have items after refresh");
+            expect(visibleProjectsItemsCount, "Tree should have items after refresh").to.be.greaterThan(0);
             logger.info("Toolbar", "Refresh completed successfully");
         });
     });
@@ -248,8 +243,7 @@ describe("Toolbar Actions UI Tests", function () {
             const hasOpenAction = actions.some(
                 (a) => a.toLowerCase().includes("open") || a.toLowerCase().includes("test themes")
             );
-            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-            expect(hasOpenAction, "TOV should have Open/Test Themes button").to.be.true;
+            expect(hasOpenAction, "TOV should have Open/Test Themes button").to.equal(true);
 
             logger.info("Toolbar", "Open action button found on TOV");
         });
@@ -285,8 +279,7 @@ describe("Toolbar Actions UI Tests", function () {
             const hasGenerateAction = actions.some(
                 (a) => a.toLowerCase().includes("generate") || a.toLowerCase().includes("robot")
             );
-            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-            expect(hasGenerateAction, "TOV should have Generate button").to.be.true;
+            expect(hasGenerateAction, "TOV should have Generate button").to.equal(true);
 
             logger.info("Toolbar", "Generate action button found on TOV");
         });
@@ -337,7 +330,7 @@ describe("Toolbar Actions UI Tests", function () {
             logger.info("Toolbar", "Navigating to Test Themes View...");
             const testViewNavigationResult = await navigateToTestView(getDriver(), "testThemes");
             if (!testViewNavigationResult.success) {
-                logger.error("Toolbar", `Failed to navigate: ${testViewNavigationResult.error}`);
+                skipPrecondition(this, `Failed to navigate to Test Themes View: ${testViewNavigationResult.error}`);
             }
         });
 
@@ -363,6 +356,7 @@ describe("Toolbar Actions UI Tests", function () {
             );
             logger.info("Toolbar", `Open Projects View button found: ${hasOpenProjects}`);
 
+            expect(hasOpenProjects, "Test Themes toolbar should expose Open Projects View action").to.equal(true);
             if (hasOpenProjects) {
                 logger.info("Toolbar", "Open Projects View button found");
             }
@@ -384,6 +378,7 @@ describe("Toolbar Actions UI Tests", function () {
             const hasRefresh = await hasToolbarButton(testThemesSection, "Refresh", driver);
             logger.info("Toolbar", `Refresh button found: ${hasRefresh}`);
 
+            expect(hasRefresh, "Test Themes toolbar should expose Refresh action").to.equal(true);
             if (hasRefresh) {
                 logger.info("Toolbar", "Refresh button found in Test Themes toolbar");
             }
@@ -416,15 +411,17 @@ describe("Toolbar Actions UI Tests", function () {
 
             const projectsAppeared = await waitForProjectsView(driver);
             logger.info("Toolbar", `Projects View appeared: ${projectsAppeared}`);
+            expect(projectsAppeared, "Projects View should appear after clicking Open Projects View").to.equal(true);
 
-            if (projectsAppeared) {
-                const sideBar = new SideBarView();
-                const content = sideBar.getContent();
-                const projectsSection = await projectsPage.getSection(content);
+            const sideBar = new SideBarView();
+            const content = sideBar.getContent();
+            const projectsSection = await projectsPage.getSection(content);
 
-                if (projectsSection) {
-                    logger.info("Toolbar", "Navigated back to Projects View");
-                }
+            expect(projectsSection, "Projects section should be visible after navigation").to.satisfy(
+                (section: unknown) => section !== undefined && section !== null
+            );
+            if (projectsSection) {
+                logger.info("Toolbar", "Navigated back to Projects View");
             }
         });
     });
@@ -465,10 +462,10 @@ describe("Toolbar Actions UI Tests", function () {
                 "login webview to appear"
             );
 
+            expect(webviewAppeared, "Login webview should appear after logout").to.equal(true);
+
             if (webviewAppeared) {
                 logger.info("Toolbar", "Logged out successfully - login page visible");
-            } else {
-                logger.warn("Toolbar", "Login page did not appear after logout");
             }
 
             // Re-login for subsequent tests

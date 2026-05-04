@@ -31,7 +31,7 @@ import {
 } from "./utils/testUtils";
 import { doubleClickTreeItem, waitForTreeItemButton } from "./utils/treeViewUtils";
 import { getTestData, logTestDataConfig } from "./config/testConfig";
-import { TestContext, setupTestHooks, skipTest } from "./utils/testHooks";
+import { TestContext, setupTestHooks } from "./utils/testHooks";
 import { findResourceSubdivision } from "./utils/navigationUtils";
 import { ProjectsViewPage } from "./pages/ProjectsViewPage";
 import { TestThemesPage } from "./pages/TestThemesPage";
@@ -39,8 +39,8 @@ import { TestElementsPage } from "./pages/TestElementsPage";
 
 const logger = getTestLogger();
 
-function skipError(context: Mocha.Context, reason: string): never {
-    return skipTest(context, "error", reason);
+function skipError(_context: Mocha.Context, reason: string): never {
+    throw new Error(reason);
 }
 
 describe("Resource Creation Flow UI Tests", function () {
