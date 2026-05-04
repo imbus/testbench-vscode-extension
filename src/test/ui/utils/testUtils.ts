@@ -11,6 +11,7 @@ import {
     TEST_PATHS
 } from "../config/testConfig";
 import { getTestLogger } from "./testLogger";
+import { escapeXPathLiteral } from "./xpathUtils";
 import * as path from "path";
 import * as fs from "fs";
 import {
@@ -799,10 +800,21 @@ export async function findAndSwitchToWebview(
     timeout: number = UITimeouts.VERY_LONG
 ): Promise<boolean> {
     try {
+        const attributeNamePattern = /^[A-Za-z_][A-Za-z0-9_.:-]*$/;
+        const safeMarkAttribute = attributeNamePattern.test(markAttribute) ? markAttribute : "data-test-webview";
+
+        if (safeMarkAttribute !== markAttribute) {
+            logger.warn(
+                "Webview",
+                `Invalid webview markAttribute "${markAttribute}". Falling back to "${safeMarkAttribute}".`
+            );
+        }
+
         // Wait for webview to be available with a single attempt using proper waits
         const iframeFound: boolean = await driver.wait(
             async (): Promise<boolean> => {
-                const result = (await driver.executeScript(`
+                const result = (await driver.executeScript(
+                    `
                 function findIframesInShadowDOM(root) {
                     const iframes = [];
                     const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null);
@@ -821,11 +833,13 @@ export async function findAndSwitchToWebview(
                 }
                 const allIframes = findIframesInShadowDOM(document.body);
                 if (allIframes.length > 0) {
-                    allIframes[allIframes.length - 1].setAttribute('${markAttribute}', 'true');
+                    allIframes[allIframes.length - 1].setAttribute(String(arguments[0] || 'data-test-webview'), 'true');
                     return true;
                 }
                 return false;
-            `)) as boolean;
+            `,
+                    safeMarkAttribute
+                )) as boolean;
                 return result;
             },
             timeout,
@@ -838,7 +852,7 @@ export async function findAndSwitchToWebview(
         }
 
         // Find and switch to the marked iframe
-        const markedIframes = await driver.findElements(By.css(`iframe[${markAttribute}="true"]`));
+        const markedIframes = await driver.findElements(By.css(`iframe[${safeMarkAttribute}="true"]`));
         if (markedIframes.length === 0) {
             return false;
         }
@@ -1359,6 +1373,7 @@ export async function handleConfirmationDialog(
         await driver.switchTo().defaultContent();
 
         logger.trace("Dialog", `Looking for confirmation dialog with button: "${buttonText}"`);
+        const escapedButtonText = escapeXPathLiteral(buttonText);
 
         // First, quickly check if dialog exists (without waiting)
         const existingDialogs = await driver.findElements(
@@ -1444,18 +1459,18 @@ export async function handleConfirmationDialog(
                 if (dialogElement) {
                     try {
                         buttons = await dialogElement.findElements(
-                            By.xpath(`.//button[normalize-space(text())='${buttonText}']`)
+                            By.xpath(`.//button[normalize-space(text())=${escapedButtonText}]`)
                         );
                         if (buttons.length === 0) {
                             buttons = await dialogElement.findElements(
-                                By.xpath(`.//button[contains(normalize-space(text()), '${buttonText}')]`)
+                                By.xpath(`.//button[contains(normalize-space(text()), ${escapedButtonText})]`)
                             );
                         }
                         // Also try links that look like buttons
                         if (buttons.length === 0) {
                             buttons = await dialogElement.findElements(
                                 By.xpath(
-                                    `.//a[contains(@class, 'monaco-button') and normalize-space(text())='${buttonText}']`
+                                    `.//a[contains(@class, 'monaco-button') and normalize-space(text())=${escapedButtonText}]`
                                 )
                             );
                         }
@@ -1467,13 +1482,15 @@ export async function handleConfirmationDialog(
                 // If no buttons found in dialog, try document-wide search
                 if (buttons.length === 0) {
                     // Try exact text match first (button elements)
-                    buttons = await driver.findElements(By.xpath(`//button[normalize-space(text())='${buttonText}']`));
+                    buttons = await driver.findElements(
+                        By.xpath(`//button[normalize-space(text())=${escapedButtonText}]`)
+                    );
 
                     // Try links that look like buttons (VS Code uses <a> tags styled as buttons)
                     if (buttons.length === 0) {
                         buttons = await driver.findElements(
                             By.xpath(
-                                `//a[contains(@class, 'monaco-button') and normalize-space(text())='${buttonText}']`
+                                `//a[contains(@class, 'monaco-button') and normalize-space(text())=${escapedButtonText}]`
                             )
                         );
                     }
@@ -1481,25 +1498,25 @@ export async function handleConfirmationDialog(
                     // If no exact match, try contains
                     if (buttons.length === 0) {
                         buttons = await driver.findElements(
-                            By.xpath(`//button[contains(normalize-space(text()), '${buttonText}')]`)
+                            By.xpath(`//button[contains(normalize-space(text()), ${escapedButtonText})]`)
                         );
                     }
 
                     if (buttons.length === 0) {
                         buttons = await driver.findElements(
                             By.xpath(
-                                `//a[contains(@class, 'monaco-button') and contains(normalize-space(text()), '${buttonText}')]`
+                                `//a[contains(@class, 'monaco-button') and contains(normalize-space(text()), ${escapedButtonText})]`
                             )
                         );
                     }
 
                     // Try by aria-label
                     if (buttons.length === 0) {
-                        buttons = await driver.findElements(By.xpath(`//button[@aria-label='${buttonText}']`));
+                        buttons = await driver.findElements(By.xpath(`//button[@aria-label=${escapedButtonText}]`));
                     }
 
                     if (buttons.length === 0) {
-                        buttons = await driver.findElements(By.xpath(`//a[@aria-label='${buttonText}']`));
+                        buttons = await driver.findElements(By.xpath(`//a[@aria-label=${escapedButtonText}]`));
                     }
                 }
 
@@ -1572,7 +1589,8 @@ export async function handleConfirmationDialog(
         // If button not found, try JavaScript-based search (buttons might be in shadow DOM)
         logger.trace("Dialog", `Button "${buttonText}" not found with XPath, trying JavaScript search...`);
         try {
-            const buttonFound = (await driver.executeScript(`
+            const buttonFound = (await driver.executeScript(
+                `
                 function findButtonInDialog(buttonText) {
                     // Try to find dialog element
                     const dialog = document.querySelector('.monaco-dialog') || 
@@ -1594,13 +1612,15 @@ export async function handleConfirmationDialog(
                     }
                     return null;
                 }
-                const button = findButtonInDialog('${buttonText}');
+                const button = findButtonInDialog(String(arguments[0] || ''));
                 if (button) {
                     button.scrollIntoView({ block: 'center' });
                     return button;
                 }
                 return null;
-            `)) as WebElement | null;
+            `,
+                buttonText
+            )) as WebElement | null;
 
             if (buttonFound) {
                 logger.trace("Dialog", "Found button using JavaScript, clicking...");
@@ -1739,7 +1759,8 @@ export async function handleConfirmationDialog(
             }
 
             // Try to find and click the button using JavaScript
-            const buttonClicked = (await driver.executeScript(`
+            const buttonClicked = (await driver.executeScript(
+                `
                 function findAndClickButton(buttonText) {
                     const dialog = document.querySelector('.monaco-dialog') || 
                                   document.querySelector('[role="dialog"]') ||
@@ -1760,8 +1781,10 @@ export async function handleConfirmationDialog(
                     }
                     return false;
                 }
-                return findAndClickButton('${buttonText}');
-            `)) as boolean;
+                return findAndClickButton(String(arguments[0] || ''));
+            `,
+                buttonText
+            )) as boolean;
 
             if (buttonClicked) {
                 logger.trace("Dialog", "Successfully clicked button using JavaScript in fallback");
@@ -1831,6 +1854,7 @@ export async function findNotificationButton(
 ): Promise<WebElement | null> {
     try {
         await driver.switchTo().defaultContent();
+        const escapedButtonText = escapeXPathLiteral(buttonText);
 
         const button = await driver.wait(
             async () => {
@@ -1853,7 +1877,7 @@ export async function findNotificationButton(
                                     try {
                                         const btn = await container.findElement(
                                             By.xpath(
-                                                `.//button[normalize-space(text())='${buttonText}'] | .//a[contains(@class, 'monaco-button') and normalize-space(text())='${buttonText}']`
+                                                `.//button[normalize-space(text())=${escapedButtonText}] | .//a[contains(@class, 'monaco-button') and normalize-space(text())=${escapedButtonText}]`
                                             )
                                         );
                                         if (btn) {
@@ -1872,7 +1896,7 @@ export async function findNotificationButton(
                     // Also try finding buttons directly (might be in a dialog)
                     const buttons = await driver.findElements(
                         By.xpath(
-                            `//button[normalize-space(text())='${buttonText}'] | //a[contains(@class, 'monaco-button') and normalize-space(text())='${buttonText}']`
+                            `//button[normalize-space(text())=${escapedButtonText}] | //a[contains(@class, 'monaco-button') and normalize-space(text())=${escapedButtonText}]`
                         )
                     );
 
@@ -2124,6 +2148,7 @@ export async function clickCodeLens(
 ): Promise<boolean> {
     await driver.switchTo().defaultContent();
     logger.trace("CodeLens", `Starting exact DOM search and click for: "${codeLensText}"`);
+    const escapedCodeLensText = escapeXPathLiteral(codeLensText);
 
     try {
         await driver.wait(
@@ -2131,7 +2156,7 @@ export async function clickCodeLens(
                 try {
                     // Precise XPath based on DevTools inspection
                     // Look for <span> with class 'codelens-decoration' -> child <a> with specific text
-                    const xpathSelector = `//span[contains(@class, 'codelens-decoration')]//a[contains(text(), '${codeLensText}')]`;
+                    const xpathSelector = `//span[contains(@class, 'codelens-decoration')]//a[contains(text(), ${escapedCodeLensText})]`;
 
                     const links = await driver.findElements(By.xpath(xpathSelector));
 
@@ -2457,7 +2482,8 @@ export async function clickCreateResourceButton(
 
             // Use JavaScript to find and click the button in one atomic operation
             // This reduces the chance of stale element errors
-            const clickSucceeded = (await driver.executeScript(`
+            const clickSucceeded = (await driver.executeScript(
+                `
                 function findAndClickCreateResourceButton(itemLabel) {
                     const rows = document.querySelectorAll('.monaco-list-row');
                     for (const row of rows) {
@@ -2505,8 +2531,10 @@ export async function clickCreateResourceButton(
                     }
                     return false;
                 }
-                return findAndClickCreateResourceButton('${itemLabel.replace(/'/g, "\\'")}');
-            `)) as boolean;
+                return findAndClickCreateResourceButton(String(arguments[0] || ''));
+            `,
+                itemLabel
+            )) as boolean;
 
             if (clickSucceeded) {
                 logger.trace("TreeItem", "Successfully clicked Create Resource button");

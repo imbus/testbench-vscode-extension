@@ -257,8 +257,9 @@ export async function enterSearchText(driver: any, searchText: string): Promise<
         const inputAppeared = await waitForCondition(
             driver,
             async () => {
-                const hasInput = await driver.executeScript(`
-                    const selectors = '${TREE_SEARCH_INPUT_SELECTORS}';
+                const hasInput = await driver.executeScript(
+                    `
+                    const selectors = String(arguments[0] || '');
                     const inputs = document.querySelectorAll(selectors);
                     for (const input of inputs) {
                         if (input.offsetParent !== null) {
@@ -266,7 +267,9 @@ export async function enterSearchText(driver: any, searchText: string): Promise<
                         }
                     }
                     return false;
-                `);
+                `,
+                    TREE_SEARCH_INPUT_SELECTORS
+                );
                 return hasInput as boolean;
             },
             UITimeouts.MEDIUM,
@@ -280,14 +283,16 @@ export async function enterSearchText(driver: any, searchText: string): Promise<
         }
 
         // Use JavaScript to set the input value directly (avoids ElementNotInteractableError)
-        const success = await driver.executeScript(`
-            const selectors = '${TREE_SEARCH_INPUT_SELECTORS}';
+        const success = await driver.executeScript(
+            `
+            const selectors = String(arguments[0] || '');
+            const nextValue = String(arguments[1] ?? '');
             const inputs = document.querySelectorAll(selectors);
             for (const input of inputs) {
                 if (input.offsetParent !== null) {
                     // Focus and set value
                     input.focus();
-                    input.value = '${searchText}';
+                    input.value = nextValue;
                     // Dispatch input event to trigger VS Code's filtering
                     input.dispatchEvent(new Event('input', { bubbles: true }));
                     input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -295,7 +300,10 @@ export async function enterSearchText(driver: any, searchText: string): Promise<
                 }
             }
             return false;
-        `);
+        `,
+            TREE_SEARCH_INPUT_SELECTORS,
+            searchText
+        );
 
         if (!success) {
             logger.warn("Toolbar", "Could not set search text via JavaScript");
@@ -322,8 +330,9 @@ export async function clearSearch(driver: any): Promise<boolean> {
         await driver.switchTo().defaultContent();
 
         // Use JavaScript to clear the input value directly (avoids ElementNotInteractableError)
-        const cleared = await driver.executeScript(`
-            const selectors = '${TREE_SEARCH_INPUT_SELECTORS}';
+        const cleared = await driver.executeScript(
+            `
+            const selectors = String(arguments[0] || '');
             const inputs = document.querySelectorAll(selectors);
             for (const input of inputs) {
                 if (input.offsetParent !== null) {
@@ -337,7 +346,9 @@ export async function clearSearch(driver: any): Promise<boolean> {
                 }
             }
             return false;
-        `);
+        `,
+            TREE_SEARCH_INPUT_SELECTORS
+        );
 
         if (cleared) {
             await applySlowMotion(driver);

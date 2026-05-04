@@ -99,11 +99,13 @@ export async function getItemIconInfo(item: TreeItem, driver: any): Promise<Icon
     try {
         const itemLabel = await item.getLabel();
 
-        const iconInfoJson = await driver.executeScript(`
+        const iconInfoJson = await driver.executeScript(
+            `
             const rows = document.querySelectorAll('.monaco-list-row');
+            const targetLabel = String(arguments[0] || '');
             for (const row of rows) {
                 const labelEl = row.querySelector('.label-name');
-                if (labelEl && labelEl.textContent.includes('${itemLabel}')) {
+                if (labelEl && (labelEl.textContent || '').includes(targetLabel)) {
                     const icon = row.querySelector('.monaco-icon-label-container .codicon, .custom-view-tree-node-item-icon');
                     if (icon) {
                         const style = window.getComputedStyle(icon);
@@ -116,7 +118,9 @@ export async function getItemIconInfo(item: TreeItem, driver: any): Promise<Icon
                 }
             }
             return null;
-        `);
+        `,
+            itemLabel
+        );
 
         return iconInfoJson ? JSON.parse(iconInfoJson) : null;
     } catch (error) {

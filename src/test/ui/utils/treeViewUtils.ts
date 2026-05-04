@@ -7,6 +7,7 @@
 import { TreeItem, WebDriver, ViewSection, By, SideBarView } from "vscode-extension-tester";
 import { getTestLogger } from "./testLogger";
 import { applySlowMotion, waitForTreeItems, UITimeouts, waitForCondition } from "./testUtils";
+import { escapeXPathLiteral } from "./xpathUtils";
 
 const logger = getTestLogger();
 
@@ -674,6 +675,7 @@ export async function waitForTreeItemButton(
         await driver.switchTo().defaultContent();
 
         const itemLabel = await item.getLabel();
+        const escapedButtonText = escapeXPathLiteral(buttonText || "Create");
 
         await driver.wait(
             async () => {
@@ -681,7 +683,7 @@ export async function waitForTreeItemButton(
                     // Try to find buttons near the tree item
                     const buttons = await driver.findElements(
                         By.xpath(
-                            `//div[contains(@class, 'monaco-list-row')]//button[contains(@aria-label, '${buttonText || "Create"}') or contains(@title, '${buttonText || "Create"}')]`
+                            `//div[contains(@class, 'monaco-list-row')]//button[contains(@aria-label, ${escapedButtonText}) or contains(@title, ${escapedButtonText})]`
                         )
                     );
 
