@@ -16,7 +16,9 @@ import {
     getProfileByName,
     getCompleteSettings,
     isValidProfile,
-    getAvailableProfiles
+    getAvailableProfiles,
+    assertValidProfileConfiguration,
+    type ExtensionSettingsProfile
 } from "../config/testConfigurations";
 import { discoverUiTestFiles, selectUiTestFiles, type DiscoveredUiTestFile } from "./testDiscovery";
 
@@ -59,7 +61,7 @@ interface ProfileResult {
  * @param projectRoot - The project root directory
  * @returns Path to the created settings file
  */
-function createSettingsFile(profile: any, projectRoot: string): string {
+function createSettingsFile(profile: ExtensionSettingsProfile, projectRoot: string): string {
     const settingsDir = path.join(projectRoot, "src/test/ui/config/profiles");
     if (!fs.existsSync(settingsDir)) {
         fs.mkdirSync(settingsDir, { recursive: true });
@@ -88,7 +90,7 @@ function createSettingsFile(profile: any, projectRoot: string): string {
  * @returns Promise<TestFileResult> - Result of the test execution
  */
 async function runSingleTestFile(
-    profile: any,
+    profile: ExtensionSettingsProfile,
     testFile: DiscoveredUiTestFile,
     projectRoot: string,
     settingsPath: string
@@ -201,7 +203,7 @@ async function runSingleTestFile(
  * @returns Promise<TestFileResult[]> - Results of all test executions
  */
 async function runTestsWithProfile(
-    profile: any,
+    profile: ExtensionSettingsProfile,
     testFiles: DiscoveredUiTestFile[],
     projectRoot: string
 ): Promise<TestFileResult[]> {
@@ -248,7 +250,11 @@ async function runTestsWithProfile(
  * @param projectRoot - The project root directory
  * @returns Promise<ProfileResult> - Result of the profile execution
  */
-async function runAllTestsForProfile(profile: any, testFiles: string[], projectRoot: string): Promise<ProfileResult> {
+async function runAllTestsForProfile(
+    profile: ExtensionSettingsProfile,
+    testFiles: string[],
+    projectRoot: string
+): Promise<ProfileResult> {
     const logger = getTestLogger();
     const startTime = Date.now();
 
@@ -549,6 +555,9 @@ async function main(): Promise<void> {
 
         logger.info("Setup", "UI Test Runner with Profiles starting...");
         logger.info("Setup", `Project Root: ${projectRoot}`);
+
+        // Guard against profile drift/misconfiguration before any heavy setup work.
+        assertValidProfileConfiguration();
 
         // In strict mode (CI or explicit flag), fail before expensive setup when credentials are invalid.
         assertCredentialReadinessForStrictMode();

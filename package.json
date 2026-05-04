@@ -925,7 +925,7 @@
         "test:ui-single": "npm run compile-tests && node out/test/ui/runners/runUITests.js",
         "test:ui-profile": "npm run compile-tests && node out/test/ui/runners/runUITestsWithProfiles.js",
         "test:ui-all-profiles": "npm run compile-tests && node out/test/ui/runners/runUITestsWithProfiles.js",
-        "test:ui-list-profiles": "node src/test/ui/config/listProfiles.js",
+        "test:ui-list-profiles": "npm run compile-tests && node out/test/ui/config/listProfiles.js",
         "test:ui-interactive": "node scripts/run-profile-test.js",
         "test:ui-setup": "extest setup-tests",
         "test:ui-run": "npm run compile-tests && extest run-tests out/test/ui/**/*.ui.test.js",

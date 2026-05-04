@@ -1,5 +1,5 @@
 /**
- * @file src/test/ui/testConfigurations.ts
+ * @file src/test/ui/config/testConfigurations.ts
  * @description Defines multiple test configuration profiles for UI testing.
  * Each profile represents a different combination of extension settings.
  */
@@ -8,6 +8,13 @@ export interface ExtensionSettingsProfile {
     name: string;
     description: string;
     settings: Record<string, any>;
+}
+
+export interface ProfileSummary {
+    /** Profile identifier used by CLI flags (for example: --profile=<name>). */
+    name: string;
+    /** Human-readable profile description displayed in logs/listing output. */
+    description: string;
 }
 
 /**
@@ -143,6 +150,71 @@ export const TEST_PROFILES: ExtensionSettingsProfile[] = [
         }
     }
 ];
+
+/**
+ * Returns profile names and descriptions for display/reporting use-cases.
+ *
+ * @returns Profile summaries derived from the single TEST_PROFILES source.
+ */
+export function getProfileSummaries(): ProfileSummary[] {
+    return TEST_PROFILES.map((profile) => ({
+        name: profile.name,
+        description: profile.description
+    }));
+}
+
+/**
+ * Validates profile metadata and returns human-readable issues.
+ *
+ * @param profiles - Optional profile set to validate. Defaults to TEST_PROFILES.
+ * @returns Array of validation error messages. Empty array means valid metadata.
+ */
+export function validateProfileConfiguration(profiles: ExtensionSettingsProfile[] = TEST_PROFILES): string[] {
+    const errors: string[] = [];
+    const seenProfileNames = new Set<string>();
+
+    if (profiles.length === 0) {
+        errors.push("At least one test profile must be configured.");
+        return errors;
+    }
+
+    for (const profile of profiles) {
+        const trimmedName = profile.name.trim();
+        const trimmedDescription = profile.description.trim();
+
+        if (!trimmedName) {
+            errors.push("Profile name must not be empty.");
+            continue;
+        }
+
+        if (!trimmedDescription) {
+            errors.push(`Profile '${trimmedName}' must include a description.`);
+        }
+
+        if (seenProfileNames.has(trimmedName)) {
+            errors.push(`Duplicate profile name detected: '${trimmedName}'.`);
+        } else {
+            seenProfileNames.add(trimmedName);
+        }
+    }
+
+    return errors;
+}
+
+/**
+ * Throws when profile metadata is invalid.
+ *
+ * @param profiles - Optional profile set to validate. Defaults to TEST_PROFILES.
+ * @throws Error when one or more profile validation issues are found.
+ */
+export function assertValidProfileConfiguration(profiles: ExtensionSettingsProfile[] = TEST_PROFILES): void {
+    const validationErrors = validateProfileConfiguration(profiles);
+    if (validationErrors.length === 0) {
+        return;
+    }
+
+    throw new Error(`Invalid test profile configuration:\n- ${validationErrors.join("\n- ")}`);
+}
 
 /**
  * Gets a test profile by name.

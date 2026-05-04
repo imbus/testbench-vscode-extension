@@ -44,7 +44,7 @@ src/test/ui/
 │   ├── .vscode-test.settings.json     # VS Code settings for test environment
 │   ├── testConfig.ts                  # Test credentials and configuration management
 │   ├── testConfigurations.ts          # Multi-configuration test profiles
-│   └── listProfiles.js                # Profile listing utility
+│   └── listProfiles.ts                # Profile listing utility
 │
 ├── runners/                           # Test runner scripts
 │   ├── runUITests.ts                  # Standard single-configuration runner
@@ -92,7 +92,7 @@ The `fixtures/` folder contains static files that are copied to the test workspa
 - **`testConfig.ts`** - Manages test credentials and configuration
 - **`testConfigurations.ts`** - Defines test profiles for multi-configuration testing
 - **`.vscode-test.settings.json`** - VS Code settings applied during test execution
-- **`listProfiles.js`** - Lists available test profiles
+- **`listProfiles.ts`** - Lists available test profiles
 
 **Test Runners (`runners/` folder):**
 
