@@ -34,6 +34,8 @@ async function main(): Promise<void> {
         // Check if a profile was specified via environment variable (from runUITestsWithProfiles.ts)
         const profileName = process.env.TESTBENCH_TEST_PROFILE;
         const profileSettingsPath = process.env.TESTBENCH_PROFILE_SETTINGS_PATH;
+        const isolationMode = process.env.TESTBENCH_TEST_ISOLATION_MODE;
+        const skipSetupFromParent = process.env.TESTBENCH_SKIP_SETUP === "true";
 
         if (profileName && profileSettingsPath) {
             logger.info("Setup", `Running with profile: ${profileName}`);
@@ -44,6 +46,13 @@ async function main(): Promise<void> {
             logger.info("Setup", "Using default settings (no profile specified)");
         }
         clearSettingsCache();
+
+        if (isolationMode) {
+            logger.info("Setup", `Isolation mode: ${isolationMode}`);
+        }
+        if (skipSetupFromParent) {
+            logger.info("Setup", "Setup mode: reusing parent-initialized test assets");
+        }
 
         // In strict mode (CI or explicit flag), fail before expensive setup when credentials are invalid.
         assertCredentialReadinessForStrictMode();
@@ -137,21 +146,36 @@ async function main(): Promise<void> {
 
         let exTester: ExTester;
 
-        try {
-            exTester = await performSetup(false);
-        } catch (err: any) {
-            const isCorruptionError =
-                err.message &&
-                (err.message.includes("FILE_ENDED") ||
-                    err.message.includes("end of central directory") ||
-                    err.message.includes("invalid signature"));
+        if (skipSetupFromParent) {
+            const hasExistingVSCode =
+                fs.existsSync(testStoragePath) &&
+                fs.readdirSync(testStoragePath).some((file) => file.includes("vscode"));
+            const hasExtensionsDirectory = fs.existsSync(extensionsPath);
 
-            if (isCorruptionError) {
-                logger.warn("Setup", "Detected corrupted VS Code archive (interrupted download).");
-                logger.info("Setup", "Automatically cleaning and retrying download...");
-                exTester = await performSetup(true);
+            if (hasExistingVSCode && hasExtensionsDirectory) {
+                logger.info("Setup", "Using existing VS Code and extension assets from parent setup.");
+                exTester = new ExTester(testStoragePath, ReleaseQuality.Stable, extensionsPath);
             } else {
-                throw err;
+                logger.warn("Setup", "Requested setup reuse, but required assets were missing. Running setup now.");
+                exTester = await performSetup(false);
+            }
+        } else {
+            try {
+                exTester = await performSetup(false);
+            } catch (err: any) {
+                const isCorruptionError =
+                    err.message &&
+                    (err.message.includes("FILE_ENDED") ||
+                        err.message.includes("end of central directory") ||
+                        err.message.includes("invalid signature"));
+
+                if (isCorruptionError) {
+                    logger.warn("Setup", "Detected corrupted VS Code archive (interrupted download).");
+                    logger.info("Setup", "Automatically cleaning and retrying download...");
+                    exTester = await performSetup(true);
+                } else {
+                    throw err;
+                }
             }
         }
 

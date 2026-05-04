@@ -131,7 +131,14 @@ This command will:
 
 ### Run a Single UI Test
 
-To execute a specific test file instead of the entire suite, use the `test:ui-single` script. You must pass the filename (without the full path) after the `--` separator:
+To execute a specific test file instead of the entire suite, you can use either of the following approaches:
+
+1. Quick single-runner command (`test:ui-single`)
+2. Profile runner command (`test:ui-profile`) with granular mode (recommended for more structured and readable output)
+
+#### Option A: Quick single-runner command
+
+Use the `test:ui-single` script and pass the filename (without the full path) after the `--` separator:
 
 ```bash
 npm run test:ui-single -- loginWebview.ui.test.ts
@@ -146,6 +153,21 @@ npm run test:ui-single -- toolbarActions.ui.test.ts
 npm run test:ui-single -- treeExpansionPersistence.ui.test.ts
 npm run test:ui-single -- subdivisionMarkingPersistence.ui.test.ts
 ```
+
+#### Option B: Profile runner with granular mode (recommended)
+
+Use `test:ui-profile` when you want explicit profile selection, isolation metadata in logs, and a more readable summary format:
+
+```bash
+npm run test:ui-profile -- --profile=default --test=loginWebview.ui.test.ts --granular --skip-setup
+npm run test:ui-profile -- --profile=default --test=projectsView.ui.test.ts --granular --skip-setup
+npm run test:ui-profile -- --profile=fully-qualified-keywords --test=loginWebview.ui.test.ts --granular --skip-setup
+```
+
+Notes:
+
+- `--granular` runs each selected test file in its own isolated subprocess.
+- `--skip-setup` avoids re-downloading/reinstalling VS Code test assets when they are already available, which is useful for repeated local reruns.
 
 ### Run Tests with Multiple Configuration Profiles
 
@@ -176,8 +198,8 @@ npm run test:ui-profile -- --granular
 
 **Execution Modes:**
 
-**Fast (default)**: Runs all test files per profile in a single VS Code session | For normal testing, CI pipelines
-**Granular**: Runs each test file separately, providing per-file pass/fail results | For debugging specific test failures
+**Fast (default)**: Runs all test files per profile in one isolated subprocess | For normal testing, CI pipelines
+**Granular**: Runs each test file in its own isolated subprocess, providing per-file pass/fail results | For debugging specific test failures and reducing cross-file state leakage
 
 **Available Configuration Profiles:**
 

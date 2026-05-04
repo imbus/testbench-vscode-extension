@@ -27,6 +27,8 @@ interface TestRunOptions {
     granular?: boolean; // Run each test file separately (slower but gives per-file results)
 }
 
+type GranularIsolationMode = "subprocess-per-file";
+
 /**
  * Result of a single test file execution.
  */
@@ -35,6 +37,7 @@ interface TestFileResult {
     profile: string;
     passed: boolean;
     duration: number; // in milliseconds
+    isolationMode: GranularIsolationMode;
     error?: string;
 }
 
@@ -70,20 +73,24 @@ function createSettingsFile(profile: any, projectRoot: string): string {
 }
 
 /**
- * Runs a single test file with a specific configuration profile.
+ * Runs a single test file with a specific configuration profile in an isolated subprocess.
+ *
+ * Isolation model:
+ * - one Node.js subprocess per test file execution
+ * - one VS Code test session per subprocess
+ *
+ * This avoids process-level leakage between granular test files.
  *
  * @param profile - The test profile to use
  * @param testFile - The test file to run
- * @param exTester - The ExTester instance
- * @param runtimeWorkspacePath - The workspace path for tests
+ * @param projectRoot - The project root directory
  * @param settingsPath - Path to the settings file
  * @returns Promise<TestFileResult> - Result of the test execution
  */
 async function runSingleTestFile(
     profile: any,
     testFile: DiscoveredUiTestFile,
-    exTester: ExTester,
-    runtimeWorkspacePath: string,
+    projectRoot: string,
     settingsPath: string
 ): Promise<TestFileResult> {
     const logger = getTestLogger();
@@ -99,27 +106,77 @@ async function runSingleTestFile(
             profile: profile.name,
             passed: false,
             duration: Date.now() - startTime,
+            isolationMode: "subprocess-per-file",
             error: `Test file not found: ${compiledTestPath}`
         };
     }
 
-    const testFilesPattern = compiledTestPath.replace(/\\/g, "/");
-    logger.info("TestRunner", `  Running: ${displayName}`);
+    logger.info("TestRunner", `  Running: ${displayName} [isolation=subprocess-per-file]`);
 
     try {
-        await exTester.runTests(testFilesPattern, {
-            settings: settingsPath,
-            resources: [runtimeWorkspacePath],
-            cleanup: true
+        const runUITestsScript = path.join(__dirname, "runUITests.js");
+        const env = {
+            ...process.env,
+            TESTBENCH_TEST_PROFILE: profile.name,
+            TESTBENCH_PROFILE_SETTINGS_PATH: settingsPath,
+            TESTBENCH_TEST_ISOLATION_MODE: "subprocess-per-file",
+            TESTBENCH_SKIP_SETUP: "true"
+        };
+
+        const runResult = await new Promise<{ exitCode: number; stderr: string }>((resolve, reject) => {
+            const child = cp.spawn("node", [runUITestsScript, testFile.sourceRelativePath], {
+                cwd: projectRoot,
+                env,
+                stdio: ["inherit", "pipe", "pipe"],
+                shell: true
+            });
+
+            let stderr = "";
+
+            child.stdout?.on("data", (data) => {
+                process.stdout.write(data.toString());
+            });
+
+            child.stderr?.on("data", (data) => {
+                const text = data.toString();
+                stderr += text;
+                process.stderr.write(text);
+            });
+
+            child.on("close", (code) => {
+                resolve({ exitCode: code ?? 1, stderr });
+            });
+
+            child.on("error", (error) => {
+                reject(error);
+            });
         });
 
         const duration = Date.now() - startTime;
-        logger.info("TestRunner", `  ${displayName} passed (${formatDuration(duration)})`);
+        const passed = runResult.exitCode === 0;
+
+        if (passed) {
+            logger.info("TestRunner", `  ${displayName} passed (${formatDuration(duration)})`);
+            return {
+                testFile: displayName,
+                profile: profile.name,
+                passed: true,
+                duration,
+                isolationMode: "subprocess-per-file"
+            };
+        }
+
+        logger.error(
+            "TestRunner",
+            `  ${displayName} failed with exit code ${runResult.exitCode} (${formatDuration(duration)})`
+        );
         return {
             testFile: displayName,
             profile: profile.name,
-            passed: true,
-            duration
+            passed: false,
+            duration,
+            isolationMode: "subprocess-per-file",
+            error: `Exit code: ${runResult.exitCode}. ${runResult.stderr.slice(-500)}`
         };
     } catch (error) {
         const duration = Date.now() - startTime;
@@ -129,6 +186,7 @@ async function runSingleTestFile(
             profile: profile.name,
             passed: false,
             duration,
+            isolationMode: "subprocess-per-file",
             error: String(error)
         };
     }
@@ -139,38 +197,30 @@ async function runSingleTestFile(
  *
  * @param profile - The test profile to use
  * @param testFiles - Array of test files to run
- * @param exTester - The ExTester instance
  * @param projectRoot - The project root directory
- * @param runtimeWorkspacePath - The workspace path for tests
  * @returns Promise<TestFileResult[]> - Results of all test executions
  */
 async function runTestsWithProfile(
     profile: any,
     testFiles: DiscoveredUiTestFile[],
-    exTester: ExTester,
-    projectRoot: string,
-    runtimeWorkspacePath: string
+    projectRoot: string
 ): Promise<TestFileResult[]> {
     const logger = getTestLogger();
     logger.info("ProfileRunner", `\n${"=".repeat(80)}`);
     logger.info("ProfileRunner", `Running tests with profile: ${profile.name}`);
     logger.info("ProfileRunner", `Description: ${profile.description}`);
     logger.info("ProfileRunner", `Test files: ${testFiles.length}`);
+    logger.info("ProfileRunner", "Isolation mode: subprocess-per-file");
     logger.info("ProfileRunner", `${"=".repeat(80)}\n`);
 
     // Create settings file for this profile
     const settingsPath = createSettingsFile(profile, projectRoot);
     logger.info("ProfileRunner", `Settings file: ${settingsPath}`);
 
-    // Set the active profile and clear settings cache to ensure fresh settings are loaded
-    const { clearSettingsCache, setActiveProfile } = await import("../config/testConfig");
-    setActiveProfile(profile.name);
-    clearSettingsCache();
-
     const results: TestFileResult[] = [];
 
     for (const testFile of testFiles) {
-        const result = await runSingleTestFile(profile, testFile, exTester, runtimeWorkspacePath, settingsPath);
+        const result = await runSingleTestFile(profile, testFile, projectRoot, settingsPath);
         results.push(result);
     }
 
@@ -206,6 +256,7 @@ async function runAllTestsForProfile(profile: any, testFiles: string[], projectR
     logger.info("ProfileRunner", `Running tests with profile: ${profile.name}`);
     logger.info("ProfileRunner", `Description: ${profile.description}`);
     logger.info("ProfileRunner", `Test files: ${testFiles.length} (running in isolated subprocess)`);
+    logger.info("ProfileRunner", "Isolation mode: subprocess-per-profile");
     logger.info("ProfileRunner", `${"=".repeat(80)}\n`);
 
     // Create settings file for this profile
@@ -222,7 +273,9 @@ async function runAllTestsForProfile(profile: any, testFiles: string[], projectR
         const env = {
             ...process.env,
             TESTBENCH_TEST_PROFILE: profile.name,
-            TESTBENCH_PROFILE_SETTINGS_PATH: settingsPath
+            TESTBENCH_PROFILE_SETTINGS_PATH: settingsPath,
+            TESTBENCH_TEST_ISOLATION_MODE: "subprocess-per-profile",
+            TESTBENCH_SKIP_SETUP: "true"
         };
 
         logger.info("ProfileRunner", `Spawning subprocess for profile: ${profile.name}`);
@@ -594,12 +647,6 @@ async function main(): Promise<void> {
             });
         };
 
-        // Create a fresh ExTester instance for each profile run
-        // This ensures each profile gets a clean VS Code session
-        const createExTester = (): ExTester => {
-            return new ExTester(testStoragePath, ReleaseQuality.Stable, extensionsPath);
-        };
-
         try {
             await performOneTimeSetup(false);
         } catch (err: any) {
@@ -648,8 +695,8 @@ async function main(): Promise<void> {
         );
 
         // Determine execution mode:
-        // - Granular mode: Run each test file separately (slower, gives per-file results)
-        // - Fast mode (default): Run all tests per profile in single VS Code session
+        // - Granular mode: Run each test file in an isolated subprocess (slowest, per-file results)
+        // - Fast mode (default): Run all tests per profile in one isolated subprocess
         const useGranularMode = options.granular || options.testFile !== undefined;
 
         if (useGranularMode) {
@@ -659,18 +706,7 @@ async function main(): Promise<void> {
             const allResults: TestFileResult[] = [];
 
             for (const profile of profilesToRun) {
-                // Create a fresh ExTester instance for each profile
-                // This ensures each profile gets a clean VS Code session
-                const exTester = createExTester();
-                logger.info("ProfileRunner", `Created fresh ExTester instance for profile: ${profile.name}`);
-
-                const profileResults = await runTestsWithProfile(
-                    profile,
-                    testFilesToRun,
-                    exTester,
-                    projectRoot,
-                    runtimeWorkspacePath
-                );
+                const profileResults = await runTestsWithProfile(profile, testFilesToRun, projectRoot);
                 allResults.push(...profileResults);
             }
 
