@@ -9,7 +9,7 @@ import * as path from "path";
 import * as fs from "fs";
 import * as cp from "child_process";
 import { ExTester, ReleaseQuality } from "vscode-extension-tester";
-import { loadEnv, TEST_PATHS, getLoggerConfig } from "../config/testConfig";
+import { loadEnv, TEST_PATHS, getLoggerConfig, assertCredentialReadinessForStrictMode } from "../config/testConfig";
 import { initializeTestLogger, getTestLogger } from "../utils/testLogger";
 import {
     TEST_PROFILES,
@@ -496,6 +496,9 @@ async function main(): Promise<void> {
 
         logger.info("Setup", "UI Test Runner with Profiles starting...");
         logger.info("Setup", `Project Root: ${projectRoot}`);
+
+        // In strict mode (CI or explicit flag), fail before expensive setup when credentials are invalid.
+        assertCredentialReadinessForStrictMode();
 
         // Validate profile if specified
         if (options.profile && !isValidProfile(options.profile)) {

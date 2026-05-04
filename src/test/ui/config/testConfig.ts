@@ -166,6 +166,7 @@ const ENV_VARS = {
     TESTBENCH_PORT_NUMBER: "TESTBENCH_TEST_PORT_NUMBER",
     TESTBENCH_USERNAME: "TESTBENCH_TEST_USERNAME",
     TESTBENCH_PASSWORD: "TESTBENCH_TEST_PASSWORD",
+    UI_TEST_STRICT_CREDENTIALS: "UI_TEST_STRICT_CREDENTIALS",
     UI_TEST_SLOW_MOTION: "UI_TEST_SLOW_MOTION",
     UI_TEST_SLOW_MOTION_DELAY: "UI_TEST_SLOW_MOTION_DELAY",
     // Test data environment variables
@@ -182,8 +183,8 @@ const ENV_VARS = {
 } as const;
 
 /**
- * Default test credentials (fallback values for local development).
- * These should only be used when environment variables are not set.
+ * Default test credentials used for local placeholders.
+ * For required fields, these defaults are considered not-ready when used as fallbacks.
  */
 const DEFAULT_CREDENTIALS: TestCredentials = {
     connectionLabel: "TestLabel",
@@ -193,25 +194,202 @@ const DEFAULT_CREDENTIALS: TestCredentials = {
     password: "testPassword"
 };
 
+type RequiredCredentialField = "serverName" | "username" | "password";
+
+/**
+ * A credential value together with its provenance.
+ * `fromEnv` is true only when a non-empty explicit environment value was provided.
+ */
+interface ResolvedCredentialValue {
+    value: string;
+    fromEnv: boolean;
+}
+
+/**
+ * Normalized readiness result used by `hasTestCredentials`, strict-mode gates,
+ * and actionable diagnostics.
+ */
+interface CredentialReadinessResult {
+    isReady: boolean;
+    isStrictMode: boolean;
+    errors: string[];
+    defaultedFields: (keyof TestCredentials)[];
+    credentials: TestCredentials;
+}
+
+/**
+ * Required credential fields and their backing environment variable names.
+ */
+const REQUIRED_CREDENTIALS: Array<{ field: RequiredCredentialField; envVar: string }> = [
+    { field: "serverName", envVar: ENV_VARS.TESTBENCH_SERVER_NAME },
+    { field: "username", envVar: ENV_VARS.TESTBENCH_USERNAME },
+    { field: "password", envVar: ENV_VARS.TESTBENCH_PASSWORD }
+];
+
+/**
+ * Tracks the last readiness warning to avoid repetitive log noise.
+ */
+let lastCredentialReadinessMessage: string | null = null;
+
+/**
+ * Resolves a credential value from environment or fallback default, while recording source.
+ */
+function getResolvedCredentialValue(envVar: string, defaultValue: string): ResolvedCredentialValue {
+    const rawValue = process.env[envVar];
+    if (rawValue === undefined || rawValue === null) {
+        return { value: defaultValue, fromEnv: false };
+    }
+
+    const trimmed = rawValue.trim();
+    if (trimmed === "") {
+        return { value: defaultValue, fromEnv: false };
+    }
+
+    return { value: trimmed, fromEnv: true };
+}
+
+/**
+ * Parses common boolean-like environment values.
+ * Returns undefined when the value is absent or not a supported boolean literal.
+ */
+function parseBooleanEnv(value: string | undefined): boolean | undefined {
+    if (!value) {
+        return undefined;
+    }
+
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1") {
+        return true;
+    }
+
+    if (normalized === "false" || normalized === "0") {
+        return false;
+    }
+
+    return undefined;
+}
+
+/**
+ * Determines whether strict credential mode is active.
+ * Priority: explicit override (`UI_TEST_STRICT_CREDENTIALS`) > CI auto-mode.
+ */
+function isStrictCredentialModeEnabled(): boolean {
+    const strictOverride = parseBooleanEnv(process.env[ENV_VARS.UI_TEST_STRICT_CREDENTIALS]);
+    if (strictOverride !== undefined) {
+        return strictOverride;
+    }
+
+    return parseBooleanEnv(process.env.CI) === true;
+}
+
+/**
+ * Evaluates whether credential configuration is ready for test execution.
+ */
+function evaluateCredentialReadiness(): CredentialReadinessResult {
+    const resolved = {
+        connectionLabel: getResolvedCredentialValue(
+            ENV_VARS.TESTBENCH_CONNECTION_LABEL,
+            DEFAULT_CREDENTIALS.connectionLabel
+        ),
+        serverName: getResolvedCredentialValue(ENV_VARS.TESTBENCH_SERVER_NAME, DEFAULT_CREDENTIALS.serverName),
+        portNumber: getResolvedCredentialValue(ENV_VARS.TESTBENCH_PORT_NUMBER, DEFAULT_CREDENTIALS.portNumber),
+        username: getResolvedCredentialValue(ENV_VARS.TESTBENCH_USERNAME, DEFAULT_CREDENTIALS.username),
+        password: getResolvedCredentialValue(ENV_VARS.TESTBENCH_PASSWORD, DEFAULT_CREDENTIALS.password)
+    };
+
+    const credentials: TestCredentials = {
+        connectionLabel: resolved.connectionLabel.value,
+        serverName: resolved.serverName.value,
+        portNumber: resolved.portNumber.value,
+        username: resolved.username.value,
+        password: resolved.password.value
+    };
+
+    const defaultedFields = Object.entries(resolved)
+        .filter(([_, source]) => !source.fromEnv)
+        .map(([field]) => field) as (keyof TestCredentials)[];
+
+    const strictMode = isStrictCredentialModeEnabled();
+    const errors: string[] = [];
+
+    const missingRequiredVars: string[] = REQUIRED_CREDENTIALS.filter(({ envVar }) => {
+        const value = process.env[envVar];
+        return value === undefined || value === null || value.trim() === "";
+    }).map(({ envVar }) => envVar);
+
+    if (strictMode && missingRequiredVars.length > 0) {
+        errors.push(
+            `Strict credential mode is enabled. Missing explicit environment variables: ${missingRequiredVars.join(", ")}.`
+        );
+    }
+
+    const requiredFallbackFields = REQUIRED_CREDENTIALS.filter(({ field }) => !resolved[field].fromEnv).map(
+        ({ field }) => field
+    );
+
+    if (!strictMode && requiredFallbackFields.length > 0) {
+        const fallbackEnvVars = REQUIRED_CREDENTIALS.filter(({ field }) => requiredFallbackFields.includes(field)).map(
+            ({ envVar }) => envVar
+        );
+        errors.push(
+            `Credential fallback defaults are in use for: ${requiredFallbackFields.join(", ")} (${fallbackEnvVars.join(", ")}).`
+        );
+    }
+
+    return {
+        isReady: errors.length === 0,
+        isStrictMode: strictMode,
+        errors,
+        defaultedFields,
+        credentials
+    };
+}
+
+/**
+ * Builds a user-facing readiness error with actionable configuration guidance.
+ */
+function buildCredentialReadinessErrorMessage(readiness: CredentialReadinessResult): string {
+    const details = readiness.errors.join(" ");
+    return (
+        `${details} Set explicit values for ${ENV_VARS.TESTBENCH_SERVER_NAME}, ` +
+        `${ENV_VARS.TESTBENCH_USERNAME}, and ${ENV_VARS.TESTBENCH_PASSWORD}. ` +
+        "You can configure them in your environment or in testBenchConnection.env."
+    );
+}
+
+/**
+ * Returns a human-readable credential readiness error, or null when credentials are ready.
+ */
+export function getCredentialReadinessErrorMessage(): string | null {
+    const readiness = evaluateCredentialReadiness();
+    if (readiness.isReady) {
+        return null;
+    }
+
+    return buildCredentialReadinessErrorMessage(readiness);
+}
+
+/**
+ * Fails fast only when strict credential mode is enabled and credentials are not ready.
+ */
+export function assertCredentialReadinessForStrictMode(): void {
+    const readiness = evaluateCredentialReadiness();
+    if (!readiness.isStrictMode || readiness.isReady) {
+        return;
+    }
+
+    throw new Error(buildCredentialReadinessErrorMessage(readiness));
+}
+
 /**
  * Gets test credentials from environment variables.
  * Falls back to default values ONLY if environment variables are not set.
  * Environment variables take priority over defaults.
  *
  * @returns TestCredentials object
- * @throws Error if required credentials are missing and no defaults are available
+ * @throws Error if credential readiness validation fails
  */
 export function getTestCredentials(): TestCredentials {
-    // Helper to check if env var is set and not empty
-    const getEnvVar = (envVar: string, defaultValue: string): string => {
-        const value = process.env[envVar];
-        // Only use default if env var is undefined, null, or empty string
-        if (value === undefined || value === null || value.trim() === "") {
-            return defaultValue;
-        }
-        return value.trim();
-    };
-
     // Debug: Log what we're reading from environment
     logger.trace("TestConfig", "Reading credentials from environment:");
     logger.trace(
@@ -235,53 +413,18 @@ export function getTestCredentials(): TestCredentials {
         `  ${ENV_VARS.TESTBENCH_PASSWORD}=${process.env[ENV_VARS.TESTBENCH_PASSWORD] ? "***" : "not set"}`
     );
 
-    const credentials: TestCredentials = {
-        connectionLabel: getEnvVar(ENV_VARS.TESTBENCH_CONNECTION_LABEL, DEFAULT_CREDENTIALS.connectionLabel),
-        serverName: getEnvVar(ENV_VARS.TESTBENCH_SERVER_NAME, DEFAULT_CREDENTIALS.serverName),
-        portNumber: getEnvVar(ENV_VARS.TESTBENCH_PORT_NUMBER, DEFAULT_CREDENTIALS.portNumber),
-        username: getEnvVar(ENV_VARS.TESTBENCH_USERNAME, DEFAULT_CREDENTIALS.username),
-        password: getEnvVar(ENV_VARS.TESTBENCH_PASSWORD, DEFAULT_CREDENTIALS.password)
-    };
+    const readiness = evaluateCredentialReadiness();
+    if (!readiness.isReady) {
+        throw new Error(buildCredentialReadinessErrorMessage(readiness));
+    }
 
-    // Log which values are from env vs defaults (for debugging)
-    const usingDefaults = {
-        connectionLabel: !process.env[ENV_VARS.TESTBENCH_CONNECTION_LABEL]?.trim(),
-        serverName: !process.env[ENV_VARS.TESTBENCH_SERVER_NAME]?.trim(),
-        portNumber: !process.env[ENV_VARS.TESTBENCH_PORT_NUMBER]?.trim(),
-        username: !process.env[ENV_VARS.TESTBENCH_USERNAME]?.trim(),
-        password: !process.env[ENV_VARS.TESTBENCH_PASSWORD]?.trim()
-    };
-
-    if (usingDefaults.serverName || usingDefaults.username) {
-        logger.warn(
-            "TestConfig",
-            "⚠️  WARNING: Using default values for: " +
-                Object.entries(usingDefaults)
-                    .filter(([_, usingDefault]) => usingDefault)
-                    .map(([key]) => key)
-                    .join(", ")
-        );
-        logger.warn(
-            "TestConfig",
-            "Make sure testBenchConnection.env file exists in project root with required variables."
-        );
+    if (readiness.defaultedFields.length > 0) {
+        logger.debug("TestConfig", `Using default values for: ${readiness.defaultedFields.join(", ")}`);
     } else {
         logger.info("TestConfig", "All credentials loaded from environment variables");
     }
 
-    // Validate that we have at least the minimum required credentials
-    if (!credentials.serverName || !credentials.username) {
-        throw new Error(
-            "Missing required test credentials. Please set the following environment variables:\n" +
-                `  - ${ENV_VARS.TESTBENCH_SERVER_NAME}\n` +
-                `  - ${ENV_VARS.TESTBENCH_USERNAME}\n` +
-                `  - ${ENV_VARS.TESTBENCH_PASSWORD}\n` +
-                `  - ${ENV_VARS.TESTBENCH_PORT_NUMBER} (optional, defaults to 443)\n` +
-                `  - ${ENV_VARS.TESTBENCH_CONNECTION_LABEL} (optional)`
-        );
-    }
-
-    return credentials;
+    return readiness.credentials;
 }
 
 /**
@@ -291,12 +434,18 @@ export function getTestCredentials(): TestCredentials {
  * @returns True if credentials are available, false otherwise
  */
 export function hasTestCredentials(): boolean {
-    try {
-        getTestCredentials();
-        return true;
-    } catch {
+    const readiness = evaluateCredentialReadiness();
+    if (!readiness.isReady) {
+        const message = buildCredentialReadinessErrorMessage(readiness);
+        if (message !== lastCredentialReadinessMessage) {
+            logger.warn("TestConfig", `Test credentials not ready. ${message}`);
+            lastCredentialReadinessMessage = message;
+        }
         return false;
     }
+
+    lastCredentialReadinessMessage = null;
+    return true;
 }
 
 /**

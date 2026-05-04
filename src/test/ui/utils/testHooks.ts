@@ -8,7 +8,13 @@ import * as fs from "fs";
 import * as path from "path";
 import { VSBrowser, WebDriver, EditorView, Workbench, By, until } from "vscode-extension-tester";
 import { openTestBenchSidebar, ensureLoggedIn, UITimeouts, releaseModifierKeys } from "./testUtils";
-import { isSlowMotionEnabled, getSlowMotionDelay, hasTestCredentials, TEST_PATHS } from "../config/testConfig";
+import {
+    isSlowMotionEnabled,
+    getSlowMotionDelay,
+    hasTestCredentials,
+    getCredentialReadinessErrorMessage,
+    TEST_PATHS
+} from "../config/testConfig";
 import { getTestLogger } from "./testLogger";
 import { ProjectsViewPage } from "../pages/ProjectsViewPage";
 import { TestThemesPage } from "../pages/TestThemesPage";
@@ -299,7 +305,13 @@ export async function isTestBenchSidebarOpen(_driver: WebDriver): Promise<boolea
 export async function ensureLoggedInOrSkip(driver: WebDriver, suiteName: string, skipFn: () => void): Promise<boolean> {
     const logger = getTestLogger();
     if (!hasTestCredentials()) {
-        logger.warn(suiteName, "Test credentials not available. Skipping tests.");
+        const readinessMessage = getCredentialReadinessErrorMessage();
+        logger.warn(
+            suiteName,
+            readinessMessage
+                ? `Test credentials not available. Skipping tests. ${readinessMessage}`
+                : "Test credentials not available. Skipping tests."
+        );
         skipFn();
         return false;
     }

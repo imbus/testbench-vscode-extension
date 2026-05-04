@@ -3,7 +3,13 @@
  * @description Utility functions and constants for UI tests
  */
 
-import { getSlowMotionDelay, getTestCredentials, hasTestCredentials, TEST_PATHS } from "../config/testConfig";
+import {
+    getSlowMotionDelay,
+    getTestCredentials,
+    getCredentialReadinessErrorMessage,
+    hasTestCredentials,
+    TEST_PATHS
+} from "../config/testConfig";
 import { getTestLogger } from "./testLogger";
 import * as path from "path";
 import * as fs from "fs";
@@ -1971,7 +1977,13 @@ export async function ensureLoggedIn(
         logger.trace("Login", "User is not logged in. Performing login...");
 
         if (!hasTestCredentials() && !credentials) {
-            logger.warn("Login", "Test credentials not available");
+            const readinessMessage = getCredentialReadinessErrorMessage();
+            logger.warn(
+                "Login",
+                readinessMessage
+                    ? `Test credentials not available. ${readinessMessage}`
+                    : "Test credentials not available"
+            );
             return false;
         }
 

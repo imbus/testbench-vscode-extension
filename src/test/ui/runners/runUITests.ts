@@ -8,7 +8,14 @@ import * as path from "path";
 import * as fs from "fs";
 import * as cp from "child_process";
 import { ExTester, ReleaseQuality } from "vscode-extension-tester";
-import { loadEnv, TEST_PATHS, getLoggerConfig, setActiveProfile, clearSettingsCache } from "../config/testConfig";
+import {
+    loadEnv,
+    TEST_PATHS,
+    getLoggerConfig,
+    setActiveProfile,
+    clearSettingsCache,
+    assertCredentialReadinessForStrictMode
+} from "../config/testConfig";
 import { initializeTestLogger, getTestLogger } from "../utils/testLogger";
 import { discoverUiTestFiles, selectUiTestFiles } from "./testDiscovery";
 
@@ -37,6 +44,9 @@ async function main(): Promise<void> {
             logger.info("Setup", "Using default settings (no profile specified)");
         }
         clearSettingsCache();
+
+        // In strict mode (CI or explicit flag), fail before expensive setup when credentials are invalid.
+        assertCredentialReadinessForStrictMode();
 
         // Centralize storage for all transient test artifacts under .test-resources
         const baseStoragePath = path.resolve(projectRoot, TEST_PATHS.BASE_STORAGE);

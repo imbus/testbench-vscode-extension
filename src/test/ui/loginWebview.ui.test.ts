@@ -16,7 +16,7 @@ import {
     ConnectionFormElements,
     UITimeouts
 } from "./utils/testUtils";
-import { getTestCredentials, hasTestCredentials } from "./config/testConfig";
+import { getTestCredentials, getCredentialReadinessErrorMessage, hasTestCredentials } from "./config/testConfig";
 import { TestContext, setupLoginWebviewTestHooks } from "./utils/testHooks";
 import { getTestLogger } from "./utils/testLogger";
 
@@ -52,6 +52,10 @@ async function withWebviewContext(
         }
 
         if (requireCredentials && !hasTestCredentials()) {
+            const readinessMessage = getCredentialReadinessErrorMessage();
+            if (readinessMessage) {
+                throw new Error(`Test credentials not available - test skipped: ${readinessMessage}`);
+            }
             throw new Error("Test credentials not available - test skipped");
         }
 

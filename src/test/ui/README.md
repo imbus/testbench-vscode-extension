@@ -250,6 +250,8 @@ UI tests require test credentials to connect to a TestBench server. Set these en
 - `TESTBENCH_TEST_USERNAME` - Test username
 - `TESTBENCH_TEST_PASSWORD` - Test password
 
+Note: Credential readiness uses source-based validation. Required fields are considered not ready when they come from built-in fallback defaults (because the related env vars are missing or empty). Explicit env values are accepted as-is.
+
 **Optional (with defaults):**
 
 - `TESTBENCH_TEST_PORT_NUMBER` - Server port (default: "9445")
@@ -272,6 +274,10 @@ UI tests require test credentials to connect to a TestBench server. Set these en
 - `UI_TEST_SLOW_MOTION_DELAY` - Delay in milliseconds for slow motion (default: 1000ms)
     - Only used when `UI_TEST_SLOW_MOTION` is enabled
     - Example: `"2000"` for 2 second delays
+- `UI_TEST_STRICT_CREDENTIALS` - Enforce strict credential validation (default: auto)
+    - `"true"`: fail fast if required credential environment variables are missing or empty
+    - `"false"`: disable strict fail-fast even when `CI=true`
+    - Unset: strict mode is enabled automatically when `CI=true`
 
 ### Setting Environment Variables
 
