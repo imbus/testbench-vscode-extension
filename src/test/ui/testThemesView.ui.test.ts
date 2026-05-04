@@ -281,20 +281,27 @@ async function getTreeItemTooltip(item: TreeItem, driver: WebDriver): Promise<st
 
         // Use JavaScript to find the tree row and hover over the label area
         // More reliable than using the TreeItem element directly
-        const treeRowElement = await driver.executeScript(`
+        const treeRowElement = await driver.executeScript(
+            `
             const rows = document.querySelectorAll(".monaco-list-row");
+            const targetLabel = String(arguments[0] || '');
+            if (!targetLabel) {
+                return null;
+            }
             for (const row of rows) {
                 const label = row.querySelector('.monaco-icon-label, .label-name, [class*="label"]');
                 if (label) {
                     const text = label.textContent || label.innerText || "";
-                    if (text.includes("${itemLabel.replace(/"/g, '\\"')}")) {
+                    if (text.includes(targetLabel)) {
                         // Return the label element, not the whole row
                         return label;
                     }
                 }
             }
             return null;
-        `);
+        `,
+            itemLabel
+        );
 
         const elementToHover = labelElement || treeRowElement || item;
 
@@ -356,11 +363,16 @@ async function getTreeItemTooltip(item: TreeItem, driver: WebDriver): Promise<st
 
         // Try getting the title attribute directly from the tree row
         try {
-            const rowWithTitle = (await driver.executeScript(`
+            const rowWithTitle = (await driver.executeScript(
+                `
                 const rows = document.querySelectorAll(".monaco-list-row");
+                const targetLabel = String(arguments[0] || '');
+                if (!targetLabel) {
+                    return null;
+                }
                 for (const row of rows) {
                     const text = row.textContent || row.innerText || "";
-                    if (text.includes("${itemLabel.replace(/"/g, '\\"')}")) {
+                    if (text.includes(targetLabel)) {
                         // Look for title attribute on the row or its children
                         if (row.title) return row.title;
                         const labeled = row.querySelector("[title]");
@@ -372,7 +384,9 @@ async function getTreeItemTooltip(item: TreeItem, driver: WebDriver): Promise<st
                     }
                 }
                 return null;
-            `)) as string | null;
+            `,
+                itemLabel
+            )) as string | null;
 
             if (rowWithTitle && rowWithTitle.trim().length > 0) {
                 logger.trace("Tooltip", `Found title from row: ${rowWithTitle.substring(0, 100)}...`);
@@ -600,13 +614,18 @@ async function clickGenerateButton(driver: WebDriver, itemLabel: string): Promis
         await driver.switchTo().defaultContent();
         logger.trace("TestGeneration", `Looking for Generate button near item: "${itemLabel}"`);
 
-        const scrollAndHoverSucceeded = (await driver.executeScript(`
+        const scrollAndHoverSucceeded = (await driver.executeScript(
+            `
             function scrollAndHoverItem(itemLabel) {
+                if (!itemLabel) {
+                    return false;
+                }
                 const rows = document.querySelectorAll('.monaco-list-row');
                 for (const row of rows) {
                     const labelElement = row.querySelector('.monaco-icon-label .label-name');
                     const labelText = labelElement ? labelElement.textContent : '';
-                    if (labelText === itemLabel || row.textContent.includes(itemLabel)) {
+                    const rowText = row.textContent || row.innerText || '';
+                    if (labelText === itemLabel || rowText.includes(itemLabel)) {
                         row.scrollIntoView({ block: 'center' });
                         row.click();
                         row.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
@@ -616,8 +635,10 @@ async function clickGenerateButton(driver: WebDriver, itemLabel: string): Promis
                 }
                 return false;
             }
-            return scrollAndHoverItem('${itemLabel.replace(/'/g, "\\'")}');
-        `)) as boolean;
+            return scrollAndHoverItem(String(arguments[0] || ''));
+        `,
+            itemLabel
+        )) as boolean;
 
         if (!scrollAndHoverSucceeded) {
             logger.debug("TestGeneration", `Could not find item "${itemLabel}" in tree`);
@@ -626,8 +647,12 @@ async function clickGenerateButton(driver: WebDriver, itemLabel: string): Promis
 
         await driver.sleep(300);
 
-        const clickSucceeded = (await driver.executeScript(`
+        const clickSucceeded = (await driver.executeScript(
+            `
             function findAndClickGenerateButton(itemLabel) {
+                if (!itemLabel) {
+                    return false;
+                }
                 const rows = document.querySelectorAll('.monaco-list-row');
                 for (const row of rows) {
                     const rowText = row.textContent || row.innerText || '';
@@ -661,8 +686,10 @@ async function clickGenerateButton(driver: WebDriver, itemLabel: string): Promis
                 }
                 return false;
             }
-            return findAndClickGenerateButton('${itemLabel.replace(/'/g, "\\'")}');
-        `)) as boolean;
+            return findAndClickGenerateButton(String(arguments[0] || ''));
+        `,
+            itemLabel
+        )) as boolean;
 
         if (!clickSucceeded) {
             logger.debug("TestGeneration", "Generate button not found or click failed");

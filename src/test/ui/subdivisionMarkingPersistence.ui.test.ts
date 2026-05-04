@@ -83,11 +83,16 @@ async function getSubdivisionIconInfo(
     try {
         const itemLabel = await item.getLabel();
 
-        const iconSrc = (await driver.executeScript(`
+        const iconSrc = (await driver.executeScript(
+            `
             const rows = document.querySelectorAll('.monaco-list-row');
+            const targetLabel = String(arguments[0] || '');
+            if (!targetLabel) {
+                return null;
+            }
             for (const row of rows) {
                 const labelEl = row.querySelector('.label-name');
-                if (labelEl && labelEl.textContent.includes('${itemLabel.replace(/'/g, "\\'")}')) {
+                if (labelEl && (labelEl.textContent || '').includes(targetLabel)) {
                     // Look for the custom icon image
                     const icon = row.querySelector('.custom-view-tree-node-item-icon');
                     if (icon) {
@@ -100,7 +105,9 @@ async function getSubdivisionIconInfo(
                 }
             }
             return null;
-        `)) as string | null;
+        `,
+            itemLabel
+        )) as string | null;
 
         const isLocal = iconSrc ? iconSrc.includes(SUBDIVISION_ICON_PREFIXES.LOCAL) : false;
 
