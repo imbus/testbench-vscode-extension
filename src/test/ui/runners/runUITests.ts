@@ -10,6 +10,7 @@ import * as cp from "child_process";
 import { ExTester, ReleaseQuality } from "vscode-extension-tester";
 import { loadEnv, TEST_PATHS, getLoggerConfig, setActiveProfile, clearSettingsCache } from "../config/testConfig";
 import { initializeTestLogger, getTestLogger } from "../utils/testLogger";
+import { discoverUiTestFiles, selectUiTestFiles } from "./testDiscovery";
 
 async function main(): Promise<void> {
     try {
@@ -148,62 +149,47 @@ async function main(): Promise<void> {
 
         // Handle arguments
         const specificFile = process.argv[2];
-        let testFilesPattern: string;
+        const compiledUiRoot = path.join(__dirname, "..");
+        const discoveredTests = discoverUiTestFiles(projectRoot, compiledUiRoot);
+
+        if (discoveredTests.length === 0) {
+            logger.error("TestRunner", "No UI test files were discovered under src/test/ui.");
+            logger.close();
+            process.exit(1);
+        }
+
+        const selectedTests = selectUiTestFiles(discoveredTests, specificFile);
+        let testFilesPattern: string | string[];
 
         if (specificFile) {
             logger.info("TestRunner", `Targeting specific file: ${specificFile}`);
-            const fileName = specificFile.replace(".ts", ".js");
-            const compiledTestPath = path.join(__dirname, "..", fileName);
-            testFilesPattern = compiledTestPath.replace(/\\/g, "/");
+        } else {
+            logger.info("TestRunner", "No specific file provided. Running all discovered UI tests.");
+        }
 
-            // Validate that the test file exists
-            if (!fs.existsSync(compiledTestPath)) {
-                const sourceFileName = specificFile.endsWith(".ts") ? specificFile : `${specificFile}.ts`;
-                const sourceTestPath = path.resolve(projectRoot, "src/test/ui", sourceFileName);
-                const sourceExists = fs.existsSync(sourceTestPath);
-
-                logger.error("TestRunner", "Test file not found!");
-                logger.error("TestRunner", `Compiled file: ${compiledTestPath}`);
-                if (sourceExists) {
-                    logger.error("TestRunner", `Source file exists: ${sourceTestPath}`);
-                    logger.error(
-                        "TestRunner",
-                        "The file may not have been compiled. Try running 'npm run compile-tests' first."
-                    );
-                } else {
-                    logger.error("TestRunner", `Source file: ${sourceTestPath}`);
-                    logger.error("TestRunner", "Make sure the test file exists in 'src/test/ui/' directory.");
-                }
-
-                // List available test files to help the user
-                try {
-                    const testDir = path.join(projectRoot, "src/test/ui");
-                    if (fs.existsSync(testDir)) {
-                        const availableFiles = fs
-                            .readdirSync(testDir)
-                            .filter((file) => file.endsWith(".ui.test.ts"))
-                            .map((file) => `   - ${file}`);
-
-                        if (availableFiles.length > 0) {
-                            logger.error("TestRunner", "Available test files:");
-                            availableFiles.forEach((file) => logger.error("TestRunner", file));
-                        }
-                    }
-                } catch {
-                    // Ignore errors when listing files
-                }
-
+        for (const testFile of selectedTests) {
+            if (!fs.existsSync(testFile.compiledAbsolutePath)) {
+                logger.error("TestRunner", "Compiled test file not found!");
+                logger.error("TestRunner", `Source test: ${testFile.sourceRelativePath}`);
+                logger.error("TestRunner", `Expected compiled file: ${testFile.compiledAbsolutePath}`);
+                logger.error("TestRunner", "Try running 'npm run compile-tests' first.");
                 logger.close();
                 process.exit(1);
             }
-
-            logger.info("TestRunner", `Test file found: ${compiledTestPath}`);
-        } else {
-            logger.info("TestRunner", "No specific file provided. Running all UI tests.");
-            testFilesPattern = path.join(__dirname, "..", "**/*.ui.test.js").replace(/\\/g, "/");
         }
 
-        logger.info("TestRunner", `Test Pattern: ${testFilesPattern}`);
+        if (selectedTests.length === 1) {
+            testFilesPattern = selectedTests[0].compiledAbsolutePath.replace(/\\/g, "/");
+            logger.info("TestRunner", `Test file found: ${testFilesPattern}`);
+        } else {
+            testFilesPattern = selectedTests.map((testFile) => testFile.compiledAbsolutePath.replace(/\\/g, "/"));
+            logger.info("TestRunner", `Discovered ${selectedTests.length} UI test files.`);
+        }
+
+        logger.info(
+            "TestRunner",
+            `Test Pattern: ${Array.isArray(testFilesPattern) ? `${testFilesPattern.length} files` : testFilesPattern}`
+        );
         logger.info("TestRunner", `Workspace: ${runtimeWorkspacePath}`);
 
         // Use profile-specific settings file if available, otherwise use default

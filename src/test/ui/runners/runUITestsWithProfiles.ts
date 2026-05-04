@@ -18,6 +18,7 @@ import {
     isValidProfile,
     getAvailableProfiles
 } from "../config/testConfigurations";
+import { discoverUiTestFiles, selectUiTestFiles, type DiscoveredUiTestFile } from "./testDiscovery";
 
 interface TestRunOptions {
     profile?: string; // Specific profile name to use, or undefined to run with all profiles
@@ -36,38 +37,6 @@ interface TestFileResult {
     duration: number; // in milliseconds
     error?: string;
 }
-
-/**
- * Available UI test files.
- */
-const UI_TEST_FILES = [
-    "loginWebview.ui.test.ts",
-    "projectsView.ui.test.ts",
-    "testThemesView.ui.test.ts",
-    "resourceCreationFlow.ui.test.ts",
-    "searchFeature.ui.test.ts",
-    "testElementsView.ui.test.ts",
-    "contextConfiguration.ui.test.ts",
-    "toolbarActions.ui.test.ts",
-    "treeExpansionPersistence.ui.test.ts",
-    "subdivisionMarkingPersistence.ui.test.ts"
-];
-
-/**
- * Short names for test files (used in summary table).
- */
-const TEST_FILE_SHORT_NAMES: Record<string, string> = {
-    "loginWebview.ui.test.ts": "login",
-    "projectsView.ui.test.ts": "projects",
-    "testThemesView.ui.test.ts": "themes",
-    "resourceCreationFlow.ui.test.ts": "resource",
-    "searchFeature.ui.test.ts": "search",
-    "testElementsView.ui.test.ts": "elements",
-    "contextConfiguration.ui.test.ts": "config",
-    "toolbarActions.ui.test.ts": "toolbar",
-    "treeExpansionPersistence.ui.test.ts": "persistence",
-    "subdivisionMarkingPersistence.ui.test.ts": "marking"
-};
 
 /**
  * Result of running all tests with a single profile.
@@ -106,29 +75,27 @@ function createSettingsFile(profile: any, projectRoot: string): string {
  * @param profile - The test profile to use
  * @param testFile - The test file to run
  * @param exTester - The ExTester instance
- * @param projectRoot - The project root directory
  * @param runtimeWorkspacePath - The workspace path for tests
  * @param settingsPath - Path to the settings file
  * @returns Promise<TestFileResult> - Result of the test execution
  */
 async function runSingleTestFile(
     profile: any,
-    testFile: string,
+    testFile: DiscoveredUiTestFile,
     exTester: ExTester,
-    projectRoot: string,
     runtimeWorkspacePath: string,
     settingsPath: string
 ): Promise<TestFileResult> {
     const logger = getTestLogger();
     const startTime = Date.now();
 
-    const fileName = testFile.replace(".ts", ".js");
-    const compiledTestPath = path.join(__dirname, "..", fileName);
+    const compiledTestPath = testFile.compiledAbsolutePath;
+    const displayName = testFile.sourceRelativePath;
 
     if (!fs.existsSync(compiledTestPath)) {
         logger.error("TestRunner", `Test file not found: ${compiledTestPath}`);
         return {
-            testFile,
+            testFile: displayName,
             profile: profile.name,
             passed: false,
             duration: Date.now() - startTime,
@@ -137,7 +104,7 @@ async function runSingleTestFile(
     }
 
     const testFilesPattern = compiledTestPath.replace(/\\/g, "/");
-    logger.info("TestRunner", `  Running: ${testFile}`);
+    logger.info("TestRunner", `  Running: ${displayName}`);
 
     try {
         await exTester.runTests(testFilesPattern, {
@@ -147,18 +114,18 @@ async function runSingleTestFile(
         });
 
         const duration = Date.now() - startTime;
-        logger.info("TestRunner", `  ${testFile} passed (${formatDuration(duration)})`);
+        logger.info("TestRunner", `  ${displayName} passed (${formatDuration(duration)})`);
         return {
-            testFile,
+            testFile: displayName,
             profile: profile.name,
             passed: true,
             duration
         };
     } catch (error) {
         const duration = Date.now() - startTime;
-        logger.error("TestRunner", `  ${testFile} failed (${formatDuration(duration)})`);
+        logger.error("TestRunner", `  ${displayName} failed (${formatDuration(duration)})`);
         return {
-            testFile,
+            testFile: displayName,
             profile: profile.name,
             passed: false,
             duration,
@@ -179,7 +146,7 @@ async function runSingleTestFile(
  */
 async function runTestsWithProfile(
     profile: any,
-    testFiles: string[],
+    testFiles: DiscoveredUiTestFile[],
     exTester: ExTester,
     projectRoot: string,
     runtimeWorkspacePath: string
@@ -203,14 +170,7 @@ async function runTestsWithProfile(
     const results: TestFileResult[] = [];
 
     for (const testFile of testFiles) {
-        const result = await runSingleTestFile(
-            profile,
-            testFile,
-            exTester,
-            projectRoot,
-            runtimeWorkspacePath,
-            settingsPath
-        );
+        const result = await runSingleTestFile(profile, testFile, exTester, runtimeWorkspacePath, settingsPath);
         results.push(result);
     }
 
@@ -348,7 +308,7 @@ function formatDuration(ms: number): string {
 /**
  * Generates and prints a comprehensive summary matrix.
  */
-function printSummaryMatrix(results: TestFileResult[], profiles: string[], testFiles: string[]): void {
+function printSummaryMatrix(results: TestFileResult[], profiles: string[], testFiles: DiscoveredUiTestFile[]): void {
     const logger = getTestLogger();
 
     // Build results map for quick lookup
@@ -359,7 +319,7 @@ function printSummaryMatrix(results: TestFileResult[], profiles: string[], testF
     }
 
     // Calculate column widths
-    const shortNames = testFiles.map((f) => TEST_FILE_SHORT_NAMES[f] || f.replace(".ui.test.ts", ""));
+    const shortNames = testFiles.map((testFile) => testFile.summaryName);
     const maxProfileWidth = Math.max(20, ...profiles.map((p) => p.length));
     const colWidth = Math.max(8, ...shortNames.map((n) => n.length + 2));
 
@@ -397,7 +357,7 @@ function printSummaryMatrix(results: TestFileResult[], profiles: string[], testF
         let profileTotal = 0;
 
         for (const testFile of testFiles) {
-            const key = `${profile}|${testFile}`;
+            const key = `${profile}|${testFile.sourceRelativePath}`;
             const result = resultsMap.get(key);
 
             if (result) {
@@ -425,8 +385,8 @@ function printSummaryMatrix(results: TestFileResult[], profiles: string[], testF
     // Totals row
     let totalsRow = "TOTAL".padEnd(maxProfileWidth) + " │";
     for (const testFile of testFiles) {
-        const passedForFile = results.filter((r) => r.testFile === testFile && r.passed).length;
-        const totalForFile = results.filter((r) => r.testFile === testFile).length;
+        const passedForFile = results.filter((r) => r.testFile === testFile.sourceRelativePath && r.passed).length;
+        const totalForFile = results.filter((r) => r.testFile === testFile.sourceRelativePath).length;
         totalsRow += `${passedForFile}/${totalForFile}`.padStart(colWidth) + " ";
     }
     totalsRow += `│ ${totalPassed}/${totalPassed + totalFailed}`;
@@ -658,13 +618,21 @@ async function main(): Promise<void> {
         const profilesToRun = options.profile ? [getProfileByName(options.profile)!] : TEST_PROFILES;
 
         // Determine which test files to run
-        const testFilesToRun = options.testFile ? [options.testFile] : UI_TEST_FILES;
+        const compiledUiRoot = path.join(__dirname, "..");
+        const discoveredTests = discoverUiTestFiles(projectRoot, compiledUiRoot);
+
+        if (discoveredTests.length === 0) {
+            logger.error("Setup", "No UI test files were discovered under src/test/ui.");
+            process.exit(1);
+        }
+
+        const testFilesToRun = selectUiTestFiles(discoveredTests, options.testFile);
 
         // Validate test files exist
         for (const testFile of testFilesToRun) {
-            const compiledPath = path.join(__dirname, "..", testFile.replace(".ts", ".js"));
+            const compiledPath = testFile.compiledAbsolutePath;
             if (!fs.existsSync(compiledPath)) {
-                logger.error("Setup", `Test file not found: ${testFile}`);
+                logger.error("Setup", `Test file not found: ${testFile.sourceRelativePath}`);
                 logger.error("Setup", `Expected at: ${compiledPath}`);
                 process.exit(1);
             }
@@ -732,7 +700,11 @@ async function main(): Promise<void> {
             for (const profile of profilesToRun) {
                 logger.info("ProfileRunner", `Starting isolated subprocess for profile: ${profile.name}`);
 
-                const result = await runAllTestsForProfile(profile, testFilesToRun, projectRoot);
+                const result = await runAllTestsForProfile(
+                    profile,
+                    testFilesToRun.map((testFile) => testFile.sourceRelativePath),
+                    projectRoot
+                );
                 profileResults.push(result);
             }
 
