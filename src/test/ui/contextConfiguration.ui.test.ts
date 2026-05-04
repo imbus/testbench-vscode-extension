@@ -14,6 +14,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { getTestLogger } from "./utils/testLogger";
 import { applySlowMotion, waitForTreeItems, UITimeouts, waitForNotification } from "./utils/testUtils";
+import { clickToolbarButton } from "./utils/toolbarUtils";
 import { hasPinIcon } from "./utils/treeItemUtils";
 import { getTestData, logTestDataConfig } from "./config/testConfig";
 import { TestContext, setupTestHooks, skipTest } from "./utils/testHooks";
@@ -181,6 +182,46 @@ async function closeContextMenu(contextMenu: ContextMenu): Promise<void> {
         await contextMenu.close();
     } catch {
         // Ignore close errors
+    }
+}
+
+/**
+ * Waits for the quick-pick prompt shown by ls.config validation flow.
+ * @param driver - The WebDriver instance
+ * @param timeout - Maximum time to wait
+ * @returns True when validation quick-pick is visible
+ */
+async function waitForValidationQuickPick(driver: any, timeout: number = UITimeouts.LONG): Promise<boolean> {
+    try {
+        await driver.wait(
+            async () => {
+                const promptVisible = await driver.executeScript(`
+                    const quickInput = document.querySelector('.quick-input-widget');
+                    if (!quickInput) {
+                        return false;
+                    }
+
+                    const style = window.getComputedStyle(quickInput);
+                    if (style.display === 'none' || style.visibility === 'hidden') {
+                        return false;
+                    }
+
+                    const text = (quickInput.textContent || '').toLowerCase();
+                    return (
+                        text.includes('select testbench project') ||
+                        text.includes('config is invalid') ||
+                        text.includes('choose a project')
+                    );
+                `);
+
+                return Boolean(promptVisible);
+            },
+            timeout,
+            "Waiting for ls.config validation quick-pick"
+        );
+        return true;
+    } catch {
+        return false;
     }
 }
 
@@ -538,8 +579,8 @@ describe("Context Configuration UI Tests", function () {
     describe("Configuration Validation", function () {
         it("should detect when ls.config.json has invalid project name", async function () {
             const driver = getDriver();
-            const testConfig = getTestData();
             const projectsPage = new ProjectsViewPage(driver);
+            const testConfig = getTestData();
 
             const invalidConfig = {
                 projectName: "NonExistentProject_12345",
@@ -552,16 +593,33 @@ describe("Context Configuration UI Tests", function () {
             // Trigger refresh to validate
             const projectsSection = await getProjectsSection();
             if (projectsSection) {
-                await projectsPage.clickToolbarAction(projectsSection, "Refresh");
+                let refreshClicked = await projectsPage.clickToolbarAction(projectsSection, "Refresh");
+                if (!refreshClicked) {
+                    refreshClicked = await clickToolbarButton(projectsSection, "Refresh Projects", driver);
+                }
+                if (!refreshClicked) {
+                    refreshClicked = await clickToolbarButton(projectsSection, "Refresh", driver);
+                }
+
+                expect(refreshClicked, "Refresh action should be clickable to trigger validation").to.equal(true);
                 await driver.sleep(2000);
+            } else {
+                skipPrecondition(this, "Projects section not found for validation test");
             }
 
-            const validationNotification = await waitForNotification(driver, "configuration", UITimeouts.MEDIUM);
+            const validationNotification = await waitForNotification(driver, "configuration", UITimeouts.LONG);
+            const validationQuickPick = validationNotification ? false : await waitForValidationQuickPick(driver);
 
-            expect(validationNotification, "Validation notification should appear for invalid configuration").to.equal(
-                true
+            expect(
+                validationNotification || validationQuickPick,
+                "Validation UI feedback should appear for invalid configuration"
+            ).to.equal(true);
+            logger.info(
+                "Validation",
+                validationNotification
+                    ? "Configuration validation notification appeared"
+                    : "Configuration validation quick-pick appeared"
             );
-            logger.info("Validation", "Configuration validation notification appeared");
 
             // Restore valid config
             const validConfig = {

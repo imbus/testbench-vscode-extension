@@ -136,26 +136,45 @@ export async function hasPinIcon(item: TreeItem, driver: any): Promise<boolean> 
     try {
         const itemLabel = await item.getLabel();
 
-        const hasPin = await driver.executeScript(`
+        const hasPin = await driver.executeScript(
+            `
+            const targetLabel = String(arguments[0] || '').trim();
             const rows = document.querySelectorAll('.monaco-list-row');
+
             for (const row of rows) {
                 const labelEl = row.querySelector('.label-name');
-                if (labelEl && labelEl.textContent.includes('${itemLabel}')) {
-                    // Look for pin icon or active indicator
-                    const pinIcons = row.querySelectorAll('.codicon-pin, .codicon-pinned, [class*="pin"], .tree-item-active');
-                    if (pinIcons.length > 0) return true;
-                    
-                    // Also check for custom decoration that indicates active state
-                    const decorations = row.querySelectorAll('.monaco-icon-label-container .file-icon');
-                    for (const dec of decorations) {
-                        if (dec.className.includes('active') || dec.className.includes('pin')) {
-                            return true;
-                        }
+                const rowLabel = (labelEl?.textContent || '').trim();
+                if (!rowLabel || rowLabel !== targetLabel) {
+                    continue;
+                }
+
+                // Current implementation decorates active items using a description marker: "📌".
+                const rowText = (row.textContent || '').trim();
+                if (rowText.includes('📌')) {
+                    return true;
+                }
+
+                // Keep codicon-based checks for compatibility with other icon styles.
+                const pinIcons = row.querySelectorAll(
+                    '.codicon-pin, .codicon-pinned, [class*="codicon-pin"], .tree-item-active, [class*=" pin"]'
+                );
+                if (pinIcons.length > 0) {
+                    return true;
+                }
+
+                const decorations = row.querySelectorAll('.monaco-icon-label-container .file-icon');
+                for (const decoration of decorations) {
+                    const className = decoration.className || '';
+                    if (className.includes('active') || className.includes('pin')) {
+                        return true;
                     }
                 }
             }
+
             return false;
-        `);
+        `,
+            itemLabel
+        );
 
         return hasPin as boolean;
     } catch (error) {
