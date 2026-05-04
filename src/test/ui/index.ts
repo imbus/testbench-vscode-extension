@@ -6,10 +6,12 @@
 import * as path from "path";
 import Mocha from "mocha";
 import { glob } from "glob";
-// The loadEnv() function in testConfig.ts is called automatically on import
-import "./config/testConfig";
+import { loadEnv } from "./config/testConfig";
 
 export async function run(): Promise<void> {
+    const projectRoot = path.resolve(__dirname, "../../../");
+    loadEnv(projectRoot);
+
     // Create the mocha test
     const mocha = new Mocha({
         ui: "bdd",

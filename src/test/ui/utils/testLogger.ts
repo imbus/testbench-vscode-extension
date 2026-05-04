@@ -108,6 +108,14 @@ export class TestLogger {
     }
 
     /**
+     * Creates a detached logger instance that does not participate in the singleton lifecycle.
+     * Useful for deterministic pre-initialization logging behavior.
+     */
+    public static createDetached(config?: TestLoggerConfig): TestLogger {
+        return new TestLogger(config);
+    }
+
+    /**
      * Resets the singleton instance.
      * Useful for testing or reinitializing with new config.
      */
@@ -496,6 +504,36 @@ export class TestLogger {
  * Call initializeTestLogger() before using.
  */
 let globalLogger: TestLogger | null = null;
+const preInitConsoleLogger: TestLogger = TestLogger.createDetached({
+    consoleOutput: true,
+    logLevel: LogLevel.TRACE
+});
+
+function getActiveLogger(): TestLogger {
+    return globalLogger ?? preInitConsoleLogger;
+}
+
+/**
+ * Returns a stable object that forwards each property access to the current active logger.
+ * This keeps top-level logger constants in other modules deterministic even before bootstrap.
+ */
+function createDynamicLoggerProxy(): TestLogger {
+    return new Proxy({} as TestLogger, {
+        get(_target: TestLogger, prop: string | symbol): unknown {
+            const activeLogger = getActiveLogger();
+            const loggerRecord = activeLogger as unknown as Record<string | symbol, unknown>;
+            const value = loggerRecord[prop];
+
+            if (typeof value === "function") {
+                return (value as (...args: unknown[]) => unknown).bind(activeLogger);
+            }
+
+            return value;
+        }
+    });
+}
+
+const loggerProxy: TestLogger = createDynamicLoggerProxy();
 
 /**
  * Initializes the global test logger.
@@ -513,17 +551,12 @@ export async function initializeTestLogger(projectRoot: string, config?: TestLog
 
 /**
  * Gets the global test logger instance.
- * Throws if logger hasn't been initialized.
+ * Before explicit initialization, this routes to a console-only detached logger.
  *
  * @returns The global TestLogger instance
  */
 export function getTestLogger(): TestLogger {
-    if (!globalLogger) {
-        // Return a logger that outputs to console only if not initialized
-        // This provides graceful degradation
-        globalLogger = TestLogger.getInstance({ consoleOutput: true });
-    }
-    return globalLogger;
+    return loggerProxy;
 }
 
 /**

@@ -8,6 +8,8 @@ import * as path from "path";
 import * as fs from "fs";
 import { getTestLogger } from "../utils/testLogger";
 
+// getTestLogger() already returns a dynamic logger proxy from testLogger.ts,
+// so capturing it once here remains safe and readable.
 const logger = getTestLogger();
 
 /**
@@ -142,13 +144,6 @@ export function loadEnv(projectRoot?: string): boolean {
         return false;
     }
 }
-
-/**
- * Loads environment variables from .env files at module initialization.
- * This ensures env vars are available even if runUITests.ts wasn't used.
- * This is called automatically when the module is imported for backward compatibility.
- */
-loadEnv();
 
 /**
  * Test credentials interface for TestBench connection.
