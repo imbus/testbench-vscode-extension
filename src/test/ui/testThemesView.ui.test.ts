@@ -50,7 +50,9 @@ import {
     TreeItemLevel,
     logTreeStructure,
     findTreeItemByLevel,
+    findTreeItemByLabel,
     canExecuteScenario,
+    waitForTreeItem,
     doubleClickTreeItem,
     expandTreeItemIfNeeded
 } from "./utils/treeViewUtils";
@@ -2414,6 +2416,29 @@ async function runScenarioForTest(
 }
 
 /**
+ * Finds a Test Themes tree item by label using recursive discovery and expansion.
+ *
+ * @param driver - The WebDriver instance
+ * @param testThemesPage - The TestThemesPage instance
+ * @param itemLabel - The tree item label to find
+ * @param timeout - Maximum time to wait (default: UITimeouts.MEDIUM)
+ * @returns Promise<TreeItem | null> - Matching tree item or null if not found
+ */
+async function findTestThemesItemByLabel(
+    driver: WebDriver,
+    testThemesPage: TestThemesPage,
+    itemLabel: string,
+    timeout: number = UITimeouts.MEDIUM
+): Promise<TreeItem | null> {
+    return await waitForTreeItem(
+        driver,
+        async (content: any) => await testThemesPage.getSection(content),
+        itemLabel,
+        timeout
+    );
+}
+
+/**
  * Asserts that scenario execution produced at least one generated Robot Framework file.
  *
  * @param result Scenario execution result to validate.
@@ -2791,7 +2816,7 @@ describe("Test Themes View UI Tests", function () {
             }
 
             logger.info("Phase4", `Looking for test theme "${config.testThemeName}"...`);
-            const targetTestTheme = await testThemesPage.getItem(testThemesSectionVerify, config.testThemeName);
+            const targetTestTheme = await findTestThemesItemByLabel(driver, testThemesPage, config.testThemeName);
 
             if (!targetTestTheme) {
                 logger.warn("Phase4", `Test theme "${config.testThemeName}" not found`);
@@ -2862,7 +2887,11 @@ describe("Test Themes View UI Tests", function () {
                 config.testThemeName
             );
 
-            if (!testThemeForVerification) {
+            const refreshedThemeForVerification =
+                testThemeForVerification ||
+                (await findTestThemesItemByLabel(driver, testThemesPage, config.testThemeName, UITimeouts.LONG));
+
+            if (!refreshedThemeForVerification) {
                 logger.warn("Phase5", `Test theme "${config.testThemeName}" not found for verification`);
                 skipError(this, `Test theme '${config.testThemeName}' not found for verification`);
                 return;
@@ -2870,7 +2899,7 @@ describe("Test Themes View UI Tests", function () {
 
             // Expand the test theme to see its children (test case sets)
             logger.info("Phase5", "Expanding test theme to find generated test case sets...");
-            const hasChildren = await testThemeForVerification.hasChildren();
+            const hasChildren = await refreshedThemeForVerification.hasChildren();
             let canVerifyChildRobotFile = true;
             if (!hasChildren) {
                 logger.warn(
@@ -2881,16 +2910,16 @@ describe("Test Themes View UI Tests", function () {
             }
 
             if (canVerifyChildRobotFile) {
-                const isExpanded = await testThemeForVerification.isExpanded();
+                const isExpanded = await refreshedThemeForVerification.isExpanded();
                 if (!isExpanded) {
-                    await testThemeForVerification.expand();
+                    await refreshedThemeForVerification.expand();
                     await applySlowMotion(driver);
                     // Wait for children to load
                     await waitForTreeItems(testThemesSectionAfterGen, driver);
                 }
 
                 // Get children (test case sets)
-                const testCaseSets = await testThemeForVerification.getChildren();
+                const testCaseSets = await refreshedThemeForVerification.getChildren();
                 if (testCaseSets.length === 0) {
                     logger.warn(
                         "Phase5",
@@ -2943,12 +2972,12 @@ describe("Test Themes View UI Tests", function () {
 
                     // Re-fetch the test case set to avoid stale element reference after tooltip interactions
                     // First, make sure testThemeForVerification is still expanded
-                    const stillExpanded = await testThemeForVerification.isExpanded();
+                    const stillExpanded = await refreshedThemeForVerification.isExpanded();
                     if (!stillExpanded) {
-                        await testThemeForVerification.expand();
+                        await refreshedThemeForVerification.expand();
                         await applySlowMotion(driver);
                     }
-                    const freshTestCaseSets = await testThemeForVerification.getChildren();
+                    const freshTestCaseSets = await refreshedThemeForVerification.getChildren();
 
                     // Find the matching item by label
                     let itemToClick: TreeItem | null = null;
@@ -3193,7 +3222,12 @@ describe("Test Themes View UI Tests", function () {
                 );
             }
             if (!targetTestThemeForUpload) {
-                targetTestThemeForUpload = await testThemesPage.getItem(testThemesSectionUpload, config.testThemeName);
+                targetTestThemeForUpload = await findTestThemesItemByLabel(
+                    driver,
+                    testThemesPage,
+                    config.testThemeName,
+                    UITimeouts.LONG
+                );
             }
 
             if (!targetTestThemeForUpload) {
@@ -3232,7 +3266,11 @@ describe("Test Themes View UI Tests", function () {
 
                         itemForUpload = targetTestThemeUniqueId
                             ? await findTreeItemByUniqueId(refreshedSection, driver, targetTestThemeUniqueId)
-                            : await testThemesPage.getItem(refreshedSection, config.testThemeName);
+                            : await findTreeItemByLabel(
+                                  (await refreshedSection.getVisibleItems()) as TreeItem[],
+                                  config.testThemeName,
+                                  true
+                              );
 
                         if (!itemForUpload) {
                             return false;

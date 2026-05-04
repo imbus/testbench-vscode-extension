@@ -21,7 +21,7 @@ import {
 } from "./utils/testUtils";
 import { clickToolbarButton } from "./utils/toolbarUtils";
 import { waitForTreeItemButton } from "./utils/treeViewUtils";
-import { hasActionButton, collectTreeItemLabels } from "./utils/treeItemUtils";
+import { collectTreeItemLabels } from "./utils/treeItemUtils";
 import { navigateToTestView } from "./utils/navigationUtils";
 import { getTestData, logTestDataConfig, hasTestCredentials } from "./config/testConfig";
 import { TestContext, setupTestHooks, skipTest } from "./utils/testHooks";
@@ -63,58 +63,162 @@ interface SubdivisionMarkingState {
     iconContainsLocal: boolean;
 }
 
-/**
- * Gets the icon source for a tree item to determine if it's marked.
- * Marked subdivisions use 'localSubdivision' icon, unmarked use 'missingSubdivision'.
- *
- * 1. Locate the icon shown for a specific subdivision row.
- * 2. Read the icon source from the rendered tree item.
- * 3. Check whether it points to the "local subdivision" icon.
- * 4. Return both the raw icon source and the local/non-local result.
- *
- * @param item - The tree item to check
- * @param driver - The WebDriver instance
- * @returns Promise<{ iconSrc: string | null; isLocal: boolean }> - Icon source and whether it indicates local availability
- */
-async function getSubdivisionIconInfo(
-    item: TreeItem,
-    driver: WebDriver
-): Promise<{ iconSrc: string | null; isLocal: boolean }> {
-    try {
-        const itemLabel = await item.getLabel();
+interface SubdivisionRowState {
+    found: boolean;
+    hasCreateButton: boolean;
+    hasOpenButton: boolean;
+    iconContainsLocal: boolean;
+}
 
-        const iconSrc = (await driver.executeScript(
+/**
+ * Focuses a tree row by subdivision label so row-scoped action buttons are rendered.
+ *
+ * @param label - The subdivision label to focus
+ * @param driver - The WebDriver instance
+ * @returns Promise<boolean> - True if a matching row was focused
+ */
+async function focusSubdivisionRowByLabel(label: string, driver: WebDriver): Promise<boolean> {
+    try {
+        const focused = (await driver.executeScript(
             `
             const rows = document.querySelectorAll('.monaco-list-row');
             const targetLabel = String(arguments[0] || '');
             if (!targetLabel) {
-                return null;
+                return false;
             }
             for (const row of rows) {
                 const labelEl = row.querySelector('.label-name');
-                if (labelEl && (labelEl.textContent || '').includes(targetLabel)) {
-                    // Look for the custom icon image
-                    const icon = row.querySelector('.custom-view-tree-node-item-icon');
-                    if (icon) {
-                        const style = window.getComputedStyle(icon);
-                        const bgImage = style.backgroundImage || '';
-                        // Extract URL from background-image
-                        const match = bgImage.match(/url\\(["']?([^"')]+)["']?\\)/);
-                        return match ? match[1] : bgImage;
-                    }
+                const rowLabel = (labelEl?.textContent || '').trim();
+                const rowText = (row.textContent || row.innerText || '').trim();
+                if (rowLabel === targetLabel || rowText.includes(targetLabel)) {
+                    row.scrollIntoView({ block: 'center' });
+                    row.click();
+                    row.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+                    row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+                    return true;
                 }
             }
-            return null;
+            return false;
         `,
-            itemLabel
-        )) as string | null;
+            label
+        )) as boolean;
 
-        const isLocal = iconSrc ? iconSrc.includes(SUBDIVISION_ICON_PREFIXES.LOCAL) : false;
-
-        return { iconSrc, isLocal };
+        return focused;
     } catch (error) {
-        logger.debug("SubdivisionIcon", `Error getting icon info: ${error}`);
-        return { iconSrc: null, isLocal: false };
+        logger.debug("SubdivisionRow", `Error focusing row by label "${label}": ${error}`);
+        return false;
+    }
+}
+
+/**
+ * Reads action/button/icon state for a subdivision row by label.
+ *
+ * @param label - The subdivision label to inspect
+ * @param driver - The WebDriver instance
+ * @returns Promise<SubdivisionRowState> - The resolved row state
+ */
+async function readSubdivisionRowStateByLabel(label: string, driver: WebDriver): Promise<SubdivisionRowState> {
+    try {
+        const state = (await driver.executeScript(
+            `
+            const targetLabel = String(arguments[0] || '').trim();
+            const localIconPrefix = String(arguments[1] || '');
+            if (!targetLabel) {
+                return {
+                    found: false,
+                    hasCreateButton: false,
+                    hasOpenButton: false,
+                    iconContainsLocal: false
+                };
+            }
+
+            const rows = document.querySelectorAll('.monaco-list-row');
+            for (const row of rows) {
+                const labelEl = row.querySelector('.label-name');
+                const rowLabel = (labelEl?.textContent || '').trim();
+                const rowText = (row.textContent || row.innerText || '').trim();
+                if (rowLabel !== targetLabel && !rowText.includes(targetLabel)) {
+                    continue;
+                }
+
+                const actionButtons = row.querySelectorAll('.action-label, a.action-item, button.action-item');
+                let hasCreateButton = false;
+                let hasOpenButton = false;
+
+                for (const button of actionButtons) {
+                    const text = (
+                        button.getAttribute('title') ||
+                        button.getAttribute('aria-label') ||
+                        button.textContent ||
+                        ''
+                    ).toLowerCase();
+
+                    if (text.includes('create resource')) {
+                        hasCreateButton = true;
+                    }
+                    if (text.includes('open resource')) {
+                        hasOpenButton = true;
+                    }
+                }
+
+                const icon = row.querySelector('.custom-view-tree-node-item-icon');
+                let iconContainsLocal = false;
+                if (icon) {
+                    const style = window.getComputedStyle(icon);
+                    const bgImage = style.backgroundImage || '';
+                    const match = bgImage.match(/url\\(["']?([^"')]+)["']?\\)/);
+                    const iconSrc = match ? match[1] : bgImage;
+                    iconContainsLocal = !!(iconSrc && iconSrc.includes(localIconPrefix));
+                }
+
+                return {
+                    found: true,
+                    hasCreateButton,
+                    hasOpenButton,
+                    iconContainsLocal
+                };
+            }
+
+            return {
+                found: false,
+                hasCreateButton: false,
+                hasOpenButton: false,
+                iconContainsLocal: false
+            };
+        `,
+            label,
+            SUBDIVISION_ICON_PREFIXES.LOCAL
+        )) as SubdivisionRowState;
+
+        return state;
+    } catch (error) {
+        logger.debug("SubdivisionRow", `Error reading row state for "${label}": ${error}`);
+        return {
+            found: false,
+            hasCreateButton: false,
+            hasOpenButton: false,
+            iconContainsLocal: false
+        };
+    }
+}
+
+/**
+ * Resolves a stable label for a subdivision state lookup.
+ *
+ * @param item - The tree item (can be stale)
+ * @param labelHint - Optional caller-provided label to avoid stale reads
+ * @returns Promise<string> - The resolved label (or empty string)
+ */
+async function resolveSubdivisionLabel(item: TreeItem, labelHint?: string): Promise<string> {
+    if (labelHint && labelHint.trim().length > 0) {
+        return labelHint;
+    }
+
+    try {
+        return await item.getLabel();
+    } catch (error) {
+        logger.debug("SubdivisionRow", `Failed to resolve label from TreeItem: ${error}`);
+        return "";
     }
 }
 
@@ -127,18 +231,24 @@ async function getSubdivisionIconInfo(
  *
  * @param item - The tree item
  * @param driver - The WebDriver instance
+ * @param labelHint - Optional known label for stale-safe state lookups
  * @returns Promise<SubdivisionMarkingState> - The marking state
  */
-async function captureSubdivisionMarkingState(item: TreeItem, driver: WebDriver): Promise<SubdivisionMarkingState> {
-    const label = await item.getLabel();
+async function captureSubdivisionMarkingState(
+    item: TreeItem,
+    driver: WebDriver,
+    labelHint?: string
+): Promise<SubdivisionMarkingState> {
+    const label = await resolveSubdivisionLabel(item, labelHint);
 
-    // Click to reveal action buttons
-    await item.click();
+    // Focus row by label to ensure inline action buttons are visible before reading state.
+    await focusSubdivisionRowByLabel(label, driver);
     await driver.sleep(200);
 
-    const hasCreateButton = await hasActionButton(item, "Create Resource", driver);
-    const hasOpenButton = await hasActionButton(item, "Open Resource", driver);
-    const { isLocal: iconContainsLocal } = await getSubdivisionIconInfo(item, driver);
+    const rowState = await readSubdivisionRowStateByLabel(label, driver);
+    const hasCreateButton = rowState.hasCreateButton;
+    const hasOpenButton = rowState.hasOpenButton;
+    const iconContainsLocal = rowState.iconContainsLocal;
 
     // A subdivision is considered "marked" if:
     // - It has the "Open Resource" button (resource exists locally), OR
@@ -219,10 +329,12 @@ async function findUnmarkedResourceSubdivision(
                 continue;
             }
 
-            await item.click();
-            await driver.sleep(200);
-
-            const hasCreate = await hasActionButton(item, "Create Resource", driver);
+            const focused = await focusSubdivisionRowByLabel(label, driver);
+            if (focused) {
+                await driver.sleep(200);
+            }
+            const rowState = await readSubdivisionRowStateByLabel(label, driver);
+            const hasCreate = rowState.hasCreateButton;
 
             if (hasCreate) {
                 logger.info("FindSubdivision", `Found unmarked resource subdivision: "${label}"`);
@@ -587,9 +699,10 @@ describe("Subdivision Marking Persistence UI Tests", function () {
             let targetLabel = config.subdivisionName;
 
             if (targetSubdivision) {
-                await targetSubdivision.click();
+                await focusSubdivisionRowByLabel(targetLabel, driver);
                 await driver.sleep(200);
-                const hasCreate = await hasActionButton(targetSubdivision, "Create Resource", driver);
+                const rowState = await readSubdivisionRowStateByLabel(targetLabel, driver);
+                const hasCreate = rowState.hasCreateButton;
                 if (!hasCreate) {
                     logger.info(
                         "Phase2",
@@ -617,7 +730,7 @@ describe("Subdivision Marking Persistence UI Tests", function () {
             }
 
             // Capture initial marking state (this clicks the item)
-            const initialState = await captureSubdivisionMarkingState(targetSubdivision, driver);
+            const initialState = await captureSubdivisionMarkingState(targetSubdivision, driver, targetLabel);
             logger.info("Phase2", `Initial state of "${targetLabel}": marked=${initialState.isMarked}`);
 
             // Verify initial state is unmarked
@@ -699,7 +812,7 @@ describe("Subdivision Marking Persistence UI Tests", function () {
             }
 
             // Verify subdivision is now marked
-            const finalState = await captureSubdivisionMarkingState(updatedSubdivision, driver);
+            const finalState = await captureSubdivisionMarkingState(updatedSubdivision, driver, targetLabel);
             logger.info("Phase2", `Final state of "${targetLabel}": marked=${finalState.isMarked}`);
 
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
