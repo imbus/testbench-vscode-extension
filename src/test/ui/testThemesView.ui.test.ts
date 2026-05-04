@@ -43,7 +43,7 @@ import {
     FilesystemVerificationResult
 } from "./utils/testUtils";
 import { getRobotOutputXmlPath, getTestData, logTestDataConfig } from "./config/testConfig";
-import { TestContext, setupTestHooks } from "./utils/testHooks";
+import { TestContext, setupTestHooks, skipTest } from "./utils/testHooks";
 import { TestThemesPage } from "./pages/TestThemesPage";
 import { ProjectsViewPage } from "./pages/ProjectsViewPage";
 import {
@@ -57,6 +57,14 @@ import {
 import * as path from "path";
 
 const logger = getTestLogger();
+
+function skipPrecondition(context: Mocha.Context, reason: string): never {
+    return skipTest(context, "precondition", reason);
+}
+
+function skipError(context: Mocha.Context, reason: string): never {
+    return skipTest(context, "error", reason);
+}
 
 /**
  * Track if tree structure has been logged in this test session.
@@ -2481,13 +2489,13 @@ describe("Test Themes View UI Tests", function () {
                     );
                     if (!buttonClicked) {
                         logger.warn("Phase1", 'Failed to click "Open Projects View" button');
-                        this.skip();
+                        skipError(this, 'Failed to click "Open Projects View" button');
                     }
 
                     const projectsViewAppeared = await waitForProjectsView(driver);
                     if (!projectsViewAppeared) {
                         logger.warn("Phase1", "Projects view did not appear");
-                        this.skip();
+                        skipError(this, "Projects view did not appear after clicking Open Projects View");
                     }
                     isInProjectsView = true;
                 }
@@ -2508,14 +2516,14 @@ describe("Test Themes View UI Tests", function () {
 
                 if (!projectsSectionUpdated) {
                     logger.warn("Phase2", "Projects section not found");
-                    this.skip();
+                    skipPrecondition(this, "Projects section not found");
                     return;
                 }
 
                 const itemsLoaded = await waitForTreeItems(projectsSectionUpdated, driver);
                 if (!itemsLoaded) {
                     logger.warn("Phase2", "Tree items did not load in time");
-                    this.skip();
+                    skipError(this, "Projects tree items did not load in time");
                     return;
                 }
 
@@ -2534,7 +2542,7 @@ describe("Test Themes View UI Tests", function () {
                 const targetProject = await projectsPage.getProject(projectsSectionUpdated, config.projectName);
                 if (!targetProject) {
                     logger.warn("Phase2", `Project "${config.projectName}" not found`);
-                    this.skip();
+                    skipPrecondition(this, `Project '${config.projectName}' not found`);
                     return;
                 }
 
@@ -2545,7 +2553,10 @@ describe("Test Themes View UI Tests", function () {
                         "Phase2",
                         `Project label mismatch: expected "${config.projectName}", but found "${foundProjectLabel}"`
                     );
-                    this.skip();
+                    skipError(
+                        this,
+                        `Project label mismatch: expected '${config.projectName}', got '${foundProjectLabel}'`
+                    );
                     return;
                 }
 
@@ -2553,7 +2564,7 @@ describe("Test Themes View UI Tests", function () {
                 const targetVersion = await projectsPage.getVersion(targetProject, config.versionName);
                 if (!targetVersion) {
                     logger.warn("Phase2", `Version "${config.versionName}" not found`);
-                    this.skip();
+                    skipPrecondition(this, `Version '${config.versionName}' not found`);
                     return;
                 }
 
@@ -2564,7 +2575,7 @@ describe("Test Themes View UI Tests", function () {
                 const targetCycle = await projectsPage.getCycle(targetVersion, config.cycleName);
                 if (!targetCycle) {
                     logger.warn("Phase2", `Cycle "${config.cycleName}" not found`);
-                    this.skip();
+                    skipPrecondition(this, `Cycle '${config.cycleName}' not found`);
                     return;
                 }
 
@@ -2579,7 +2590,7 @@ describe("Test Themes View UI Tests", function () {
                         `CRITICAL: Project label changed to "${verifiedProjectLabel}", expected "${config.projectName}"`
                     );
                     logger.error("Phase2", `This indicates we may be working with the wrong project!`);
-                    this.skip();
+                    skipError(this, "Project label verification failed before cycle interaction");
                     return;
                 }
 
@@ -2631,7 +2642,7 @@ describe("Test Themes View UI Tests", function () {
                                 "Phase2",
                                 `This indicates we're about to click a cycle from the wrong project!`
                             );
-                            this.skip();
+                            skipError(this, "Project label mismatch after refresh");
                             return;
                         }
 
@@ -2690,7 +2701,7 @@ describe("Test Themes View UI Tests", function () {
                 const viewsAppeared = await waitForTestThemesAndElementsViews(driver);
                 if (!viewsAppeared) {
                     logger.warn("Phase2", "Test Themes view did not appear");
-                    this.skip();
+                    skipError(this, "Test Themes/Test Elements views did not appear after cycle open");
                     return;
                 }
 
@@ -2724,7 +2735,7 @@ describe("Test Themes View UI Tests", function () {
 
             if (!testThemesSectionVerify) {
                 logger.warn("Phase3", "Test Themes section not found");
-                this.skip();
+                skipPrecondition(this, "Test Themes section not found");
                 return;
             }
 
@@ -2745,7 +2756,7 @@ describe("Test Themes View UI Tests", function () {
             const testThemesLoaded = await waitForTreeItems(testThemesSectionVerify, driver);
             if (!testThemesLoaded) {
                 logger.warn("Phase4", "Test Themes tree items did not load");
-                this.skip();
+                skipError(this, "Test Themes tree items did not load");
                 return;
             }
 
@@ -2754,7 +2765,7 @@ describe("Test Themes View UI Tests", function () {
 
             if (!targetTestTheme) {
                 logger.warn("Phase4", `Test theme "${config.testThemeName}" not found`);
-                this.skip();
+                skipPrecondition(this, `Test theme '${config.testThemeName}' not found`);
                 return;
             }
 
@@ -2777,7 +2788,7 @@ describe("Test Themes View UI Tests", function () {
 
             if (!generateButtonClicked) {
                 logger.warn("Phase4", "Failed to click Generate button");
-                this.skip();
+                skipError(this, "Failed to click Generate button");
                 return;
             }
 
@@ -2808,7 +2819,7 @@ describe("Test Themes View UI Tests", function () {
 
             if (!testThemesSectionAfterGen) {
                 logger.warn("Phase5", "Test Themes section not found after generation");
-                this.skip();
+                skipError(this, "Test Themes section not found after generation");
                 return;
             }
 
@@ -2823,7 +2834,7 @@ describe("Test Themes View UI Tests", function () {
 
             if (!testThemeForVerification) {
                 logger.warn("Phase5", `Test theme "${config.testThemeName}" not found for verification`);
-                this.skip();
+                skipError(this, `Test theme '${config.testThemeName}' not found for verification`);
                 return;
             }
 
@@ -2929,7 +2940,7 @@ describe("Test Themes View UI Tests", function () {
                     }
                     if (!itemToClick) {
                         logger.warn("Phase5", "Could not find test case set to click");
-                        this.skip();
+                        skipError(this, "Could not find test case set to click");
                         return;
                     }
 
@@ -2942,7 +2953,7 @@ describe("Test Themes View UI Tests", function () {
 
                     if (!fileOpened) {
                         logger.warn("Phase5", ".robot file did not open in editor within timeout");
-                        this.skip();
+                        skipError(this, ".robot file did not open in editor within timeout");
                         return;
                     }
 
@@ -2958,7 +2969,7 @@ describe("Test Themes View UI Tests", function () {
                     const robotFileTitles = openEditorTitles.filter((title) => title.includes(".robot"));
                     if (robotFileTitles.length === 0) {
                         logger.warn("Phase5", "No .robot file found in open editors");
-                        this.skip();
+                        skipError(this, "No .robot file found in open editors");
                         return;
                     }
 
@@ -2969,7 +2980,7 @@ describe("Test Themes View UI Tests", function () {
 
                     if (!robotEditor) {
                         logger.warn("Verification", "Could not find opened .robot file editor");
-                        this.skip();
+                        skipError(this, "Could not find opened .robot file editor");
                         return;
                     }
 
@@ -3131,14 +3142,14 @@ describe("Test Themes View UI Tests", function () {
 
             if (!testThemesSectionUpload) {
                 logger.warn("Phase8", "Test Themes section not found after returning");
-                this.skip();
+                skipError(this, "Test Themes section not found after returning from Testing view");
                 return;
             }
 
             const uploadTreeLoaded = await waitForTreeItems(testThemesSectionUpload, driver);
             if (!uploadTreeLoaded) {
                 logger.warn("Phase8", "Test Themes tree items did not load");
-                this.skip();
+                skipError(this, "Test Themes tree items did not load before upload");
                 return;
             }
 
@@ -3157,7 +3168,7 @@ describe("Test Themes View UI Tests", function () {
 
             if (!targetTestThemeForUpload) {
                 logger.warn("Phase8", `Test theme "${config.testThemeName}" not found for upload`);
-                this.skip();
+                skipError(this, `Test theme '${config.testThemeName}' not found for upload`);
                 return;
             }
 

@@ -111,6 +111,107 @@ const DEFAULT_OPTIONS: Required<TestHooksOptions> = {
     verifySidebarBeforeOpen: true
 };
 
+export type SkipCategory = "precondition" | "error";
+
+/**
+ * Structured skip metadata propagated by helpers that decide to skip.
+ */
+export interface SkipDecision {
+    category: SkipCategory;
+    reason: string;
+}
+
+interface TestSkipMetadata {
+    category: SkipCategory;
+    reason?: string;
+}
+
+interface SuiteExecutionStats {
+    passed: number;
+    failed: number;
+    skipped: number;
+    skippedByPrecondition: number;
+    skippedByError: number;
+}
+
+type TestWithSkipMetadata = Mocha.Test & {
+    __testbenchSkipMetadata?: TestSkipMetadata;
+};
+
+const suiteExecutionStats = new Map<string, SuiteExecutionStats>();
+
+/**
+ * Creates a zeroed stats object for one suite execution.
+ */
+function createEmptySuiteExecutionStats(): SuiteExecutionStats {
+    return {
+        passed: 0,
+        failed: 0,
+        skipped: 0,
+        skippedByPrecondition: 0,
+        skippedByError: 0
+    };
+}
+
+/**
+ * Initializes per-suite counters at suite start.
+ */
+function initializeSuiteExecutionStats(suiteName: string): void {
+    suiteExecutionStats.set(suiteName, createEmptySuiteExecutionStats());
+}
+
+/**
+ * Returns existing suite stats or lazily creates a fallback bucket.
+ */
+function getSuiteExecutionStats(suiteName: string): SuiteExecutionStats {
+    const existingStats = suiteExecutionStats.get(suiteName);
+    if (existingStats) {
+        return existingStats;
+    }
+
+    const fallbackStats = createEmptySuiteExecutionStats();
+    suiteExecutionStats.set(suiteName, fallbackStats);
+    return fallbackStats;
+}
+
+/**
+ * Persists skip metadata on the current test so afterEach can classify it.
+ */
+function recordSkipMetadata(test: Mocha.Test | undefined, metadata: TestSkipMetadata): void {
+    if (!test) {
+        return;
+    }
+
+    (test as TestWithSkipMetadata).__testbenchSkipMetadata = metadata;
+}
+
+/**
+ * Reads and clears skip metadata from the test to avoid cross-test leakage.
+ */
+function consumeSkipMetadata(test: Mocha.Test | undefined): TestSkipMetadata | undefined {
+    if (!test) {
+        return undefined;
+    }
+
+    const typedTest = test as TestWithSkipMetadata;
+    const metadata = typedTest.__testbenchSkipMetadata;
+    delete typedTest.__testbenchSkipMetadata;
+    return metadata;
+}
+
+/**
+ * Skips the current test while recording categorized skip metadata for reporting.
+ *
+ * @param context - Mocha execution context
+ * @param category - Skip classification used in per-suite summary output
+ * @param reason - Optional human-readable reason for the skip
+ * @returns Never returns because Mocha marks the test pending and aborts execution
+ */
+export function skipTest(context: Mocha.Context, category: SkipCategory, reason?: string): never {
+    recordSkipMetadata(context.currentTest, { category, reason });
+    return context.skip();
+}
+
 /**
  * Safely executes an async operation with error handling.
  * Logs errors but doesn't throw. Used for cleanup operations
@@ -299,27 +400,30 @@ export async function isTestBenchSidebarOpen(_driver: WebDriver): Promise<boolea
  *
  * @param driver - WebDriver instance
  * @param suiteName - Name of the test suite for logging
- * @param skipFn - Function to call to skip the test (typically `this.skip()`)
+ * @param skipFn - Callback that applies skip behavior using an optional categorized decision payload
  * @returns Promise<boolean> - True if logged in, false if test should be skipped
  */
-export async function ensureLoggedInOrSkip(driver: WebDriver, suiteName: string, skipFn: () => void): Promise<boolean> {
+export async function ensureLoggedInOrSkip(
+    driver: WebDriver,
+    suiteName: string,
+    skipFn: (decision?: SkipDecision) => void
+): Promise<boolean> {
     const logger = getTestLogger();
     if (!hasTestCredentials()) {
         const readinessMessage = getCredentialReadinessErrorMessage();
-        logger.warn(
-            suiteName,
-            readinessMessage
-                ? `Test credentials not available. Skipping tests. ${readinessMessage}`
-                : "Test credentials not available. Skipping tests."
-        );
-        skipFn();
+        const reason = readinessMessage
+            ? `Test credentials not available. Skipping tests. ${readinessMessage}`
+            : "Test credentials not available. Skipping tests.";
+        logger.warn(suiteName, reason);
+        skipFn({ category: "precondition", reason });
         return false;
     }
 
     const loggedIn = await ensureLoggedIn(driver);
     if (!loggedIn) {
-        logger.warn(suiteName, "Failed to login. Skipping tests.");
-        skipFn();
+        const reason = "Failed to login. Skipping tests.";
+        logger.warn(suiteName, reason);
+        skipFn({ category: "precondition", reason });
         return false;
     }
 
@@ -343,6 +447,7 @@ export function createBeforeHook(context: TestContext, options: TestHooksOptions
         context.driver = context.browser.driver;
 
         logger.suiteStart(opts.suiteName);
+        initializeSuiteExecutionStats(opts.suiteName);
 
         // Wait for VS Code to be fully loaded before any interactions
         const isReady = await waitForVSCodeReady(context.driver, opts.timeout);
@@ -372,6 +477,7 @@ export function createAfterHook(options: TestHooksOptions = {}): () => Promise<v
 
     return async function (): Promise<void> {
         const logger = getTestLogger();
+        const stats = getSuiteExecutionStats(opts.suiteName);
 
         if (opts.closeEditors) {
             await safeExecute(
@@ -381,7 +487,20 @@ export function createAfterHook(options: TestHooksOptions = {}): () => Promise<v
             );
         }
 
-        logger.suiteEnd(opts.suiteName);
+        logger.suiteEnd(opts.suiteName, {
+            passed: stats.passed,
+            failed: stats.failed,
+            skipped: stats.skipped
+        });
+
+        if (stats.skipped > 0) {
+            logger.info(
+                "Suite",
+                `Skip breakdown for ${opts.suiteName}: precondition=${stats.skippedByPrecondition}, error=${stats.skippedByError}`
+            );
+        }
+
+        suiteExecutionStats.delete(opts.suiteName);
     };
 }
 
@@ -424,7 +543,11 @@ export function createBeforeEachHook(
         }
 
         if (opts.requiresLogin) {
-            await ensureLoggedInOrSkip(driver, opts.suiteName, () => this.skip());
+            await ensureLoggedInOrSkip(driver, opts.suiteName, (decision) => {
+                const category = decision?.category || "precondition";
+                const reason = decision?.reason;
+                skipTest(this, category, reason);
+            });
         }
     };
 }
@@ -450,12 +573,14 @@ export function createAfterEachHook(
     return async function (this: Mocha.Context): Promise<void> {
         const driver = getDriver();
         const logger = getTestLogger();
+        const stats = getSuiteExecutionStats(opts.suiteName);
         const testTitle = this.currentTest?.title || "unknown";
         const testState = this.currentTest?.state;
         const testDuration = this.currentTest?.duration;
 
         // Log test result
         if (testState === "failed") {
+            stats.failed += 1;
             logger.testFail(testTitle, this.currentTest?.err, testDuration);
 
             // Capture screenshot on failure - use safe execution to prevent blocking other cleanup
@@ -467,9 +592,19 @@ export function createAfterEachHook(
                 );
             }
         } else if (testState === "passed") {
+            stats.passed += 1;
             logger.testPass(testTitle, testDuration);
         } else if (testState === "pending") {
-            logger.testSkip(testTitle);
+            stats.skipped += 1;
+            const skipMetadata = consumeSkipMetadata(this.currentTest);
+
+            if (skipMetadata?.category === "precondition") {
+                stats.skippedByPrecondition += 1;
+                logger.testSkip(testTitle, skipMetadata.reason || "precondition");
+            } else {
+                stats.skippedByError += 1;
+                logger.testSkip(testTitle, skipMetadata?.reason || "uncategorized");
+            }
         }
 
         // Clear notifications to ensure clean state for next test
@@ -777,8 +912,9 @@ export function createLoginWebviewBeforeEachHook(
             logger.warn(opts.suiteName, "⚠ Warning: Cleanup may not be complete after all retry attempts");
 
             if (opts.skipOnCleanupFailure) {
-                logger.info(opts.suiteName, "Skipping test due to cleanup failure");
-                this.skip();
+                const reason = "Skipping test due to cleanup failure";
+                logger.info(opts.suiteName, reason);
+                skipTest(this, "error", reason);
                 return;
             }
         }

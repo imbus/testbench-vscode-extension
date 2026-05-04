@@ -23,13 +23,21 @@ import { doubleClickTreeItem } from "./utils/treeViewUtils";
 import { navigateToTestView, findResourceSubdivision } from "./utils/navigationUtils";
 import { hasActionButton, getItemIconInfo, collectTreeItemLabels } from "./utils/treeItemUtils";
 import { getTestData, logTestDataConfig } from "./config/testConfig";
-import { TestContext, setupTestHooks } from "./utils/testHooks";
+import { TestContext, setupTestHooks, skipTest } from "./utils/testHooks";
 import { TestElementsPage } from "./pages/TestElementsPage";
 
 const logger = getTestLogger();
 const ROBOT_RESOURCE_MARKER = "[Robot-Resource]";
 const OPEN_RESOURCE_RETRY_ATTEMPTS = 3;
 const OPEN_RESOURCE_RETRY_DELAY_MS = 400;
+
+function skipPrecondition(context: Mocha.Context, reason: string): never {
+    return skipTest(context, "precondition", reason);
+}
+
+function skipError(context: Mocha.Context, reason: string): never {
+    return skipTest(context, "error", reason);
+}
 
 describe("Test Elements View UI Tests", function () {
     const ctx: TestContext = {} as TestContext;
@@ -238,8 +246,7 @@ describe("Test Elements View UI Tests", function () {
 
             const elementsSection = await getElementsSection();
             if (!elementsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test Elements section not found");
             }
 
             await waitForTreeItems(elementsSection, driver);
@@ -270,8 +277,7 @@ describe("Test Elements View UI Tests", function () {
 
             const elementsSection = await getElementsSection();
             if (!elementsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test Elements section not found");
             }
 
             await waitForTreeItems(elementsSection, driver);
@@ -289,8 +295,7 @@ describe("Test Elements View UI Tests", function () {
 
             if (!targetSubdivision) {
                 logger.warn("TestElements", `No resource subdivision with actions found`);
-                this.skip();
-                return;
+                skipPrecondition(this, "No resource subdivision with actions found");
             }
 
             logger.info("TestElements", `Found subdivision: "${resolvedSubdivisionLabel}"`);
@@ -312,8 +317,7 @@ describe("Test Elements View UI Tests", function () {
 
             const elementsSection = await getElementsSection();
             if (!elementsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test Elements section not found");
             }
 
             await waitForTreeItems(elementsSection, driver);
@@ -377,8 +381,7 @@ describe("Test Elements View UI Tests", function () {
 
             const elementsSection = await getElementsSection();
             if (!elementsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test Elements section not found");
             }
 
             await waitForTreeItems(elementsSection, driver);
@@ -420,8 +423,7 @@ describe("Test Elements View UI Tests", function () {
 
             const elementsSection = await getElementsSection();
             if (!elementsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test Elements section not found");
             }
 
             await waitForTreeItems(elementsSection, driver);
@@ -434,15 +436,13 @@ describe("Test Elements View UI Tests", function () {
             const targetSubdivision = subdivisionSearchResult.subdivision;
 
             if (!targetSubdivision) {
-                this.skip();
-                return;
+                skipPrecondition(this, "No subdivision with keyword children found");
             }
 
             const hasSubdivisionChildren = await targetSubdivision.hasChildren();
             if (!hasSubdivisionChildren) {
                 logger.info("TestElements", "Subdivision has no keyword children");
-                this.skip();
-                return;
+                skipPrecondition(this, "Subdivision has no keyword children");
             }
 
             // Expand to reveal keywords
@@ -477,8 +477,7 @@ describe("Test Elements View UI Tests", function () {
 
             const elementsSection = await getElementsSection();
             if (!elementsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test Elements section not found");
             }
 
             await waitForTreeItems(elementsSection, driver);
@@ -491,8 +490,7 @@ describe("Test Elements View UI Tests", function () {
             const subdivisionItem = subdivisionSearchResult.subdivision;
 
             if (!subdivisionItem) {
-                this.skip();
-                return;
+                skipPrecondition(this, "No subdivision with keyword children found");
             }
 
             // Ensure subdivision is expanded
@@ -504,8 +502,7 @@ describe("Test Elements View UI Tests", function () {
             const subdivisionChildren = await subdivisionItem.getChildren();
             if (subdivisionChildren.length === 0) {
                 logger.info("TestElements", "No keywords to click");
-                this.skip();
-                return;
+                skipPrecondition(this, "No keywords available under subdivision");
             }
 
             const firstKeywordOfSubdivision = subdivisionChildren[0];
@@ -529,6 +526,7 @@ describe("Test Elements View UI Tests", function () {
                 }
             } else {
                 logger.warn("TestElements", "Resource file did not open (resource may not exist yet)");
+                skipError(this, "Resource file did not open after keyword click");
             }
         });
 
@@ -547,8 +545,7 @@ describe("Test Elements View UI Tests", function () {
 
             const elementsSection = await getElementsSection();
             if (!elementsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test Elements section not found");
             }
 
             await waitForTreeItems(elementsSection, driver);
@@ -561,8 +558,7 @@ describe("Test Elements View UI Tests", function () {
             const subdivisionItem = subdivisionSearchResult.subdivision;
 
             if (!subdivisionItem) {
-                this.skip();
-                return;
+                skipPrecondition(this, "No subdivision with keyword children found");
             }
 
             if (!(await subdivisionItem.isExpanded())) {
@@ -572,8 +568,7 @@ describe("Test Elements View UI Tests", function () {
 
             const subdivisionChildren = await subdivisionItem.getChildren();
             if (subdivisionChildren.length === 0) {
-                this.skip();
-                return;
+                skipPrecondition(this, "No keywords available under subdivision for double-click");
             }
 
             const firstKeywordOfSubdivision = subdivisionChildren[0];
@@ -590,6 +585,7 @@ describe("Test Elements View UI Tests", function () {
                 logger.info("TestElements", "Resource file opened on double-click");
             } else {
                 logger.warn("TestElements", "Resource file did not open on double-click");
+                skipError(this, "Resource file did not open on keyword double-click");
             }
         });
     });
@@ -610,8 +606,7 @@ describe("Test Elements View UI Tests", function () {
 
             const elementsSection = await getElementsSection();
             if (!elementsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test Elements section not found");
             }
 
             await waitForTreeItems(elementsSection, driver);
@@ -668,8 +663,7 @@ describe("Test Elements View UI Tests", function () {
 
             if (!openResourceClicked && !resourceCreatedAsFallback) {
                 logger.info("TestElements", "No actionable resource operation found for selected subdivision");
-                this.skip();
-                return;
+                skipError(this, "No actionable resource operation found for selected subdivision");
             }
 
             if (!openResourceClicked && resourceCreatedAsFallback) {
@@ -677,6 +671,7 @@ describe("Test Elements View UI Tests", function () {
                     "TestElements",
                     "Open Resource action remained flaky; validating by resource file open after create fallback"
                 );
+                skipError(this, "Open Resource action remained unavailable after create fallback");
             }
 
             const isResourceFileOpened = await waitForFileInEditor(driver, ".resource", UITimeouts.MEDIUM);

@@ -16,10 +16,18 @@ import { getTestLogger } from "./utils/testLogger";
 import { applySlowMotion, waitForTreeItems, UITimeouts, waitForNotification } from "./utils/testUtils";
 import { hasPinIcon } from "./utils/treeItemUtils";
 import { getTestData, logTestDataConfig } from "./config/testConfig";
-import { TestContext, setupTestHooks } from "./utils/testHooks";
+import { TestContext, setupTestHooks, skipTest } from "./utils/testHooks";
 import { ProjectsViewPage } from "./pages/ProjectsViewPage";
 
 const logger = getTestLogger();
+
+function skipPrecondition(context: Mocha.Context, reason: string): never {
+    return skipTest(context, "precondition", reason);
+}
+
+function skipError(context: Mocha.Context, reason: string): never {
+    return skipTest(context, "error", reason);
+}
 
 /**
  * Gets the path to the ls.config.json file in the given workspace.
@@ -222,28 +230,24 @@ describe("Context Configuration UI Tests", function () {
 
             const projectsSection = await getProjectsSection();
             if (!projectsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found");
             }
 
             await waitForTreeItems(projectsSection, driver);
 
             const project = await projectsPage.getProject(projectsSection, config.projectName);
             if (!project) {
-                this.skip();
-                return;
+                skipPrecondition(this, `Project '${config.projectName}' not found`);
             }
 
             const version = await projectsPage.getVersion(project, config.versionName);
             if (!version) {
-                this.skip();
-                return;
+                skipPrecondition(this, `Version '${config.versionName}' not found`);
             }
 
             const cycle = await projectsPage.getCycle(version, config.cycleName);
             if (!cycle) {
-                this.skip();
-                return;
+                skipPrecondition(this, `Cycle '${config.cycleName}' not found`);
             }
 
             // Click cycle to trigger configuration prompt
@@ -293,8 +297,7 @@ describe("Context Configuration UI Tests", function () {
 
             if (!fs.existsSync(configPath)) {
                 logger.info("Config", "No existing config file to verify");
-                this.skip();
-                return;
+                skipPrecondition(this, "No existing ls.config.json file to verify");
             }
 
             const config = readLsConfig(workspacePath);
@@ -322,23 +325,20 @@ describe("Context Configuration UI Tests", function () {
 
             const projectsSection = await getProjectsSection();
             if (!projectsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found");
             }
 
             await waitForTreeItems(projectsSection, driver);
 
             const project = await projectsPage.getProject(projectsSection, config.projectName);
             if (!project) {
-                this.skip();
-                return;
+                skipPrecondition(this, `Project '${config.projectName}' not found`);
             }
 
             const contextMenu = await openContextMenu(project, driver);
             if (!contextMenu) {
                 logger.warn("ContextMenu", "Could not open context menu on project");
-                this.skip();
-                return;
+                skipError(this, "Could not open context menu on project");
             }
 
             const hasSetActive = await hasMenuItem(contextMenu, "Set as Active");
@@ -358,29 +358,25 @@ describe("Context Configuration UI Tests", function () {
 
             const projectsSection = await getProjectsSection();
             if (!projectsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found");
             }
 
             await waitForTreeItems(projectsSection, driver);
 
             const project = await projectsPage.getProject(projectsSection, config.projectName);
             if (!project) {
-                this.skip();
-                return;
+                skipPrecondition(this, `Project '${config.projectName}' not found`);
             }
 
             const version = await projectsPage.getVersion(project, config.versionName);
             if (!version) {
-                this.skip();
-                return;
+                skipPrecondition(this, `Version '${config.versionName}' not found`);
             }
 
             const contextMenu = await openContextMenu(version, driver);
             if (!contextMenu) {
                 logger.warn("ContextMenu", "Could not open context menu on version");
-                this.skip();
-                return;
+                skipError(this, "Could not open context menu on version");
             }
 
             const hasSetActive = await hasMenuItem(contextMenu, "Set as Active");
@@ -400,22 +396,19 @@ describe("Context Configuration UI Tests", function () {
 
             const projectsSection = await getProjectsSection();
             if (!projectsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found");
             }
 
             await waitForTreeItems(projectsSection, driver);
 
             const project = await projectsPage.getProject(projectsSection, config.projectName);
             if (!project) {
-                this.skip();
-                return;
+                skipPrecondition(this, `Project '${config.projectName}' not found`);
             }
 
             const contextMenu = await openContextMenu(project, driver);
             if (!contextMenu) {
-                this.skip();
-                return;
+                skipError(this, "Could not open context menu for active project selection");
             }
 
             // Use the full menu item label "Set as Active Project"
@@ -423,8 +416,7 @@ describe("Context Configuration UI Tests", function () {
             if (!projectActivationClicked) {
                 logger.info("ContextMenu", "Could not click 'Set as Active Project' - trying partial match");
                 await closeContextMenu(contextMenu);
-                this.skip();
-                return;
+                skipError(this, "Could not click 'Set as Active Project' context menu item");
             }
 
             await applySlowMotion(driver);
@@ -496,8 +488,7 @@ describe("Context Configuration UI Tests", function () {
 
             const projectsSection = await getProjectsSection();
             if (!projectsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found");
             }
 
             await waitForTreeItems(projectsSection, driver);
@@ -505,8 +496,7 @@ describe("Context Configuration UI Tests", function () {
             const activeProject = await projectsPage.getProject(projectsSection, projectName);
             if (!activeProject) {
                 logger.warn("PinIcon", `Project "${projectName}" not found in tree`);
-                this.skip();
-                return;
+                skipPrecondition(this, `Project '${projectName}' not found in tree`);
             }
 
             const hasPin = await hasPinIcon(activeProject, driver);
@@ -525,23 +515,20 @@ describe("Context Configuration UI Tests", function () {
 
             const projectsSection = await getProjectsSection();
             if (!projectsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found");
             }
 
             await waitForTreeItems(projectsSection, driver);
 
             const activeProject = await projectsPage.getProject(projectsSection, projectName);
             if (!activeProject) {
-                this.skip();
-                return;
+                skipPrecondition(this, `Project '${projectName}' not found in tree`);
             }
 
             const activeTov = await projectsPage.getVersion(activeProject, tovName);
             if (!activeTov) {
                 logger.warn("PinIcon", `TOV "${tovName}" not found`);
-                this.skip();
-                return;
+                skipPrecondition(this, `TOV '${tovName}' not found`);
             }
 
             const hasPin = await hasPinIcon(activeTov, driver);

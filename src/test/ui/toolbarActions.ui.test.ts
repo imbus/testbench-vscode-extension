@@ -23,11 +23,19 @@ import { navigateToTestView } from "./utils/navigationUtils";
 import { clickToolbarButton, getToolbarButtonLabels, hasToolbarButton } from "./utils/toolbarUtils";
 import { getActionButtonLabels } from "./utils/treeItemUtils";
 import { getTestData, logTestDataConfig, hasTestCredentials } from "./config/testConfig";
-import { TestContext, setupTestHooks, ensureLoggedInOrSkip } from "./utils/testHooks";
+import { TestContext, setupTestHooks, ensureLoggedInOrSkip, skipTest } from "./utils/testHooks";
 import { ProjectsViewPage } from "./pages/ProjectsViewPage";
 import { TestThemesPage } from "./pages/TestThemesPage";
 
 const logger = getTestLogger();
+
+function skipPrecondition(context: Mocha.Context, reason: string): never {
+    return skipTest(context, "precondition", reason);
+}
+
+function skipError(context: Mocha.Context, reason: string): never {
+    return skipTest(context, "error", reason);
+}
 
 describe("Toolbar Actions UI Tests", function () {
     const ctx: TestContext = {} as TestContext;
@@ -71,8 +79,7 @@ describe("Toolbar Actions UI Tests", function () {
 
             const projectsSection = await getProjectsSection();
             if (!projectsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found");
             }
 
             const toolbarButtonLabelsOfProjects = await getToolbarButtonLabels(projectsSection, driver);
@@ -107,8 +114,7 @@ describe("Toolbar Actions UI Tests", function () {
 
             const projectsSection = await getProjectsSection();
             if (!projectsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found");
             }
 
             // Refresh button in projects view has title "Refresh Projects"
@@ -130,8 +136,7 @@ describe("Toolbar Actions UI Tests", function () {
 
             const projectsSection = await getProjectsSection();
             if (!projectsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found");
             }
 
             // Search button in projects view has title "Search"
@@ -153,8 +158,7 @@ describe("Toolbar Actions UI Tests", function () {
 
             const projectsSection = await getProjectsSection();
             if (!projectsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found");
             }
 
             const toolbarButtonLabelsOfProjects = await getToolbarButtonLabels(projectsSection, driver);
@@ -176,8 +180,7 @@ describe("Toolbar Actions UI Tests", function () {
 
             const projectsSection = await getProjectsSection();
             if (!projectsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found");
             }
 
             await waitForTreeItems(projectsSection, driver);
@@ -186,8 +189,7 @@ describe("Toolbar Actions UI Tests", function () {
             const isRefreshButtonClicked = await clickToolbarButton(projectsSection, "refresh", driver);
             if (!isRefreshButtonClicked) {
                 logger.warn("Toolbar", "Could not click Refresh button");
-                this.skip();
-                return;
+                skipError(this, "Could not click Refresh toolbar button");
             }
 
             await applySlowMotion(driver);
@@ -225,22 +227,19 @@ describe("Toolbar Actions UI Tests", function () {
 
             const projectsSection = await getProjectsSection();
             if (!projectsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found");
             }
 
             await waitForTreeItems(projectsSection, driver);
 
             const project = await projectsPage.getProject(projectsSection, config.projectName);
             if (!project) {
-                this.skip();
-                return;
+                skipPrecondition(this, `Project '${config.projectName}' not found`);
             }
 
             const version = await projectsPage.getVersion(project, config.versionName);
             if (!version) {
-                this.skip();
-                return;
+                skipPrecondition(this, `Version '${config.versionName}' not found`);
             }
 
             const actions = await getActionButtonLabels(version, driver);
@@ -267,22 +266,19 @@ describe("Toolbar Actions UI Tests", function () {
 
             const projectsSection = await getProjectsSection();
             if (!projectsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found");
             }
 
             await waitForTreeItems(projectsSection, driver);
 
             const project = await projectsPage.getProject(projectsSection, config.projectName);
             if (!project) {
-                this.skip();
-                return;
+                skipPrecondition(this, `Project '${config.projectName}' not found`);
             }
 
             const version = await projectsPage.getVersion(project, config.versionName);
             if (!version) {
-                this.skip();
-                return;
+                skipPrecondition(this, `Version '${config.versionName}' not found`);
             }
 
             const actions = await getActionButtonLabels(version, driver);
@@ -307,28 +303,24 @@ describe("Toolbar Actions UI Tests", function () {
 
             const projectsSection = await getProjectsSection();
             if (!projectsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found");
             }
 
             await waitForTreeItems(projectsSection, driver);
 
             const project = await projectsPage.getProject(projectsSection, config.projectName);
             if (!project) {
-                this.skip();
-                return;
+                skipPrecondition(this, `Project '${config.projectName}' not found`);
             }
 
             const version = await projectsPage.getVersion(project, config.versionName);
             if (!version) {
-                this.skip();
-                return;
+                skipPrecondition(this, `Version '${config.versionName}' not found`);
             }
 
             const cycle = await projectsPage.getCycle(version, config.cycleName);
             if (!cycle) {
-                this.skip();
-                return;
+                skipPrecondition(this, `Cycle '${config.cycleName}' not found`);
             }
 
             const actions = await getActionButtonLabels(cycle, driver);
@@ -360,8 +352,7 @@ describe("Toolbar Actions UI Tests", function () {
             const testThemesSection = await getTestThemesSection();
             if (!testThemesSection) {
                 logger.info("Toolbar", "Test Themes section not found");
-                this.skip();
-                return;
+                skipPrecondition(this, "Test Themes section not found");
             }
 
             const labels = await getToolbarButtonLabels(testThemesSection, driver);
@@ -387,8 +378,7 @@ describe("Toolbar Actions UI Tests", function () {
 
             const testThemesSection = await getTestThemesSection();
             if (!testThemesSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test Themes section not found");
             }
 
             const hasRefresh = await hasToolbarButton(testThemesSection, "Refresh", driver);
@@ -412,8 +402,7 @@ describe("Toolbar Actions UI Tests", function () {
 
             const testThemesSection = await getTestThemesSection();
             if (!testThemesSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test Themes section not found");
             }
 
             const isOpenProjectsViewClicked = await testThemesPage.clickOpenProjectsView();
@@ -453,14 +442,12 @@ describe("Toolbar Actions UI Tests", function () {
 
             if (!hasTestCredentials()) {
                 logger.info("Toolbar", "No test credentials for logout test");
-                this.skip();
-                return;
+                skipPrecondition(this, "No test credentials for logout test");
             }
 
             const projectsSection = await getProjectsSection();
             if (!projectsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found");
             }
 
             const logoutClicked = await clickToolbarButton(projectsSection, "logout", driver);

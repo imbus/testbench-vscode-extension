@@ -31,13 +31,17 @@ import {
 } from "./utils/testUtils";
 import { doubleClickTreeItem, waitForTreeItemButton } from "./utils/treeViewUtils";
 import { getTestData, logTestDataConfig } from "./config/testConfig";
-import { TestContext, setupTestHooks } from "./utils/testHooks";
+import { TestContext, setupTestHooks, skipTest } from "./utils/testHooks";
 import { findResourceSubdivision } from "./utils/navigationUtils";
 import { ProjectsViewPage } from "./pages/ProjectsViewPage";
 import { TestThemesPage } from "./pages/TestThemesPage";
 import { TestElementsPage } from "./pages/TestElementsPage";
 
 const logger = getTestLogger();
+
+function skipError(context: Mocha.Context, reason: string): never {
+    return skipTest(context, "error", reason);
+}
 
 describe("Resource Creation Flow UI Tests", function () {
     const ctx: TestContext = {} as TestContext;
@@ -783,8 +787,7 @@ describe("Resource Creation Flow UI Tests", function () {
 
             if (!contentDeleted) {
                 logger.error("Phase4", "ERROR: Failed to delete content after all retry attempts");
-                this.skip();
-                return;
+                skipError(this, "Failed to delete content after all retry attempts");
             }
 
             logger.debug("Phase4", "Waiting for CodeLens to stabilize after deletion...");
@@ -794,19 +797,19 @@ describe("Resource Creation Flow UI Tests", function () {
         const codeLensAppeared = await waitForCodeLens(driver, "Pull changes from TestBench");
         if (!codeLensAppeared) {
             logger.warn("Phase4", "CodeLens 'Pull changes from TestBench' did not appear");
-            this.skip();
+            skipError(this, "CodeLens 'Pull changes from TestBench' did not appear");
         }
 
         const codeLensClicked = await clickCodeLens(driver, "Pull changes from TestBench", 0);
         if (!codeLensClicked) {
             logger.warn("Phase4", "Failed to click CodeLens 'Pull changes from TestBench'");
-            this.skip();
+            skipError(this, "Failed to click CodeLens 'Pull changes from TestBench'");
         }
 
         const refactorPreviewOpened = await waitForRefactorPreview(driver);
         if (!refactorPreviewOpened) {
             logger.warn("Phase4", "Refactor Preview did not open after clicking CodeLens");
-            this.skip();
+            skipError(this, "Refactor Preview did not open after clicking CodeLens");
         }
 
         const checkboxReady = await ensureRefactorPreviewItemChecked(driver, expectedResourceFileName);
@@ -817,7 +820,7 @@ describe("Resource Creation Flow UI Tests", function () {
         const applyClicked = await clickRefactorPreviewApply(driver);
         if (!applyClicked) {
             logger.warn("Phase4", "Failed to click Apply button in Refactor Preview");
-            this.skip();
+            skipError(this, "Failed to click Apply button in Refactor Preview");
         }
 
         logger.info("Phase4", "Synchronization complete.");

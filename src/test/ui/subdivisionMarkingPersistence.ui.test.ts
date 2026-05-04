@@ -24,10 +24,14 @@ import { waitForTreeItemButton } from "./utils/treeViewUtils";
 import { hasActionButton, collectTreeItemLabels } from "./utils/treeItemUtils";
 import { navigateToTestView } from "./utils/navigationUtils";
 import { getTestData, logTestDataConfig, hasTestCredentials } from "./config/testConfig";
-import { TestContext, setupTestHooks } from "./utils/testHooks";
+import { TestContext, setupTestHooks, skipTest } from "./utils/testHooks";
 import { TestElementsPage } from "./pages/TestElementsPage";
 
 const logger = getTestLogger();
+
+function skipPrecondition(context: Mocha.Context, reason: string): never {
+    return skipTest(context, "precondition", reason);
+}
 
 /**
  * Icon name prefixes used in subdivision tree items.
@@ -455,8 +459,7 @@ describe("Subdivision Marking Persistence UI Tests", function () {
     before(async function () {
         if (!hasTestCredentials()) {
             logger.warn("Setup", "Test credentials not available - skipping test suite");
-            this.skip();
-            return;
+            skipPrecondition(this, "Test credentials not available - skipping test suite");
         }
 
         const driver = getDriver();
@@ -603,8 +606,7 @@ describe("Subdivision Marking Persistence UI Tests", function () {
 
             if (!targetSubdivision) {
                 logger.warn("Phase2", "No unmarked resource subdivision found - all resources may already be created");
-                this.skip();
-                return;
+                skipPrecondition(this, "No unmarked resource subdivision found");
             }
 
             // Capture initial marking state (this clicks the item)
@@ -718,8 +720,7 @@ describe("Subdivision Marking Persistence UI Tests", function () {
 
             if (!createdResourceSubdivisionLabel) {
                 logger.warn("Reload", "No resource was created in previous test - skipping");
-                this.skip();
-                return;
+                skipPrecondition(this, "No resource was created in previous test");
             }
 
             logger.info("Reload", "Reloading VS Code window...");
@@ -767,8 +768,7 @@ describe("Subdivision Marking Persistence UI Tests", function () {
 
             if (!createdResourceSubdivisionLabel) {
                 logger.warn("LogoutLogin", "No resource was created in previous test - skipping");
-                this.skip();
-                return;
+                skipPrecondition(this, "No resource was created in previous test");
             }
 
             // Logout
@@ -824,8 +824,7 @@ describe("Subdivision Marking Persistence UI Tests", function () {
 
             if (!createdResourceSubdivisionLabel) {
                 logger.warn("Refresh", "No resource was created in previous test - skipping");
-                this.skip();
-                return;
+                skipPrecondition(this, "No resource was created in previous test");
             }
 
             // Navigate to Test Elements view
@@ -874,8 +873,7 @@ describe("Subdivision Marking Persistence UI Tests", function () {
         it("should verify all persistence scenarios passed", async function () {
             if (!createdResourceSubdivisionLabel) {
                 logger.warn("Summary", "No resource was created - test suite did not run completely");
-                this.skip();
-                return;
+                skipPrecondition(this, "No resource was created - test suite did not run completely");
             }
 
             logger.info("Summary", "=".repeat(60));

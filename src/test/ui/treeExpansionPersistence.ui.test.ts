@@ -22,13 +22,17 @@ import {
 } from "./utils/testUtils";
 import { clickToolbarButton } from "./utils/toolbarUtils";
 import { getTestData, logTestDataConfig, hasTestCredentials } from "./config/testConfig";
-import { TestContext, setupTestHooks } from "./utils/testHooks";
+import { TestContext, setupTestHooks, skipTest } from "./utils/testHooks";
 import { ProjectsViewPage } from "./pages/ProjectsViewPage";
 import { TestThemesPage } from "./pages/TestThemesPage";
 import { TestElementsPage } from "./pages/TestElementsPage";
 import { doubleClickTreeItem } from "./utils/treeViewUtils";
 
 const logger = getTestLogger();
+
+function skipPrecondition(context: Mocha.Context, reason: string): never {
+    return skipTest(context, "precondition", reason);
+}
 
 const TOGGLE_ITEM_COUNT = 3;
 const STATE_RESTORE_DELAY = 2000;
@@ -876,8 +880,7 @@ describe("Tree Expansion State Persistence Tests", function () {
         it("should preserve expansion state after logout/login", async function () {
             const driver = getDriver();
             if (!hasTestCredentials()) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test credentials not available");
             }
 
             const projectsPage = new ProjectsViewPage(driver);
@@ -916,8 +919,7 @@ describe("Tree Expansion State Persistence Tests", function () {
         it("should preserve expansion state after VS Code reload", async function () {
             const driver = getDriver();
             if (!hasTestCredentials()) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test credentials not available");
             }
 
             const projectsPage = new ProjectsViewPage(driver);
@@ -950,8 +952,7 @@ describe("Tree Expansion State Persistence Tests", function () {
         it("should preserve expansion state after tree view refresh", async function () {
             const driver = getDriver();
             if (!hasTestCredentials()) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test credentials not available");
             }
 
             const projectsPage = new ProjectsViewPage(driver);
@@ -988,7 +989,7 @@ describe("Tree Expansion State Persistence Tests", function () {
             const navigated = await navigateToTestView(driver, "Test Themes");
             if (!navigated) {
                 logger.warn("Persistence", "Skipping test because Test Themes view navigation failed");
-                this.skip();
+                skipPrecondition(this, "Test Themes view navigation failed");
             }
         });
 
@@ -1002,15 +1003,13 @@ describe("Tree Expansion State Persistence Tests", function () {
         it("should preserve expansion state after logout/login", async function () {
             const driver = getDriver();
             if (!hasTestCredentials()) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test credentials not available");
             }
 
             const testThemesPage = new TestThemesPage(driver);
             const section = await getSection(testThemesPage, driver);
             if (!section) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test Themes section not found");
             }
 
             await waitForTreeItems(section, driver);
@@ -1041,15 +1040,13 @@ describe("Tree Expansion State Persistence Tests", function () {
         it("should preserve expansion state after VS Code reload", async function () {
             const driver = getDriver();
             if (!hasTestCredentials()) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test credentials not available");
             }
 
             const testThemesPage = new TestThemesPage(driver);
             const section = await getSection(testThemesPage, driver);
             if (!section) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test Themes section not found");
             }
 
             await waitForTreeItems(section, driver);
@@ -1076,15 +1073,13 @@ describe("Tree Expansion State Persistence Tests", function () {
         it("should preserve expansion state after tree view refresh", async function () {
             const driver = getDriver();
             if (!hasTestCredentials()) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test credentials not available");
             }
 
             const testThemesPage = new TestThemesPage(driver);
             const section = await getSection(testThemesPage, driver);
             if (!section) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test Themes section not found");
             }
 
             await waitForTreeItems(section, driver);
@@ -1114,7 +1109,7 @@ describe("Tree Expansion State Persistence Tests", function () {
             const navigated = await navigateToTestView(driver, "Test Elements");
             if (!navigated) {
                 logger.warn("Persistence", "Skipping test because Test Elements view navigation failed");
-                this.skip();
+                skipPrecondition(this, "Test Elements view navigation failed");
             }
         });
 
@@ -1128,15 +1123,13 @@ describe("Tree Expansion State Persistence Tests", function () {
         it("should preserve expansion state after logout/login", async function () {
             const driver = getDriver();
             if (!hasTestCredentials()) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test credentials not available");
             }
 
             const testElementsPage = new TestElementsPage(driver);
             const section = await getSection(testElementsPage, driver);
             if (!section) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test Elements section not found");
             }
 
             await waitForTreeItems(section, driver);
@@ -1164,15 +1157,13 @@ describe("Tree Expansion State Persistence Tests", function () {
         it("should preserve expansion state after VS Code reload", async function () {
             const driver = getDriver();
             if (!hasTestCredentials()) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test credentials not available");
             }
 
             const testElementsPage = new TestElementsPage(driver);
             const section = await getSection(testElementsPage, driver);
             if (!section) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test Elements section not found");
             }
 
             await waitForTreeItems(section, driver);
@@ -1201,15 +1192,13 @@ describe("Tree Expansion State Persistence Tests", function () {
 
             const driver = getDriver();
             if (!hasTestCredentials()) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test credentials not available");
             }
 
             const testElementsPage = new TestElementsPage(driver);
             const section = await getSection(testElementsPage, driver);
             if (!section) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test Elements section not found");
             }
 
             await waitForTreeItems(section, driver);

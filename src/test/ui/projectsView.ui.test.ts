@@ -7,9 +7,17 @@ import { expect } from "chai";
 import { SideBarView, TreeItem } from "vscode-extension-tester";
 import { applySlowMotion, waitForTreeItems, clickNotificationButton, cleanupWorkspace } from "./utils/testUtils";
 import { getTestData, logTestDataConfig } from "./config/testConfig";
-import { TestContext, setupTestHooks, collapseAllTreeItems } from "./utils/testHooks";
+import { TestContext, setupTestHooks, collapseAllTreeItems, skipTest } from "./utils/testHooks";
 import { getTestLogger } from "./utils/testLogger";
 import { ProjectsViewPage } from "./pages/ProjectsViewPage";
+
+function skipPrecondition(context: Mocha.Context, reason: string): never {
+    return skipTest(context, "precondition", reason);
+}
+
+function skipError(context: Mocha.Context, reason: string): never {
+    return skipTest(context, "error", reason);
+}
 
 describe("Projects View UI Tests", function () {
     const ctx: TestContext = {} as TestContext;
@@ -72,8 +80,7 @@ describe("Projects View UI Tests", function () {
             const logger = getTestLogger();
             if (!projectsSection) {
                 logger.warn("ProjectsView", "Projects section not found in sidebar");
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found in sidebar");
             }
 
             logger.info("ProjectsView", "Found Projects section");
@@ -81,8 +88,7 @@ describe("Projects View UI Tests", function () {
             const itemsLoaded = await waitForTreeItems(projectsSection, driver);
             if (!itemsLoaded) {
                 logger.warn("ProjectsView", "Tree items did not load in time");
-                this.skip();
-                return;
+                skipError(this, "Tree items did not load in time");
             }
 
             const visibleProjectTreeItems = (await projectsSection.getVisibleItems()) as TreeItem[];
@@ -127,15 +133,13 @@ describe("Projects View UI Tests", function () {
             const projectsSection = await projectsPage.getSection(content);
             if (!projectsSection) {
                 logger.warn("ProjectsView", "Projects section not found in sidebar");
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found in sidebar");
             }
 
             const areProjectItemsLoaded = await waitForTreeItems(projectsSection, driver);
             if (!areProjectItemsLoaded) {
                 logger.warn("ProjectsView", "Tree items did not load in time");
-                this.skip();
-                return;
+                skipError(this, "Tree items did not load in time");
             }
 
             const visibleProjectItems = (await projectsSection.getVisibleItems()) as TreeItem[];
@@ -212,22 +216,19 @@ describe("Projects View UI Tests", function () {
             const projectsSection = await projectsPage.getSection(content);
             if (!projectsSection) {
                 logger.warn("ProjectsView", "Projects section not found in sidebar");
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found in sidebar");
             }
 
             const areProjectItemsLoaded = await waitForTreeItems(projectsSection, driver);
             if (!areProjectItemsLoaded) {
                 logger.warn("ProjectsView", "Tree items did not load in time");
-                this.skip();
-                return;
+                skipError(this, "Tree items did not load in time");
             }
 
             const targetProject = await projectsPage.getProject(projectsSection, testData.projectName);
             if (!targetProject) {
                 logger.warn("ProjectsView", `Project "${testData.projectName}" not found`);
-                this.skip();
-                return;
+                skipPrecondition(this, `Project '${testData.projectName}' not found`);
             }
 
             logger.info("ProjectsView", `Found project "${testData.projectName}"`);
@@ -243,8 +244,7 @@ describe("Projects View UI Tests", function () {
 
             if (!targetVersion) {
                 logger.warn("ProjectsView", "No version found under target project");
-                this.skip();
-                return;
+                skipPrecondition(this, "No version found under target project");
             }
 
             const resolvedVersionLabel = await targetVersion.getLabel();
@@ -261,8 +261,7 @@ describe("Projects View UI Tests", function () {
 
             if (!targetCycle) {
                 logger.warn("ProjectsView", "No cycle found under target version");
-                this.skip();
-                return;
+                skipPrecondition(this, "No cycle found under target version");
             }
 
             const resolvedCycleLabel = await targetCycle.getLabel();
@@ -281,8 +280,7 @@ describe("Projects View UI Tests", function () {
 
             if (!notificationClicked) {
                 logger.warn("ProjectsView", "Failed to click Create button in notification");
-                this.skip();
-                return;
+                skipError(this, "Failed to click Create button in configuration notification");
             }
             logger.info("ProjectsView", "Test completed successfully");
         });

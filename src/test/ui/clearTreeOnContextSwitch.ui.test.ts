@@ -18,12 +18,20 @@ import {
 import { collectTreeItemLabels } from "./utils/treeItemUtils";
 import { doubleClickTreeItem } from "./utils/treeViewUtils";
 import { getTestData, logTestDataConfig } from "./config/testConfig";
-import { TestContext, setupTestHooks } from "./utils/testHooks";
+import { TestContext, setupTestHooks, skipTest } from "./utils/testHooks";
 import { ProjectsViewPage } from "./pages/ProjectsViewPage";
 import { TestThemesPage } from "./pages/TestThemesPage";
 import { navigateToProjectsView } from "./utils/navigationUtils";
 
 const logger = getTestLogger();
+
+function skipPrecondition(context: Mocha.Context, reason: string): never {
+    return skipTest(context, "precondition", reason);
+}
+
+function skipError(context: Mocha.Context, reason: string): never {
+    return skipTest(context, "error", reason);
+}
 
 interface OpenCycleResult {
     title: string;
@@ -193,32 +201,27 @@ describe("Clear Tree On Context Switch Behavior", function () {
         const navResult = await navigateToProjectsView(driver);
         if (!navResult.success) {
             logger.warn("ClearSwitch", `Failed to navigate to Projects view: ${navResult.error}`);
-            this.skip();
-            return;
+            skipError(this, `Failed to navigate to Projects view: ${navResult.error}`);
         }
 
         const projectsSection = await getProjectsSection(projectsPage);
         if (!projectsSection) {
-            this.skip();
-            return;
+            skipPrecondition(this, "Projects section not found");
         }
 
         const projectsLoaded = await waitForTreeItems(projectsSection, driver, UITimeouts.LONG);
         if (!projectsLoaded) {
-            this.skip();
-            return;
+            skipPrecondition(this, "Projects tree items did not load in time");
         }
 
         const project = await projectsPage.getProject(projectsSection, testData.projectName);
         if (!project) {
-            this.skip();
-            return;
+            skipPrecondition(this, `Project '${testData.projectName}' not found`);
         }
 
         const version = await projectsPage.getVersion(project, testData.versionName);
         if (!version) {
-            this.skip();
-            return;
+            skipPrecondition(this, `Version '${testData.versionName}' not found`);
         }
 
         const cycles = await version.getChildren();
@@ -226,8 +229,7 @@ describe("Clear Tree On Context Switch Behavior", function () {
 
         if (cycleLabels.length < 2) {
             logger.warn("ClearSwitch", "Need at least 2 cycles to validate context switch behavior. Skipping test.");
-            this.skip();
-            return;
+            skipPrecondition(this, "Need at least 2 cycles to validate context switch behavior");
         }
 
         const firstCycle = cycleLabels.includes(testData.cycleName) ? testData.cycleName : cycleLabels[0];
@@ -235,8 +237,7 @@ describe("Clear Tree On Context Switch Behavior", function () {
 
         if (!secondCycle) {
             logger.warn("ClearSwitch", "Could not identify a second distinct cycle. Skipping test.");
-            this.skip();
-            return;
+            skipPrecondition(this, "Could not identify a second distinct cycle");
         }
 
         logger.info("ClearSwitch", `Using cycles: first='${firstCycle}', second='${secondCycle}'`);
@@ -248,8 +249,7 @@ describe("Clear Tree On Context Switch Behavior", function () {
             firstCycle
         );
         if (!firstCycleOpenResult) {
-            this.skip();
-            return;
+            skipPrecondition(this, `Could not open cycle '${firstCycle}' and collect test theme labels`);
         }
 
         expect(firstCycleOpenResult.title).to.include(firstCycle);
@@ -265,8 +265,7 @@ describe("Clear Tree On Context Switch Behavior", function () {
         const backToProjects = await navigateToProjectsView(driver);
         if (!backToProjects.success) {
             logger.warn("ClearSwitch", `Failed to return to Projects view: ${backToProjects.error}`);
-            this.skip();
-            return;
+            skipError(this, `Failed to return to Projects view: ${backToProjects.error}`);
         }
 
         const secondCycleOpenResult = await openCycleAndCollectTestThemeLabels(
@@ -276,8 +275,7 @@ describe("Clear Tree On Context Switch Behavior", function () {
             secondCycle
         );
         if (!secondCycleOpenResult) {
-            this.skip();
-            return;
+            skipPrecondition(this, `Could not open cycle '${secondCycle}' and collect test theme labels`);
         }
 
         expect(secondCycleOpenResult.title).to.include(secondCycle);

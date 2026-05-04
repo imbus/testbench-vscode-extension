@@ -17,8 +17,17 @@ import {
     UITimeouts
 } from "./utils/testUtils";
 import { getTestCredentials, getCredentialReadinessErrorMessage, hasTestCredentials } from "./config/testConfig";
-import { TestContext, setupLoginWebviewTestHooks } from "./utils/testHooks";
+import { TestContext, setupLoginWebviewTestHooks, skipTest } from "./utils/testHooks";
 import { getTestLogger } from "./utils/testLogger";
+
+function handleWebviewPreconditionSkip(context: Mocha.Context, error: unknown): never {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("skipped")) {
+        return skipTest(context, "precondition", message);
+    }
+
+    throw error;
+}
 
 /**
  * Wrapper function to execute test code within webview context with proper cleanup.
@@ -136,11 +145,7 @@ describe("Login Webview - Connection Management Tests", function () {
                 },
                 false // No credentials needed for this check
             ).catch((error) => {
-                if (error.message.includes("skipped")) {
-                    this.skip();
-                } else {
-                    throw error;
-                }
+                handleWebviewPreconditionSkip(this, error);
             });
         });
     });
@@ -166,11 +171,7 @@ describe("Login Webview - Connection Management Tests", function () {
                 },
                 false
             ).catch((error) => {
-                if (error.message.includes("skipped")) {
-                    this.skip();
-                } else {
-                    throw error;
-                }
+                handleWebviewPreconditionSkip(this, error);
             });
         });
 
@@ -208,11 +209,7 @@ describe("Login Webview - Connection Management Tests", function () {
                 },
                 true // requires credentials for other fields
             ).catch((error) => {
-                if (error.message.includes("skipped")) {
-                    this.skip();
-                } else {
-                    throw error;
-                }
+                handleWebviewPreconditionSkip(this, error);
             });
         });
     });
@@ -263,11 +260,7 @@ describe("Login Webview - Connection Management Tests", function () {
                 },
                 true
             ).catch((error) => {
-                if (error.message.includes("skipped")) {
-                    this.skip();
-                } else {
-                    throw error;
-                }
+                handleWebviewPreconditionSkip(this, error);
             });
         });
 
@@ -305,11 +298,7 @@ describe("Login Webview - Connection Management Tests", function () {
                 },
                 true
             ).catch((error) => {
-                if (error.message.includes("skipped")) {
-                    this.skip();
-                } else {
-                    throw error;
-                }
+                handleWebviewPreconditionSkip(this, error);
             });
         });
     });
@@ -359,11 +348,7 @@ describe("Login Webview - Connection Management Tests", function () {
                 },
                 true
             ).catch((error) => {
-                if (error.message.includes("skipped")) {
-                    this.skip();
-                } else {
-                    throw error;
-                }
+                handleWebviewPreconditionSkip(this, error);
             });
         });
 
@@ -426,11 +411,7 @@ describe("Login Webview - Connection Management Tests", function () {
                 },
                 true
             ).catch((error) => {
-                if (error.message.includes("skipped")) {
-                    this.skip();
-                } else {
-                    throw error;
-                }
+                handleWebviewPreconditionSkip(this, error);
             });
         });
 
@@ -489,11 +470,7 @@ describe("Login Webview - Connection Management Tests", function () {
                 },
                 true
             ).catch((error) => {
-                if (error.message.includes("skipped")) {
-                    this.skip();
-                } else {
-                    throw error;
-                }
+                handleWebviewPreconditionSkip(this, error);
             });
         });
     });
@@ -559,11 +536,7 @@ describe("Login Webview - Connection Management Tests", function () {
                 },
                 true
             ).catch((error) => {
-                if (error.message.includes("skipped")) {
-                    this.skip();
-                } else {
-                    throw error;
-                }
+                handleWebviewPreconditionSkip(this, error);
             });
         });
     });
@@ -607,11 +580,7 @@ describe("Login Webview - Connection Management Tests", function () {
                 },
                 true
             ).catch((error) => {
-                if (error.message.includes("skipped")) {
-                    this.skip();
-                } else {
-                    throw error;
-                }
+                handleWebviewPreconditionSkip(this, error);
             });
         });
     });
@@ -670,11 +639,7 @@ describe("Login Webview - Connection Management Tests", function () {
                 },
                 true
             ).catch((error) => {
-                if (error.message.includes("skipped")) {
-                    this.skip();
-                } else {
-                    throw error;
-                }
+                handleWebviewPreconditionSkip(this, error);
             });
         });
 
@@ -718,11 +683,7 @@ describe("Login Webview - Connection Management Tests", function () {
                 },
                 true
             ).catch((error) => {
-                if (error.message.includes("skipped")) {
-                    this.skip();
-                } else {
-                    throw error;
-                }
+                handleWebviewPreconditionSkip(this, error);
             });
         });
     });

@@ -17,11 +17,19 @@ import { waitForTreeItems } from "./utils/testUtils";
 import { navigateToTestView } from "./utils/navigationUtils";
 import { clickSearchButton, enterSearchText, clearSearch, getVisibleItemCount } from "./utils/toolbarUtils";
 import { getTestData, logTestDataConfig } from "./config/testConfig";
-import { TestContext, setupTestHooks } from "./utils/testHooks";
+import { TestContext, setupTestHooks, skipTest } from "./utils/testHooks";
 import { ProjectsViewPage } from "./pages/ProjectsViewPage";
 import { TestThemesPage } from "./pages/TestThemesPage";
 
 const logger = getTestLogger();
+
+function skipPrecondition(context: Mocha.Context, reason: string): never {
+    return skipTest(context, "precondition", reason);
+}
+
+function skipError(context: Mocha.Context, reason: string): never {
+    return skipTest(context, "error", reason);
+}
 
 describe("Search Feature UI Tests", function () {
     const ctx: TestContext = {} as TestContext;
@@ -66,8 +74,7 @@ describe("Search Feature UI Tests", function () {
             const projectsSection = await getProjectsSection();
             if (!projectsSection) {
                 logger.warn("Search", "Projects section not found");
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found");
             }
 
             await waitForTreeItems(projectsSection, driver);
@@ -79,8 +86,7 @@ describe("Search Feature UI Tests", function () {
             const isSearchActivated = await clickSearchButton(projectsSection, driver);
             if (!isSearchActivated) {
                 logger.warn("Search", "Could not activate search button");
-                this.skip();
-                return;
+                skipError(this, "Could not activate search button");
             }
 
             logger.info("Search", "Search activated successfully");
@@ -99,8 +105,7 @@ describe("Search Feature UI Tests", function () {
 
             const projectsSection = await getProjectsSection();
             if (!projectsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found");
             }
 
             await waitForTreeItems(projectsSection, driver);
@@ -109,8 +114,7 @@ describe("Search Feature UI Tests", function () {
 
             const isSearchActivated = await clickSearchButton(projectsSection, driver);
             if (!isSearchActivated) {
-                this.skip();
-                return;
+                skipError(this, "Could not activate search button");
             }
 
             // Enter partial project name
@@ -118,8 +122,7 @@ describe("Search Feature UI Tests", function () {
             const textEntered = await enterSearchText(driver, searchText);
             if (!textEntered) {
                 logger.warn("Search", "Could not enter search text");
-                this.skip();
-                return;
+                skipError(this, "Could not enter search text");
             }
 
             await driver.sleep(500);
@@ -148,8 +151,7 @@ describe("Search Feature UI Tests", function () {
 
             const projectsSection = await getProjectsSection();
             if (!projectsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found");
             }
 
             await waitForTreeItems(projectsSection, driver);
@@ -158,8 +160,7 @@ describe("Search Feature UI Tests", function () {
 
             const isSearchActivated = await clickSearchButton(projectsSection, driver);
             if (!isSearchActivated) {
-                this.skip();
-                return;
+                skipError(this, "Could not activate search button");
             }
 
             // Search for non-existent item
@@ -196,16 +197,14 @@ describe("Search Feature UI Tests", function () {
 
             const projectsSection = await getProjectsSection();
             if (!projectsSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found");
             }
 
             await waitForTreeItems(projectsSection, driver);
 
             const isSearchActivated = await clickSearchButton(projectsSection, driver);
             if (!isSearchActivated) {
-                this.skip();
-                return;
+                skipError(this, "Could not activate search button");
             }
 
             await enterSearchText(driver, config.projectName);
@@ -253,8 +252,7 @@ describe("Search Feature UI Tests", function () {
             const testThemesSection = await getTestThemesSection();
             if (!testThemesSection) {
                 logger.warn("Search", "Test Themes section not found");
-                this.skip();
-                return;
+                skipPrecondition(this, "Test Themes section not found");
             }
 
             await waitForTreeItems(testThemesSection, driver);
@@ -265,8 +263,7 @@ describe("Search Feature UI Tests", function () {
             const isSearchActivated = await clickSearchButton(testThemesSection, driver);
             if (!isSearchActivated) {
                 logger.warn("Search", "Could not activate search in Test Themes");
-                this.skip();
-                return;
+                skipError(this, "Could not activate search in Test Themes");
             }
 
             // Search for test theme
@@ -299,16 +296,14 @@ describe("Search Feature UI Tests", function () {
 
             const testThemesSection = await getTestThemesSection();
             if (!testThemesSection) {
-                this.skip();
-                return;
+                skipPrecondition(this, "Test Themes section not found");
             }
 
             await waitForTreeItems(testThemesSection, driver);
 
             const isSearchActivated = await clickSearchButton(testThemesSection, driver);
             if (!isSearchActivated) {
-                this.skip();
-                return;
+                skipError(this, "Could not activate search in Test Themes");
             }
 
             await enterSearchText(driver, config.testThemeName);
@@ -362,8 +357,7 @@ describe("Search Feature UI Tests", function () {
             const projectsSection = await getProjectsSection();
             if (!projectsSection) {
                 logger.warn("Search", "Projects section not found for gear icon test");
-                this.skip();
-                return;
+                skipPrecondition(this, "Projects section not found for gear icon test");
             }
 
             await waitForTreeItems(projectsSection, driver);
@@ -371,8 +365,7 @@ describe("Search Feature UI Tests", function () {
             const isSearchActivated = await clickSearchButton(projectsSection, driver);
             if (!isSearchActivated) {
                 logger.warn("Search", "Could not activate search for gear icon test");
-                this.skip();
-                return;
+                skipError(this, "Could not activate search for gear icon test");
             }
 
             // Check for gear/settings icon in the search widget area
