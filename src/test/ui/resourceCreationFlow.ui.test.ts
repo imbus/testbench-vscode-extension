@@ -11,13 +11,9 @@ import { expect } from "chai";
 import { SideBarView, TreeItem, Key, EditorView, TextEditor } from "vscode-extension-tester";
 import { getTestLogger } from "./utils/testLogger";
 import {
-    applySlowMotion,
-    waitForTreeItems,
     waitForProjectsView,
     waitForTestThemesAndElementsViews,
     handleCycleConfigurationPrompt,
-    UITimeouts,
-    waitForTreeRefresh,
     waitForQuickInput,
     openTestBenchSidebar,
     setCursorPosition,
@@ -29,6 +25,7 @@ import {
     clickRefactorPreviewApply,
     releaseModifierKeys
 } from "./utils/testUtils";
+import { applySlowMotion, waitForTreeItems, UITimeouts, waitForTreeRefresh } from "./utils/waitHelpers";
 import { doubleClickTreeItem, waitForTreeItemButton } from "./utils/treeViewUtils";
 import { getTestData, logTestDataConfig } from "./config/testConfig";
 import { TestContext, setupTestHooks } from "./utils/testHooks";

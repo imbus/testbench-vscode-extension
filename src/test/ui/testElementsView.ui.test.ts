@@ -12,13 +12,8 @@
 import { expect } from "chai";
 import { SideBarView, TreeItem, EditorView } from "vscode-extension-tester";
 import { getTestLogger } from "./utils/testLogger";
-import {
-    applySlowMotion,
-    waitForTreeItems,
-    UITimeouts,
-    waitForFileInEditor,
-    openTestBenchSidebar
-} from "./utils/testUtils";
+import { waitForFileInEditor, openTestBenchSidebar } from "./utils/testUtils";
+import { applySlowMotion, waitForTreeItems, UITimeouts } from "./utils/waitHelpers";
 import { doubleClickTreeItem } from "./utils/treeViewUtils";
 import { navigateToTestView, findResourceSubdivision } from "./utils/navigationUtils";
 import { hasActionButton, getItemIconInfo, collectTreeItemLabels } from "./utils/treeItemUtils";

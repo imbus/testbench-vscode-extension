@@ -5,7 +5,7 @@
  */
 
 import { getTestLogger } from "./testLogger";
-import { applySlowMotion, waitForCondition, UITimeouts } from "./testUtils";
+import { applySlowMotion, waitForCondition, UITimeouts } from "./waitHelpers";
 
 const logger = getTestLogger();
 

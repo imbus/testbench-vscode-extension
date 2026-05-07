@@ -6,7 +6,7 @@
 
 import { TreeItem, By } from "vscode-extension-tester";
 import { getTestLogger } from "./testLogger";
-import { applySlowMotion } from "./testUtils";
+import { applySlowMotion } from "./waitHelpers";
 
 const logger = getTestLogger();
 

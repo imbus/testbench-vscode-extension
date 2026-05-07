@@ -24,17 +24,9 @@ import {
 import { getTestLogger } from "./utils/testLogger";
 import {
     openTestBenchSidebar,
-    applySlowMotion,
-    waitForTreeItems,
     waitForProjectsView,
     waitForTestThemesAndElementsViews,
     handleCycleConfigurationPrompt,
-    UITimeouts,
-    waitForCondition,
-    waitForTooltip,
-    waitForTestingViewReady,
-    waitForTreeRefresh,
-    waitForNotification,
     verifyGeneratedFilesExist,
     countGeneratedRobotFiles,
     getGeneratedRobotFiles,
@@ -42,6 +34,16 @@ import {
     releaseModifierKeys,
     FilesystemVerificationResult
 } from "./utils/testUtils";
+import {
+    applySlowMotion,
+    waitForTreeItems,
+    UITimeouts,
+    waitForCondition,
+    waitForTooltip,
+    waitForTestingViewReady,
+    waitForTreeRefresh,
+    waitForNotification
+} from "./utils/waitHelpers";
 import { getRobotOutputXmlPath, getTestData, logTestDataConfig } from "./config/testConfig";
 import { TestContext, setupTestHooks, skipTest } from "./utils/testHooks";
 import { TestThemesPage } from "./pages/TestThemesPage";

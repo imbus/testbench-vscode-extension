@@ -11,14 +11,13 @@ import { expect } from "chai";
 import { SideBarView, TreeItem, ViewSection, Workbench, By, until, WebDriver } from "vscode-extension-tester";
 import { getTestLogger } from "./utils/testLogger";
 import {
-    waitForTreeItems,
-    UITimeouts,
     waitForFileInEditor,
     openTestBenchSidebar,
     attemptLogout,
     ensureLoggedIn,
     cleanupWorkspace
 } from "./utils/testUtils";
+import { waitForTreeItems, UITimeouts } from "./utils/waitHelpers";
 import { clickToolbarButton } from "./utils/toolbarUtils";
 import { waitForTreeItemButton } from "./utils/treeViewUtils";
 import { collectTreeItemLabels } from "./utils/treeItemUtils";

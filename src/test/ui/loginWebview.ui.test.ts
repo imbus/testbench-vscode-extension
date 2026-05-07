@@ -10,12 +10,11 @@ import {
     findAndSwitchToWebview,
     isWebviewAvailable,
     generateUniqueConnectionLabel,
-    applySlowMotion,
     ConnectionPage,
     ConnectionFormData,
-    ConnectionFormElements,
-    UITimeouts
+    ConnectionFormElements
 } from "./utils/testUtils";
+import { applySlowMotion, UITimeouts } from "./utils/waitHelpers";
 import { getTestCredentials, getCredentialReadinessErrorMessage, hasTestCredentials } from "./config/testConfig";
 import { TestContext, setupLoginWebviewTestHooks, skipTest } from "./utils/testHooks";
 import { getTestLogger } from "./utils/testLogger";

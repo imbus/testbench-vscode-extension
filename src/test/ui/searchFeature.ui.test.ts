@@ -13,7 +13,7 @@
 import { expect } from "chai";
 import { SideBarView } from "vscode-extension-tester";
 import { getTestLogger } from "./utils/testLogger";
-import { waitForTreeItems } from "./utils/testUtils";
+import { waitForTreeItems } from "./utils/waitHelpers";
 import { navigateToTestView } from "./utils/navigationUtils";
 import { clickSearchButton, enterSearchText, clearSearch, getVisibleItemCount } from "./utils/toolbarUtils";
 import { getTestData, logTestDataConfig } from "./config/testConfig";

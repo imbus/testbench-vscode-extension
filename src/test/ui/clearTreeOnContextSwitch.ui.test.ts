@@ -8,13 +8,8 @@
 import { expect } from "chai";
 import { SideBarView, TreeItem } from "vscode-extension-tester";
 import { getTestLogger } from "./utils/testLogger";
-import {
-    waitForTreeItems,
-    waitForTestThemesAndElementsViews,
-    handleCycleConfigurationPrompt,
-    applySlowMotion,
-    UITimeouts
-} from "./utils/testUtils";
+import { waitForTestThemesAndElementsViews, handleCycleConfigurationPrompt } from "./utils/testUtils";
+import { waitForTreeItems, applySlowMotion, UITimeouts } from "./utils/waitHelpers";
 import { collectTreeItemLabels } from "./utils/treeItemUtils";
 import { doubleClickTreeItem } from "./utils/treeViewUtils";
 import { getTestData, logTestDataConfig } from "./config/testConfig";

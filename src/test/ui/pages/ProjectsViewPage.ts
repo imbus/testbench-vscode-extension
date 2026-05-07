@@ -5,7 +5,7 @@
  */
 
 import { WebDriver, TreeItem, ViewSection } from "vscode-extension-tester";
-import { applySlowMotion } from "../utils/testUtils";
+import { applySlowMotion } from "../utils/waitHelpers";
 import { waitForTreeItemChildren } from "../utils/treeViewUtils";
 import { getTestLogger } from "../utils/testLogger";
 import { BasePage } from "./BasePage";

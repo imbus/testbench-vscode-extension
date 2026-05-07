@@ -10,16 +10,14 @@ import { expect } from "chai";
 import { SideBarView, TreeItem, ViewSection, Workbench, By, until, WebDriver } from "vscode-extension-tester";
 import { getTestLogger } from "./utils/testLogger";
 import {
-    applySlowMotion,
-    waitForTreeItems,
     waitForProjectsView,
     waitForTestThemesAndElementsViews,
     handleCycleConfigurationPrompt,
-    UITimeouts,
     attemptLogout,
     ensureLoggedIn,
     openTestBenchSidebar
 } from "./utils/testUtils";
+import { applySlowMotion, waitForTreeItems, UITimeouts } from "./utils/waitHelpers";
 import { clickToolbarButton } from "./utils/toolbarUtils";
 import { getTestData, logTestDataConfig, hasTestCredentials } from "./config/testConfig";
 import { TestContext, setupTestHooks, skipTest } from "./utils/testHooks";

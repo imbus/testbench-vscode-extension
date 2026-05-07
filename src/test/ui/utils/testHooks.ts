@@ -7,7 +7,8 @@
 import * as fs from "fs";
 import * as path from "path";
 import { VSBrowser, WebDriver, EditorView, Workbench, By, until } from "vscode-extension-tester";
-import { openTestBenchSidebar, ensureLoggedIn, UITimeouts, releaseModifierKeys } from "./testUtils";
+import { openTestBenchSidebar, ensureLoggedIn, releaseModifierKeys } from "./testUtils";
+import { UITimeouts } from "./waitHelpers";
 import {
     isSlowMotionEnabled,
     getSlowMotionDelay,

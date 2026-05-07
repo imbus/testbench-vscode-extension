@@ -5,7 +5,8 @@
  */
 
 import { WebDriver, By, WebElement, until } from "vscode-extension-tester";
-import { ConnectionFormElements, UITimeouts, applySlowMotion } from "../utils/testUtils";
+import { ConnectionFormElements } from "../utils/testUtils";
+import { UITimeouts, applySlowMotion } from "../utils/waitHelpers";
 import { getTestLogger } from "../utils/testLogger";
 
 /**

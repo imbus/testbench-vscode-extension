@@ -13,7 +13,7 @@ import { SideBarView, ContextMenu } from "vscode-extension-tester";
 import * as fs from "fs";
 import * as path from "path";
 import { getTestLogger } from "./utils/testLogger";
-import { applySlowMotion, waitForTreeItems, UITimeouts, waitForNotification } from "./utils/testUtils";
+import { applySlowMotion, waitForTreeItems, UITimeouts, waitForNotification } from "./utils/waitHelpers";
 import { clickToolbarButton } from "./utils/toolbarUtils";
 import { hasPinIcon } from "./utils/treeItemUtils";
 import { getTestData, logTestDataConfig } from "./config/testConfig";

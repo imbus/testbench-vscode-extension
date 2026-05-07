@@ -7,13 +7,13 @@
 import { SideBarView, TreeItem } from "vscode-extension-tester";
 import { getTestLogger } from "./testLogger";
 import {
-    waitForTreeItems,
     waitForTestThemesAndElementsViews,
     handleCycleConfigurationPrompt,
     waitForProjectsView,
     openTestBenchSidebar,
     ensureLoggedIn
 } from "./testUtils";
+import { waitForTreeItems } from "./waitHelpers";
 import { doubleClickTreeItem } from "./treeViewUtils";
 import { getTestData } from "../config/testConfig";
 import { ProjectsViewPage } from "../pages/ProjectsViewPage";

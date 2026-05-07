@@ -6,7 +6,7 @@
 
 import { TreeItem, WebDriver, ViewSection, By, SideBarView } from "vscode-extension-tester";
 import { getTestLogger } from "./testLogger";
-import { applySlowMotion, waitForTreeItems, UITimeouts, waitForCondition } from "./testUtils";
+import { applySlowMotion, waitForTreeItems, UITimeouts, waitForCondition } from "./waitHelpers";
 import { escapeXPathLiteral } from "./xpathUtils";
 
 const logger = getTestLogger();
