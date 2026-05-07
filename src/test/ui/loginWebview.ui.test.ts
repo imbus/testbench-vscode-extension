@@ -5,16 +5,10 @@
 
 import { expect } from "chai";
 import { WebDriver, SideBarView, By } from "vscode-extension-tester";
-import {
-    handleAuthenticationModals,
-    findAndSwitchToWebview,
-    isWebviewAvailable,
-    generateUniqueConnectionLabel,
-    ConnectionPage,
-    ConnectionFormData,
-    ConnectionFormElements
-} from "./utils/testUtils";
-import { applySlowMotion, UITimeouts } from "./utils/waitHelpers";
+import { handleAuthenticationModals, generateUniqueConnectionLabel } from "./utils/testUtils";
+import { findAndSwitchToWebview, isWebviewAvailable } from "./utils/webviewUtils";
+import { ConnectionPage, ConnectionFormData } from "./pages/ConnectionPage";
+import { UITimeouts } from "./utils/waitHelpers";
 import { getTestCredentials, getCredentialReadinessErrorMessage, hasTestCredentials } from "./config/testConfig";
 import { TestContext, setupLoginWebviewTestHooks, skipTest } from "./utils/testHooks";
 import { getTestLogger } from "./utils/testLogger";
@@ -135,10 +129,7 @@ describe("Login Webview - Connection Management Tests", function () {
                     const connectionPage = new ConnectionPage(driver);
                     await connectionPage.resetForm();
 
-                    const storePasswordCheckbox = await driver.findElement(
-                        By.id(ConnectionFormElements.STORE_PASSWORD_CHECKBOX)
-                    );
-                    const isChecked = await storePasswordCheckbox.isSelected();
+                    const isChecked = await connectionPage.isStorePasswordChecked();
                     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
                     expect(isChecked).to.be.true;
                 },
@@ -162,8 +153,7 @@ describe("Login Webview - Connection Management Tests", function () {
                     const connectionPage = new ConnectionPage(driver);
                     await connectionPage.resetForm();
 
-                    const saveButton = await driver.findElement(By.id(ConnectionFormElements.SAVE_BUTTON));
-                    await saveButton.click();
+                    await connectionPage.clickPrimarySaveButton();
 
                     const messageText = await connectionPage.getErrorMessage();
                     expect(messageText.toLowerCase()).to.include("required");
@@ -199,8 +189,7 @@ describe("Login Webview - Connection Management Tests", function () {
 
                     await connectionPage.fillForm(formData);
 
-                    const saveButton = await driver.findElement(By.id(ConnectionFormElements.SAVE_BUTTON));
-                    await saveButton.click();
+                    await connectionPage.clickPrimarySaveButton();
 
                     // Wait for specific port validation error
                     const messageText = await connectionPage.getErrorMessage();
@@ -339,8 +328,7 @@ describe("Login Webview - Connection Management Tests", function () {
                         // eslint-disable-next-line @typescript-eslint/no-unused-expressions
                         expect(isInEditMode, "Form should be in edit mode after clicking edit button").to.be.true;
 
-                        const cancelButton = await driver.findElement(By.id(ConnectionFormElements.CANCEL_EDIT_BUTTON));
-                        const isCancelButtonDisplayed = await cancelButton.isDisplayed();
+                        const isCancelButtonDisplayed = await connectionPage.isCancelEditButtonVisible();
                         // eslint-disable-next-line @typescript-eslint/no-unused-expressions
                         expect(isCancelButtonDisplayed, "Cancel button should be visible in edit mode").to.be.true;
                     }
@@ -384,10 +372,7 @@ describe("Login Webview - Connection Management Tests", function () {
                     if (isConnectionFound && foundConnection) {
                         await connectionPage.clickEdit(foundConnection);
 
-                        const labelInput = await driver.findElement(By.id(ConnectionFormElements.CONNECTION_LABEL));
-                        await labelInput.clear();
-                        await labelInput.sendKeys(updatedLabel);
-                        await applySlowMotion(driver);
+                        await connectionPage.setConnectionLabel(updatedLabel);
 
                         // Let the POM handle the dialog and wait for UI update
                         await connectionPage.save(true);
@@ -447,15 +432,11 @@ describe("Login Webview - Connection Management Tests", function () {
                     if (isConnectionFound && connectionElement) {
                         await connectionPage.clickEdit(connectionElement);
 
-                        const labelInput = await driver.findElement(By.id(ConnectionFormElements.CONNECTION_LABEL));
-                        await labelInput.clear();
-                        await labelInput.sendKeys("This should be cancelled");
-                        await applySlowMotion(driver);
+                        await connectionPage.setConnectionLabel("This should be cancelled");
 
                         await connectionPage.cancelEdit();
 
-                        const sectionTitle = await driver.findElement(By.id(ConnectionFormElements.SECTION_TITLE));
-                        const titleText = await sectionTitle.getText();
+                        const titleText = await connectionPage.getSectionTitle();
                         expect(titleText).to.include("Add New Connection");
 
                         const { found: isOriginalConnectionFound } =

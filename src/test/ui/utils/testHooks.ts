@@ -7,7 +7,14 @@
 import * as fs from "fs";
 import * as path from "path";
 import { VSBrowser, WebDriver, EditorView, Workbench, By, until } from "vscode-extension-tester";
-import { openTestBenchSidebar, ensureLoggedIn, releaseModifierKeys } from "./testUtils";
+import {
+    openTestBenchSidebar,
+    ensureLoggedIn,
+    releaseModifierKeys,
+    attemptLogout,
+    deleteAllConnections
+} from "./testUtils";
+import { findAndSwitchToWebview, isWebviewAvailable } from "./webviewUtils";
 import { UITimeouts } from "./waitHelpers";
 import {
     isSlowMotionEnabled,
@@ -789,7 +796,6 @@ async function closeStuckDialogs(driver: WebDriver, maxAttempts: number = 3): Pr
  */
 async function verifyCleanWebviewState(driver: WebDriver): Promise<boolean> {
     try {
-        const { findAndSwitchToWebview } = await import("./testUtils");
         const webviewFound = await findAndSwitchToWebview(driver);
         if (!webviewFound) {
             return false;
@@ -855,7 +861,6 @@ export function createLoginWebviewBeforeEachHook(
 
         await openTestBenchSidebar(driver);
 
-        const { attemptLogout, deleteAllConnections, isWebviewAvailable } = await import("./testUtils");
         const logger = getTestLogger();
 
         // Attempt logout with retry

@@ -5,9 +5,26 @@
  */
 
 import { WebDriver, By, WebElement, until } from "vscode-extension-tester";
-import { ConnectionFormElements } from "../utils/testUtils";
+import { handleConfirmationDialog } from "../utils/dialogUtils";
+import { findAndSwitchToWebview } from "../utils/webviewUtils";
 import { UITimeouts, applySlowMotion } from "../utils/waitHelpers";
 import { getTestLogger } from "../utils/testLogger";
+
+const CONNECTION_FORM_ELEMENT_IDS = {
+    CONNECTION_LABEL: "connectionLabel",
+    SERVER_NAME: "serverName",
+    PORT_NUMBER: "portNumber",
+    USERNAME: "username",
+    PASSWORD: "password",
+    STORE_PASSWORD_CHECKBOX: "storePasswordCheckbox",
+    SAVE_BUTTON: "saveConnectionBtn",
+    SAVE_BUTTON_TEXT: "saveButtonText",
+    CANCEL_EDIT_BUTTON: "cancelEditBtn",
+    SECTION_TITLE: "sectionTitle",
+    MESSAGES: "messages",
+    CONNECTIONS_LIST: "connectionsList",
+    ADD_CONNECTION_FORM: "addConnectionForm"
+} as const;
 
 /**
  * Interface for connection form data.
@@ -36,19 +53,19 @@ export interface ConnectionSearchResult {
 export class ConnectionPage {
     private driver: WebDriver;
     private locators = {
-        labelInput: By.id(ConnectionFormElements.CONNECTION_LABEL),
-        serverInput: By.id(ConnectionFormElements.SERVER_NAME),
-        portInput: By.id(ConnectionFormElements.PORT_NUMBER),
-        usernameInput: By.id(ConnectionFormElements.USERNAME),
-        passwordInput: By.id(ConnectionFormElements.PASSWORD),
-        storePasswordCheckbox: By.id(ConnectionFormElements.STORE_PASSWORD_CHECKBOX),
-        saveButton: By.id(ConnectionFormElements.SAVE_BUTTON),
-        saveButtonText: By.id(ConnectionFormElements.SAVE_BUTTON_TEXT),
-        cancelEditButton: By.id(ConnectionFormElements.CANCEL_EDIT_BUTTON),
-        sectionTitle: By.id(ConnectionFormElements.SECTION_TITLE),
-        messages: By.id(ConnectionFormElements.MESSAGES),
-        connectionsList: By.id(ConnectionFormElements.CONNECTIONS_LIST),
-        addConnectionForm: By.id(ConnectionFormElements.ADD_CONNECTION_FORM)
+        labelInput: By.id(CONNECTION_FORM_ELEMENT_IDS.CONNECTION_LABEL),
+        serverInput: By.id(CONNECTION_FORM_ELEMENT_IDS.SERVER_NAME),
+        portInput: By.id(CONNECTION_FORM_ELEMENT_IDS.PORT_NUMBER),
+        usernameInput: By.id(CONNECTION_FORM_ELEMENT_IDS.USERNAME),
+        passwordInput: By.id(CONNECTION_FORM_ELEMENT_IDS.PASSWORD),
+        storePasswordCheckbox: By.id(CONNECTION_FORM_ELEMENT_IDS.STORE_PASSWORD_CHECKBOX),
+        saveButton: By.id(CONNECTION_FORM_ELEMENT_IDS.SAVE_BUTTON),
+        saveButtonText: By.id(CONNECTION_FORM_ELEMENT_IDS.SAVE_BUTTON_TEXT),
+        cancelEditButton: By.id(CONNECTION_FORM_ELEMENT_IDS.CANCEL_EDIT_BUTTON),
+        sectionTitle: By.id(CONNECTION_FORM_ELEMENT_IDS.SECTION_TITLE),
+        messages: By.id(CONNECTION_FORM_ELEMENT_IDS.MESSAGES),
+        connectionsList: By.id(CONNECTION_FORM_ELEMENT_IDS.CONNECTIONS_LIST),
+        addConnectionForm: By.id(CONNECTION_FORM_ELEMENT_IDS.ADD_CONNECTION_FORM)
     };
 
     constructor(driver: WebDriver) {
@@ -97,9 +114,7 @@ export class ConnectionPage {
      * @param timeout - Maximum time to wait (default: UITimeouts.LONG)
      */
     public async save(waitForUpdate: boolean = true, timeout: number = UITimeouts.LONG): Promise<void> {
-        const saveButton = await this.driver.findElement(this.locators.saveButton);
-        await saveButton.click();
-        await applySlowMotion(this.driver);
+        await this.clickPrimarySaveButton();
 
         // Handle "Save Changes" overwrite confirmation dialog if it appears
         // This dialog appears when saving a connection with a name that already exists
@@ -122,9 +137,8 @@ export class ConnectionPage {
                     return;
                 }
 
-                // Dialog appeared and is visible, handle it using dynamic import to avoid circular dependency
+                // Dialog appeared and is visible, handle it via shared host-dialog helper
                 const logger = getTestLogger();
-                const { handleConfirmationDialog } = await import("../utils/testUtils");
                 const dialogHandled = await handleConfirmationDialog(this.driver, "Save Changes", UITimeouts.SHORT);
                 if (dialogHandled) {
                     logger.info("ConnectionPage", "Handled 'Save Changes' overwrite dialog");
@@ -146,14 +160,12 @@ export class ConnectionPage {
             }
 
             // Switch back to webview to continue
-            const { findAndSwitchToWebview } = await import("../utils/testUtils");
             await findAndSwitchToWebview(this.driver);
         } catch (error) {
             // If dialog handling fails, try to switch back to webview and continue
             const logger = getTestLogger();
             logger.warn("ConnectionPage", "Error handling Save Changes dialog, continuing anyway:", error);
             try {
-                const { findAndSwitchToWebview } = await import("../utils/testUtils");
                 await findAndSwitchToWebview(this.driver);
             } catch {
                 // If we can't switch back, the waitForUpdate check below will likely fail
@@ -213,14 +225,91 @@ export class ConnectionPage {
     }
 
     /**
+     * Clicks the primary save button without additional save-flow handling.
+     *
+     * @returns Promise that resolves after the click and slow-motion delay complete
+     */
+    public async clickPrimarySaveButton(): Promise<void> {
+        const saveButton = await this.driver.findElement(this.locators.saveButton);
+        await saveButton.click();
+        await applySlowMotion(this.driver);
+    }
+
+    /**
+     * Returns whether the "Store Password" checkbox is currently selected.
+     *
+     * @returns True when the checkbox is checked, otherwise false
+     */
+    public async isStorePasswordChecked(): Promise<boolean> {
+        const checkbox = await this.driver.findElement(this.locators.storePasswordCheckbox);
+        return checkbox.isSelected();
+    }
+
+    /**
+     * Clears and sets the connection label input.
+     *
+     * @param label - New value for the connection label field
+     * @returns Promise that resolves once typing is complete
+     */
+    public async setConnectionLabel(label: string): Promise<void> {
+        await this.clearAndType(this.locators.labelInput, label);
+    }
+
+    /**
+     * Returns true when the cancel edit button is visible.
+     *
+     * @returns True if the cancel edit button can be located and is displayed
+     */
+    public async isCancelEditButtonVisible(): Promise<boolean> {
+        try {
+            const cancelButton = await this.driver.findElement(this.locators.cancelEditButton);
+            return await cancelButton.isDisplayed();
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Reads the current section title text.
+     *
+     * @returns Section title text, or empty string if unavailable
+     */
+    public async getSectionTitle(): Promise<string> {
+        try {
+            const sectionTitle = await this.driver.findElement(this.locators.sectionTitle);
+            return await sectionTitle.getText();
+        } catch {
+            return "";
+        }
+    }
+
+    /**
+     * Waits for the connections list to be present in the webview.
+     *
+     * @param timeout - Maximum wait time in milliseconds
+     * @returns True if the list is found before timeout, otherwise false
+     */
+    public async waitForConnectionsList(timeout: number = UITimeouts.MEDIUM): Promise<boolean> {
+        try {
+            await this.driver.wait(
+                until.elementLocated(this.locators.connectionsList),
+                timeout,
+                "Waiting for connections list to be available"
+            );
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
      * Verifies that the form is in edit mode.
      *
      * @returns True if in edit mode, false otherwise
      */
     public async isEditMode(): Promise<boolean> {
         try {
-            const sectionTitle = await this.driver.findElement(this.locators.sectionTitle);
-            const titleText = await sectionTitle.getText();
+            const titleText = await this.getSectionTitle();
             return titleText.toLowerCase().includes("edit");
         } catch {
             return false;
@@ -271,13 +360,8 @@ export class ConnectionPage {
         // Wait for form to reset (section title should change back to "Add New Connection")
         await this.driver.wait(
             async () => {
-                try {
-                    const sectionTitle = await this.driver.findElement(this.locators.sectionTitle);
-                    const titleText = await sectionTitle.getText();
-                    return titleText.toLowerCase().includes("add new connection");
-                } catch {
-                    return false;
-                }
+                const titleText = await this.getSectionTitle();
+                return titleText.toLowerCase().includes("add new connection");
             },
             UITimeouts.MEDIUM,
             "Waiting for form to reset after canceling edit"
@@ -391,8 +475,7 @@ export class ConnectionPage {
                 "Waiting for confirmation dialog to appear"
             );
 
-            // Handle confirmation dialog using dynamic import to avoid circular dependency
-            const { handleConfirmationDialog } = await import("../utils/testUtils");
+            // Handle confirmation dialog using shared dialog helper
             const dialogHandled = await handleConfirmationDialog(this.driver, "Delete");
 
             if (!dialogHandled) {
@@ -411,7 +494,6 @@ export class ConnectionPage {
             );
 
             // Switch back to webview
-            const { findAndSwitchToWebview } = await import("../utils/testUtils");
             const webviewFound = await findAndSwitchToWebview(this.driver);
             if (!webviewFound) {
                 logger.warn("ConnectionPage", "Could not switch back to webview after delete");
@@ -423,7 +505,6 @@ export class ConnectionPage {
             logger.error("ConnectionPage", `Error deleting connection: ${error}`);
             // Try to switch back to webview
             try {
-                const { findAndSwitchToWebview } = await import("../utils/testUtils");
                 await findAndSwitchToWebview(this.driver);
             } catch {
                 // Ignore errors when switching back
@@ -503,8 +584,7 @@ export class ConnectionPage {
                         "Waiting for confirmation dialog to appear"
                     );
 
-                    // Handle confirmation dialog using dynamic import to avoid circular dependency
-                    const { handleConfirmationDialog } = await import("../utils/testUtils");
+                    // Handle confirmation dialog using shared dialog helper
                     const dialogHandled = await handleConfirmationDialog(this.driver, "Delete");
 
                     if (!dialogHandled) {
@@ -548,7 +628,6 @@ export class ConnectionPage {
 
                     // Switch back to webview to continue deleting connections
                     try {
-                        const { findAndSwitchToWebview } = await import("../utils/testUtils");
                         const webviewFound = await findAndSwitchToWebview(this.driver);
                         if (!webviewFound) {
                             logger.warn("ConnectionPage", "Could not switch back to webview after dialog");
@@ -564,7 +643,6 @@ export class ConnectionPage {
                     logger.error("ConnectionPage", `Error deleting connection: ${error}`);
                     // Try to switch back to webview and continue
                     try {
-                        const { findAndSwitchToWebview } = await import("../utils/testUtils");
                         await findAndSwitchToWebview(this.driver);
                     } catch {
                         // If we can't switch back, break the loop

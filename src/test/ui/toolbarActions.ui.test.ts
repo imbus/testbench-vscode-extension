@@ -10,7 +10,8 @@
 import { expect } from "chai";
 import { SideBarView } from "vscode-extension-tester";
 import { getTestLogger } from "./utils/testLogger";
-import { waitForProjectsView, isWebviewAvailable, attemptLogout } from "./utils/testUtils";
+import { waitForProjectsView, attemptLogout } from "./utils/testUtils";
+import { isWebviewAvailable } from "./utils/webviewUtils";
 import { applySlowMotion, waitForTreeItems, UITimeouts, waitForCondition } from "./utils/waitHelpers";
 import { navigateToTestView } from "./utils/navigationUtils";
 import { clickToolbarButton, getToolbarButtonLabels, hasToolbarButton } from "./utils/toolbarUtils";
