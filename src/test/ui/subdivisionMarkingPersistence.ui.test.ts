@@ -10,13 +10,8 @@
 import { expect } from "chai";
 import { SideBarView, TreeItem, ViewSection, Workbench, By, until, WebDriver } from "vscode-extension-tester";
 import { getTestLogger } from "./utils/testLogger";
-import {
-    waitForFileInEditor,
-    openTestBenchSidebar,
-    attemptLogout,
-    ensureLoggedIn,
-    cleanupWorkspace
-} from "./utils/testUtils";
+import { waitForFileInEditor, openTestBenchSidebar, attemptLogout, ensureLoggedIn } from "./utils/testUtils";
+import { cleanupWorkspace } from "./utils/workspaceUtils";
 import { waitForTreeItems, UITimeouts } from "./utils/waitHelpers";
 import { clickToolbarButton } from "./utils/toolbarUtils";
 import { waitForTreeItemButton } from "./utils/treeViewUtils";

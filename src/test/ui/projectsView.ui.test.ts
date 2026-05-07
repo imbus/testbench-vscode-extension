@@ -5,7 +5,8 @@
 
 import { expect } from "chai";
 import { SideBarView, TreeItem } from "vscode-extension-tester";
-import { clickNotificationButton, cleanupWorkspace } from "./utils/testUtils";
+import { clickNotificationButton } from "./utils/testUtils";
+import { cleanupWorkspace } from "./utils/workspaceUtils";
 import { applySlowMotion, waitForTreeItems } from "./utils/waitHelpers";
 import { getTestData, logTestDataConfig } from "./config/testConfig";
 import { TestContext, setupTestHooks, collapseAllTreeItems, skipTest } from "./utils/testHooks";
