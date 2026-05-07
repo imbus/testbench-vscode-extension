@@ -540,20 +540,25 @@ export async function waitForTreeItem(
 
 /**
  * Waits for tree item children to be loaded after expansion.
- * Checks that the item is expanded and children are available.
+ * Checks that the item is expanded and that child-state has settled.
  * Works with any tree view.
  *
  * @param item - The tree item to wait for
  * @param driver - The WebDriver instance
- * @param timeout - Maximum time to wait (default: UITimeouts.MEDIUM)
- * @returns Promise<boolean> - True if children are loaded, false if timeout
+ * @param timeout - Maximum time to wait (default: UITimeouts.SHORT)
+ * @returns Promise<boolean> - True when child-state is considered loaded, false on timeout
  */
 export async function waitForTreeItemChildren(
     item: TreeItem,
     driver: WebDriver,
-    timeout: number = UITimeouts.MEDIUM
+    timeout: number = UITimeouts.SHORT
 ): Promise<boolean> {
     try {
+        // Some VS Code trees briefly report expandable nodes before children are rendered.
+        // Treat a stable empty children list as "loaded" to avoid long per-node timeouts.
+        let previousChildCount: number | null = null;
+        let stableEmptySamples = 0;
+
         await driver.wait(
             async () => {
                 try {
@@ -572,13 +577,31 @@ export async function waitForTreeItemChildren(
                         return false;
                     }
 
-                    return hasChildren ? children.length > 0 : children.length === 0;
+                    if (children.length > 0) {
+                        return true;
+                    }
+
+                    // If the item no longer reports children, an empty list is expected.
+                    if (!hasChildren) {
+                        return true;
+                    }
+
+                    // If the empty state is stable across a few short polls, consider loading complete.
+                    if (previousChildCount === 0) {
+                        stableEmptySamples++;
+                    } else {
+                        stableEmptySamples = 1;
+                    }
+                    previousChildCount = children.length;
+
+                    return stableEmptySamples >= 3;
                 } catch {
                     return false;
                 }
             },
             timeout,
-            "Waiting for tree item children to load"
+            "Waiting for tree item children to load",
+            100
         );
         return true;
     } catch (error) {
@@ -589,7 +612,7 @@ export async function waitForTreeItemChildren(
 
 /**
  * Safely expands a tree item if it has children and is not already expanded.
- * Waits for children to load after expansion using smart wait.
+ * Waits for child-state to settle after expansion using condition-based polling.
  * Works with any tree view.
  *
  * @param item - The tree item to expand
@@ -611,10 +634,10 @@ export async function expandTreeItemIfNeeded(item: TreeItem, driver: WebDriver):
         await item.expand();
         await applySlowMotion(driver);
 
-        // Wait for children to actually load (smart wait instead of fixed delay)
-        const childrenLoaded = await waitForTreeItemChildren(item, driver);
+        // Wait for child-state to settle via condition polling (no unconditional sleep).
+        const childrenLoaded = await waitForTreeItemChildren(item, driver, UITimeouts.SHORT);
         if (!childrenLoaded) {
-            logger.warn("TreeItem", "Children may not have loaded for tree item");
+            logger.debug("TreeItem", "Children may not have loaded for tree item");
         }
 
         // Verify it's expanded
