@@ -46,6 +46,8 @@ export interface ConnectionSearchResult {
     found: boolean;
 }
 
+type ConnectionListAction = "edit" | "delete" | "login";
+
 /**
  * Page Object Model for the Connection Management Webview.
  * Encapsulates all interactions with the connection form and connection list.
@@ -66,6 +68,11 @@ export class ConnectionPage {
         messages: By.id(CONNECTION_FORM_ELEMENT_IDS.MESSAGES),
         connectionsList: By.id(CONNECTION_FORM_ELEMENT_IDS.CONNECTIONS_LIST),
         addConnectionForm: By.id(CONNECTION_FORM_ELEMENT_IDS.ADD_CONNECTION_FORM)
+    };
+    private readonly connectionActionSelectors: Record<ConnectionListAction, string> = {
+        edit: "button.edit-btn",
+        delete: "button.delete-btn",
+        login: "button.login-btn"
     };
 
     constructor(driver: WebDriver) {
@@ -422,12 +429,25 @@ export class ConnectionPage {
     }
 
     /**
+     * Returns whether a connection list action button is disabled.
+     *
+     * @param connectionElement - The connection list item element
+     * @param action - The action button to inspect
+     * @returns True if the action is disabled, otherwise false
+     */
+    public async isActionDisabled(connectionElement: WebElement, action: ConnectionListAction): Promise<boolean> {
+        const actionButton = await this.getConnectionActionButton(connectionElement, action);
+        const isDisabled = await actionButton.getAttribute("disabled");
+        return isDisabled !== null;
+    }
+
+    /**
      * Clicks the edit button for a connection found in the list.
      *
      * @param connectionElement - The connection list item element
      */
     public async clickEdit(connectionElement: WebElement): Promise<void> {
-        const editButton = await connectionElement.findElement(By.css("button.edit-btn"));
+        const editButton = await this.getConnectionActionButton(connectionElement, "edit");
         await editButton.click();
         await applySlowMotion(this.driver);
 
@@ -447,7 +467,7 @@ export class ConnectionPage {
      * @param connectionElement - The connection list item element
      */
     public async clickDelete(connectionElement: WebElement): Promise<void> {
-        const deleteButton = await connectionElement.findElement(By.css("button.delete-btn"));
+        const deleteButton = await this.getConnectionActionButton(connectionElement, "delete");
         await deleteButton.click();
         await applySlowMotion(this.driver);
     }
@@ -519,7 +539,7 @@ export class ConnectionPage {
      * @param connectionElement - The connection list item element
      */
     public async clickLogin(connectionElement: WebElement): Promise<void> {
-        const loginButton = await connectionElement.findElement(By.css("button.login-btn"));
+        const loginButton = await this.getConnectionActionButton(connectionElement, "login");
         await loginButton.click();
         await applySlowMotion(this.driver);
     }
@@ -555,10 +575,9 @@ export class ConnectionPage {
 
                 try {
                     // Check if delete button is enabled (not disabled during edit mode)
-                    const deleteButton = await firstConnection.findElement(By.css("button.delete-btn"));
-                    const isDisabled = await deleteButton.getAttribute("disabled");
+                    const isDisabled = await this.isActionDisabled(firstConnection, "delete");
 
-                    if (isDisabled !== null) {
+                    if (isDisabled) {
                         // Connection is being edited - cancel edit mode first
                         logger.info("ConnectionPage", "Connection is being edited. Canceling edit mode first...");
                         try {
@@ -711,5 +730,19 @@ export class ConnectionPage {
             await element.sendKeys(text);
             await applySlowMotion(this.driver);
         }
+    }
+
+    /**
+     * Locates an action button for one connection list item.
+     *
+     * @param connectionElement - The connection list item element
+     * @param action - The action button to locate
+     * @returns The action button element
+     */
+    private async getConnectionActionButton(
+        connectionElement: WebElement,
+        action: ConnectionListAction
+    ): Promise<WebElement> {
+        return connectionElement.findElement(By.css(this.connectionActionSelectors[action]));
     }
 }

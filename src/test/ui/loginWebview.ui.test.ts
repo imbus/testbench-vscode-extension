@@ -4,7 +4,7 @@
  */
 
 import { expect } from "chai";
-import { WebDriver, SideBarView, By } from "vscode-extension-tester";
+import { WebDriver, SideBarView } from "vscode-extension-tester";
 import { handleAuthenticationModals, generateUniqueConnectionLabel } from "./utils/testUtils";
 import { findAndSwitchToWebview, isWebviewAvailable } from "./utils/webviewUtils";
 import { ConnectionPage, ConnectionFormData } from "./pages/ConnectionPage";
@@ -609,11 +609,14 @@ describe("Login Webview - Connection Management Tests", function () {
 
                         const { element: connection2Element } = await connectionPage.findConnection(connection2Label);
                         if (connection2Element) {
-                            const deleteButton = await connection2Element.findElement(By.css("button.delete-btn"));
-                            const isDisabled = await deleteButton.getAttribute("disabled");
-                            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-                            expect(isDisabled, "Delete button on other connections should be disabled during edit mode")
-                                .to.not.be.null;
+                            const isDeleteDisabled = await connectionPage.isActionDisabled(
+                                connection2Element,
+                                "delete"
+                            );
+                            expect(
+                                isDeleteDisabled,
+                                "Delete button on other connections should be disabled during edit mode"
+                            ).to.equal(true);
                         }
                     }
                 },
