@@ -6,7 +6,6 @@
 
 import * as path from "path";
 import * as fs from "fs";
-import * as cp from "child_process";
 import { ExTester, ReleaseQuality } from "vscode-extension-tester";
 import {
     loadEnv,
@@ -18,6 +17,14 @@ import {
 } from "../config/testConfig";
 import { initializeTestLogger, getTestLogger } from "../utils/testLogger";
 import { discoverUiTestFiles, selectUiTestFiles } from "./testDiscovery";
+import {
+    createRunnerPaths,
+    ensureVsixPackage,
+    hasExistingVSCodeInstallation,
+    isArchiveCorruptionError,
+    prepareRuntimeWorkspace,
+    setupExTesterEnvironment
+} from "./runnerBootstrap";
 
 async function main(): Promise<void> {
     try {
@@ -58,103 +65,36 @@ async function main(): Promise<void> {
         assertCredentialReadinessForStrictMode();
 
         // Centralize storage for all transient test artifacts under .test-resources
-        const baseStoragePath = path.resolve(projectRoot, TEST_PATHS.BASE_STORAGE);
+        const runnerPaths = createRunnerPaths(projectRoot);
 
-        // Sub-directories for specific components
-        const testStoragePath = path.join(baseStoragePath, TEST_PATHS.VSCODE_DATA); // VS Code binaries
-        const extensionsPath = path.join(baseStoragePath, TEST_PATHS.EXTENSIONS); // Installed extensions
-        const runtimeWorkspacePath = path.join(baseStoragePath, TEST_PATHS.WORKSPACE); // Active workspace used during tests
-
-        // Source of truth for test files (not modified during tests)
-        const fixturesPath = path.resolve(projectRoot, TEST_PATHS.FIXTURES);
-
-        logger.info("Setup", `Base Storage Path: ${baseStoragePath}`);
+        logger.info("Setup", `Base Storage Path: ${runnerPaths.baseStoragePath}`);
         logger.info("Setup", "Preparing runtime workspace...");
-
-        // Clean previous runtime workspace
-        if (fs.existsSync(runtimeWorkspacePath)) {
-            fs.rmSync(runtimeWorkspacePath, { recursive: true, force: true });
-        }
-
-        // Copy fixtures to runtime workspace
-        if (fs.existsSync(fixturesPath)) {
-            logger.info("Setup", `Copying fixtures from '${fixturesPath}' to '${runtimeWorkspacePath}'...`);
-            fs.cpSync(fixturesPath, runtimeWorkspacePath, { recursive: true });
-        } else {
-            logger.warn("Setup", `No fixtures found at '${fixturesPath}'. Creating empty workspace.`);
-            fs.mkdirSync(runtimeWorkspacePath, { recursive: true });
-        }
+        prepareRuntimeWorkspace(runnerPaths, logger);
 
         logger.info("Setup", "Checking VSIX status...");
-        const packageJsonPath = path.join(projectRoot, TEST_PATHS.PACKAGE_JSON);
-        if (!fs.existsSync(packageJsonPath)) {
-            throw new Error(`${TEST_PATHS.PACKAGE_JSON} not found at ${packageJsonPath}`);
-        }
-
-        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
-        const vsixName = `${packageJson.name}-${packageJson.version}.vsix`;
-        const vsixPath = path.join(projectRoot, vsixName);
-
-        if (fs.existsSync(vsixPath)) {
-            logger.info("Setup", `Found existing VSIX: ${vsixName}. Skipping package creation.`);
-        } else {
-            logger.info("Setup", `VSIX not found (${vsixName}). Creating package...`);
-            try {
-                cp.execSync("npm run vsix-package", {
-                    cwd: projectRoot,
-                    stdio: "inherit"
-                });
-                logger.info("Setup", "VSIX package created successfully.");
-            } catch (error) {
-                logger.error("Setup", "Failed to create VSIX package.");
-                throw error;
-            }
-        }
+        const { vsixPath } = ensureVsixPackage(projectRoot, runnerPaths.packageJsonPath, logger);
 
         const performSetup = async (forceClean: boolean = false): Promise<ExTester> => {
-            if (forceClean) {
-                logger.info("Setup", "Cleaning VS Code data...");
-                if (fs.existsSync(testStoragePath)) {
-                    fs.rmSync(testStoragePath, { recursive: true, force: true });
-                }
-            }
-
-            const tester = new ExTester(testStoragePath, ReleaseQuality.Stable, extensionsPath);
-
-            // Check if VS Code binary exists in our specific sub-folder
-            const hasExistingVSCode =
-                fs.existsSync(testStoragePath) &&
-                fs.readdirSync(testStoragePath).some((file) => file.includes("vscode"));
-
-            if (hasExistingVSCode && !forceClean) {
-                logger.info("Setup", "Detected existing VS Code. Skipping download.");
-            } else {
-                logger.info("Setup", "Downloading VS Code...");
-                await tester.downloadCode();
-            }
-
-            await tester.downloadChromeDriver();
-
-            logger.info("Setup", `Installing extension from: ${vsixPath}`);
-            await tester.installVsix({
-                vsixFile: vsixPath,
-                installDependencies: true
+            return setupExTesterEnvironment({
+                testStoragePath: runnerPaths.testStoragePath,
+                extensionsPath: runnerPaths.extensionsPath,
+                vsixPath,
+                logger,
+                forceClean,
+                skipVsCodeDownloadAndDriver: false,
+                installVsix: true
             });
-
-            return tester;
         };
 
         let exTester: ExTester;
 
         if (skipSetupFromParent) {
-            const hasExistingVSCode =
-                fs.existsSync(testStoragePath) &&
-                fs.readdirSync(testStoragePath).some((file) => file.includes("vscode"));
-            const hasExtensionsDirectory = fs.existsSync(extensionsPath);
+            const hasExistingVSCode = hasExistingVSCodeInstallation(runnerPaths.testStoragePath);
+            const hasExtensionsDirectory = fs.existsSync(runnerPaths.extensionsPath);
 
             if (hasExistingVSCode && hasExtensionsDirectory) {
                 logger.info("Setup", "Using existing VS Code and extension assets from parent setup.");
-                exTester = new ExTester(testStoragePath, ReleaseQuality.Stable, extensionsPath);
+                exTester = new ExTester(runnerPaths.testStoragePath, ReleaseQuality.Stable, runnerPaths.extensionsPath);
             } else {
                 logger.warn("Setup", "Requested setup reuse, but required assets were missing. Running setup now.");
                 exTester = await performSetup(false);
@@ -162,14 +102,8 @@ async function main(): Promise<void> {
         } else {
             try {
                 exTester = await performSetup(false);
-            } catch (err: any) {
-                const isCorruptionError =
-                    err.message &&
-                    (err.message.includes("FILE_ENDED") ||
-                        err.message.includes("end of central directory") ||
-                        err.message.includes("invalid signature"));
-
-                if (isCorruptionError) {
+            } catch (err) {
+                if (isArchiveCorruptionError(err)) {
                     logger.warn("Setup", "Detected corrupted VS Code archive (interrupted download).");
                     logger.info("Setup", "Automatically cleaning and retrying download...");
                     exTester = await performSetup(true);
@@ -224,7 +158,7 @@ async function main(): Promise<void> {
             "TestRunner",
             `Test Pattern: ${Array.isArray(testFilesPattern) ? `${testFilesPattern.length} files` : testFilesPattern}`
         );
-        logger.info("TestRunner", `Workspace: ${runtimeWorkspacePath}`);
+        logger.info("TestRunner", `Workspace: ${runnerPaths.runtimeWorkspacePath}`);
 
         // Use profile-specific settings file if available, otherwise use default
         const settingsPath = profileSettingsPath || TEST_PATHS.VSCODE_TEST_SETTINGS;
@@ -232,7 +166,7 @@ async function main(): Promise<void> {
 
         await exTester.runTests(testFilesPattern, {
             settings: settingsPath,
-            resources: [runtimeWorkspacePath], // Opens the prepared runtime workspace
+            resources: [runnerPaths.runtimeWorkspacePath], // Opens the prepared runtime workspace
             cleanup: true // Set to true to keep the instance open after tests for debugging
         });
 

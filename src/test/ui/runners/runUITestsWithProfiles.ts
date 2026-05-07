@@ -8,8 +8,7 @@
 import * as path from "path";
 import * as fs from "fs";
 import * as cp from "child_process";
-import { ExTester, ReleaseQuality } from "vscode-extension-tester";
-import { loadEnv, TEST_PATHS, getLoggerConfig, assertCredentialReadinessForStrictMode } from "../config/testConfig";
+import { loadEnv, getLoggerConfig, assertCredentialReadinessForStrictMode } from "../config/testConfig";
 import { initializeTestLogger, getTestLogger } from "../utils/testLogger";
 import {
     TEST_PROFILES,
@@ -21,6 +20,13 @@ import {
     type ExtensionSettingsProfile
 } from "../config/testConfigurations";
 import { discoverUiTestFiles, selectUiTestFiles, type DiscoveredUiTestFile } from "./testDiscovery";
+import {
+    createRunnerPaths,
+    ensureVsixPackage,
+    isArchiveCorruptionError,
+    prepareRuntimeWorkspace,
+    setupExTesterEnvironment
+} from "./runnerBootstrap";
 
 interface TestRunOptions {
     profile?: string; // Specific profile name to use, or undefined to run with all profiles
@@ -569,103 +575,32 @@ async function main(): Promise<void> {
             process.exit(1);
         }
 
-        // Centralize storage for all transient test artifacts under .test-resources
-        const baseStoragePath = path.resolve(projectRoot, TEST_PATHS.BASE_STORAGE);
-        const testStoragePath = path.join(baseStoragePath, TEST_PATHS.VSCODE_DATA);
-        const extensionsPath = path.join(baseStoragePath, TEST_PATHS.EXTENSIONS);
-        const runtimeWorkspacePath = path.join(baseStoragePath, TEST_PATHS.WORKSPACE);
-        const fixturesPath = path.resolve(projectRoot, TEST_PATHS.FIXTURES);
+        const runnerPaths = createRunnerPaths(projectRoot);
 
         logger.info("Setup", "Preparing runtime workspace...");
-
-        // Clean previous runtime workspace
-        if (fs.existsSync(runtimeWorkspacePath)) {
-            fs.rmSync(runtimeWorkspacePath, { recursive: true, force: true });
-        }
-
-        // Copy fixtures to runtime workspace
-        if (fs.existsSync(fixturesPath)) {
-            logger.info("Setup", `Copying fixtures from '${fixturesPath}' to '${runtimeWorkspacePath}'...`);
-            fs.cpSync(fixturesPath, runtimeWorkspacePath, { recursive: true });
-        } else {
-            logger.warn("Setup", `No fixtures found at '${fixturesPath}'. Creating empty workspace.`);
-            fs.mkdirSync(runtimeWorkspacePath, { recursive: true });
-        }
+        prepareRuntimeWorkspace(runnerPaths, logger);
 
         // Check VSIX
         logger.info("Setup", "Checking VSIX status...");
-        const packageJsonPath = path.join(projectRoot, TEST_PATHS.PACKAGE_JSON);
-        if (!fs.existsSync(packageJsonPath)) {
-            throw new Error(`${TEST_PATHS.PACKAGE_JSON} not found at ${packageJsonPath}`);
-        }
-
-        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
-        const vsixName = `${packageJson.name}-${packageJson.version}.vsix`;
-        const vsixPath = path.join(projectRoot, vsixName);
-
-        if (fs.existsSync(vsixPath)) {
-            logger.info("Setup", `Found existing VSIX: ${vsixName}. Skipping package creation.`);
-        } else {
-            logger.info("Setup", `VSIX not found (${vsixName}). Creating package...`);
-            try {
-                cp.execSync("npm run vsix-package", {
-                    cwd: projectRoot,
-                    stdio: "inherit"
-                });
-                logger.info("Setup", "VSIX package created successfully.");
-            } catch (error) {
-                logger.error("Setup", "Failed to create VSIX package.");
-                throw error;
-            }
-        }
+        const { vsixPath } = ensureVsixPackage(projectRoot, runnerPaths.packageJsonPath, logger);
 
         // One-time setup: download VS Code and ChromeDriver
         const performOneTimeSetup = async (forceClean: boolean = false): Promise<void> => {
-            if (forceClean) {
-                logger.info("Setup", "Cleaning VS Code data...");
-                if (fs.existsSync(testStoragePath)) {
-                    fs.rmSync(testStoragePath, { recursive: true, force: true });
-                }
-            }
-
-            const tester = new ExTester(testStoragePath, ReleaseQuality.Stable, extensionsPath);
-
-            // Handle VS Code download (can be skipped if already present)
-            if (options.skipSetup) {
-                logger.info("Setup", "Skipping VS Code download (--skip-setup flag)");
-            } else {
-                const hasExistingVSCode =
-                    fs.existsSync(testStoragePath) &&
-                    fs.readdirSync(testStoragePath).some((file) => file.includes("vscode"));
-
-                if (hasExistingVSCode && !forceClean) {
-                    logger.info("Setup", "Detected existing VS Code. Skipping download.");
-                } else {
-                    logger.info("Setup", "Downloading VS Code...");
-                    await tester.downloadCode();
-                }
-
-                await tester.downloadChromeDriver();
-            }
-
-            // Install extension once during setup
-            logger.info("Setup", `Installing extension from: ${vsixPath}`);
-            await tester.installVsix({
-                vsixFile: vsixPath,
-                installDependencies: true
+            await setupExTesterEnvironment({
+                testStoragePath: runnerPaths.testStoragePath,
+                extensionsPath: runnerPaths.extensionsPath,
+                vsixPath,
+                logger,
+                forceClean,
+                skipVsCodeDownloadAndDriver: options.skipSetup === true,
+                installVsix: true
             });
         };
 
         try {
             await performOneTimeSetup(false);
-        } catch (err: any) {
-            const isCorruptionError =
-                err.message &&
-                (err.message.includes("FILE_ENDED") ||
-                    err.message.includes("end of central directory") ||
-                    err.message.includes("invalid signature"));
-
-            if (isCorruptionError) {
+        } catch (err) {
+            if (isArchiveCorruptionError(err)) {
                 logger.warn("Setup", "Detected corrupted VS Code. Cleaning and retrying...");
                 await performOneTimeSetup(true);
             } else {
