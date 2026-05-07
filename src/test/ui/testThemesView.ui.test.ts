@@ -27,13 +27,15 @@ import {
     waitForProjectsView,
     waitForTestThemesAndElementsViews,
     handleCycleConfigurationPrompt,
+    releaseModifierKeys
+} from "./utils/testUtils";
+import {
     verifyGeneratedFilesExist,
     countGeneratedRobotFiles,
     getGeneratedRobotFiles,
     readRobotFileContent,
-    releaseModifierKeys,
     FilesystemVerificationResult
-} from "./utils/testUtils";
+} from "./utils/filesystemUtils";
 import {
     applySlowMotion,
     waitForTreeItems,

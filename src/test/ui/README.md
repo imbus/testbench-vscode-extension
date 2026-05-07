@@ -52,6 +52,8 @@ src/test/ui/
 │
 ├── utils/                             # Utility functions
 │   ├── testUtils.ts                   # Reusable helper functions
+│   ├── waitHelpers.ts                 # Wait wrappers, timeouts, and slow-motion helpers
+│   ├── filesystemUtils.ts             # Generated .robot filesystem verification helpers
 │   ├── testHooks.ts                   # Shared test hooks and setup utilities
 │   ├── testLogger.ts                  # Persistent file logging utility
 │   └── treeViewUtils.ts               # Tree view specific utilities
@@ -102,6 +104,8 @@ The `fixtures/` folder contains static files that are copied to the test workspa
 **Utilities (`utils/` folder):**
 
 - **`testUtils.ts`** - Reusable helper functions for common test operations
+- **`waitHelpers.ts`** - Shared wait wrappers, timeout constants, and slow-motion helpers
+- **`filesystemUtils.ts`** - Generated Robot Framework file verification and metadata helpers
 - **`testHooks.ts`** - Shared before/after hooks for test suites
 - **`testLogger.ts`** - Centralized logging utility with file persistence and log rotation
 - **`treeViewUtils.ts`** - Tree view specific navigation and manipulation utilities
@@ -465,7 +469,13 @@ The logger supports the following log levels (in order of verbosity):
 
 ## Test Utilities
 
-The `testUtils.ts` file provides reusable helper functions for common test operations:
+Core utility modules:
+
+- `testUtils.ts` for shared UI interaction helpers
+- `waitHelpers.ts` for timing and wait abstractions
+- `filesystemUtils.ts` for generated-file verification helpers
+
+Example helper operations from `testUtils.ts`:
 
 ### Modal Button Handling
 
