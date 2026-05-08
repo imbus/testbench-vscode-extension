@@ -1,5 +1,9 @@
+from collections.abc import Iterator
+from contextlib import contextmanager
+import os
 import pathlib
 import re
+import tempfile
 
 import requests  # type: ignore
 from lsprotocol.types import (
@@ -170,6 +174,57 @@ class TestBenchLanguageServer(LanguageServer):
 
 
 testbench_ls = TestBenchLanguageServer()
+
+
+def _write_temp_snapshot(
+    content: str, *, prefix: str, suffix: str, directory: str | None = None
+) -> pathlib.Path:
+    fd, temp_file_path = tempfile.mkstemp(prefix=prefix, suffix=suffix, dir=directory)
+    temp_path = pathlib.Path(temp_file_path)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as temp_file:
+            temp_file.write(content)
+    except OSError:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        temp_path.unlink(missing_ok=True)
+        raise
+    return temp_path
+
+
+@contextmanager
+def resource_documentation_from_document(document: TextDocument) -> Iterator[ResourceDocumentation]:
+    source_text = document.source or ""
+    temp_path: pathlib.Path | None = None
+
+    # Prefer the source file's directory so relative imports keep resolving.
+    if document.path:
+        source_path = pathlib.Path(document.path)
+        if source_path.parent.exists():
+            try:
+                temp_path = _write_temp_snapshot(
+                    source_text,
+                    prefix=f".{source_path.stem}-testbench-ls-",
+                    suffix=source_path.suffix or ".resource",
+                    directory=str(source_path.parent),
+                )
+            except OSError:
+                temp_path = None
+
+    if temp_path is None:
+        temp_path = _write_temp_snapshot(
+            source_text, prefix="testbench-ls-", suffix=".resource"
+        )
+
+    try:
+        yield ResourceDocumentation(str(temp_path))
+    finally:
+        try:
+            temp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def parse_subdivision_mapping(ls: LanguageServer, values: list[str]) -> dict[str, str]:
@@ -657,53 +712,53 @@ def push_testbench_subdivision(ls: LanguageServer, kwargs):
     vs_code_resource = TestBenchResourceModel.from_file(document.source)
     if not vs_code_resource.tb_subdivision_uid or not context_is_valid(ls, vs_code_resource):
         return
-    rd = ResourceDocumentation(document.path)
-    push_success = True
-    for keyword in reversed(vs_code_resource.keyword_section.body):
-        if get_keyword_tags(keyword) and any(
-            tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword))
-        ):
-            continue
-        keyword_uid = get_kw_uid(keyword)
-        if not keyword_uid:
-            create_testbench_keyword(
-                ls, {"document_uri": document_uri, "keyword_name": get_kw_name(keyword)}
-            )
-            continue
-        existing_keywords = vs_code_resource.get_keywords(keyword_uid)
-        if len(existing_keywords) > 1:
-            show_error(
-                ls,
-                ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
-            )
-            push_success = False
-            continue
-        new_docu = (
-            rd.get_keyword_documentation(keyword_uid)
-            .replace("<br>", "<br/>")
-            .replace("<hr>", "<br/>")
-        )
-        html_description = f"<html><body>{new_docu}</body></html>"
-        call_type = get_tb_keyword_call_type(keyword)
-        try:
-            tb_connection = TestBenchResourceConnection.singleton()
-            response = patch_tb_keyword_details(
-                tb_connection,
-                keyword_uid,
-                keyword.name,
-                html_description,
-                call_type.value,
-            )
-        except requests.exceptions.HTTPError as http_error:
-            if http_error.response.status_code == 409:
-                show_error(ls, f"{ERROR_PUSH_KEYWORD}: {ERROR_KEYWORD_IS_LOCKED}.")
+    with resource_documentation_from_document(document) as resource_documentation:
+        push_success = True
+        for keyword in reversed(vs_code_resource.keyword_section.body):
+            if get_keyword_tags(keyword) and any(
+                tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword))
+            ):
+                continue
+            keyword_uid = get_kw_uid(keyword)
+            if not keyword_uid:
+                create_testbench_keyword(
+                    ls, {"document_uri": document_uri, "keyword_name": get_kw_name(keyword)}
+                )
+                continue
+            existing_keywords = vs_code_resource.get_keywords(keyword_uid)
+            if len(existing_keywords) > 1:
+                show_error(
+                    ls,
+                    ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
+                )
                 push_success = False
-            else:
-                show_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.json().get('message')}")
+                continue
+            new_docu = (
+                resource_documentation.get_keyword_documentation(keyword_uid)
+                .replace("<br>", "<br/>")
+                .replace("<hr>", "<br/>")
+            )
+            html_description = f"<html><body>{new_docu}</body></html>"
+            call_type = get_tb_keyword_call_type(keyword)
+            try:
+                tb_connection = TestBenchResourceConnection.singleton()
+                patch_tb_keyword_details(
+                    tb_connection,
+                    keyword_uid,
+                    keyword.name,
+                    html_description,
+                    call_type.value,
+                )
+            except requests.exceptions.HTTPError as http_error:
+                if http_error.response.status_code == 409:
+                    show_error(ls, f"{ERROR_PUSH_KEYWORD}: {ERROR_KEYWORD_IS_LOCKED}.")
+                    push_success = False
+                else:
+                    show_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.json().get('message')}")
+                    push_success = False
+            except TestBenchKeywordNotFound as not_found_error:
+                show_error(ls, ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID.format(uid=not_found_error.uid))
                 push_success = False
-        except TestBenchKeywordNotFound as not_found_error:
-            show_error(ls, ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID.format(uid=not_found_error.uid))
-            push_success = False
     if push_success:
         show_info(ls, INFO_CHANGES_PUSHED)
 
@@ -1002,16 +1057,18 @@ def push_testbench_keyword(ls: LanguageServer, kwargs):
             ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
         )
         return
-    rd = ResourceDocumentation(document.path)
-    new_docu = (
-        rd.get_keyword_documentation(keyword_uid).replace("<br>", "<br/>").replace("<hr>", "<br/>")
-    )
+    with resource_documentation_from_document(document) as resource_documentation:
+        new_docu = (
+            resource_documentation.get_keyword_documentation(keyword_uid)
+            .replace("<br>", "<br/>")
+            .replace("<hr>", "<br/>")
+        )
     html_description = f"<html><body>{new_docu}</body></html>"
     call_type = get_tb_keyword_call_type(robot_keywords[0])
 
     try:
         tb_connection = TestBenchResourceConnection.singleton()
-        response = patch_tb_keyword_details(
+        patch_tb_keyword_details(
             tb_connection,
             keyword_uid,
             robot_keywords[0].name,
@@ -1044,14 +1101,14 @@ def create_testbench_keyword(ls: LanguageServer, kwargs):
             ERROR_DUPLICATE_KEYWORD_NAME.format(name=keyword_name),
         )
         return
-    rd = ResourceDocumentation(document.path)
-    new_docu = (
-        rd.get_keyword_documentation_by_name(keyword_name)
-        .replace("<br>", "<br/>")
-        .replace("<hr>", "<br/>")
-    )
+    with resource_documentation_from_document(document) as resource_documentation:
+        new_docu = (
+            resource_documentation.get_keyword_documentation_by_name(keyword_name)
+            .replace("<br>", "<br/>")
+            .replace("<hr>", "<br/>")
+        )
+        arguments = resource_documentation.get_keyword_arguments(keyword_name)
     html_description = f"<html><body>{new_docu}</body></html>"
-    arguments = rd.get_keyword_arguments(keyword_name)
     tb_parameters = [{"name": arg, "evaluationType": "CallByValue"} for arg in arguments]
     call_type = get_tb_keyword_call_type(robot_keywords[0])
     try:
