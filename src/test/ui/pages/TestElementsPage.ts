@@ -6,6 +6,7 @@
 
 import { WebDriver, TreeItem, ViewSection } from "vscode-extension-tester";
 import { BasePage } from "./BasePage";
+import { runWithTimeout } from "../utils/waitHelpers";
 
 export class TestElementsPage extends BasePage {
     private sectionTitle = "Test Elements";
@@ -61,15 +62,6 @@ export class TestElementsPage extends BasePage {
         return null;
     }
 
-    private async withTimeout<T>(operation: () => Promise<T>, timeoutMs: number = 2500): Promise<T | null> {
-        return await Promise.race([
-            operation(),
-            new Promise<null>((resolve) => {
-                setTimeout(() => resolve(null), timeoutMs);
-            })
-        ]);
-    }
-
     /**
      * Searches with bounded expansion depth to discover nested items without traversing huge trees.
      */
@@ -95,27 +87,43 @@ export class TestElementsPage extends BasePage {
                     continue;
                 }
 
-                const hasChildren = await this.withTimeout(() => item.hasChildren());
+                const hasChildren = await runWithTimeout(
+                    () => item.hasChildren(),
+                    2500,
+                    `checking children for Test Elements item "${label}"`
+                );
                 if (!hasChildren) {
                     continue;
                 }
 
-                const isExpanded = await this.withTimeout(() => item.isExpanded());
+                const isExpanded = await runWithTimeout(
+                    () => item.isExpanded(),
+                    2500,
+                    `checking expansion state for Test Elements item "${label}"`
+                );
                 if (isExpanded === null) {
                     continue;
                 }
 
                 if (!isExpanded) {
-                    const expanded = await this.withTimeout(async () => {
-                        await item.expand();
-                        return true;
-                    });
+                    const expanded = await runWithTimeout(
+                        async () => {
+                            await item.expand();
+                            return true;
+                        },
+                        2500,
+                        `expanding Test Elements item "${label}"`
+                    );
                     if (!expanded) {
                         continue;
                     }
                 }
 
-                const children = await this.withTimeout(() => item.getChildren());
+                const children = await runWithTimeout(
+                    () => item.getChildren(),
+                    2500,
+                    `loading children for Test Elements item "${label}"`
+                );
                 if (!children || children.length === 0) {
                     continue;
                 }

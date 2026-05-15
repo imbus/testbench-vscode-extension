@@ -8,7 +8,7 @@ import { WebDriver, SideBarView } from "vscode-extension-tester";
 import { handleAuthenticationModals, generateUniqueConnectionLabel } from "./utils/testUtils";
 import { findAndSwitchToWebview, isWebviewAvailable } from "./utils/webviewUtils";
 import { ConnectionPage, ConnectionFormData } from "./pages/ConnectionPage";
-import { UITimeouts } from "./utils/waitHelpers";
+import { UITimeouts, waitForCondition } from "./utils/waitHelpers";
 import { getTestCredentials, getCredentialReadinessErrorMessage, hasTestCredentials } from "./config/testConfig";
 import { TestContext, setupLoginWebviewTestHooks, skipTest } from "./utils/testHooks";
 import { getTestLogger } from "./utils/testLogger";
@@ -232,14 +232,17 @@ describe("Login Webview - Connection Management Tests", function () {
                     await connectionPage.fillForm(formData);
                     await connectionPage.save();
 
-                    await driver.wait(
+                    const connectionSaved = await waitForCondition(
+                        driver,
                         async () => {
                             const count = await connectionPage.getConnectionCount();
                             return count > initialCount;
                         },
                         UITimeouts.LONG,
+                        100,
                         "Waiting for connection to be saved"
                     );
+                    expect(connectionSaved, "Connection list count should increase after saving").to.equal(true);
 
                     const { found: isConnectionFound } = await connectionPage.findConnection(connectionLabel);
                     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
@@ -378,13 +381,18 @@ describe("Login Webview - Connection Management Tests", function () {
                         await connectionPage.save(true);
 
                         // Wait for connection to be updated with new label
-                        await driver.wait(
+                        const labelUpdated = await waitForCondition(
+                            driver,
                             async () => {
                                 const { found: foundConnection } = await connectionPage.findConnection(updatedLabel);
                                 return foundConnection;
                             },
                             UITimeouts.LONG,
+                            100,
                             "Waiting for connection to be updated with new label"
+                        );
+                        expect(labelUpdated, `Connection '${updatedLabel}' should appear after saving edit`).to.equal(
+                            true
                         );
 
                         const { found: updatedFoundConnection } = await connectionPage.findConnection(updatedLabel);
@@ -493,13 +501,18 @@ describe("Login Webview - Connection Management Tests", function () {
                         // eslint-disable-next-line @typescript-eslint/no-unused-expressions
                         expect(isDeleted, "Delete operation should complete successfully").to.be.true;
 
-                        await driver.wait(
+                        const connectionDeleted = await waitForCondition(
+                            driver,
                             async () => {
                                 const count = await connectionPage.getConnectionCount();
                                 return count < initialConnectionCount;
                             },
                             UITimeouts.LONG,
+                            100,
                             "Waiting for connection to be deleted"
+                        );
+                        expect(connectionDeleted, "Connection list count should decrease after deletion").to.equal(
+                            true
                         );
 
                         const finalConnectionCount = await connectionPage.getConnectionCount();

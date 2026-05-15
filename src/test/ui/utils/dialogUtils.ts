@@ -5,10 +5,133 @@
 
 import { getTestLogger } from "./testLogger";
 import { escapeXPathLiteral } from "./xpathUtils";
-import { UITimeouts, applySlowMotion } from "./waitHelpers";
-import { WebDriver, By, WebElement, until, Key } from "vscode-extension-tester";
+import { UITimeouts, applySlowMotion, waitForCondition } from "./waitHelpers";
+import { WebDriver, By, WebElement, Key } from "vscode-extension-tester";
 
 const logger = getTestLogger();
+const DIALOG_SELECTORS = ".monaco-dialog-modal-block, .monaco-dialog, .monaco-dialog-box";
+
+/**
+ * Checks whether any known VS Code dialog surface is currently visible.
+ *
+ * @param driver - WebDriver instance used to inspect dialog DOM nodes
+ * @returns Promise<boolean> - True when at least one visible dialog is present
+ */
+async function hasVisibleDialog(driver: WebDriver): Promise<boolean> {
+    const dialogs = await driver.findElements(By.css(DIALOG_SELECTORS));
+    for (const dialog of dialogs) {
+        try {
+            if (await dialog.isDisplayed()) {
+                return true;
+            }
+        } catch {
+            // Ignore stale nodes and continue checking remaining candidates.
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Waits for a visible dialog surface to appear.
+ *
+ * @param driver - WebDriver instance used for polling
+ * @param timeout - Maximum wait duration in milliseconds
+ * @param context - Timeout context description for diagnostics
+ * @returns Promise<boolean> - True if a dialog appeared before timeout
+ */
+async function waitForDialogPresent(driver: WebDriver, timeout: number, context: string): Promise<boolean> {
+    return await waitForCondition(driver, async () => await hasVisibleDialog(driver), timeout, 100, context);
+}
+
+/**
+ * Waits for all visible dialog surfaces to disappear.
+ *
+ * @param driver - WebDriver instance used for polling
+ * @param timeout - Maximum wait duration in milliseconds
+ * @param context - Timeout context description for diagnostics
+ * @returns Promise<boolean> - True when no visible dialogs remain before timeout
+ */
+async function waitForDialogGone(driver: WebDriver, timeout: number, context: string): Promise<boolean> {
+    return await waitForCondition(driver, async () => !(await hasVisibleDialog(driver)), timeout, 100, context);
+}
+
+/**
+ * Resolves a confirmation button element using dialog-scoped and fallback searches.
+ *
+ * @param driver - WebDriver instance used to execute searches
+ * @param escapedButtonText - XPath-safe confirmation button text value
+ * @param dialogElement - Optional dialog root element to prioritize scoped queries
+ * @returns Promise<WebElement | null> - Resolved button element, or null if not found
+ */
+async function findConfirmationButton(
+    driver: WebDriver,
+    escapedButtonText: string,
+    dialogElement: WebElement | null
+): Promise<WebElement | null> {
+    let buttons: WebElement[] = [];
+
+    // If we found the dialog element, search within it first.
+    if (dialogElement) {
+        try {
+            buttons = await dialogElement.findElements(
+                By.xpath(`.//button[normalize-space(text())=${escapedButtonText}]`)
+            );
+            if (buttons.length === 0) {
+                buttons = await dialogElement.findElements(
+                    By.xpath(`.//button[contains(normalize-space(text()), ${escapedButtonText})]`)
+                );
+            }
+            // Try links similar to buttons
+            if (buttons.length === 0) {
+                buttons = await dialogElement.findElements(
+                    By.xpath(`.//a[contains(@class, 'monaco-button') and normalize-space(text())=${escapedButtonText}]`)
+                );
+            }
+        } catch {
+            // If dialog element becomes stale, fall back to document-wide search.
+        }
+    }
+
+    // If no buttons found in dialog, try document-wide search.
+    if (buttons.length === 0) {
+        // Try exact text match first (button elements).
+        buttons = await driver.findElements(By.xpath(`//button[normalize-space(text())=${escapedButtonText}]`));
+
+        // Try links that look like buttons (VS Code uses <a> tags styled as buttons).
+        if (buttons.length === 0) {
+            buttons = await driver.findElements(
+                By.xpath(`//a[contains(@class, 'monaco-button') and normalize-space(text())=${escapedButtonText}]`)
+            );
+        }
+
+        // If no exact match, try contains.
+        if (buttons.length === 0) {
+            buttons = await driver.findElements(
+                By.xpath(`//button[contains(normalize-space(text()), ${escapedButtonText})]`)
+            );
+        }
+
+        if (buttons.length === 0) {
+            buttons = await driver.findElements(
+                By.xpath(
+                    `//a[contains(@class, 'monaco-button') and contains(normalize-space(text()), ${escapedButtonText})]`
+                )
+            );
+        }
+
+        // Try by aria-label.
+        if (buttons.length === 0) {
+            buttons = await driver.findElements(By.xpath(`//button[@aria-label=${escapedButtonText}]`));
+        }
+
+        if (buttons.length === 0) {
+            buttons = await driver.findElements(By.xpath(`//a[@aria-label=${escapedButtonText}]`));
+        }
+    }
+
+    return buttons.length > 0 ? buttons[0] : null;
+}
 
 /**
  * Handles VS Code confirmation dialog by clicking the specified button text.
@@ -33,20 +156,17 @@ export async function handleConfirmationDialog(
         const escapedButtonText = escapeXPathLiteral(buttonText);
 
         // First, quickly check if dialog exists (without waiting)
-        const existingDialogs = await driver.findElements(
-            By.css(".monaco-dialog-modal-block, .monaco-dialog, .monaco-dialog-box")
-        );
+        const dialogAlreadyVisible = await hasVisibleDialog(driver);
 
         // If no dialog exists, return early without trying strategies
-        if (existingDialogs.length === 0) {
+        if (!dialogAlreadyVisible) {
             // Wait briefly for dialog to appear (in case it's still animating)
-            try {
-                await driver.wait(
-                    until.elementLocated(By.css(".monaco-dialog-modal-block, .monaco-dialog, .monaco-dialog-box")),
-                    UITimeouts.SHORT,
-                    "Waiting briefly for dialog to appear"
-                );
-            } catch {
+            const appeared = await waitForDialogPresent(
+                driver,
+                UITimeouts.SHORT,
+                `brief confirmation dialog appearance check for button "${buttonText}"`
+            );
+            if (!appeared) {
                 // Dialog doesn't exist, return early
                 logger.trace("Dialog", "No dialog found, skipping button search");
                 return false;
@@ -56,16 +176,17 @@ export async function handleConfirmationDialog(
         // Dialog exists, proceed with finding the button
         // Wait for the dialog modal to be fully rendered
         let dialogElement: WebElement | null = null;
-        try {
-            await driver.wait(
-                until.elementLocated(By.css(".monaco-dialog-modal-block, .monaco-dialog, .monaco-dialog-box")),
-                timeout,
-                "Waiting for dialog modal to appear"
-            );
+        const dialogAppeared = await waitForDialogPresent(
+            driver,
+            timeout,
+            `confirmation dialog modal to appear for button "${buttonText}"`
+        );
+        if (dialogAppeared) {
             logger.trace("Dialog", "Dialog modal appeared");
 
             // Wait for dialog to fully render and for dialog content to be visible
-            await driver.wait(
+            await waitForCondition(
+                driver,
                 async () => {
                     try {
                         const dialog = await driver.findElement(
@@ -77,7 +198,8 @@ export async function handleConfirmationDialog(
                     }
                 },
                 UITimeouts.SHORT,
-                "Waiting for dialog to fully render"
+                100,
+                `dialog content to be displayed before searching for button "${buttonText}"`
             );
 
             // Try multiple selectors for the dialog element
@@ -102,143 +224,80 @@ export async function handleConfirmationDialog(
             if (!dialogElement) {
                 logger.trace("Dialog", "Dialog element not found with standard selectors, searching in document");
             }
-        } catch {
+        } else {
             logger.trace("Dialog", "Dialog modal not found, but continuing to search for button");
         }
 
-        // Try multiple strategies to find the button
-        // Strategy 1: Find by exact text match within dialog context
-        const confirmButton = await driver.wait(
+        // Try multiple strategies to find the button.
+        // Strategy 1: Find by text/aria-label within dialog, then document-wide.
+        let confirmButton: WebElement | null = null;
+        const confirmButtonFound = await waitForCondition(
+            driver,
             async () => {
-                let buttons: WebElement[] = [];
-
-                // If we found the dialog element, search within it
-                if (dialogElement) {
-                    try {
-                        buttons = await dialogElement.findElements(
-                            By.xpath(`.//button[normalize-space(text())=${escapedButtonText}]`)
-                        );
-                        if (buttons.length === 0) {
-                            buttons = await dialogElement.findElements(
-                                By.xpath(`.//button[contains(normalize-space(text()), ${escapedButtonText})]`)
-                            );
-                        }
-                        // Also try links that look like buttons
-                        if (buttons.length === 0) {
-                            buttons = await dialogElement.findElements(
-                                By.xpath(
-                                    `.//a[contains(@class, 'monaco-button') and normalize-space(text())=${escapedButtonText}]`
-                                )
-                            );
-                        }
-                    } catch {
-                        // If dialog element becomes stale, try document-wide search
-                    }
-                }
-
-                // If no buttons found in dialog, try document-wide search
-                if (buttons.length === 0) {
-                    // Try exact text match first (button elements)
-                    buttons = await driver.findElements(
-                        By.xpath(`//button[normalize-space(text())=${escapedButtonText}]`)
-                    );
-
-                    // Try links that look like buttons (VS Code uses <a> tags styled as buttons)
-                    if (buttons.length === 0) {
-                        buttons = await driver.findElements(
-                            By.xpath(
-                                `//a[contains(@class, 'monaco-button') and normalize-space(text())=${escapedButtonText}]`
-                            )
-                        );
-                    }
-
-                    // If no exact match, try contains
-                    if (buttons.length === 0) {
-                        buttons = await driver.findElements(
-                            By.xpath(`//button[contains(normalize-space(text()), ${escapedButtonText})]`)
-                        );
-                    }
-
-                    if (buttons.length === 0) {
-                        buttons = await driver.findElements(
-                            By.xpath(
-                                `//a[contains(@class, 'monaco-button') and contains(normalize-space(text()), ${escapedButtonText})]`
-                            )
-                        );
-                    }
-
-                    // Try by aria-label
-                    if (buttons.length === 0) {
-                        buttons = await driver.findElements(By.xpath(`//button[@aria-label=${escapedButtonText}]`));
-                    }
-
-                    if (buttons.length === 0) {
-                        buttons = await driver.findElements(By.xpath(`//a[@aria-label=${escapedButtonText}]`));
-                    }
-                }
-
-                return buttons.length > 0 ? buttons[0] : null;
+                confirmButton = await findConfirmationButton(driver, escapedButtonText, dialogElement);
+                return confirmButton !== null;
             },
             timeout,
-            `Waiting for confirmation dialog with button: ${buttonText}`
+            100,
+            `confirmation dialog button "${buttonText}" to appear`
         );
 
-        if (confirmButton) {
-            const buttonTextFound = await confirmButton.getText();
-            const tagName = await confirmButton.getTagName();
+        if (confirmButtonFound && confirmButton) {
+            const resolvedConfirmButton: WebElement = confirmButton;
+            const buttonTextFound = await resolvedConfirmButton.getText();
+            const tagName = await resolvedConfirmButton.getTagName();
             logger.trace("Dialog", `Found ${tagName} element with text: "${buttonTextFound}", clicking...`);
 
             // Scroll button into view if needed
-            await driver.executeScript("arguments[0].scrollIntoView({ block: 'center' });", confirmButton);
+            await driver.executeScript("arguments[0].scrollIntoView({ block: 'center' });", resolvedConfirmButton);
 
             // Wait for button to be clickable (enabled and displayed)
-            await driver.wait(
+            const buttonClickable = await waitForCondition(
+                driver,
                 async () => {
                     try {
-                        const isEnabled = await confirmButton.isEnabled();
-                        const isDisplayed = await confirmButton.isDisplayed();
+                        const isEnabled = await resolvedConfirmButton.isEnabled();
+                        const isDisplayed = await resolvedConfirmButton.isDisplayed();
                         return isEnabled && isDisplayed;
                     } catch {
                         return false;
                     }
                 },
                 UITimeouts.MINIMAL,
-                "Waiting for button to be clickable"
+                100,
+                `confirmation dialog button "${buttonText}" to become clickable`
             );
+            if (!buttonClickable) {
+                throw new Error(`Timed out waiting for confirmation button "${buttonText}" to become clickable`);
+            }
 
             try {
-                await confirmButton.click();
+                await resolvedConfirmButton.click();
                 await applySlowMotion(driver); // Visible: clicking confirmation dialog button
             } catch (clickError) {
                 // If click fails, try JavaScript click
                 logger.warn("Dialog", "Regular click failed, trying JavaScript click", clickError);
-                await driver.executeScript("arguments[0].click();", confirmButton);
+                await driver.executeScript("arguments[0].click();", resolvedConfirmButton);
                 await applySlowMotion(driver);
             }
 
             // Wait for dialog to fully close (wait for modal-block to disappear)
-            try {
-                await driver.wait(
-                    async () => {
-                        const modalBlocks = await driver.findElements(By.css(".monaco-dialog-modal-block"));
-                        return modalBlocks.length === 0;
-                    },
-                    UITimeouts.MEDIUM,
-                    "Waiting for dialog to close"
-                );
+            const dialogClosed = await waitForDialogGone(
+                driver,
+                UITimeouts.MEDIUM,
+                `confirmation dialog to close after clicking "${buttonText}"`
+            );
+            if (dialogClosed) {
                 logger.trace("Dialog", "Dialog closed successfully");
-            } catch {
+            } else {
                 logger.trace("Dialog", "Dialog may have closed, but modal-block still present");
             }
 
             // Additional wait to ensure dialog is fully gone and verify no dialog elements remain
-            await driver.wait(
-                async () => {
-                    const dialogs = await driver.findElements(By.css(".monaco-dialog-modal-block, .monaco-dialog"));
-                    return dialogs.length === 0;
-                },
+            await waitForDialogGone(
+                driver,
                 UITimeouts.SHORT,
-                "Waiting for dialog to be fully gone"
+                `confirmation dialog to be fully gone after clicking "${buttonText}"`
             );
             return true;
         }
@@ -285,13 +344,10 @@ export async function handleConfirmationDialog(
                 await applySlowMotion(driver);
 
                 // Wait for dialog to close
-                await driver.wait(
-                    async () => {
-                        const modalBlocks = await driver.findElements(By.css(".monaco-dialog-modal-block"));
-                        return modalBlocks.length === 0;
-                    },
+                await waitForDialogGone(
+                    driver,
                     UITimeouts.MEDIUM,
-                    "Waiting for dialog to close after JavaScript click"
+                    `confirmation dialog to close after JavaScript click for "${buttonText}"`
                 );
 
                 // Verify dialog is fully gone
@@ -313,25 +369,24 @@ export async function handleConfirmationDialog(
             await dialogModal.click();
 
             // Wait for dialog to be focused
-            await driver.wait(
+            await waitForCondition(
+                driver,
                 async () => {
                     const activeElement = await driver.executeScript("return document.activeElement;");
                     return activeElement !== null;
                 },
                 500,
-                "Waiting for dialog to be focused"
+                100,
+                "dialog to be focused before Enter key confirmation"
             );
 
             await driver.actions().sendKeys(Key.ENTER).perform();
 
             // Wait for dialog to close
-            await driver.wait(
-                async () => {
-                    const modalBlocks = await driver.findElements(By.css(".monaco-dialog-modal-block"));
-                    return modalBlocks.length === 0;
-                },
+            await waitForDialogGone(
+                driver,
                 UITimeouts.MEDIUM,
-                "Waiting for dialog to close after Enter key"
+                `confirmation dialog to close after Enter key for "${buttonText}"`
             );
 
             // Check if dialog closed
@@ -352,11 +407,9 @@ export async function handleConfirmationDialog(
             (error.message.includes("Timeout") || error.message.includes("timeout") || error.name === "TimeoutError");
 
         // Check if dialog exists before trying fallback strategies
-        const dialogs = await driver.findElements(
-            By.css(".monaco-dialog-modal-block, .monaco-dialog, .monaco-dialog-box")
-        );
+        const dialogVisible = await hasVisibleDialog(driver);
 
-        if (dialogs.length === 0) {
+        if (!dialogVisible) {
             if (isTimeoutError) {
                 logger.trace("Dialog", "No dialog found (timeout), skipping fallback strategies");
             } else {
@@ -369,15 +422,11 @@ export async function handleConfirmationDialog(
         // Dialog exists but button finding failed, try alternative approach
         try {
             // Wait for dialog to be fully rendered
-            try {
-                await driver.wait(
-                    until.elementLocated(By.css(".monaco-dialog, .monaco-dialog-modal-block")),
-                    UITimeouts.SHORT,
-                    "Waiting for dialog to be ready"
-                );
-            } catch {
-                // Dialog might already be there, continue with fallback
-            }
+            await waitForDialogPresent(
+                driver,
+                UITimeouts.SHORT,
+                `dialog to be ready before fallback search for "${buttonText}"`
+            );
 
             // Use JavaScript to find all buttons/links (can access shadow DOM and any structure)
             logger.trace("Dialog", "Using JavaScript to search for buttons in fallback strategy...");
@@ -448,28 +497,22 @@ export async function handleConfirmationDialog(
                 await applySlowMotion(driver);
 
                 // Wait for dialog to close
-                try {
-                    await driver.wait(
-                        async () => {
-                            const modalBlocks = await driver.findElements(By.css(".monaco-dialog-modal-block"));
-                            return modalBlocks.length === 0;
-                        },
-                        UITimeouts.MEDIUM,
-                        "Waiting for dialog to close"
-                    );
+                const fallbackClosed = await waitForDialogGone(
+                    driver,
+                    UITimeouts.MEDIUM,
+                    `confirmation dialog to close after fallback click for "${buttonText}"`
+                );
+                if (fallbackClosed) {
                     logger.trace("Dialog", "Dialog closed successfully");
-                } catch {
+                } else {
                     logger.trace("Dialog", "Dialog may have closed");
                 }
 
                 // Verify dialog is fully gone
-                await driver.wait(
-                    async () => {
-                        const dialogs = await driver.findElements(By.css(".monaco-dialog-modal-block, .monaco-dialog"));
-                        return dialogs.length === 0;
-                    },
+                await waitForDialogGone(
+                    driver,
                     UITimeouts.SHORT,
-                    "Waiting for dialog to be fully gone"
+                    `confirmation dialog to be fully gone after fallback click for "${buttonText}"`
                 );
                 return true;
             }

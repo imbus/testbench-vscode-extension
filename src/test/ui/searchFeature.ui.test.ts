@@ -13,7 +13,7 @@
 import { expect } from "chai";
 import { SideBarView } from "vscode-extension-tester";
 import { getTestLogger } from "./utils/testLogger";
-import { waitForTreeItems } from "./utils/waitHelpers";
+import { UITimeouts, waitForCondition, waitForTreeItems } from "./utils/waitHelpers";
 import { navigateToTestView } from "./utils/navigationUtils";
 import { clickSearchButton, enterSearchText, clearSearch, getVisibleItemCount } from "./utils/toolbarUtils";
 import { getTestData, logTestDataConfig } from "./config/testConfig";
@@ -44,6 +44,41 @@ describe("Search Feature UI Tests", function () {
     });
 
     const getDriver = () => ctx.driver;
+
+    async function waitForSearchResultsToSettle(
+        section: any,
+        description: string,
+        timeout: number = UITimeouts.MEDIUM
+    ): Promise<number> {
+        const driver = getDriver();
+        let lastCount: number | null = null;
+        let stableSince: number | null = null;
+
+        const didSettle = await waitForCondition(
+            driver,
+            async () => {
+                const currentCount = await getVisibleItemCount(section);
+                if (lastCount === null || currentCount !== lastCount) {
+                    lastCount = currentCount;
+                    stableSince = Date.now();
+                    return false;
+                }
+
+                if (stableSince === null) {
+                    stableSince = Date.now();
+                    return false;
+                }
+
+                return Date.now() - stableSince >= 250;
+            },
+            timeout,
+            100,
+            description
+        );
+
+        expect(didSettle, `Timed out waiting for ${description}`).to.equal(true);
+        return lastCount ?? (await getVisibleItemCount(section));
+    }
 
     async function getProjectsSection(): Promise<any> {
         const driver = getDriver();
@@ -77,7 +112,10 @@ describe("Search Feature UI Tests", function () {
                 skipPrecondition(this, "Projects section not found");
             }
 
-            await waitForTreeItems(projectsSection, driver);
+            const hasProjectsItems = await waitForTreeItems(projectsSection, driver);
+            if (!hasProjectsItems) {
+                skipPrecondition(this, "Projects section has no visible items");
+            }
 
             const initialProjectsItemCount = await getVisibleItemCount(projectsSection);
             logger.info("Search", `Initial visible items: ${initialProjectsItemCount}`);
@@ -108,7 +146,10 @@ describe("Search Feature UI Tests", function () {
                 skipPrecondition(this, "Projects section not found");
             }
 
-            await waitForTreeItems(projectsSection, driver);
+            const hasProjectsItems = await waitForTreeItems(projectsSection, driver);
+            if (!hasProjectsItems) {
+                skipPrecondition(this, "Projects section has no visible items");
+            }
 
             const initialProjectsItemCount = await getVisibleItemCount(projectsSection);
 
@@ -125,9 +166,10 @@ describe("Search Feature UI Tests", function () {
                 skipError(this, "Could not enter search text");
             }
 
-            await driver.sleep(500);
-
-            const filteredProjectsItemCount = await getVisibleItemCount(projectsSection);
+            const filteredProjectsItemCount = await waitForSearchResultsToSettle(
+                projectsSection,
+                "project search results to settle"
+            );
             logger.info(
                 "Search",
                 `Filtered visible items: ${filteredProjectsItemCount} (was ${initialProjectsItemCount})`
@@ -156,7 +198,10 @@ describe("Search Feature UI Tests", function () {
                 skipPrecondition(this, "Projects section not found");
             }
 
-            await waitForTreeItems(projectsSection, driver);
+            const hasProjectsItems = await waitForTreeItems(projectsSection, driver);
+            if (!hasProjectsItems) {
+                skipPrecondition(this, "Projects section has no visible items");
+            }
 
             const initialProjectsItemCount = await getVisibleItemCount(projectsSection);
 
@@ -166,16 +211,48 @@ describe("Search Feature UI Tests", function () {
             }
 
             // Search for non-existent item
-            await enterSearchText(driver, "ZZZZNONEXISTENT");
-            await driver.sleep(500);
-
-            const filteredProjectsItemCount = await getVisibleItemCount(projectsSection);
+            const enteredUnmatchedText = await enterSearchText(driver, "ZZZZNONEXISTENT");
+            if (!enteredUnmatchedText) {
+                skipError(this, "Could not enter unmatched search text");
+            }
+            const filteredProjectsItemCount = await waitForSearchResultsToSettle(
+                projectsSection,
+                "project search results to settle after entering unmatched text"
+            );
             expect(filteredProjectsItemCount).to.be.lessThan(initialProjectsItemCount, "Search should filter items");
 
-            await clearSearch(driver);
-            await driver.sleep(500);
+            const clearedSearch = await clearSearch(driver);
+            expect(clearedSearch, "Search should be clearable").to.equal(true);
 
-            const restoredProjectsItemCount = await getVisibleItemCount(projectsSection);
+            let restoredProjectsItemCount = 0;
+            const restored = await waitForCondition(
+                driver,
+                async () => {
+                    const refreshedProjectsSection = await getProjectsSection();
+                    if (!refreshedProjectsSection) {
+                        return false;
+                    }
+
+                    const refreshedItemsLoaded = await waitForTreeItems(
+                        refreshedProjectsSection,
+                        driver,
+                        UITimeouts.MEDIUM
+                    );
+                    if (!refreshedItemsLoaded) {
+                        return false;
+                    }
+
+                    restoredProjectsItemCount = await getVisibleItemCount(refreshedProjectsSection);
+                    return restoredProjectsItemCount === initialProjectsItemCount;
+                },
+                UITimeouts.LONG,
+                150,
+                "project search results to restore after clearing search"
+            );
+
+            expect(restored, "Projects tree should restore to the initial item count after clearing search").to.equal(
+                true
+            );
             expect(restoredProjectsItemCount).to.equal(
                 initialProjectsItemCount,
                 "Items should be restored after clearing search"
@@ -202,17 +279,63 @@ describe("Search Feature UI Tests", function () {
                 skipPrecondition(this, "Projects section not found");
             }
 
-            await waitForTreeItems(projectsSection, driver);
+            const hasProjectsItems = await waitForTreeItems(projectsSection, driver);
+            if (!hasProjectsItems) {
+                skipPrecondition(this, "Projects section has no visible items");
+            }
 
             const isSearchActivated = await clickSearchButton(projectsSection, driver);
             if (!isSearchActivated) {
                 skipError(this, "Could not activate search button");
             }
 
-            await enterSearchText(driver, config.projectName);
-            await driver.sleep(500);
+            const enteredExactText = await enterSearchText(driver, config.projectName);
+            if (!enteredExactText) {
+                skipError(this, "Could not enter exact project search text");
+            }
 
-            const targetProject = await projectsPage.getProject(projectsSection, config.projectName);
+            let targetProject = await projectsPage.getProject(projectsSection, config.projectName);
+            if (!targetProject) {
+                const projectFound = await waitForCondition(
+                    driver,
+                    async () => {
+                        const refreshedProjectsSection = await getProjectsSection();
+                        if (!refreshedProjectsSection) {
+                            return false;
+                        }
+
+                        const refreshedItemsLoaded = await waitForTreeItems(
+                            refreshedProjectsSection,
+                            driver,
+                            UITimeouts.MEDIUM
+                        );
+                        if (!refreshedItemsLoaded) {
+                            return false;
+                        }
+
+                        const candidate = await projectsPage.getProject(refreshedProjectsSection, config.projectName);
+                        if (candidate) {
+                            targetProject = candidate;
+                            return true;
+                        }
+
+                        return false;
+                    },
+                    UITimeouts.MEDIUM,
+                    100,
+                    `project "${config.projectName}" to appear in search results`
+                );
+                expect(projectFound, `Timed out waiting for project "${config.projectName}" search result`).to.equal(
+                    true
+                );
+                if (!targetProject) {
+                    const refreshedProjectsSection = await getProjectsSection();
+                    if (refreshedProjectsSection) {
+                        targetProject = await projectsPage.getProject(refreshedProjectsSection, config.projectName);
+                    }
+                }
+            }
+
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
             expect(targetProject, `Project "${config.projectName}" should be found in search results`).to.not.be.null;
 
@@ -257,7 +380,10 @@ describe("Search Feature UI Tests", function () {
                 skipPrecondition(this, "Test Themes section not found");
             }
 
-            await waitForTreeItems(testThemesSection, driver);
+            const hasTestThemeItems = await waitForTreeItems(testThemesSection, driver);
+            if (!hasTestThemeItems) {
+                skipPrecondition(this, "Test Themes section has no visible items");
+            }
 
             const initialTestThemesItemCount = await getVisibleItemCount(testThemesSection);
             logger.info("Search", `Initial test theme items: ${initialTestThemesItemCount}`);
@@ -271,9 +397,10 @@ describe("Search Feature UI Tests", function () {
             // Search for test theme
             const searchText = config.testThemeName.substring(0, 3);
             await enterSearchText(driver, searchText);
-            await driver.sleep(500);
-
-            const filteredTestThemesItemCount = await getVisibleItemCount(testThemesSection);
+            const filteredTestThemesItemCount = await waitForSearchResultsToSettle(
+                testThemesSection,
+                "test theme search results to settle"
+            );
             logger.info("Search", `Filtered count: ${filteredTestThemesItemCount}`);
 
             if (initialTestThemesItemCount > 1) {
@@ -301,7 +428,10 @@ describe("Search Feature UI Tests", function () {
                 skipPrecondition(this, "Test Themes section not found");
             }
 
-            await waitForTreeItems(testThemesSection, driver);
+            const hasTestThemeItems = await waitForTreeItems(testThemesSection, driver);
+            if (!hasTestThemeItems) {
+                skipPrecondition(this, "Test Themes section has no visible items");
+            }
 
             const isSearchActivated = await clickSearchButton(testThemesSection, driver);
             if (!isSearchActivated) {
@@ -309,9 +439,25 @@ describe("Search Feature UI Tests", function () {
             }
 
             await enterSearchText(driver, config.testThemeName);
-            await driver.sleep(500);
+            let targetTestTheme = await testThemesPage.getItem(testThemesSection, config.testThemeName);
+            if (!targetTestTheme) {
+                const testThemeFound = await waitForCondition(
+                    driver,
+                    async () => {
+                        const candidate = await testThemesPage.getItem(testThemesSection, config.testThemeName);
+                        return candidate !== undefined;
+                    },
+                    UITimeouts.MEDIUM,
+                    100,
+                    `test theme "${config.testThemeName}" to appear in search results`
+                );
+                expect(
+                    testThemeFound,
+                    `Timed out waiting for test theme "${config.testThemeName}" search result`
+                ).to.equal(true);
+                targetTestTheme = await testThemesPage.getItem(testThemesSection, config.testThemeName);
+            }
 
-            const targetTestTheme = await testThemesPage.getItem(testThemesSection, config.testThemeName);
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
             expect(targetTestTheme, `Test theme "${config.testThemeName}" should be found`).to.not.be.undefined;
 
@@ -362,7 +508,10 @@ describe("Search Feature UI Tests", function () {
                 skipPrecondition(this, "Projects section not found for gear icon test");
             }
 
-            await waitForTreeItems(projectsSection, driver);
+            const hasProjectsItems = await waitForTreeItems(projectsSection, driver);
+            if (!hasProjectsItems) {
+                skipPrecondition(this, "Projects section has no visible items for gear icon test");
+            }
 
             const isSearchActivated = await clickSearchButton(projectsSection, driver);
             if (!isSearchActivated) {

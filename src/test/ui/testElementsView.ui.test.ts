@@ -13,7 +13,7 @@ import { expect } from "chai";
 import { SideBarView, TreeItem, EditorView } from "vscode-extension-tester";
 import { getTestLogger } from "./utils/testLogger";
 import { waitForFileInEditor, openTestBenchSidebar } from "./utils/testUtils";
-import { applySlowMotion, waitForTreeItems, UITimeouts } from "./utils/waitHelpers";
+import { applySlowMotion, retryUntil, waitForTreeItems, UITimeouts } from "./utils/waitHelpers";
 import { doubleClickTreeItem } from "./utils/treeViewUtils";
 import { navigateToTestView, findResourceSubdivision } from "./utils/navigationUtils";
 import { hasActionButton, getItemIconInfo, collectTreeItemLabels } from "./utils/treeItemUtils";
@@ -24,7 +24,6 @@ import { TestElementsPage } from "./pages/TestElementsPage";
 const logger = getTestLogger();
 const ROBOT_RESOURCE_MARKER = "[Robot-Resource]";
 const OPEN_RESOURCE_RETRY_ATTEMPTS = 3;
-const OPEN_RESOURCE_RETRY_DELAY_MS = 400;
 
 function skipPrecondition(context: Mocha.Context, reason: string): never {
     return skipTest(context, "precondition", reason);
@@ -134,32 +133,35 @@ describe("Test Elements View UI Tests", function () {
     ): Promise<boolean> {
         const driver = getDriver();
 
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            await openTestBenchSidebar(driver);
-            const elementsSection = await getElementsSection();
-            if (!elementsSection) {
-                continue;
-            }
+        return await retryUntil(
+            async (attempt) => {
+                await openTestBenchSidebar(driver);
+                const elementsSection = await getElementsSection();
+                if (!elementsSection) {
+                    logger.debug(
+                        "TestElements",
+                        `Test Elements section unavailable for open-resource attempt ${attempt}/${maxAttempts}`
+                    );
+                    return false;
+                }
 
-            const subdivisionItem = await testElementsPage.getItem(elementsSection, subdivisionLabel);
-            if (!subdivisionItem) {
-                continue;
-            }
+                const subdivisionItem = await testElementsPage.getItem(elementsSection, subdivisionLabel);
+                if (!subdivisionItem) {
+                    logger.debug(
+                        "TestElements",
+                        `Subdivision "${subdivisionLabel}" unavailable for open-resource attempt ${attempt}/${maxAttempts}`
+                    );
+                    return false;
+                }
 
-            await subdivisionItem.click();
-            await applySlowMotion(driver);
+                await subdivisionItem.click();
+                await applySlowMotion(driver);
 
-            const clicked = await testElementsPage.clickOpenResource(subdivisionItem);
-            if (clicked) {
-                return true;
-            }
-
-            if (attempt < maxAttempts) {
-                await driver.sleep(OPEN_RESOURCE_RETRY_DELAY_MS);
-            }
-        }
-
-        return false;
+                return await testElementsPage.clickOpenResource(subdivisionItem);
+            },
+            maxAttempts,
+            `open resource action for subdivision "${subdivisionLabel}"`
+        );
     }
 
     async function tryCreateResourceWithRetries(
@@ -169,29 +171,84 @@ describe("Test Elements View UI Tests", function () {
     ): Promise<boolean> {
         const driver = getDriver();
 
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            await openTestBenchSidebar(driver);
-            const elementsSection = await getElementsSection();
-            if (!elementsSection) {
-                continue;
-            }
+        return await retryUntil(
+            async (attempt) => {
+                await openTestBenchSidebar(driver);
+                const elementsSection = await getElementsSection();
+                if (!elementsSection) {
+                    logger.debug(
+                        "TestElements",
+                        `Test Elements section unavailable for create-resource attempt ${attempt}/${maxAttempts}`
+                    );
+                    return false;
+                }
 
-            const subdivisionItem = await testElementsPage.getItem(elementsSection, subdivisionLabel);
-            if (!subdivisionItem) {
-                continue;
-            }
+                const subdivisionItem = await testElementsPage.getItem(elementsSection, subdivisionLabel);
+                if (!subdivisionItem) {
+                    logger.debug(
+                        "TestElements",
+                        `Subdivision "${subdivisionLabel}" unavailable for create-resource attempt ${attempt}/${maxAttempts}`
+                    );
+                    return false;
+                }
 
-            const created = await testElementsPage.clickCreateResource(subdivisionItem, subdivisionLabel);
-            if (created) {
-                return true;
-            }
+                return await testElementsPage.clickCreateResource(subdivisionItem, subdivisionLabel);
+            },
+            maxAttempts,
+            `create resource action for subdivision "${subdivisionLabel}"`
+        );
+    }
 
-            if (attempt < maxAttempts) {
-                await driver.sleep(OPEN_RESOURCE_RETRY_DELAY_MS);
+    async function hasChildrenSafe(item: TreeItem): Promise<boolean> {
+        try {
+            return await item.hasChildren();
+        } catch {
+            return false;
+        }
+    }
+
+    async function findFirstLeafDescendant(
+        rootItem: TreeItem,
+        maxDepth: number = 4
+    ): Promise<{ item: TreeItem; label: string } | null> {
+        if (maxDepth < 0) {
+            return null;
+        }
+
+        const rootHasChildren = await hasChildrenSafe(rootItem);
+        if (!rootHasChildren) {
+            try {
+                const leafLabel = await rootItem.getLabel();
+                return { item: rootItem, label: leafLabel };
+            } catch {
+                return null;
             }
         }
 
-        return false;
+        try {
+            if (!(await rootItem.isExpanded())) {
+                await rootItem.expand();
+                await applySlowMotion(getDriver());
+            }
+        } catch {
+            return null;
+        }
+
+        let children: TreeItem[] = [];
+        try {
+            children = await rootItem.getChildren();
+        } catch {
+            children = [];
+        }
+
+        for (const child of children) {
+            const descendantLeaf = await findFirstLeafDescendant(child, maxDepth - 1);
+            if (descendantLeaf) {
+                return descendantLeaf;
+            }
+        }
+
+        return null;
     }
 
     before(async function () {
@@ -500,8 +557,13 @@ describe("Test Elements View UI Tests", function () {
                 skipPrecondition(this, "No keywords available under subdivision");
             }
 
-            const firstKeywordOfSubdivision = subdivisionChildren[0];
-            const keywordLabel = await firstKeywordOfSubdivision.getLabel();
+            const keywordCandidate = await findFirstLeafDescendant(subdivisionItem, 5);
+            if (!keywordCandidate) {
+                skipPrecondition(this, "No leaf keyword item found under subdivision");
+            }
+
+            const firstKeywordOfSubdivision = keywordCandidate.item;
+            const keywordLabel = keywordCandidate.label;
             logger.info("TestElements", `Clicking keyword: "${keywordLabel}"`);
 
             await firstKeywordOfSubdivision.click();
@@ -566,8 +628,13 @@ describe("Test Elements View UI Tests", function () {
                 skipPrecondition(this, "No keywords available under subdivision for double-click");
             }
 
-            const firstKeywordOfSubdivision = subdivisionChildren[0];
-            const keywordLabel = await firstKeywordOfSubdivision.getLabel();
+            const keywordCandidate = await findFirstLeafDescendant(subdivisionItem, 5);
+            if (!keywordCandidate) {
+                skipPrecondition(this, "No leaf keyword item found under subdivision for double-click");
+            }
+
+            const firstKeywordOfSubdivision = keywordCandidate.item;
+            const keywordLabel = keywordCandidate.label;
             logger.info("TestElements", `Double-clicking keyword: "${keywordLabel}"`);
 
             await doubleClickTreeItem(firstKeywordOfSubdivision, driver);

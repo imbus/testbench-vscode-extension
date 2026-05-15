@@ -667,6 +667,7 @@ export async function doubleClickTreeItem(item: TreeItem, driver: WebDriver): Pr
         logger.warn("TreeItem", "Double-click failed, trying alternative method", error);
         try {
             await item.click();
+            // Emulate human double click with fixed delay.
             await driver.sleep(100);
             await item.click();
             await applySlowMotion(driver);

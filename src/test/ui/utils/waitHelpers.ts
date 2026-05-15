@@ -8,9 +8,31 @@ import { getTestLogger } from "./testLogger";
 import { WebDriver, By, SideBarView } from "vscode-extension-tester";
 
 const logger = getTestLogger();
+const DEFAULT_WAIT_TEXT_SNIPPET_LENGTH = 80;
 
 interface TreeSectionLike {
     getVisibleItems(): Promise<unknown[]>;
+    getTitle?(): Promise<string>;
+}
+
+/**
+ * Creates a single-line snippet suitable for timeout diagnostics.
+ *
+ * @param text - Raw text to normalize and truncate
+ * @param maxLength - Maximum snippet length including ellipsis
+ * @returns string - Normalized, bounded-length text snippet
+ */
+function createWaitTextSnippet(text: string, maxLength: number = DEFAULT_WAIT_TEXT_SNIPPET_LENGTH): string {
+    const normalizedText = text.replace(/\s+/g, " ").trim();
+    if (!normalizedText) {
+        return "<empty>";
+    }
+
+    if (normalizedText.length <= maxLength) {
+        return normalizedText;
+    }
+
+    return `${normalizedText.slice(0, Math.max(1, maxLength - 3))}...`;
 }
 
 /**
@@ -44,20 +66,152 @@ export async function waitForCondition(
     pollInterval: number = 100,
     description: string = "condition"
 ): Promise<boolean> {
-    const startTime = Date.now();
-    while (Date.now() - startTime < timeout) {
-        try {
-            if (await condition()) {
-                return true;
+    let lastConditionError: unknown;
+
+    try {
+        await driver.wait(
+            async () => {
+                try {
+                    return await condition();
+                } catch (error) {
+                    lastConditionError = error;
+                    // Keep polling when the condition is temporarily unstable.
+                    return false;
+                }
+            },
+            timeout,
+            `Waiting for ${description}`,
+            pollInterval
+        );
+        return true;
+    } catch (waitError) {
+        const waitErrorMessage = waitError instanceof Error ? waitError.message : String(waitError);
+        const conditionErrorContext =
+            lastConditionError !== undefined
+                ? `; lastConditionError=${lastConditionError instanceof Error ? lastConditionError.message : String(lastConditionError)}`
+                : "";
+
+        logger.debug(
+            "Wait",
+            `Timeout waiting for ${description} (timeout=${timeout}ms, poll=${pollInterval}ms; waitError=${waitErrorMessage})${conditionErrorContext}`
+        );
+        return false;
+    }
+}
+
+/**
+ * Waits for the VS Code activity bar element to be present in the DOM.
+ *
+ * Standardizes activity-bar readiness polling that previously appeared as
+ * inline `driver.wait` callbacks across reload/stability helpers, providing
+ * uniform timeout/poll diagnostics via {@link waitForCondition}.
+ *
+ * @param driver - The WebDriver instance
+ * @param timeout - Maximum time to wait in milliseconds
+ * @param context - Caller context appended to the wait description for diagnostics
+ * @returns Promise<boolean> - True if the activity bar appeared, false on timeout
+ */
+export async function waitForActivityBar(
+    driver: WebDriver,
+    timeout: number = UITimeouts.MEDIUM,
+    context: string = "shell readiness"
+): Promise<boolean> {
+    return waitForCondition(
+        driver,
+        async () => {
+            try {
+                const activityBar = await driver.findElement(By.id("workbench.parts.activitybar"));
+                return activityBar !== null;
+            } catch {
+                return false;
             }
-        } catch {
-            // Condition threw an error, continue polling
-        }
-        await driver.sleep(pollInterval);
+        },
+        timeout,
+        100,
+        `activity bar to be interactive (${context})`
+    );
+}
+
+/**
+ * Executes a bounded retry loop for operations that are attempt-driven
+ * rather than time/poll-driven.
+ *
+ * @param operation - Operation that returns true when successful
+ * @param maxAttempts - Maximum number of attempts before giving up
+ * @param description - Human-readable context for diagnostics
+ * @param onRetry - Optional hook executed between attempts
+ * @returns Promise<boolean> - True if operation succeeded, false otherwise
+ */
+export async function retryUntil(
+    operation: (attempt: number) => Promise<boolean>,
+    maxAttempts: number,
+    description: string,
+    onRetry?: (attempt: number, lastError?: unknown) => Promise<void>
+): Promise<boolean> {
+    if (maxAttempts < 1) {
+        logger.warn("Wait", `Invalid retry configuration for ${description}: attempts=${maxAttempts}`);
+        return false;
     }
 
-    logger.debug("Wait", `Timeout waiting for ${description}`);
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        let attemptError: unknown;
+
+        try {
+            if (await operation(attempt)) {
+                return true;
+            }
+        } catch (error) {
+            attemptError = error;
+            lastError = error;
+        }
+
+        if (attempt < maxAttempts && onRetry) {
+            await onRetry(attempt, attemptError);
+        }
+    }
+
+    const errorContext = lastError ? `; lastError=${String(lastError)}` : "";
+    logger.debug("Wait", `Retries exhausted for ${description} (attempts=${maxAttempts})${errorContext}`);
     return false;
+}
+
+/**
+ * Runs an async operation with a hard timeout and returns null on timeout.
+ *
+ * This helper standardizes short per-operation bounds used in flaky UI tree traversal,
+ * where callers prefer to continue scanning rather than failing the whole test flow.
+ *
+ * @param operation - Operation to execute
+ * @param timeoutMs - Timeout in milliseconds
+ * @param operationName - Human-readable operation context for timeout diagnostics
+ * @returns Promise<T | null> - Operation result, or null when timed out
+ */
+export async function runWithTimeout<T>(
+    operation: () => Promise<T>,
+    timeoutMs: number = 2500,
+    operationName: string = "operation"
+): Promise<T | null> {
+    const timeoutSentinel = Symbol("runWithTimeoutTimeout");
+    let timeoutHandle: NodeJS.Timeout | null = null;
+
+    const timeoutPromise = new Promise<typeof timeoutSentinel>((resolve) => {
+        timeoutHandle = setTimeout(() => resolve(timeoutSentinel), timeoutMs);
+    });
+
+    try {
+        const result = await Promise.race<T | typeof timeoutSentinel>([operation(), timeoutPromise]);
+        if (result === timeoutSentinel) {
+            logger.debug("Wait", `Timeout in ${operationName} (timeout=${timeoutMs}ms)`);
+            return null;
+        }
+        return result;
+    } finally {
+        if (timeoutHandle) {
+            clearTimeout(timeoutHandle);
+        }
+    }
 }
 
 /**
@@ -66,9 +220,14 @@ export async function waitForCondition(
  *
  * @param driver - The WebDriver instance
  * @param timeout - Maximum time to wait
+ * @param contextDescription - Operation context used in timeout diagnostics
  * @returns Promise<string | null> - Tooltip text if found, null otherwise
  */
-export async function waitForTooltip(driver: WebDriver, timeout: number = UITimeouts.MEDIUM): Promise<string | null> {
+export async function waitForTooltip(
+    driver: WebDriver,
+    timeout: number = UITimeouts.MEDIUM,
+    contextDescription: string = "tooltip content"
+): Promise<string | null> {
     const tooltipSelectors = [
         ".monaco-hover-content",
         ".hover-contents",
@@ -103,7 +262,7 @@ export async function waitForTooltip(driver: WebDriver, timeout: number = UITime
         },
         timeout,
         100,
-        "tooltip to appear"
+        `${contextDescription} to appear via hover`
     );
 
     return tooltipText;
@@ -118,7 +277,8 @@ export async function waitForTooltip(driver: WebDriver, timeout: number = UITime
  */
 export async function waitForTestingViewReady(
     driver: WebDriver,
-    timeout: number = UITimeouts.MEDIUM
+    timeout: number = UITimeouts.MEDIUM,
+    contextDescription: string = "Testing View readiness"
 ): Promise<boolean> {
     return waitForCondition(
         driver,
@@ -137,7 +297,7 @@ export async function waitForTestingViewReady(
         },
         timeout,
         200,
-        "Testing View to be ready"
+        `${contextDescription} (sidebar section title contains "test")`
     );
 }
 
@@ -154,6 +314,8 @@ export async function waitForTerminalOutput(
     expectedText: string,
     timeout: number = UITimeouts.LONG
 ): Promise<boolean> {
+    const expectedTextSnippet = createWaitTextSnippet(expectedText);
+
     return waitForCondition(
         driver,
         async () => {
@@ -172,7 +334,7 @@ export async function waitForTerminalOutput(
         },
         timeout,
         500,
-        `terminal output containing '${expectedText}'`
+        `terminal output to contain "${expectedTextSnippet}"`
     );
 }
 
@@ -189,6 +351,18 @@ export async function waitForTreeRefresh(
     section: TreeSectionLike | null | undefined,
     timeout: number = UITimeouts.MEDIUM
 ): Promise<boolean> {
+    let sectionContext = "any sidebar section";
+    if (section?.getTitle) {
+        try {
+            const sectionTitle = await section.getTitle();
+            if (sectionTitle) {
+                sectionContext = `section '${sectionTitle}'`;
+            }
+        } catch {
+            // Keep generic context when title cannot be resolved.
+        }
+    }
+
     return waitForCondition(
         driver,
         async () => {
@@ -214,7 +388,7 @@ export async function waitForTreeRefresh(
         },
         timeout,
         200,
-        "tree to refresh"
+        `tree to refresh in ${sectionContext}`
     );
 }
 
@@ -236,7 +410,8 @@ export async function waitForNotification(
 
         logger.trace("Notification", `Waiting for notification containing: "${textToMatch}"...`);
 
-        await driver.wait(
+        return await waitForCondition(
+            driver,
             async () => {
                 try {
                     // Look for notification toasts and center notifications
@@ -285,12 +460,11 @@ export async function waitForNotification(
                 }
             },
             timeout,
-            `Waiting for notification containing: "${textToMatch}"`
+            200,
+            `notification containing "${textToMatch}"`
         );
-
-        return true;
     } catch (error) {
-        logger.debug("Notification", `Notification not found within timeout: ${error}`);
+        logger.debug("Notification", `Notification wait failed before polling started: ${error}`);
         return false;
     }
 }
@@ -308,29 +482,41 @@ export async function waitForTreeItems(
     driver: WebDriver,
     timeout: number = UITimeouts.LONG
 ): Promise<boolean> {
-    try {
-        await driver.wait(
-            async () => {
-                try {
-                    const items = await section.getVisibleItems();
-                    return items.length > 0;
-                } catch {
-                    return false;
-                }
-            },
-            timeout,
-            "Waiting for tree items to load"
-        );
-        return true;
-    } catch {
-        return false;
+    let sectionContext = "tree section";
+    if (section.getTitle) {
+        try {
+            const sectionTitle = await section.getTitle();
+            if (sectionTitle) {
+                sectionContext = `tree section '${sectionTitle}'`;
+            }
+        } catch {
+            // Keep generic context when title cannot be resolved.
+        }
     }
+
+    return waitForCondition(
+        driver,
+        async () => {
+            try {
+                const items = await section.getVisibleItems();
+                return items.length > 0;
+            } catch {
+                return false;
+            }
+        },
+        timeout,
+        200,
+        `items to load in ${sectionContext}`
+    );
 }
 
 /**
  * Applies slow motion delay if enabled in configuration.
  * This should be called after visible UI actions to allow human observation.
  * Only delays when slow motion mode is enabled via UI_TEST_SLOW_MOTION environment variable.
+ *
+ * This is an intentional allowlisted fixed delay: it serves demonstrability/debuggability,
+ * not synchronization with product state.
  *
  * @param driver - The WebDriver instance
  * @param customDelay - Optional custom delay in milliseconds (overrides config)

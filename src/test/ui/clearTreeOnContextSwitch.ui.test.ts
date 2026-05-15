@@ -9,7 +9,7 @@ import { expect } from "chai";
 import { SideBarView, TreeItem } from "vscode-extension-tester";
 import { getTestLogger } from "./utils/testLogger";
 import { waitForTestThemesAndElementsViews, handleCycleConfigurationPrompt } from "./utils/testUtils";
-import { waitForTreeItems, applySlowMotion, UITimeouts } from "./utils/waitHelpers";
+import { waitForTreeItems, applySlowMotion, UITimeouts, retryUntil } from "./utils/waitHelpers";
 import { collectTreeItemLabels } from "./utils/treeItemUtils";
 import { doubleClickTreeItem } from "./utils/treeViewUtils";
 import { getTestData, logTestDataConfig } from "./config/testConfig";
@@ -138,27 +138,39 @@ describe("Clear Tree On Context Switch Behavior", function () {
             return null;
         }
 
-        await doubleClickTreeItem(refreshedCycle, driver);
-        let viewsAppeared = await waitForTestThemesAndElementsViews(driver, UITimeouts.LONG);
+        const viewsAppeared = await retryUntil(
+            async (attempt) => {
+                let cycleToOpen: TreeItem | undefined = refreshedCycle;
 
-        if (!viewsAppeared) {
-            logger.warn("ClearSwitch", "Views did not appear on first open attempt, retrying cycle double-click...");
-            await applySlowMotion(driver, 300);
+                if (attempt > 1) {
+                    logger.warn(
+                        "ClearSwitch",
+                        "Views did not appear on first open attempt, retrying cycle double-click..."
+                    );
+                    await applySlowMotion(driver, 300);
 
-            const retryProjectsSection = await getProjectsSection(projectsPage);
-            if (retryProjectsSection) {
-                const retryProject = await projectsPage.getProject(retryProjectsSection, config.projectName);
-                const retryVersion = retryProject
-                    ? await projectsPage.getVersion(retryProject, config.versionName)
-                    : undefined;
-                const retryCycle = retryVersion ? await projectsPage.getCycle(retryVersion, cycleName) : undefined;
+                    const retryProjectsSection = await getProjectsSection(projectsPage);
+                    if (!retryProjectsSection) {
+                        return false;
+                    }
 
-                if (retryCycle) {
-                    await doubleClickTreeItem(retryCycle, driver);
-                    viewsAppeared = await waitForTestThemesAndElementsViews(driver, UITimeouts.LONG);
+                    const retryProject = await projectsPage.getProject(retryProjectsSection, config.projectName);
+                    const retryVersion = retryProject
+                        ? await projectsPage.getVersion(retryProject, config.versionName)
+                        : undefined;
+                    cycleToOpen = retryVersion ? await projectsPage.getCycle(retryVersion, cycleName) : undefined;
                 }
-            }
-        }
+
+                if (!cycleToOpen) {
+                    return false;
+                }
+
+                await doubleClickTreeItem(cycleToOpen, driver);
+                return await waitForTestThemesAndElementsViews(driver, UITimeouts.LONG);
+            },
+            2,
+            `open cycle "${cycleName}" and wait for Test Themes/Test Elements views`
+        );
 
         if (!viewsAppeared) {
             logger.warn("ClearSwitch", "Test Themes/Test Elements views did not appear");

@@ -4,7 +4,7 @@
  */
 
 import { getTestLogger } from "./testLogger";
-import { UITimeouts } from "./waitHelpers";
+import { UITimeouts, waitForCondition } from "./waitHelpers";
 import { WebDriver, By, SideBarView } from "vscode-extension-tester";
 
 const logger = getTestLogger();
@@ -83,7 +83,8 @@ export async function findAndSwitchToWebview(
         }
 
         // Wait for webview to be available with a single attempt using proper waits
-        const iframeFound: boolean = await driver.wait(
+        const iframeFound: boolean = await waitForCondition(
+            driver,
             async (): Promise<boolean> => {
                 const result = (await driver.executeScript(
                     `
@@ -115,8 +116,8 @@ export async function findAndSwitchToWebview(
                 return result;
             },
             timeout,
-            "Waiting for webview iframe",
-            UITimeouts.MINIMAL
+            UITimeouts.MINIMAL,
+            `webview iframe to appear and be markable via attribute "${safeMarkAttribute}"`
         );
 
         if (!iframeFound) {
@@ -132,7 +133,8 @@ export async function findAndSwitchToWebview(
         await driver.switchTo().frame(markedIframes[0]);
 
         // Wait for active-frame to load content
-        const contentLoaded = await driver.wait(
+        const contentLoaded = await waitForCondition(
+            driver,
             async () => {
                 const result = (await driver.executeScript(`
                 const activeFrame = document.getElementById('active-frame');
@@ -155,8 +157,8 @@ export async function findAndSwitchToWebview(
                 return result.loaded;
             },
             UITimeouts.LONG,
-            "Waiting for content to load in active-frame",
-            UITimeouts.MINIMAL
+            UITimeouts.MINIMAL,
+            "active-frame content to load with expected login form elements"
         );
 
         if (!contentLoaded) {

@@ -7,7 +7,7 @@
 import { WebDriver, By, WebElement, until } from "vscode-extension-tester";
 import { handleConfirmationDialog } from "../utils/dialogUtils";
 import { findAndSwitchToWebview } from "../utils/webviewUtils";
-import { UITimeouts, applySlowMotion } from "../utils/waitHelpers";
+import { UITimeouts, applySlowMotion, waitForCondition, retryUntil } from "../utils/waitHelpers";
 import { getTestLogger } from "../utils/testLogger";
 
 const CONNECTION_FORM_ELEMENT_IDS = {
@@ -25,6 +25,9 @@ const CONNECTION_FORM_ELEMENT_IDS = {
     CONNECTIONS_LIST: "connectionsList",
     ADD_CONNECTION_FORM: "addConnectionForm"
 } as const;
+
+const DIALOG_SELECTORS = ".monaco-dialog-modal-block, .monaco-dialog, .monaco-dialog-box";
+const DIALOG_MODAL_BLOCK_SELECTOR = ".monaco-dialog-modal-block";
 
 /**
  * Interface for connection form data.
@@ -130,20 +133,12 @@ export class ConnectionPage {
             await this.driver.switchTo().defaultContent();
 
             // Check if dialog appeared (with short timeout since it may not appear)
-            try {
-                const dialogElement = await this.driver.wait(
-                    until.elementLocated(By.css(".monaco-dialog-modal-block, .monaco-dialog, .monaco-dialog-box")),
-                    UITimeouts.SHORT,
-                    "Checking for Save Changes dialog"
-                );
+            const dialogAppeared = await this.waitForDialogPresent(
+                '"Save Changes" dialog to appear after save',
+                UITimeouts.SHORT
+            );
 
-                // Verify dialog is actually visible
-                const isVisible = await dialogElement.isDisplayed();
-                if (!isVisible) {
-                    // Dialog element exists but is not visible, skip handling
-                    return;
-                }
-
+            if (dialogAppeared) {
                 // Dialog appeared and is visible, handle it via shared host-dialog helper
                 const logger = getTestLogger();
                 const dialogHandled = await handleConfirmationDialog(this.driver, "Save Changes", UITimeouts.SHORT);
@@ -154,16 +149,10 @@ export class ConnectionPage {
                 }
 
                 // Wait for dialog to fully close
-                await this.driver.wait(
-                    async () => {
-                        const modalBlocks = await this.driver.findElements(By.css(".monaco-dialog-modal-block"));
-                        return modalBlocks.length === 0;
-                    },
-                    UITimeouts.SHORT,
-                    "Waiting for Save Changes dialog to close"
-                );
-            } catch {
-                // Dialog didn't appear, which is fine - continue normally
+                const dialogClosed = await this.waitForDialogClosed('"Save Changes" dialog to close', UITimeouts.SHORT);
+                if (!dialogClosed) {
+                    logger.warn("ConnectionPage", "Timed out waiting for 'Save Changes' dialog to close");
+                }
             }
 
             // Switch back to webview to continue
@@ -189,7 +178,8 @@ export class ConnectionPage {
 
             // Wait for UI to settle and for form to reset (section title changes back to "Add New Connection")
             // Also wait for connections list to be updated (connection items to appear)
-            await this.driver.wait(
+            const uiSettled = await waitForCondition(
+                this.driver,
                 async () => {
                     try {
                         // Check if form is reset (not in edit mode)
@@ -206,8 +196,12 @@ export class ConnectionPage {
                     }
                 },
                 UITimeouts.MEDIUM,
-                "Waiting for UI to settle after save and connection to appear in list"
+                100,
+                "connection form/list to settle after save"
             );
+            if (!uiSettled) {
+                throw new Error("Timed out waiting for connection form/list to settle after save");
+            }
         }
     }
 
@@ -365,14 +359,19 @@ export class ConnectionPage {
         await applySlowMotion(this.driver);
 
         // Wait for form to reset (section title should change back to "Add New Connection")
-        await this.driver.wait(
+        const reset = await waitForCondition(
+            this.driver,
             async () => {
                 const titleText = await this.getSectionTitle();
                 return titleText.toLowerCase().includes("add new connection");
             },
             UITimeouts.MEDIUM,
-            "Waiting for form to reset after canceling edit"
+            100,
+            "connection form to reset after canceling edit"
         );
+        if (!reset) {
+            throw new Error("Timed out waiting for connection form to reset after canceling edit");
+        }
     }
 
     /**
@@ -452,13 +451,18 @@ export class ConnectionPage {
         await applySlowMotion(this.driver);
 
         // Wait for UI to update and for form to enter edit mode
-        await this.driver.wait(
+        const enteredEditMode = await waitForCondition(
+            this.driver,
             async () => {
                 return await this.isEditMode();
             },
             UITimeouts.MEDIUM,
-            "Waiting for form to enter edit mode"
+            100,
+            "connection form to enter edit mode"
         );
+        if (!enteredEditMode) {
+            throw new Error("Timed out waiting for connection form to enter edit mode");
+        }
     }
 
     /**
@@ -488,12 +492,14 @@ export class ConnectionPage {
             // Switch to default content BEFORE handling dialog (dialog blocks webview)
             await this.driver.switchTo().defaultContent();
 
-            // Wait for dialog to appear
-            await this.driver.wait(
-                until.elementLocated(By.css(".monaco-dialog-modal-block, .monaco-dialog, .monaco-dialog-box")),
-                UITimeouts.MEDIUM,
-                "Waiting for confirmation dialog to appear"
+            const dialogAppeared = await this.waitForDialogPresent(
+                "delete confirmation dialog to appear",
+                UITimeouts.MEDIUM
             );
+            if (!dialogAppeared) {
+                logger.warn("ConnectionPage", "Delete confirmation dialog did not appear in time");
+                return false;
+            }
 
             // Handle confirmation dialog using shared dialog helper
             const dialogHandled = await handleConfirmationDialog(this.driver, "Delete");
@@ -503,15 +509,14 @@ export class ConnectionPage {
                 return false;
             }
 
-            // Wait for dialog to be fully closed
-            await this.driver.wait(
-                async () => {
-                    const modalBlocks = await this.driver.findElements(By.css(".monaco-dialog-modal-block"));
-                    return modalBlocks.length === 0;
-                },
-                UITimeouts.MEDIUM,
-                "Waiting for dialog to close"
+            const dialogClosed = await this.waitForDialogClosed(
+                "delete confirmation dialog to close",
+                UITimeouts.MEDIUM
             );
+            if (!dialogClosed) {
+                logger.warn("ConnectionPage", "Delete confirmation dialog did not close in time");
+                return false;
+            }
 
             // Switch back to webview
             const webviewFound = await findAndSwitchToWebview(this.driver);
@@ -556,118 +561,149 @@ export class ConnectionPage {
         try {
             let deletedCount = 0;
             const maxIterations = 50; // Safety limit to prevent infinite loops
-            let iterations = 0;
+            let stoppedEarly: boolean = false;
+            let stopReason: string = "";
 
-            // Delete connections until none remain
-            while (iterations < maxIterations) {
-                iterations++;
+            const cleanupCompleted = await retryUntil(
+                async (attempt) => {
+                    // Get all connections
+                    const connections = await this.getAllConnections();
 
-                // Get all connections
-                const connections = await this.getAllConnections();
-
-                if (connections.length === 0) {
-                    // No more connections to delete
-                    break;
-                }
-
-                // Delete the first connection (we'll keep deleting until all are gone)
-                const firstConnection = connections[0];
-
-                try {
-                    // Check if delete button is enabled (not disabled during edit mode)
-                    const isDisabled = await this.isActionDisabled(firstConnection, "delete");
-
-                    if (isDisabled) {
-                        // Connection is being edited - cancel edit mode first
-                        logger.info("ConnectionPage", "Connection is being edited. Canceling edit mode first...");
-                        try {
-                            await this.cancelEdit();
-                            // Re-fetch connections after canceling edit
-                            continue;
-                        } catch {
-                            logger.warn("ConnectionPage", "Could not cancel edit mode. Skipping cleanup.");
-                            break;
-                        }
+                    if (connections.length === 0) {
+                        // No more connections to delete
+                        return true;
                     }
 
-                    // Click delete button (this will open confirmation dialog)
-                    await this.clickDelete(firstConnection);
+                    // Delete the first connection (we'll keep deleting until all are gone)
+                    const firstConnection = connections[0];
 
-                    // Switch to default content BEFORE handling dialog (dialog blocks webview)
-                    await this.driver.switchTo().defaultContent();
+                    try {
+                        // Check if delete button is enabled (not disabled during edit mode)
+                        const isDisabled = await this.isActionDisabled(firstConnection, "delete");
 
-                    // Wait for dialog to appear
-                    await this.driver.wait(
-                        until.elementLocated(By.css(".monaco-dialog-modal-block, .monaco-dialog, .monaco-dialog-box")),
-                        UITimeouts.MEDIUM,
-                        "Waiting for confirmation dialog to appear"
-                    );
+                        if (isDisabled) {
+                            // Connection is being edited - cancel edit mode first
+                            logger.info("ConnectionPage", "Connection is being edited. Canceling edit mode first...");
+                            try {
+                                await this.cancelEdit();
+                                return false;
+                            } catch {
+                                stoppedEarly = true;
+                                stopReason = "Could not cancel edit mode during bulk cleanup";
+                                logger.warn("ConnectionPage", "Could not cancel edit mode. Stopping cleanup.");
+                                return true;
+                            }
+                        }
 
-                    // Handle confirmation dialog using shared dialog helper
-                    const dialogHandled = await handleConfirmationDialog(this.driver, "Delete");
+                        // Click delete button (this will open confirmation dialog)
+                        await this.clickDelete(firstConnection);
 
-                    if (!dialogHandled) {
-                        logger.warn("ConnectionPage", "Failed to handle confirmation dialog, skipping this connection");
-                        // Try to cancel the dialog if it's still open
-                        try {
-                            await this.driver.switchTo().defaultContent();
-                            const cancelButtons = await this.driver.findElements(
-                                By.xpath("//button[contains(text(), 'Cancel') or contains(text(), 'No')]")
+                        // Switch to default content BEFORE handling dialog (dialog blocks webview)
+                        await this.driver.switchTo().defaultContent();
+
+                        const dialogAppeared = await this.waitForDialogPresent(
+                            "delete confirmation dialog to appear during bulk cleanup",
+                            UITimeouts.MEDIUM
+                        );
+                        if (!dialogAppeared) {
+                            logger.warn(
+                                "ConnectionPage",
+                                `Delete confirmation dialog did not appear during cleanup (attempt ${attempt}/${maxIterations})`
                             );
-                            if (cancelButtons.length > 0) {
-                                await cancelButtons[0].click();
+                            return false;
+                        }
 
-                                // Wait for dialog to disappear
-                                await this.driver.wait(
-                                    async () => {
-                                        const modalBlocks = await this.driver.findElements(
-                                            By.css(".monaco-dialog-modal-block")
-                                        );
-                                        return modalBlocks.length === 0;
-                                    },
-                                    UITimeouts.MEDIUM,
-                                    "Waiting for dialog to close after cancel"
+                        // Handle confirmation dialog using shared dialog helper
+                        const dialogHandled = await handleConfirmationDialog(this.driver, "Delete");
+
+                        if (!dialogHandled) {
+                            logger.warn(
+                                "ConnectionPage",
+                                "Failed to handle confirmation dialog, skipping this connection"
+                            );
+                            // Try to cancel the dialog if it's still open
+                            try {
+                                await this.driver.switchTo().defaultContent();
+                                const cancelButtons = await this.driver.findElements(
+                                    By.xpath("//button[contains(text(), 'Cancel') or contains(text(), 'No')]")
                                 );
+                                if (cancelButtons.length > 0) {
+                                    await cancelButtons[0].click();
+
+                                    const dialogClosedAfterCancel = await this.waitForDialogClosed(
+                                        "confirmation dialog to close after cancel during cleanup",
+                                        UITimeouts.MEDIUM
+                                    );
+                                    if (!dialogClosedAfterCancel) {
+                                        logger.warn("ConnectionPage", "Dialog did not close in time after cancel");
+                                    }
+                                }
+                            } catch {
+                                // Ignore errors when trying to cancel
+                            }
+                            return false;
+                        }
+
+                        const dialogClosed = await this.waitForDialogClosed(
+                            "delete confirmation dialog to close during bulk cleanup",
+                            UITimeouts.MEDIUM
+                        );
+                        if (!dialogClosed) {
+                            logger.warn("ConnectionPage", "Delete confirmation dialog did not close during cleanup");
+                            return false;
+                        }
+
+                        // Switch back to webview to continue deleting connections
+                        try {
+                            const webviewFound = await findAndSwitchToWebview(this.driver);
+                            if (!webviewFound) {
+                                stoppedEarly = true;
+                                stopReason = "Could not switch back to webview after delete dialog during bulk cleanup";
+                                logger.warn("ConnectionPage", stopReason);
+                                return true;
+                            }
+                        } catch (error) {
+                            stoppedEarly = true;
+                            stopReason = `Error switching back to webview during bulk cleanup: ${String(error)}`;
+                            logger.error("ConnectionPage", stopReason);
+                            return true;
+                        }
+
+                        deletedCount++;
+                        return false;
+                    } catch (error) {
+                        logger.error("ConnectionPage", `Error deleting connection: ${error}`);
+                        // Try to switch back to webview and continue
+                        try {
+                            const webviewFound = await findAndSwitchToWebview(this.driver);
+                            if (!webviewFound) {
+                                stoppedEarly = true;
+                                stopReason = "Could not switch back to webview after delete error during cleanup";
+                                return true;
                             }
                         } catch {
-                            // Ignore errors when trying to cancel
+                            // If we can't switch back, stop cleanup early
+                            stoppedEarly = true;
+                            stopReason = "Could not switch back to webview after delete error during cleanup";
+                            return true;
                         }
-                        continue; // Skip this connection and try next
-                    }
 
-                    // Wait for dialog to be fully closed
-                    await this.driver.wait(
-                        async () => {
-                            const modalBlocks = await this.driver.findElements(By.css(".monaco-dialog-modal-block"));
-                            return modalBlocks.length === 0;
-                        },
-                        UITimeouts.MEDIUM,
-                        "Waiting for dialog to close"
-                    );
-
-                    // Switch back to webview to continue deleting connections
-                    try {
-                        const webviewFound = await findAndSwitchToWebview(this.driver);
-                        if (!webviewFound) {
-                            logger.warn("ConnectionPage", "Could not switch back to webview after dialog");
-                            break;
-                        }
-                    } catch (error) {
-                        logger.error("ConnectionPage", `Error switching back to webview: ${error}`);
-                        break;
+                        return false;
                     }
+                },
+                maxIterations,
+                "delete all saved TestBench connections"
+            );
 
-                    deletedCount++;
-                } catch (error) {
-                    logger.error("ConnectionPage", `Error deleting connection: ${error}`);
-                    // Try to switch back to webview and continue
-                    try {
-                        await findAndSwitchToWebview(this.driver);
-                    } catch {
-                        // If we can't switch back, break the loop
-                        break;
-                    }
-                }
+            if (!cleanupCompleted) {
+                logger.warn(
+                    "ConnectionPage",
+                    `Reached cleanup iteration limit (${maxIterations}) while deleting TestBench connections`
+                );
+            }
+
+            if (stoppedEarly && stopReason) {
+                logger.warn("ConnectionPage", `Stopped bulk cleanup early: ${stopReason}`);
             }
 
             if (deletedCount > 0) {
@@ -703,18 +739,79 @@ export class ConnectionPage {
             );
 
             // Wait for the field to be cleared and verify value is empty
-            await this.driver.wait(
+            const cleared = await waitForCondition(
+                this.driver,
                 async () => {
                     const value = await element.getAttribute("value");
                     return value === null || value === "";
                 },
                 1000,
-                "Waiting for input field to be cleared"
+                100,
+                "connection form input field to be cleared"
             );
+            if (!cleared) {
+                const logger = getTestLogger();
+                logger.warn("ConnectionPage", "Input field clear verification timed out");
+            }
         } catch (error) {
             const logger = getTestLogger();
             logger.warn("ConnectionPage", "Warning: Could not fully clear input field:", error);
         }
+    }
+
+    /**
+     * Waits for any host dialog surface to appear.
+     */
+    private async waitForDialogPresent(context: string, timeout: number = UITimeouts.MEDIUM): Promise<boolean> {
+        return await waitForCondition(
+            this.driver,
+            async () => {
+                const dialogs = await this.driver.findElements(By.css(DIALOG_SELECTORS));
+                for (const dialog of dialogs) {
+                    try {
+                        if (await dialog.isDisplayed()) {
+                            return true;
+                        }
+                    } catch {
+                        // Ignore stale dialog candidates and keep checking.
+                    }
+                }
+
+                return false;
+            },
+            timeout,
+            100,
+            context
+        );
+    }
+
+    /**
+     * Waits for the host dialog modal block to be dismissed.
+     * @param context - Description of the wait context for logging
+     * @param timeout - Maximum time to wait for the dialog to close
+     * @return True if the dialog is confirmed closed, false if timed out (dialog may still be present)
+     */
+    private async waitForDialogClosed(context: string, timeout: number = UITimeouts.MEDIUM): Promise<boolean> {
+        return await waitForCondition(
+            this.driver,
+            async () => {
+                const modalBlocks = await this.driver.findElements(By.css(DIALOG_MODAL_BLOCK_SELECTOR));
+                for (const modalBlock of modalBlocks) {
+                    try {
+                        if (await modalBlock.isDisplayed()) {
+                            return false;
+                        }
+                    } catch {
+                        // Ignore stale modal block nodes.
+                    }
+                }
+
+                return true;
+            },
+            timeout,
+            100,
+            context
+        );
     }
 
     /**

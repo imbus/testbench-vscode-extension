@@ -17,7 +17,14 @@ import {
     ensureLoggedIn,
     openTestBenchSidebar
 } from "./utils/testUtils";
-import { applySlowMotion, waitForTreeItems, UITimeouts } from "./utils/waitHelpers";
+import {
+    applySlowMotion,
+    waitForCondition,
+    waitForTreeItems,
+    waitForActivityBar,
+    UITimeouts,
+    retryUntil
+} from "./utils/waitHelpers";
 import { clickToolbarButton } from "./utils/toolbarUtils";
 import { getTestData, logTestDataConfig, hasTestCredentials } from "./config/testConfig";
 import { TestContext, setupTestHooks, skipTest } from "./utils/testHooks";
@@ -33,9 +40,6 @@ function skipPrecondition(context: Mocha.Context, reason: string): never {
 }
 
 const TOGGLE_ITEM_COUNT = 3;
-const STATE_RESTORE_DELAY = 2000;
-const REFRESH_DELAY = 3000;
-const TEST_ELEMENTS_REFRESH_DELAY = 5000;
 const TEST_ELEMENTS_REFRESH_TIMEOUT = 180000;
 
 type ViewName = "Projects" | "Test Themes" | "Test Elements";
@@ -74,18 +78,7 @@ async function ensureVSCodeStable(driver: WebDriver): Promise<void> {
     );
 
     // Wait for activity bar to be present
-    await driver.wait(
-        async () => {
-            try {
-                const activityBar = await driver.findElement(By.id("workbench.parts.activitybar"));
-                return activityBar !== null;
-            } catch {
-                return false;
-            }
-        },
-        UITimeouts.MEDIUM,
-        "Waiting for activity bar"
-    );
+    await waitForActivityBar(driver, UITimeouts.MEDIUM, "ensureVSCodeStable");
 
     // Wait for status bar
     await driver.wait(
@@ -94,8 +87,32 @@ async function ensureVSCodeStable(driver: WebDriver): Promise<void> {
         "Waiting for status bar"
     );
 
-    // Brief pause for any pending UI updates
-    await driver.sleep(500);
+    let stableSince: number | null = null;
+    const shellStable = await waitForCondition(
+        driver,
+        async () => {
+            try {
+                await driver.findElement(By.id("workbench.parts.activitybar"));
+                await driver.findElement(By.id("workbench.parts.statusbar"));
+
+                if (stableSince === null) {
+                    stableSince = Date.now();
+                    return false;
+                }
+
+                return Date.now() - stableSince >= 500;
+            } catch {
+                stableSince = null;
+                return false;
+            }
+        },
+        UITimeouts.SHORT,
+        100,
+        "VS Code shell stability"
+    );
+    if (!shellStable) {
+        logger.warn("Stability", "VS Code shell did not reach the desired stability window before proceeding");
+    }
     logger.debug("Stability", "VS Code appears stable");
 }
 
@@ -367,7 +384,19 @@ async function expandAllItems(section: ViewSection, driver: WebDriver): Promise<
                 const hasChildren = await item.hasChildren();
                 if (hasChildren && !(await item.isExpanded())) {
                     await item.expand();
-                    await driver.sleep(100);
+                    await waitForCondition(
+                        driver,
+                        async () => {
+                            try {
+                                return await item.isExpanded();
+                            } catch {
+                                return false;
+                            }
+                        },
+                        UITimeouts.SHORT,
+                        100,
+                        "tree item expansion to be reflected"
+                    );
                     expandedCount++;
                 }
             } catch {
@@ -427,77 +456,89 @@ async function reloadVSCodeWindow(driver: WebDriver): Promise<boolean> {
         }
 
         // Retry the full command-palette flow because quick picks can intermittently lag.
-        let reloadCommandTriggered = false;
         const commandQueries = ["Developer: Reload Window", ">Developer: Reload Window", "Reload Window"];
 
-        for (let attempt = 1; attempt <= 3 && !reloadCommandTriggered; attempt++) {
-            let commandPalette: any;
+        const reloadCommandTriggered = await retryUntil(
+            async (attempt) => {
+                let commandPalette: any;
 
-            try {
-                const workbench = new Workbench();
-                commandPalette = await workbench.openCommandPrompt();
-            } catch (error) {
-                logger.warn("Reload", `Command palette open attempt ${attempt} failed: ${error}`);
-                if (attempt === 3) {
-                    throw error;
-                }
-                await driver.sleep(1000);
-                continue;
-            }
-
-            for (const query of commandQueries) {
                 try {
-                    await commandPalette.setText(query);
-
-                    const picksReady = await driver.wait(
-                        async () => {
-                            try {
-                                const picks = await commandPalette.getQuickPicks();
-                                return picks.length > 0;
-                            } catch {
-                                return false;
-                            }
-                        },
-                        UITimeouts.VERY_LONG,
-                        `Waiting for quick picks to populate for query: ${query}`
-                    );
-
-                    if (!picksReady) {
-                        continue;
-                    }
-
-                    const picks = await commandPalette.getQuickPicks();
-                    for (const pick of picks) {
-                        try {
-                            const text = await pick.getText();
-                            if (text.includes("Reload Window") || text.includes("Developer: Reload Window")) {
-                                await pick.select();
-                                reloadCommandTriggered = true;
-                                break;
-                            }
-                        } catch (error) {
-                            logger.debug("Reload", `Error reading pick text: ${error}`);
-                        }
-                    }
-
-                    if (reloadCommandTriggered) {
-                        break;
-                    }
+                    const workbench = new Workbench();
+                    commandPalette = await workbench.openCommandPrompt();
                 } catch (error) {
-                    logger.debug("Reload", `Query '${query}' failed on attempt ${attempt}: ${error}`);
+                    logger.warn("Reload", `Command palette open attempt ${attempt} failed: ${error}`);
+                    return false;
                 }
-            }
 
-            if (!reloadCommandTriggered) {
+                for (const query of commandQueries) {
+                    try {
+                        await commandPalette.setText(query);
+
+                        const picksReady = await waitForCondition(
+                            driver,
+                            async () => {
+                                try {
+                                    const picks = await commandPalette.getQuickPicks();
+                                    return picks.length > 0;
+                                } catch {
+                                    return false;
+                                }
+                            },
+                            UITimeouts.VERY_LONG,
+                            200,
+                            `quick picks to populate for query: ${query}`
+                        );
+
+                        if (!picksReady) {
+                            logger.debug("Reload", `No quick picks for query '${query}' on attempt ${attempt}`);
+                            continue;
+                        }
+
+                        const picks = await commandPalette.getQuickPicks();
+                        for (const pick of picks) {
+                            try {
+                                const text = await pick.getText();
+                                if (text.includes("Reload Window") || text.includes("Developer: Reload Window")) {
+                                    await pick.select();
+                                    return true;
+                                }
+                            } catch (error) {
+                                logger.debug("Reload", `Error reading pick text: ${error}`);
+                            }
+                        }
+                    } catch (error) {
+                        logger.debug("Reload", `Query '${query}' failed on attempt ${attempt}: ${error}`);
+                    }
+                }
+
                 logger.warn("Reload", `Reload command not found on attempt ${attempt}; retrying...`);
                 try {
                     await commandPalette.cancel();
                 } catch {
                     // Ignore cancel errors
                 }
-                await driver.sleep(500);
+                await waitForCondition(
+                    driver,
+                    async () => {
+                        try {
+                            const quickInputVisible = await driver.findElements(By.css(".quick-input-widget"));
+                            return quickInputVisible.length === 0;
+                        } catch {
+                            return false;
+                        }
+                    },
+                    UITimeouts.SHORT,
+                    100,
+                    "command palette to close before reload retry"
+                );
+                return false;
+            },
+            3,
+            "Reload Window command palette flow",
+            async () => {
+                await ensureVSCodeStable(driver);
             }
-        }
+        );
 
         if (!reloadCommandTriggered) {
             logger.warn("Reload", "Reload Window command could not be triggered after retries");
@@ -547,21 +588,10 @@ async function reloadVSCodeWindow(driver: WebDriver): Promise<boolean> {
         );
 
         // Wait for activity bar to be interactive (better indicator than hard sleep)
-        await driver.wait(
-            async () => {
-                try {
-                    const activityBar = await driver.findElement(By.id("workbench.parts.activitybar"));
-                    return activityBar !== null;
-                } catch {
-                    return false;
-                }
-            },
-            UITimeouts.LONG,
-            "Waiting for activity bar"
-        );
+        await waitForActivityBar(driver, UITimeouts.LONG, "reloadVSCodeWindow post-reload");
 
-        // Small delay for extensions to finish activating
-        await driver.sleep(1500);
+        // Ensure workbench shell is ready instead of waiting a fixed duration.
+        await ensureVSCodeStable(driver);
 
         logger.info("Reload", "VS Code window reloaded successfully");
         return true;
@@ -746,32 +776,38 @@ async function verifyStatePreserved(
     action: PersistenceAction
 ): Promise<void> {
     const minimumExpectedItems = Math.max(1, Math.floor(stateBefore.items.size * 0.9));
-    let stateAfter: TreeViewExpansionState | null = null;
+    const stateAfterRef: { value: TreeViewExpansionState | null } = { value: null };
 
-    for (let attempt = 1; attempt <= 3; attempt++) {
-        const section = await getSection(page, driver);
-        if (!section) {
-            throw new Error(`${viewName} section not found after ${action}`);
-        }
+    await retryUntil(
+        async (attempt) => {
+            const section = await getSection(page, driver);
+            if (!section) {
+                throw new Error(`${viewName} section not found after ${action}`);
+            }
 
-        await waitForTreeItems(section, driver, UITimeouts.MEDIUM);
-        const captured = await captureTreeExpansionState(section, viewName);
+            await waitForTreeItems(section, driver, UITimeouts.MEDIUM);
+            const captured = await captureTreeExpansionState(section, viewName);
 
-        if (!stateAfter || captured.items.size > stateAfter.items.size) {
-            stateAfter = captured;
-        }
+            if (!stateAfterRef.value || captured.items.size > stateAfterRef.value.items.size) {
+                stateAfterRef.value = captured;
+            }
 
-        if (captured.items.size >= minimumExpectedItems) {
-            break;
-        }
+            if (captured.items.size >= minimumExpectedItems) {
+                return true;
+            }
 
-        logger.warn(
-            "Persistence",
-            `Captured only ${captured.items.size}/${stateBefore.items.size} items after ${action} (attempt ${attempt}/3), retrying...`
-        );
-        await driver.sleep(500);
-    }
+            logger.warn(
+                "Persistence",
+                `Captured only ${captured.items.size}/${stateBefore.items.size} items after ${action} (attempt ${attempt}/3), retrying...`
+            );
+            await waitForTreeItems(section, driver, UITimeouts.SHORT);
+            return false;
+        },
+        3,
+        `${viewName} state capture after ${action}`
+    );
 
+    const stateAfter = stateAfterRef.value;
     if (!stateAfter) {
         throw new Error(`Could not capture ${viewName} state after ${action}`);
     }
@@ -902,7 +938,6 @@ describe("Tree Expansion State Persistence Tests", function () {
 
             await openTestBenchSidebar(driver);
             await waitForProjectsView(driver, UITimeouts.LONG);
-            await driver.sleep(STATE_RESTORE_DELAY);
 
             await verifyStatePreserved(stateBefore, projectsPage, driver, "Projects", "logout/login");
         });
@@ -935,7 +970,6 @@ describe("Tree Expansion State Persistence Tests", function () {
 
             await openTestBenchSidebar(driver);
             await waitForProjectsView(driver, UITimeouts.VERY_LONG);
-            await driver.sleep(STATE_RESTORE_DELAY);
 
             await verifyStatePreserved(stateBefore, projectsPage, driver, "Projects", "reload");
         });
@@ -968,7 +1002,6 @@ describe("Tree Expansion State Persistence Tests", function () {
             const refreshClicked = await clickToolbarButton(currentSection!, "Refresh Projects", driver);
             expect(refreshClicked, "Refresh Projects button should be clicked").to.be.true;
 
-            await driver.sleep(REFRESH_DELAY);
             await waitForProjectsView(driver, UITimeouts.LONG);
 
             await verifyStatePreserved(stateBefore, projectsPage, driver, "Projects", "refresh");
@@ -1023,7 +1056,6 @@ describe("Tree Expansion State Persistence Tests", function () {
             await openTestBenchSidebar(driver);
             const navigated = await navigateToTestThemesAndElements(driver);
             expect(navigated, "Should navigate back to Test Themes view").to.be.true;
-            await driver.sleep(STATE_RESTORE_DELAY);
 
             await verifyStatePreserved(stateBefore, testThemesPage, driver, "Test Themes", "logout/login");
         });
@@ -1056,7 +1088,6 @@ describe("Tree Expansion State Persistence Tests", function () {
 
             await openTestBenchSidebar(driver);
             await waitForTestThemesAndElementsViews(driver, UITimeouts.VERY_LONG);
-            await driver.sleep(STATE_RESTORE_DELAY);
 
             await verifyStatePreserved(stateBefore, testThemesPage, driver, "Test Themes", "reload");
         });
@@ -1089,7 +1120,6 @@ describe("Tree Expansion State Persistence Tests", function () {
             const refreshClicked = await clickToolbarButton(currentSection!, "Refresh Test Themes", driver);
             expect(refreshClicked, "Refresh Test Themes button should be clicked").to.be.true;
 
-            await driver.sleep(REFRESH_DELAY);
             await waitForTestThemesAndElementsViews(driver, UITimeouts.LONG);
 
             await verifyStatePreserved(stateBefore, testThemesPage, driver, "Test Themes", "refresh");
@@ -1140,7 +1170,6 @@ describe("Tree Expansion State Persistence Tests", function () {
             await openTestBenchSidebar(driver);
             const navigated = await navigateToTestThemesAndElements(driver);
             expect(navigated, "Should navigate back to Test Elements view").to.be.true;
-            await driver.sleep(STATE_RESTORE_DELAY);
 
             await verifyStatePreserved(stateBefore, testElementsPage, driver, "Test Elements", "logout/login");
         });
@@ -1173,7 +1202,6 @@ describe("Tree Expansion State Persistence Tests", function () {
 
             await openTestBenchSidebar(driver);
             await waitForTestThemesAndElementsViews(driver, UITimeouts.VERY_LONG);
-            await driver.sleep(STATE_RESTORE_DELAY);
 
             await verifyStatePreserved(stateBefore, testElementsPage, driver, "Test Elements", "reload");
         });
@@ -1208,7 +1236,6 @@ describe("Tree Expansion State Persistence Tests", function () {
             const refreshClicked = await clickToolbarButton(currentSection!, "Refresh Test Elements", driver);
             expect(refreshClicked, "Refresh Test Elements button should be clicked").to.be.true;
 
-            await driver.sleep(TEST_ELEMENTS_REFRESH_DELAY);
             await waitForTestThemesAndElementsViews(driver, UITimeouts.VERY_LONG);
 
             await verifyStatePreserved(stateBefore, testElementsPage, driver, "Test Elements", "refresh");

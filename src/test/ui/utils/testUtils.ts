@@ -10,7 +10,7 @@ import { getTestLogger } from "./testLogger";
 import { clickToolbarButton } from "./toolbarUtils";
 import { findAndSwitchToWebview, isWebviewAvailable } from "./webviewUtils";
 import { escapeXPathLiteral } from "./xpathUtils";
-import { UITimeouts, applySlowMotion } from "./waitHelpers";
+import { UITimeouts, applySlowMotion, retryUntil, waitForCondition } from "./waitHelpers";
 import {
     WebDriver,
     By,
@@ -48,6 +48,351 @@ const STARTUP_OVERLAY_SELECTORS = {
     SKIP: `//button[normalize-space(.)='Skip'] | //a[normalize-space(.)='Skip'] | //*[@role='button' and normalize-space(.)='Skip']`,
     CONTINUE_WITHOUT_SIGNIN: `//button[contains(normalize-space(.), 'Continue without Signing In')] | //a[contains(normalize-space(.), 'Continue without Signing In')]`
 } as const;
+
+const QUICK_INPUT_SELECTORS = ".quick-input-widget, .monaco-quick-open-widget";
+
+/**
+ * Waits for a modal action button to become visible and returns it.
+ *
+ * @param driver - WebDriver instance used to query DOM elements
+ * @param selector - XPath selector that matches the target modal button
+ * @param buttonText - Human-readable button label used in timeout diagnostics
+ * @param timeout - Maximum time in milliseconds to wait for visibility
+ * @returns Promise<WebElement | null> - The visible modal button element, or null on timeout
+ */
+async function waitForModalButton(
+    driver: WebDriver,
+    selector: string,
+    buttonText: string,
+    timeout: number
+): Promise<WebElement | null> {
+    const getDisplayedElement = async (): Promise<WebElement | null> => {
+        const elements = await driver.findElements(By.xpath(selector));
+        for (const element of elements) {
+            try {
+                if (await element.isDisplayed()) {
+                    return element;
+                }
+            } catch {
+                // Ignore stale candidates and continue checking remaining elements.
+            }
+        }
+
+        return null;
+    };
+
+    const appeared = await waitForCondition(
+        driver,
+        async () => (await getDisplayedElement()) !== null,
+        timeout,
+        100,
+        `${buttonText} modal button`
+    );
+
+    if (!appeared) {
+        return null;
+    }
+
+    return await getDisplayedElement();
+}
+
+/**
+ * Waits until a modal button selector is no longer visible.
+ *
+ * @param driver - WebDriver instance used to query DOM elements
+ * @param selector - XPath selector for modal button elements to observe
+ * @param buttonText - Human-readable button label used in timeout diagnostics
+ * @param timeout - Maximum time in milliseconds to wait for modal closure
+ * @returns Promise<boolean> - True when all matching elements are hidden/gone, false on timeout
+ */
+async function waitForModalToClose(
+    driver: WebDriver,
+    selector: string,
+    buttonText: string,
+    timeout: number
+): Promise<boolean> {
+    return await waitForCondition(
+        driver,
+        async () => {
+            const elements = await driver.findElements(By.xpath(selector));
+            for (const element of elements) {
+                try {
+                    if (await element.isDisplayed()) {
+                        return false;
+                    }
+                } catch {
+                    // Ignore stale nodes and continue.
+                }
+            }
+
+            return true;
+        },
+        timeout,
+        100,
+        `${buttonText} modal to close`
+    );
+}
+
+/**
+ * Clicks a modal button and waits for the modal to close.
+ *
+ * @param driver - WebDriver instance used to execute interaction and wait logic
+ * @param selector - XPath selector for the target modal button
+ * @param buttonText - Human-readable button label used in logging and timeout diagnostics
+ * @param timeout - Maximum time in milliseconds to wait for appearance/closure
+ * @param actionDescription - Optional custom log message for the click action
+ * @returns Promise<boolean> - True when click succeeded and modal closed, false otherwise
+ */
+async function clickModalButton(
+    driver: WebDriver,
+    selector: string,
+    buttonText: string,
+    timeout: number,
+    actionDescription?: string
+): Promise<boolean> {
+    const modalButton = await waitForModalButton(driver, selector, buttonText, timeout);
+    if (!modalButton) {
+        return false;
+    }
+
+    await modalButton.click();
+    logger.trace("Modal", actionDescription || `Clicked ${buttonText} button`);
+
+    const modalClosed = await waitForModalToClose(driver, selector, buttonText, timeout);
+    if (!modalClosed) {
+        logger.debug("Modal", `${buttonText} modal did not close within timeout (${timeout}ms)`);
+    }
+
+    return modalClosed;
+}
+
+/**
+ * Waits for a sidebar section title to contain a given text fragment.
+ *
+ * @param driver - WebDriver instance used to read sidebar sections
+ * @param titleFragment - Partial title text to match
+ * @param timeout - Maximum wait duration in milliseconds
+ * @param description - Timeout description passed to WebDriver wait
+ * @returns Promise<void>
+ */
+async function waitForSidebarSectionTitle(
+    driver: WebDriver,
+    titleFragment: string,
+    timeout: number,
+    description: string
+): Promise<void> {
+    await driver.wait(
+        async () => {
+            try {
+                const sideBar = new SideBarView();
+                const content = sideBar.getContent();
+                const sections = await content.getSections();
+
+                for (const section of sections) {
+                    const title = await section.getTitle();
+                    if (title.includes(titleFragment)) {
+                        return true;
+                    }
+                }
+                return false;
+            } catch {
+                return false;
+            }
+        },
+        timeout,
+        description,
+        200
+    );
+}
+
+/**
+ * Waits for the TestBench activity bar control to become available.
+ *
+ * @param driver - WebDriver instance used to inspect activity bar controls
+ * @param timeout - Maximum wait duration in milliseconds
+ * @returns Promise<void>
+ */
+async function waitForTestBenchActivityControl(driver: WebDriver, timeout: number = UITimeouts.SHORT): Promise<void> {
+    await driver.wait(
+        async () => {
+            try {
+                const controls = await new ActivityBar().getViewControls();
+                for (const control of controls) {
+                    try {
+                        if ((await control.getTitle()) === "TestBench") {
+                            return true;
+                        }
+                    } catch {
+                        // Continue checking the remaining controls.
+                    }
+                }
+                return false;
+            } catch {
+                return false;
+            }
+        },
+        timeout,
+        "Waiting for TestBench activity bar item to become available",
+        200
+    );
+}
+
+/**
+ * Checks whether a visible tree row contains the provided label text.
+ *
+ * @param driver - WebDriver instance used to execute DOM inspection script
+ * @param itemLabel - Tree item label text to search for
+ * @returns Promise<boolean> - True if a matching row is present, false otherwise
+ */
+async function isTreeRowPresentByLabel(driver: WebDriver, itemLabel: string): Promise<boolean> {
+    return (await driver.executeScript(
+        `
+        const label = String(arguments[0] || '');
+        const rows = document.querySelectorAll('.monaco-list-row');
+        for (const row of rows) {
+            const rowText = row.textContent || row.innerText || '';
+            if (rowText.includes(label)) {
+                return true;
+            }
+        }
+        return false;
+    `,
+        itemLabel
+    )) as boolean;
+}
+
+/**
+ * Checks whether the "Create Resource" inline action is ready for a tree row.
+ *
+ * @param driver - WebDriver instance used to execute DOM inspection script
+ * @param itemLabel - Label used to identify the relevant tree row
+ * @returns Promise<boolean> - True if a create-resource action is discoverable, false otherwise
+ */
+async function isCreateResourceActionReady(driver: WebDriver, itemLabel: string): Promise<boolean> {
+    return (await driver.executeScript(
+        `
+        const label = String(arguments[0] || '');
+        const rows = document.querySelectorAll('.monaco-list-row');
+
+        for (const row of rows) {
+            const rowText = row.textContent || row.innerText || '';
+            if (!rowText.includes(label)) {
+                continue;
+            }
+
+            const actionButtons = row.querySelectorAll(
+                'a.action-item, button.action-item, a[class*="action"], button[class*="action"]'
+            );
+
+            for (const btn of actionButtons) {
+                const hasCreateIcon = !!btn.querySelector('.codicon-new-file, span.codicon-new-file');
+                const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+                if (hasCreateIcon || ariaLabel.includes('create resource')) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    `,
+        itemLabel
+    )) as boolean;
+}
+
+/**
+ * Waits for VS Code quick input widgets to fully close.
+ *
+ * @param driver - WebDriver instance used to query quick input elements
+ * @param timeout - Maximum wait duration in milliseconds
+ * @returns Promise<void>
+ */
+async function waitForQuickInputToClose(driver: WebDriver, timeout: number = UITimeouts.SHORT): Promise<void> {
+    await driver.wait(
+        async () => {
+            try {
+                const quickInputElements = await driver.findElements(By.css(QUICK_INPUT_SELECTORS));
+                return quickInputElements.length === 0;
+            } catch {
+                return false;
+            }
+        },
+        timeout,
+        "Waiting for quick input dialog to close",
+        100
+    );
+}
+
+/**
+ * Waits until keyboard focus is inside a Monaco editor surface.
+ *
+ * @param driver - WebDriver instance used to inspect active element state
+ * @param timeout - Maximum wait duration in milliseconds
+ * @returns Promise<void>
+ */
+async function waitForEditorFocus(driver: WebDriver, timeout: number = UITimeouts.SHORT): Promise<void> {
+    await driver.wait(
+        async () => {
+            try {
+                return (await driver.executeScript(
+                    `
+                    const active = document.activeElement;
+                    if (!active) {
+                        return false;
+                    }
+
+                    const classList = active.classList;
+                    if (classList && (classList.contains('inputarea') || classList.contains('monaco-mouse-cursor-text'))) {
+                        return true;
+                    }
+
+                    if (typeof active.closest === 'function') {
+                        return Boolean(active.closest('.monaco-editor, .editor-instance, .editor-container'));
+                    }
+
+                    return false;
+                `
+                )) as boolean;
+            } catch {
+                return false;
+            }
+        },
+        timeout,
+        "Waiting for editor to receive keyboard focus",
+        100
+    );
+}
+
+/**
+ * Waits for editor text content to differ from a previously captured snapshot.
+ *
+ * @param driver - WebDriver instance used to drive polling
+ * @param editor - Text editor handle whose content is monitored
+ * @param previousText - Baseline text used for mutation detection
+ * @param description - Timeout description for diagnostics
+ * @param timeout - Maximum wait duration in milliseconds
+ * @returns Promise<void>
+ */
+async function waitForEditorTextMutation(
+    driver: WebDriver,
+    editor: TextEditor,
+    previousText: string,
+    description: string,
+    timeout: number = UITimeouts.MEDIUM
+): Promise<void> {
+    await driver.wait(
+        async () => {
+            try {
+                const currentText = await editor.getText();
+                return currentText !== previousText;
+            } catch {
+                return false;
+            }
+        },
+        timeout,
+        description,
+        100
+    );
+}
 
 /**
  * Logs out from TestBench if a session is active.
@@ -107,7 +452,12 @@ export async function attemptLogout(driver: WebDriver): Promise<boolean> {
                 logger.trace("Logout", "Clicked 'Open Projects View' button");
                 // Wait for Projects view to appear
                 await waitForProjectsView(driver, UITimeouts.LONG);
-                await driver.sleep(500);
+                await waitForSidebarSectionTitle(
+                    driver,
+                    "Projects",
+                    UITimeouts.MEDIUM,
+                    "Waiting for Projects section to be available after switching views"
+                );
             } else {
                 logger.warn("Logout", "Failed to click 'Open Projects View' button");
             }
@@ -183,29 +533,7 @@ export async function attemptLogout(driver: WebDriver): Promise<boolean> {
  */
 export async function handleAllowButton(driver: WebDriver, timeout: number = UITimeouts.MEDIUM): Promise<boolean> {
     try {
-        // Wait for modal to appear and find Allow button
-        const allowButtons = await driver.wait(async () => {
-            const elements = await driver.findElements(By.xpath(ModalButtonSelectors.ALLOW));
-            return elements.length > 0 ? elements : null;
-        }, timeout);
-
-        if (allowButtons && allowButtons.length > 0) {
-            await allowButtons[0].click();
-            logger.trace("Modal", `Clicked ${ModalButtonTexts.ALLOW} button`);
-
-            // Wait for modal to disappear
-            await driver.wait(
-                async () => {
-                    const elements = await driver.findElements(By.xpath(ModalButtonSelectors.ALLOW));
-                    return elements.length === 0;
-                },
-                timeout,
-                "Waiting for Allow modal to close"
-            );
-            return true;
-        }
-
-        return false;
+        return await clickModalButton(driver, ModalButtonSelectors.ALLOW, ModalButtonTexts.ALLOW, timeout);
     } catch (error) {
         logger.debug("Modal", `Could not find or click ${ModalButtonTexts.ALLOW} button:`, error);
         return false;
@@ -225,28 +553,13 @@ export async function handleProceedAnywayButton(
 ): Promise<boolean> {
     try {
         logger.trace("Modal", "Checking for certificate warning...");
-        const proceedButtons = await driver.wait(async () => {
-            const elements = await driver.findElements(By.xpath(ModalButtonSelectors.PROCEED_ANYWAY));
-            return elements.length > 0 ? elements : null;
-        }, timeout);
-
-        if (proceedButtons && proceedButtons.length > 0) {
-            await proceedButtons[0].click();
-            logger.trace("Modal", `Clicked ${ModalButtonTexts.PROCEED_ANYWAY} button for untrusted certificate`);
-
-            // Wait for action to complete and modal to disappear
-            await driver.wait(
-                async () => {
-                    const elements = await driver.findElements(By.xpath(ModalButtonSelectors.PROCEED_ANYWAY));
-                    return elements.length === 0;
-                },
-                timeout,
-                "Waiting for Proceed Anyway modal to close"
-            );
-            return true;
-        }
-
-        return false;
+        return await clickModalButton(
+            driver,
+            ModalButtonSelectors.PROCEED_ANYWAY,
+            ModalButtonTexts.PROCEED_ANYWAY,
+            timeout,
+            `Clicked ${ModalButtonTexts.PROCEED_ANYWAY} button for untrusted certificate`
+        );
     } catch (error) {
         logger.debug("Modal", `Could not find or click ${ModalButtonTexts.PROCEED_ANYWAY} button:`, error);
         return false;
@@ -352,132 +665,138 @@ async function dismissStartupSignInOverlay(driver: WebDriver): Promise<boolean> 
  */
 export async function openTestBenchSidebar(driver?: WebDriver): Promise<void> {
     const maxRetries = 3;
-    let lastError: Error | null = null;
+    let lastError: unknown;
 
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-        try {
-            // Proactively dismiss onboarding/sign-in overlay on each retry.
-            // This remains a fast no-op on VS Code versions where the overlay is absent.
-            if (driver) {
-                await dismissStartupSignInOverlay(driver);
-            }
-
-            // Check if sidebar is already open by trying to get sections
-            if (driver) {
-                try {
-                    const sideBar = new SideBarView();
-                    const content = sideBar.getContent();
-                    const sections = await content.getSections();
-                    if (sections.length > 0) {
-                        // Sidebar appears to be open, verify it's the TestBench sidebar
-                        let foundTestBench = false;
-                        for (const section of sections) {
-                            const title = await section.getTitle();
-                            if (title.includes("TestBench") || title.includes("Projects") || title.includes("Login")) {
-                                foundTestBench = true;
-                                break;
-                            }
-                        }
-                        if (foundTestBench) {
-                            logger.trace("Sidebar", "TestBench sidebar is already open");
-                            return;
-                        }
-                    }
-                } catch {
-                    // Sidebar not open or not accessible, continue to open it
-                }
-            }
-
-            const activityBar = new ActivityBar();
-            const controls = await activityBar.getViewControls();
-
-            let testBenchControlFound = false;
-            for (const control of controls) {
-                try {
-                    const title = await control.getTitle();
-                    if (title === "TestBench") {
-                        testBenchControlFound = true;
-                        await control.openView();
-                        if (driver) {
-                            // Wait for sidebar to initialize (background operation, no slow motion needed)
-                            await driver.wait(
-                                async () => {
-                                    try {
-                                        const sideBar = new SideBarView();
-                                        const content = sideBar.getContent();
-                                        const sections = await content.getSections();
-                                        return sections.length > 0;
-                                    } catch {
-                                        return false;
-                                    }
-                                },
-                                UITimeouts.LONG,
-                                "Waiting for TestBench sidebar to initialize",
-                                500
-                            );
-                        }
-                        return; // Successfully opened sidebar
-                    }
-                } catch (error) {
-                    const errorMessage = error instanceof Error ? error.message : String(error);
-                    const normalizedError = errorMessage.toLowerCase();
-                    const isClickIntercepted = normalizedError.includes("element click intercepted");
-                    const isStartupOverlayInterception =
-                        normalizedError.includes("onboarding-a-overlay") ||
-                        normalizedError.includes("welcome to visual studio code");
-
-                    if (driver && (isClickIntercepted || isStartupOverlayInterception)) {
-                        const overlayDismissed = await dismissStartupSignInOverlay(driver);
-                        if (overlayDismissed) {
-                            logger.debug(
-                                "Sidebar",
-                                `Startup overlay dismissed after click interception (attempt ${attempt + 1}/${maxRetries})`
-                            );
-                            if (attempt < maxRetries - 1) {
-                                await driver.sleep(UITimeouts.MINIMAL);
-                            }
-                            break;
-                        }
-                    }
-
-                    // Stale element reference - element was found but became stale
-                    // If this is the last attempt, throw the error
-                    if (attempt === maxRetries - 1) {
-                        throw error;
-                    }
-                    logger.debug(
-                        "Sidebar",
-                        `Stale element detected on control, will retry (attempt ${attempt + 1}/${maxRetries})`
-                    );
-                    if (driver) {
-                        await dismissStartupSignInOverlay(driver);
-                    }
-                    lastError = error as Error;
-                    break; // Break inner loop to retry outer loop
-                }
-            }
-
-            // If we get here and didn't find TestBench control, throw error
-            if (!testBenchControlFound) {
-                throw new Error("TestBench activity bar item not found");
-            }
-        } catch (error) {
-            lastError = error as Error;
-            if (attempt < maxRetries - 1) {
-                logger.debug(
-                    "Sidebar",
-                    `Error opening sidebar, retrying (attempt ${attempt + 1}/${maxRetries}): ${error}`
-                );
-
+    const sidebarOpened = await retryUntil(
+        async (attempt) => {
+            try {
+                // Proactively dismiss onboarding/sign-in overlay on each retry.
+                // This remains a fast no-op on VS Code versions where the overlay is absent.
                 if (driver) {
-                    await driver.sleep(UITimeouts.MINIMAL);
+                    await dismissStartupSignInOverlay(driver);
                 }
-            } else {
-                throw new Error(
-                    `Failed to open TestBench sidebar after ${maxRetries} attempts: ${lastError?.message || error}`
-                );
+
+                // Check if sidebar is already open by trying to get sections
+                if (driver) {
+                    try {
+                        const sideBar = new SideBarView();
+                        const content = sideBar.getContent();
+                        const sections = await content.getSections();
+                        if (sections.length > 0) {
+                            // Sidebar appears to be open, verify it's the TestBench sidebar
+                            let foundTestBench = false;
+                            for (const section of sections) {
+                                const title = await section.getTitle();
+                                if (
+                                    title.includes("TestBench") ||
+                                    title.includes("Projects") ||
+                                    title.includes("Login")
+                                ) {
+                                    foundTestBench = true;
+                                    break;
+                                }
+                            }
+                            if (foundTestBench) {
+                                logger.trace("Sidebar", "TestBench sidebar is already open");
+                                return true;
+                            }
+                        }
+                    } catch {
+                        // Sidebar not open or not accessible, continue to open it
+                    }
+                }
+
+                const activityBar = new ActivityBar();
+                const controls = await activityBar.getViewControls();
+
+                let testBenchControlFound = false;
+                for (const control of controls) {
+                    try {
+                        const title = await control.getTitle();
+                        if (title === "TestBench") {
+                            testBenchControlFound = true;
+                            await control.openView();
+                            if (driver) {
+                                // Wait for sidebar to initialize (background operation, no slow motion needed)
+                                await driver.wait(
+                                    async () => {
+                                        try {
+                                            const sideBar = new SideBarView();
+                                            const content = sideBar.getContent();
+                                            const sections = await content.getSections();
+                                            return sections.length > 0;
+                                        } catch {
+                                            return false;
+                                        }
+                                    },
+                                    UITimeouts.LONG,
+                                    "Waiting for TestBench sidebar to initialize",
+                                    500
+                                );
+                            }
+                            return true;
+                        }
+                    } catch (error) {
+                        const errorMessage = error instanceof Error ? error.message : String(error);
+                        const normalizedError = errorMessage.toLowerCase();
+                        const isClickIntercepted = normalizedError.includes("element click intercepted");
+                        const isStartupOverlayInterception =
+                            normalizedError.includes("onboarding-a-overlay") ||
+                            normalizedError.includes("welcome to visual studio code");
+
+                        if (driver && (isClickIntercepted || isStartupOverlayInterception)) {
+                            const overlayDismissed = await dismissStartupSignInOverlay(driver);
+                            if (overlayDismissed) {
+                                logger.debug(
+                                    "Sidebar",
+                                    `Startup overlay dismissed after click interception (attempt ${attempt}/${maxRetries})`
+                                );
+                                lastError = error;
+                                return false;
+                            }
+                        }
+
+                        logger.debug(
+                            "Sidebar",
+                            `Stale element detected on control, will retry (attempt ${attempt}/${maxRetries})`
+                        );
+                        if (driver) {
+                            await dismissStartupSignInOverlay(driver);
+                        }
+                        lastError = error;
+                        return false;
+                    }
+                }
+
+                if (!testBenchControlFound) {
+                    lastError = new Error("TestBench activity bar item not found");
+                    return false;
+                }
+
+                return false;
+            } catch (error) {
+                lastError = error;
+                return false;
+            }
+        },
+        maxRetries,
+        "open TestBench sidebar",
+        async (attempt, retryError) => {
+            logger.debug(
+                "Sidebar",
+                `Error opening sidebar, retrying (attempt ${attempt}/${maxRetries}): ${String(retryError ?? lastError)}`
+            );
+
+            if (driver) {
+                await waitForTestBenchActivityControl(driver, UITimeouts.MINIMAL);
             }
         }
+    );
+
+    if (!sidebarOpened) {
+        const errorMessage =
+            lastError instanceof Error ? lastError.message : lastError !== undefined ? String(lastError) : "unknown";
+        throw new Error(`Failed to open TestBench sidebar after ${maxRetries} attempts: ${errorMessage}`);
     }
 }
 
@@ -908,7 +1227,36 @@ export async function clickCodeLens(
                                 "arguments[0].scrollIntoView({block: 'center', inline: 'center'});",
                                 link
                             );
-                            await driver.sleep(200);
+
+                            await driver.wait(
+                                async () => {
+                                    try {
+                                        const isVisible = await link.isDisplayed();
+                                        if (!isVisible) {
+                                            return false;
+                                        }
+
+                                        const inViewport = await driver.executeScript(
+                                            `
+                                            const rect = arguments[0].getBoundingClientRect();
+                                            return rect.width > 0 &&
+                                                rect.height > 0 &&
+                                                rect.top >= 0 &&
+                                                rect.left >= 0 &&
+                                                rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+                                                rect.right <= (window.innerWidth || document.documentElement.clientWidth);
+                                        `,
+                                            link
+                                        );
+
+                                        return Boolean(inViewport);
+                                    } catch {
+                                        return false;
+                                    }
+                                },
+                                UITimeouts.SHORT,
+                                `Waiting for CodeLens "${codeLensText}" to be interactable after scrolling`
+                            );
 
                             // Dispatch Full Mouse Event Chain
                             // VS Code often listens for 'mousedown' or 'mouseup' on these widgets, not just 'click'
@@ -1200,110 +1548,136 @@ export async function clickCreateResourceButton(
         }
     }
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-            await driver.switchTo().defaultContent();
-            logger.trace(
-                "TreeItem",
-                `Looking for Create Resource button near item: "${itemLabel}" (attempt ${attempt}/${maxRetries})`
-            );
-
-            // First, ensure the tree item is clicked to make action buttons visible
+    const clickSucceeded = await retryUntil(
+        async (attempt) => {
             try {
-                await item.click();
-                await driver.sleep(300); // Wait for action buttons to appear
-            } catch (itemClickError) {
-                logger.debug("TreeItem", "Could not click tree item, continuing anyway", itemClickError);
-            }
+                await driver.switchTo().defaultContent();
+                logger.trace(
+                    "TreeItem",
+                    `Looking for Create Resource button near item: "${itemLabel}" (attempt ${attempt}/${maxRetries})`
+                );
 
-            // Use JavaScript to find and click the button in one atomic operation
-            // This reduces the chance of stale element errors
-            const clickSucceeded = (await driver.executeScript(
-                `
-                function findAndClickCreateResourceButton(itemLabel) {
-                    const rows = document.querySelectorAll('.monaco-list-row');
-                    for (const row of rows) {
-                        const rowText = row.textContent || row.innerText || '';
-                        if (!rowText.includes(itemLabel)) {
-                            continue;
-                        }
-                        
-                        // Look for action buttons with codicon-new-file
-                        const actionButtons = row.querySelectorAll('a.action-item, button.action-item, a[class*="action"], button[class*="action"]');
-                        for (const btn of actionButtons) {
-                            // Check if button contains codicon-new-file
-                            const codicon = btn.querySelector('.codicon-new-file, span.codicon-new-file');
-                            if (codicon) {
-                                btn.scrollIntoView({ block: 'center' });
-                                btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-                                btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-                                btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-                                return true;
-                            }
-                            
-                            // Check aria-label
-                            const ariaLabel = btn.getAttribute('aria-label') || '';
-                            if (ariaLabel.toLowerCase().includes('create resource')) {
-                                btn.scrollIntoView({ block: 'center' });
-                                btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-                                btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-                                btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-                                return true;
-                            }
-                        }
-                        
-                        // Also check for any element with codicon-new-file in this row
-                        const codiconElements = row.querySelectorAll('.codicon-new-file, [class*="codicon-new-file"]');
-                        for (const codicon of codiconElements) {
-                            const actionItem = codicon.closest('a.action-item, button.action-item, a[class*="action"], button[class*="action"]');
-                            if (actionItem) {
-                                actionItem.scrollIntoView({ block: 'center' });
-                                actionItem.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-                                actionItem.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-                                actionItem.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-                                return true;
-                            }
-                        }
+                // First, ensure the tree item is clicked to make action buttons visible.
+                try {
+                    await item.click();
+                    const actionReady = await waitForCondition(
+                        driver,
+                        async () => await isCreateResourceActionReady(driver, itemLabel!),
+                        UITimeouts.SHORT,
+                        200,
+                        `Create Resource action button to appear for "${itemLabel}"`
+                    );
+                    if (!actionReady) {
+                        logger.debug(
+                            "TreeItem",
+                            `Create Resource action button not ready yet for "${itemLabel}" after row click`
+                        );
                     }
-                    return false;
+                } catch (itemClickError) {
+                    logger.debug("TreeItem", "Could not click tree item, continuing anyway", itemClickError);
                 }
-                return findAndClickCreateResourceButton(String(arguments[0] || ''));
-            `,
-                itemLabel
-            )) as boolean;
 
-            if (clickSucceeded) {
-                logger.trace("TreeItem", "Successfully clicked Create Resource button");
-                await applySlowMotion(driver);
-                return true;
-            }
+                // Use JavaScript to find and click the button in one atomic operation.
+                // This reduces the chance of stale element errors.
+                const buttonClicked = (await driver.executeScript(
+                    `
+                    function findAndClickCreateResourceButton(itemLabel) {
+                        const rows = document.querySelectorAll('.monaco-list-row');
+                        for (const row of rows) {
+                            const rowText = row.textContent || row.innerText || '';
+                            if (!rowText.includes(itemLabel)) {
+                                continue;
+                            }
 
-            logger.debug("TreeItem", `Button not found or click failed on attempt ${attempt}`);
+                            // Look for action buttons with codicon-new-file
+                            const actionButtons = row.querySelectorAll('a.action-item, button.action-item, a[class*="action"], button[class*="action"]');
+                            for (const btn of actionButtons) {
+                                // Check if button contains codicon-new-file
+                                const codicon = btn.querySelector('.codicon-new-file, span.codicon-new-file');
+                                if (codicon) {
+                                    btn.scrollIntoView({ block: 'center' });
+                                    btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                                    btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                                    btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                                    return true;
+                                }
 
-            if (attempt < maxRetries) {
-                // Wait before retrying
-                await driver.sleep(500);
-            }
-        } catch (error: any) {
-            const isStaleError =
-                error.name === "StaleElementReferenceError" || error.message?.includes("stale element");
+                                // Check aria-label
+                                const ariaLabel = btn.getAttribute('aria-label') || '';
+                                if (ariaLabel.toLowerCase().includes('create resource')) {
+                                    btn.scrollIntoView({ block: 'center' });
+                                    btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                                    btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                                    btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                                    return true;
+                                }
+                            }
 
-            if (isStaleError && attempt < maxRetries) {
-                logger.debug("TreeItem", `Stale element error on attempt ${attempt}, retrying...`);
-                await driver.sleep(500);
-                continue;
-            }
+                            // Also check for any element with codicon-new-file in this row
+                            const codiconElements = row.querySelectorAll('.codicon-new-file, [class*="codicon-new-file"]');
+                            for (const codicon of codiconElements) {
+                                const actionItem = codicon.closest('a.action-item, button.action-item, a[class*="action"], button[class*="action"]');
+                                if (actionItem) {
+                                    actionItem.scrollIntoView({ block: 'center' });
+                                    actionItem.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                                    actionItem.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                                    actionItem.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                                    return true;
+                                }
+                            }
+                        }
+                        return false;
+                    }
+                    return findAndClickCreateResourceButton(String(arguments[0] || ''));
+                `,
+                    itemLabel
+                )) as boolean;
 
-            logger.error("TreeItem", `Error on attempt ${attempt}`, error);
+                if (buttonClicked) {
+                    logger.trace("TreeItem", "Successfully clicked Create Resource button");
+                    await applySlowMotion(driver);
+                } else {
+                    logger.debug("TreeItem", `Button not found or click failed on attempt ${attempt}`);
+                }
 
-            if (attempt === maxRetries) {
+                return buttonClicked;
+            } catch (error: any) {
+                const isStaleError =
+                    error.name === "StaleElementReferenceError" || error.message?.includes("stale element");
+
+                if (isStaleError) {
+                    logger.debug("TreeItem", `Stale element error on attempt ${attempt}, retrying...`);
+                } else {
+                    logger.error("TreeItem", `Error on attempt ${attempt}`, error);
+                }
+
                 return false;
             }
+        },
+        maxRetries,
+        `click Create Resource action for tree item "${itemLabel}"`,
+        async () => {
+            const rowReady = await waitForCondition(
+                driver,
+                async () => await isTreeRowPresentByLabel(driver, itemLabel!),
+                UITimeouts.SHORT,
+                200,
+                `tree row "${itemLabel}" before retrying Create Resource click`
+            );
+            if (!rowReady) {
+                logger.debug(
+                    "TreeItem",
+                    `Tree row "${itemLabel}" did not become ready before the next Create Resource retry`
+                );
+            }
         }
+    );
+
+    if (!clickSucceeded) {
+        logger.warn("TreeItem", "Failed to click Create Resource button after all retries");
     }
 
-    logger.warn("TreeItem", "Failed to click Create Resource button after all retries");
-    return false;
+    return clickSucceeded;
 }
 
 /**
@@ -1328,37 +1702,70 @@ export async function waitForConfigurationApplied(
     targetVersion: TreeItem,
     timeout: number = UITimeouts.LONG
 ): Promise<boolean> {
+    const hasPinMarker = async (item: TreeItem): Promise<boolean> => {
+        try {
+            const description = await item.getDescription();
+            return !!description && (description.includes("📌") || description.includes("pin"));
+        } catch {
+            return false;
+        }
+    };
+
+    const waitForTreeItemsAccessible = async (): Promise<void> => {
+        await driver.wait(
+            async () => {
+                try {
+                    await targetProject.getLabel();
+                    await targetVersion.getLabel();
+                    return true;
+                } catch {
+                    return false;
+                }
+            },
+            UITimeouts.MEDIUM,
+            `Waiting for tree items "${projectName}" and "${tovName}" to become accessible`,
+            200
+        );
+    };
+
+    const waitForPinStateStability = async (stabilityMs: number = 1000): Promise<void> => {
+        let pinnedSince: number | null = null;
+
+        await driver.wait(
+            async () => {
+                const bothPinned = (await hasPinMarker(targetProject)) && (await hasPinMarker(targetVersion));
+                if (!bothPinned) {
+                    pinnedSince = null;
+                    return false;
+                }
+
+                if (pinnedSince === null) {
+                    pinnedSince = Date.now();
+                    return false;
+                }
+
+                return Date.now() - pinnedSince >= stabilityMs;
+            },
+            Math.max(UITimeouts.MEDIUM, stabilityMs + UITimeouts.MINIMAL),
+            `Waiting for pin state on "${projectName}" and "${tovName}" to stabilize`,
+            200
+        );
+    };
+
     try {
         logger.trace("Configuration", "Waiting for configuration to be applied (checking for pin emojis)...");
 
         const pinsAppeared = await driver.wait(
             async () => {
                 try {
-                    // Check the project's description for pin emoji
-                    let projectHasPin = false;
-                    try {
-                        const projectDescription = await targetProject.getDescription();
-                        if (
-                            projectDescription &&
-                            (projectDescription.includes("📌") || projectDescription.includes("pin"))
-                        ) {
-                            projectHasPin = true;
-                            logger.trace("Configuration", `Found pin on project "${projectName}"`);
-                        }
-                    } catch {
-                        // Project description might not be accessible yet
-                    }
+                    const projectHasPin = await hasPinMarker(targetProject);
+                    const tovHasPin = await hasPinMarker(targetVersion);
 
-                    // Check the TOV's description for pin emoji
-                    let tovHasPin = false;
-                    try {
-                        const tovDescription = await targetVersion.getDescription();
-                        if (tovDescription && (tovDescription.includes("📌") || tovDescription.includes("pin"))) {
-                            tovHasPin = true;
-                            logger.trace("Configuration", `Found pin on TOV "${tovName}"`);
-                        }
-                    } catch {
-                        // TOV description might not be accessible yet
+                    if (projectHasPin) {
+                        logger.trace("Configuration", `Found pin on project "${projectName}"`);
+                    }
+                    if (tovHasPin) {
+                        logger.trace("Configuration", `Found pin on TOV "${tovName}"`);
                     }
 
                     // If both have pins, configuration is applied
@@ -1379,8 +1786,7 @@ export async function waitForConfigurationApplied(
 
         if (pinsAppeared) {
             logger.info("Configuration", "Configuration applied successfully - pins detected");
-            // Wait a bit more for tree to fully stabilize after reordering
-            await driver.sleep(1000);
+            await waitForPinStateStability();
             return true;
         }
 
@@ -1389,7 +1795,7 @@ export async function waitForConfigurationApplied(
             "Configuration",
             "Pins not detected within timeout - configuration may already exist or tree may not have updated"
         );
-        await driver.sleep(500);
+        await waitForTreeItemsAccessible();
         return true;
     } catch (error) {
         // Timeout is expected if configuration already exists (pins won't appear again)
@@ -1408,7 +1814,11 @@ export async function waitForConfigurationApplied(
             logger.warn("Configuration", "Error waiting for configuration to be applied", error);
         }
         // If timeout or other error, assume configuration already exists and continue
-        await driver.sleep(2000);
+        try {
+            await waitForTreeItemsAccessible();
+        } catch {
+            // Best-effort stabilization only; keep prior behavior and continue.
+        }
         return true;
     }
 }
@@ -1647,12 +2057,12 @@ export async function closeQuickInputDialog(driver: WebDriver): Promise<boolean>
         await driver.switchTo().defaultContent();
 
         // Check if quick input dialog is open
-        const quickInputElements = await driver.findElements(By.css(".quick-input-widget, .monaco-quick-open-widget"));
+        const quickInputElements = await driver.findElements(By.css(QUICK_INPUT_SELECTORS));
         if (quickInputElements.length > 0) {
             logger.trace("Editor", "Quick input dialog detected, closing...");
             // Press Escape to close the dialog
             await driver.actions().sendKeys(Key.ESCAPE).perform();
-            await driver.sleep(300);
+            await waitForQuickInputToClose(driver);
             return true;
         }
 
@@ -1687,7 +2097,7 @@ export async function setCursorPosition(
 
         // Ensure the editor is focused
         await editor.click();
-        await driver.sleep(200);
+        await waitForEditorFocus(driver);
 
         // Use keyboard shortcut to go to beginning of file (Ctrl+Home on Windows/Linux, Cmd+Home on Mac)
         if (lineNumber === 1 && column === 0) {
@@ -1695,18 +2105,20 @@ export async function setCursorPosition(
             const isMac = process.platform === "darwin";
             const homeKey = isMac ? Key.COMMAND : Key.CONTROL;
             await driver.actions().keyDown(homeKey).sendKeys(Key.HOME).keyUp(homeKey).perform();
-            await driver.sleep(300);
+            await waitForEditorFocus(driver);
         } else {
             // For other positions, go to beginning first, then use arrow keys
             const isMac = process.platform === "darwin";
             const homeKey = isMac ? Key.COMMAND : Key.CONTROL;
             await driver.actions().keyDown(homeKey).sendKeys(Key.HOME).keyUp(homeKey).perform();
-            await driver.sleep(200);
+            await waitForEditorFocus(driver);
 
             // If we need to go to a different line, use arrow keys
             if (lineNumber > 1) {
                 for (let i = 1; i < lineNumber; i++) {
                     await driver.actions().sendKeys(Key.ARROW_DOWN).perform();
+                    // Intentional fixed delay: gives Monaco caret movement time to settle between key events.
+                    // There is no stable per-keystroke observable signal exposed by ExTester here.
                     await driver.sleep(50);
                 }
             }
@@ -1715,6 +2127,7 @@ export async function setCursorPosition(
             if (column > 0) {
                 for (let i = 0; i < column; i++) {
                     await driver.actions().sendKeys(Key.ARROW_RIGHT).perform();
+                    // Intentional fixed delay: same rationale as line movement above; prevents dropped key events.
                     await driver.sleep(50);
                 }
             }
@@ -1728,7 +2141,7 @@ export async function setCursorPosition(
         // Fallback: try clicking at the beginning of the editor
         try {
             await editor.click();
-            await driver.sleep(200);
+            await waitForEditorFocus(driver);
             // Click at the top-left of the editor content area
             const editorElement = await editor.findElement(By.css(".monaco-editor, .editor-container"));
             const location = await editorElement.getLocation();
@@ -1738,7 +2151,7 @@ export async function setCursorPosition(
                 .move({ x: location.x + 50, y: location.y + 20 })
                 .click()
                 .perform();
-            await driver.sleep(200);
+            await waitForEditorFocus(driver);
             logger.trace("Editor", "Cursor set using click fallback");
             return true;
         } catch (fallbackError) {
@@ -1796,7 +2209,7 @@ export async function deleteFromLineOnwards(editor: TextEditor, driver: WebDrive
         logger.trace("Editor", "Strategy 1: Using TextEditor API...");
         await closeQuickInputDialog(driver);
         await editor.click();
-        await driver.sleep(200);
+        await waitForEditorFocus(driver);
 
         // Get current text
         const currentText = await editor.getText();
@@ -1810,18 +2223,22 @@ export async function deleteFromLineOnwards(editor: TextEditor, driver: WebDrive
             try {
                 // Try to use the editor's API to replace all text
                 await editor.click();
-                await driver.sleep(100);
+                await waitForEditorFocus(driver);
 
                 const isMac = process.platform === "darwin";
                 const ctrlKey = isMac ? Key.COMMAND : Key.CONTROL;
 
                 // Select all
                 await driver.actions().keyDown(ctrlKey).sendKeys("a").keyUp(ctrlKey).perform();
-                await driver.sleep(150);
 
                 // Clear selection and type new text
                 await driver.actions().sendKeys(newText).perform();
-                await driver.sleep(300);
+                await waitForEditorTextMutation(
+                    driver,
+                    editor,
+                    currentText,
+                    "Waiting for editor content to update after replacement typing"
+                );
 
                 // Wait for editor to update
                 await driver.wait(
@@ -1851,24 +2268,25 @@ export async function deleteFromLineOnwards(editor: TextEditor, driver: WebDrive
         logger.trace("Editor", "Strategy 2: Using keyboard navigation...");
         await closeQuickInputDialog(driver);
         await editor.click();
-        await driver.sleep(200);
+        await waitForEditorFocus(driver);
+        const textBeforeDeletion = await editor.getText();
 
         const isMac = process.platform === "darwin";
         const ctrlKey = isMac ? Key.COMMAND : Key.CONTROL;
 
         // Go to beginning of file first
         await driver.actions().keyDown(ctrlKey).sendKeys(Key.HOME).keyUp(ctrlKey).perform();
-        await driver.sleep(150);
 
         // Navigate to the target line using arrow keys
         for (let i = 1; i < fromLine; i++) {
             await driver.actions().sendKeys(Key.ARROW_DOWN).perform();
+            // Intentional fixed delay: key-driven cursor movement is event-queue dependent in Monaco.
+            // A minimal delay improves determinism when selecting large editor ranges.
             await driver.sleep(50);
         }
 
         // Go to the beginning of the target line
         await driver.actions().sendKeys(Key.HOME).perform();
-        await driver.sleep(150);
 
         // Select from current position to end of file (Ctrl+Shift+End)
         await driver
@@ -1879,11 +2297,15 @@ export async function deleteFromLineOnwards(editor: TextEditor, driver: WebDrive
             .keyUp(Key.SHIFT)
             .keyUp(ctrlKey)
             .perform();
-        await driver.sleep(200);
 
         // Delete the selected content
         await driver.actions().sendKeys(Key.DELETE).perform();
-        await driver.sleep(300);
+        await waitForEditorTextMutation(
+            driver,
+            editor,
+            textBeforeDeletion,
+            "Waiting for editor content to change after keyboard deletion"
+        );
 
         // Verify deletion succeeded
         const verified = await driver.wait(
@@ -1908,7 +2330,7 @@ export async function deleteFromLineOnwards(editor: TextEditor, driver: WebDrive
         logger.trace("Editor", "Strategy 3: Using JavaScript text replacement...");
         await closeQuickInputDialog(driver);
         await editor.click();
-        await driver.sleep(200);
+        await waitForEditorFocus(driver);
 
         // Get current text
         const currentText = await editor.getText();
@@ -1924,22 +2346,25 @@ export async function deleteFromLineOnwards(editor: TextEditor, driver: WebDrive
             const ctrlKey = isMac ? Key.COMMAND : Key.CONTROL;
 
             await editor.click();
-            await driver.sleep(100);
+            await waitForEditorFocus(driver);
 
             // Select all
             await driver.actions().keyDown(ctrlKey).sendKeys("a").keyUp(ctrlKey).perform();
-            await driver.sleep(150);
 
             // Clear and type new text character by character to ensure it's processed
             // First clear the selection
             await driver.actions().sendKeys(Key.DELETE).perform();
-            await driver.sleep(100);
 
             // Type the new text
             if (newText) {
                 await driver.actions().sendKeys(newText).perform();
             }
-            await driver.sleep(300);
+            await waitForEditorTextMutation(
+                driver,
+                editor,
+                currentText,
+                "Waiting for editor content to update after fallback replacement"
+            );
 
             // Verify deletion succeeded
             const verified = await driver.wait(

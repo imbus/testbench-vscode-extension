@@ -5,7 +5,7 @@
  */
 
 import { WebDriver, TreeItem, ViewSection } from "vscode-extension-tester";
-import { applySlowMotion } from "../utils/waitHelpers";
+import { applySlowMotion, waitForCondition } from "../utils/waitHelpers";
 import { waitForTreeItemChildren } from "../utils/treeViewUtils";
 import { getTestLogger } from "../utils/testLogger";
 import { BasePage } from "./BasePage";
@@ -79,36 +79,47 @@ export class ProjectsViewPage extends BasePage {
     private async findChildByLabel(parentItem: TreeItem, labelToFind: string): Promise<TreeItem | undefined> {
         const logger = getTestLogger();
         const maxAttempts = 8;
+        const pollIntervalMs = 500;
+        const timeoutMs = maxAttempts * pollIntervalMs;
+        const normalizedTargetLabel = this.normalizeLabel(labelToFind);
+        let matchedChild: TreeItem | undefined;
 
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            const children = await parentItem.getChildren();
+        const found = await waitForCondition(
+            this.driver,
+            async () => {
+                matchedChild = undefined;
+                const children = await parentItem.getChildren();
 
-            // Prefer exact normalized match first
-            for (const child of children) {
-                const label = await child.getLabel();
-                if (this.normalizeLabel(label) === this.normalizeLabel(labelToFind)) {
-                    return child;
+                // Prefer exact normalized match first.
+                for (const child of children) {
+                    const label = await child.getLabel();
+                    if (this.normalizeLabel(label) === normalizedTargetLabel) {
+                        matchedChild = child;
+                        return true;
+                    }
                 }
-            }
 
-            // Fall back to tolerant matching for labels with additional metadata
-            for (const child of children) {
-                const label = await child.getLabel();
-                if (this.isFlexibleLabelMatch(label, labelToFind)) {
-                    logger.debug(
-                        "ProjectsViewPage",
-                        `Using tolerant label match. Expected: "${labelToFind}", Actual: "${label}"`
-                    );
-                    return child;
+                // Fall back to tolerant matching for labels with additional metadata.
+                for (const child of children) {
+                    const label = await child.getLabel();
+                    if (this.isFlexibleLabelMatch(label, labelToFind)) {
+                        logger.debug(
+                            "ProjectsViewPage",
+                            `Using tolerant label match. Expected: "${labelToFind}", Actual: "${label}"`
+                        );
+                        matchedChild = child;
+                        return true;
+                    }
                 }
-            }
 
-            if (attempt < maxAttempts - 1) {
-                await this.driver.sleep(500);
-            }
-        }
+                return false;
+            },
+            timeoutMs,
+            pollIntervalMs,
+            `Projects child item '${labelToFind}'`
+        );
 
-        return undefined;
+        return found ? matchedChild : undefined;
     }
 
     /**

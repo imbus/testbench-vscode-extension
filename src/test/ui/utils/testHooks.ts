@@ -15,7 +15,7 @@ import {
     deleteAllConnections
 } from "./testUtils";
 import { findAndSwitchToWebview, isWebviewAvailable } from "./webviewUtils";
-import { UITimeouts } from "./waitHelpers";
+import { UITimeouts, retryUntil, waitForCondition } from "./waitHelpers";
 import {
     isSlowMotionEnabled,
     getSlowMotionDelay,
@@ -26,6 +26,66 @@ import {
 import { getTestLogger } from "./testLogger";
 import { ProjectsViewPage } from "../pages/ProjectsViewPage";
 import { TestThemesPage } from "../pages/TestThemesPage";
+import { clearSearch } from "./toolbarUtils";
+
+const WORKBENCH_SELECTOR = ".monaco-workbench";
+const ACTIVITY_BAR_SELECTOR = ".activitybar, .composite.viewlet";
+const WORKBENCH_STABILITY_WINDOW_MS = 1000;
+const ESCAPABLE_UI_SELECTORS = [
+    ".quick-input-widget",
+    ".monaco-quick-open-widget",
+    ".monaco-dialog-modal-block",
+    ".monaco-dialog",
+    ".monaco-dialog-box",
+    ".context-view.visible"
+].join(", ");
+
+/**
+ * Waits until the VS Code workbench remains continuously present for a short
+ * stability window to avoid startup race conditions.
+ * @param driver - WebDriver instance
+ * @param timeout - Maximum time to wait for stability
+ * @param description - Description of the wait context for logging
+ * @param requireActivityBar - Whether to also require the activity bar to be present for stability
+ * @return True if the workbench is stable, false if timed out (workbench may still be present but not stable)
+ */
+async function waitForWorkbenchStability(
+    driver: WebDriver,
+    timeout: number,
+    description: string,
+    requireActivityBar: boolean
+): Promise<boolean> {
+    let stableSince: number | null = null;
+
+    return await waitForCondition(
+        driver,
+        async () => {
+            const workbench = await driver.findElements(By.css(WORKBENCH_SELECTOR));
+            if (workbench.length === 0) {
+                stableSince = null;
+                return false;
+            }
+
+            if (requireActivityBar) {
+                const activityBar = await driver.findElements(By.css(ACTIVITY_BAR_SELECTOR));
+                if (activityBar.length === 0) {
+                    stableSince = null;
+                    return false;
+                }
+            }
+
+            if (stableSince === null) {
+                stableSince = Date.now();
+                return false;
+            }
+
+            return Date.now() - stableSince >= WORKBENCH_STABILITY_WINDOW_MS;
+        },
+        timeout,
+        100,
+        description
+    );
+}
 
 /**
  * Waits for VS Code workbench to be fully loaded and ready.
@@ -40,28 +100,40 @@ async function waitForVSCodeReady(driver: WebDriver, timeout: number = 60000): P
 
     try {
         //  Wait for the main workbench element
-        await driver.wait(until.elementLocated(By.css(".monaco-workbench")), timeout, "Waiting for monaco-workbench");
+        await driver.wait(until.elementLocated(By.css(WORKBENCH_SELECTOR)), timeout, "Waiting for monaco-workbench");
 
         // Wait for the activity bar to be present
-        await driver.wait(
-            until.elementLocated(By.css(".activitybar, .composite.viewlet")),
-            timeout / 2,
-            "Waiting for activity bar"
-        );
+        await driver.wait(until.elementLocated(By.css(ACTIVITY_BAR_SELECTOR)), timeout / 2, "Waiting for activity bar");
 
-        // Wait for extensions to activate
-        await driver.sleep(2000);
+        const isInitialWorkbenchStable = await waitForWorkbenchStability(
+            driver,
+            timeout / 2,
+            "VS Code workbench to stabilize",
+            true
+        );
+        if (!isInitialWorkbenchStable) {
+            throw new Error("Timed out while waiting for VS Code workbench stability after startup");
+        }
 
         // Verify workbench is still present
-        const workbench = await driver.findElements(By.css(".monaco-workbench"));
+        const workbench = await driver.findElements(By.css(WORKBENCH_SELECTOR));
         if (workbench.length === 0) {
             logger.warn("VSCode", "Workbench disappeared, waiting again...");
             await driver.wait(
-                until.elementLocated(By.css(".monaco-workbench")),
+                until.elementLocated(By.css(WORKBENCH_SELECTOR)),
                 timeout / 2,
                 "Waiting for workbench after restart"
             );
-            await driver.sleep(1000);
+
+            const isPostRestartWorkbenchStable = await waitForWorkbenchStability(
+                driver,
+                timeout / 2,
+                "workbench to stabilize after restart",
+                false
+            );
+            if (!isPostRestartWorkbenchStable) {
+                throw new Error("Timed out while waiting for workbench stability after restart");
+            }
         }
 
         logger.info("VSCode", "VS Code is ready");
@@ -318,39 +390,51 @@ export async function clearAllNotifications(driver: WebDriver): Promise<number> 
         await driver.switchTo().defaultContent();
 
         let clearedCount = 0;
-        const maxIterations = 20; // Limit
+        const closeButtonSelector =
+            ".notifications-toasts .codicon-notifications-clear, " +
+            ".notifications-toasts .codicon-close, " +
+            ".notification-toast .action-label.codicon-close, " +
+            ".notification-toast .codicon-notifications-clear-all";
 
-        for (let i = 0; i < maxIterations; i++) {
-            try {
-                // Find notification close buttons
-                const closeButtons = await driver.findElements(
-                    By.css(
-                        ".notifications-toasts .codicon-notifications-clear, " +
-                            ".notifications-toasts .codicon-close, " +
-                            ".notification-toast .action-label.codicon-close, " +
-                            ".notification-toast .codicon-notifications-clear-all"
-                    )
-                );
+        try {
+            await driver.wait(
+                async () => {
+                    const closeButtons = await driver.findElements(By.css(closeButtonSelector));
+                    if (closeButtons.length === 0) {
+                        return true;
+                    }
 
-                if (closeButtons.length === 0) {
-                    break; // No more notifications to clear
-                }
+                    for (const button of closeButtons) {
+                        try {
+                            if (await button.isDisplayed()) {
+                                await button.click();
+                                clearedCount++;
+                                return false;
+                            }
+                        } catch {
+                            // Ignore stale elements and continue checking others.
+                        }
+                    }
 
-                // Click the first close button
-                const btn = closeButtons[0];
-                if (await btn.isDisplayed()) {
-                    await btn.click();
-                    clearedCount++;
-                    await driver.sleep(100);
-                }
-            } catch {
-                // Notification may have disappeared, continue
-                break;
-            }
+                    return false;
+                },
+                UITimeouts.MEDIUM,
+                "Waiting for notification toasts to be dismissed"
+            );
+        } catch {
+            logger.debug("Cleanup", "Timed out while dismissing notification toasts");
         }
 
         // Also try to clear notifications via command palette if any remain
-        if (clearedCount === 0) {
+        let notificationsRemain = false;
+        try {
+            const remainingButtons = await driver.findElements(By.css(closeButtonSelector));
+            notificationsRemain = remainingButtons.length > 0;
+        } catch {
+            notificationsRemain = false;
+        }
+
+        if (clearedCount === 0 || notificationsRemain) {
             try {
                 const workbench = new Workbench();
                 const notificationCenter = await workbench.openNotificationsCenter();
@@ -629,6 +713,8 @@ export function createAfterEachHook(
             opts.suiteName
         );
 
+        await safeExecute(async () => clearSearch(driver), "Clear active tree search", opts.suiteName);
+
         // Close any open dialogs by pressing Escape
         await safeExecute(
             async () => {
@@ -742,7 +828,18 @@ export async function collapseAllTreeItems(driver: WebDriver, section: any): Pro
                 const isExpanded = await item.isExpanded();
                 if (hasChildren && isExpanded) {
                     await item.collapse();
-                    await driver.sleep(100); // Brief pause for UI update
+                    await driver.wait(
+                        async () => {
+                            try {
+                                return !(await item.isExpanded());
+                            } catch {
+                                // Treat stale/removed items as collapsed for cleanup purposes.
+                                return true;
+                            }
+                        },
+                        UITimeouts.SHORT,
+                        "Waiting for tree item to collapse"
+                    );
                     collapsedCount++;
                 }
             } catch {
@@ -775,16 +872,53 @@ export interface LoginWebviewHooksOptions extends TestHooksOptions {
  * @returns Promise<void>
  */
 async function closeStuckDialogs(driver: WebDriver, maxAttempts: number = 3): Promise<void> {
+    const logger = getTestLogger();
     const { Key } = await import("vscode-extension-tester");
-    for (let i = 0; i < maxAttempts; i++) {
-        await safeExecute(
-            async () => {
-                await driver.actions().sendKeys(Key.ESCAPE).perform();
-                await driver.sleep(200);
-            },
-            `Send Escape key (attempt ${i + 1}/${maxAttempts})`,
-            "Cleanup"
-        );
+    const dismissed = await retryUntil(
+        async (attempt) => {
+            await safeExecute(
+                async () => {
+                    await driver.switchTo().defaultContent();
+                    await driver.actions().sendKeys(Key.ESCAPE).perform();
+                },
+                `Send Escape key (attempt ${attempt}/${maxAttempts})`,
+                "Cleanup"
+            );
+
+            const dismissedAfterEscape = await waitForCondition(
+                driver,
+                async () => {
+                    const escappableElements = await driver.findElements(By.css(ESCAPABLE_UI_SELECTORS));
+
+                    for (const element of escappableElements) {
+                        try {
+                            if (await element.isDisplayed()) {
+                                return false;
+                            }
+                        } catch {
+                            // Ignore stale elements while evaluating dismissal state.
+                        }
+                    }
+
+                    return true;
+                },
+                UITimeouts.SHORT,
+                100,
+                `escapable overlays/dialogs to close after Escape attempt ${attempt}/${maxAttempts}`
+            );
+
+            if (!dismissedAfterEscape) {
+                logger.debug("Cleanup", `Escapable UI still visible after Escape attempt ${attempt}/${maxAttempts}`);
+            }
+
+            return dismissedAfterEscape;
+        },
+        maxAttempts,
+        "dismiss stuck dialogs via Escape"
+    );
+
+    if (!dismissed) {
+        logger.debug("Cleanup", `Escapable UI may still be present after ${maxAttempts} Escape attempts`);
     }
 }
 
@@ -863,56 +997,72 @@ export function createLoginWebviewBeforeEachHook(
 
         const logger = getTestLogger();
 
-        // Attempt logout with retry
-        let logoutSuccess = false;
-        for (let attempt = 1; attempt <= opts.maxCleanupRetries; attempt++) {
-            try {
-                await attemptLogout(driver);
-                logoutSuccess = true;
-                break;
-            } catch (error) {
-                logger.warn(opts.suiteName, `Logout attempt ${attempt}/${opts.maxCleanupRetries} failed: ${error}`);
-                if (attempt < opts.maxCleanupRetries) {
-                    await closeStuckDialogs(driver);
-                    await driver.sleep(500);
+        // Attempt logout with bounded standardized retries.
+        const logoutSuccess = await retryUntil(
+            async (attempt) => {
+                try {
+                    await attemptLogout(driver);
+                    return true;
+                } catch (error) {
+                    logger.warn(opts.suiteName, `Logout attempt ${attempt}/${opts.maxCleanupRetries} failed: ${error}`);
+                    return false;
                 }
+            },
+            opts.maxCleanupRetries,
+            `${opts.suiteName} logout cleanup`,
+            async () => {
+                await closeStuckDialogs(driver);
+                await driver.wait(
+                    until.elementLocated(By.css(".monaco-workbench")),
+                    UITimeouts.SHORT,
+                    "Waiting for workbench before logout retry"
+                );
             }
-        }
+        );
 
         if (!logoutSuccess) {
             logger.debug(opts.suiteName, "All logout attempts failed - may already be logged out");
         }
 
-        // Delete all connections with retry
-        let cleanupSuccess = false;
-        for (let attempt = 1; attempt <= opts.maxCleanupRetries; attempt++) {
-            try {
-                await deleteAllConnections(driver);
+        // Delete all connections with bounded standardized retries.
+        const cleanupSuccess = await retryUntil(
+            async (attempt) => {
+                try {
+                    await deleteAllConnections(driver);
 
-                // Verify cleanup was successful
-                const isClean = await verifyCleanWebviewState(driver);
-                if (isClean) {
-                    cleanupSuccess = true;
-                    logger.info(opts.suiteName, "Cleanup verified: webview is in clean state");
-                    break;
-                } else {
+                    // Verify cleanup was successful
+                    const isClean = await verifyCleanWebviewState(driver);
+                    if (isClean) {
+                        logger.info(opts.suiteName, "Cleanup verified: webview is in clean state");
+                        return true;
+                    }
+
                     logger.warn(
                         opts.suiteName,
                         `Cleanup attempt ${attempt}/${opts.maxCleanupRetries}: connections still exist`
                     );
+                    return false;
+                } catch (error) {
+                    logger.warn(
+                        opts.suiteName,
+                        `Cleanup attempt ${attempt}/${opts.maxCleanupRetries} failed: ${error}`
+                    );
+                    return false;
                 }
-            } catch (error) {
-                logger.warn(opts.suiteName, `Cleanup attempt ${attempt}/${opts.maxCleanupRetries} failed: ${error}`);
-            }
-
-            // Recovery actions between retries
-            if (attempt < opts.maxCleanupRetries) {
+            },
+            opts.maxCleanupRetries,
+            `${opts.suiteName} connection cleanup`,
+            async () => {
                 await closeStuckDialogs(driver);
                 await driver.switchTo().defaultContent();
-                await driver.sleep(500);
+                await driver.wait(
+                    until.elementLocated(By.css(".monaco-workbench")),
+                    UITimeouts.SHORT,
+                    "Waiting for workbench before cleanup retry"
+                );
                 await openTestBenchSidebar(driver);
             }
-        }
+        );
 
         if (!cleanupSuccess) {
             logger.warn(opts.suiteName, "⚠ Warning: Cleanup may not be complete after all retry attempts");
@@ -928,7 +1078,6 @@ export function createLoginWebviewBeforeEachHook(
         await driver.switchTo().defaultContent();
 
         // Wait for workbench to be ready
-        const { until, By } = await import("vscode-extension-tester");
         try {
             await driver.wait(
                 until.elementLocated(By.css(".monaco-workbench")),

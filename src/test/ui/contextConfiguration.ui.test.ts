@@ -13,7 +13,13 @@ import { SideBarView, ContextMenu } from "vscode-extension-tester";
 import * as fs from "fs";
 import * as path from "path";
 import { getTestLogger } from "./utils/testLogger";
-import { applySlowMotion, waitForTreeItems, UITimeouts, waitForNotification } from "./utils/waitHelpers";
+import {
+    applySlowMotion,
+    waitForTreeItems,
+    UITimeouts,
+    waitForNotification,
+    waitForCondition
+} from "./utils/waitHelpers";
 import { clickToolbarButton } from "./utils/toolbarUtils";
 import { hasPinIcon } from "./utils/treeItemUtils";
 import { getTestData, logTestDataConfig } from "./config/testConfig";
@@ -54,6 +60,45 @@ function readLsConfig(workspacePath: string): { projectName?: string; tovName?: 
     } catch {
         return null;
     }
+}
+
+/**
+ * Waits for ls.config.json to match the expected values.
+ *
+ * @param driver - The WebDriver instance used for polling via waitForCondition
+ * @param workspacePath - Workspace containing .testbench/ls.config.json
+ * @param expected - Expected partial config values
+ * @param timeout - Maximum time to wait
+ * @returns True when config exists and matches expected values
+ */
+async function waitForLsConfigMatch(
+    driver: any,
+    workspacePath: string,
+    expected: { projectName?: string; tovName?: string },
+    timeout: number = UITimeouts.LONG
+): Promise<boolean> {
+    return await waitForCondition(
+        driver,
+        async () => {
+            const config = readLsConfig(workspacePath);
+            if (!config) {
+                return false;
+            }
+
+            if (expected.projectName !== undefined && config.projectName !== expected.projectName) {
+                return false;
+            }
+
+            if (expected.tovName !== undefined && config.tovName !== expected.tovName) {
+                return false;
+            }
+
+            return true;
+        },
+        timeout,
+        200,
+        `ls.config.json to match expected values (${JSON.stringify(expected)})`
+    );
 }
 
 /**
@@ -192,9 +237,10 @@ async function closeContextMenu(contextMenu: ContextMenu): Promise<void> {
  * @returns True when validation quick-pick is visible
  */
 async function waitForValidationQuickPick(driver: any, timeout: number = UITimeouts.LONG): Promise<boolean> {
-    try {
-        await driver.wait(
-            async () => {
+    return await waitForCondition(
+        driver,
+        async () => {
+            try {
                 const promptVisible = await driver.executeScript(`
                     const quickInput = document.querySelector('.quick-input-widget');
                     if (!quickInput) {
@@ -215,14 +261,14 @@ async function waitForValidationQuickPick(driver: any, timeout: number = UITimeo
                 `);
 
                 return Boolean(promptVisible);
-            },
-            timeout,
-            "Waiting for ls.config validation quick-pick"
-        );
-        return true;
-    } catch {
-        return false;
-    }
+            } catch {
+                return false;
+            }
+        },
+        timeout,
+        100,
+        "ls.config validation quick-pick to appear"
+    );
 }
 
 describe("Context Configuration UI Tests", function () {
@@ -310,8 +356,17 @@ describe("Context Configuration UI Tests", function () {
 
                 expect(createButtonClicked, "Should click Create button in configuration notification").to.equal(true);
                 logger.info("Config", "Clicked Create button in notification");
-                // Wait longer for config file to be written
-                await driver.sleep(3000);
+
+                const configCreated = await waitForLsConfigMatch(
+                    driver,
+                    workspacePath,
+                    {
+                        projectName: config.projectName,
+                        tovName: config.versionName
+                    },
+                    UITimeouts.LONG
+                );
+                expect(configCreated, "ls.config.json should be written after clicking Create").to.equal(true);
             }
 
             expect(
@@ -453,7 +508,16 @@ describe("Context Configuration UI Tests", function () {
             }
 
             await applySlowMotion(driver);
-            await driver.sleep(2000); // Wait for config to be written
+
+            const activeProjectPersisted = await waitForLsConfigMatch(
+                driver,
+                workspacePath,
+                {
+                    projectName: config.projectName
+                },
+                UITimeouts.LONG
+            );
+            expect(activeProjectPersisted, "Config should persist active project selection").to.equal(true);
 
             // Re-fetch project and check for pin icon
             const sideBar = new SideBarView();
@@ -510,7 +574,18 @@ describe("Context Configuration UI Tests", function () {
                         const contextMenu = await openContextMenu(project, driver);
                         if (contextMenu) {
                             await clickMenuItem(contextMenu, "Set as Active Project", driver);
-                            await driver.sleep(2000);
+
+                            const defaultConfigCreated = await waitForLsConfigMatch(
+                                driver,
+                                workspacePath,
+                                {
+                                    projectName: config.projectName
+                                },
+                                UITimeouts.LONG
+                            );
+                            if (!defaultConfigCreated) {
+                                logger.warn("PinIcon", "Timed out waiting for config after setting active project");
+                            }
                         }
                     }
                 }
@@ -602,7 +677,20 @@ describe("Context Configuration UI Tests", function () {
                 }
 
                 expect(refreshClicked, "Refresh action should be clickable to trigger validation").to.equal(true);
-                await driver.sleep(2000);
+
+                const invalidConfigStillPresent = await waitForLsConfigMatch(
+                    driver,
+                    workspacePath,
+                    {
+                        projectName: invalidConfig.projectName,
+                        tovName: invalidConfig.tovName
+                    },
+                    UITimeouts.LONG
+                );
+                expect(
+                    invalidConfigStillPresent,
+                    "Invalid config should remain persisted while validation feedback is produced"
+                ).to.equal(true);
             } else {
                 skipPrecondition(this, "Projects section not found for validation test");
             }

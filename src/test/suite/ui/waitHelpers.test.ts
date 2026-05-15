@@ -8,17 +8,37 @@ import type { WebDriver } from "vscode-extension-tester";
 import { applySlowMotion, waitForCondition, waitForTreeRefresh } from "../../ui/utils/waitHelpers";
 
 suite("Wait Helpers", () => {
-    function createSleepOnlyDriver(collectedSleeps: number[]): WebDriver {
+    function createPollingDriver(collectedSleeps: number[]): WebDriver {
         return {
             sleep: async (delay: number): Promise<void> => {
                 collectedSleeps.push(delay);
+            },
+            wait: async (
+                condition: () => Promise<boolean>,
+                timeout: number = 0,
+                message?: string,
+                pollTimeout: number = 0
+            ): Promise<boolean> => {
+                const maxAttempts = Math.max(1, Math.ceil(timeout / Math.max(1, pollTimeout)) + 1);
+
+                for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                    if (await condition()) {
+                        return true;
+                    }
+
+                    if (attempt < maxAttempts - 1) {
+                        collectedSleeps.push(pollTimeout);
+                    }
+                }
+
+                throw new Error(message || "Wait timed out");
             }
         } as unknown as WebDriver;
     }
 
     test("waitForCondition returns true when condition eventually succeeds", async () => {
         const sleeps: number[] = [];
-        const driver = createSleepOnlyDriver(sleeps);
+        const driver = createPollingDriver(sleeps);
 
         let attempts = 0;
         const succeeded = await waitForCondition(
@@ -39,7 +59,7 @@ suite("Wait Helpers", () => {
 
     test("waitForCondition tolerates thrown errors and times out", async () => {
         const sleeps: number[] = [];
-        const driver = createSleepOnlyDriver(sleeps);
+        const driver = createPollingDriver(sleeps);
 
         const succeeded = await waitForCondition(
             driver,
@@ -57,7 +77,7 @@ suite("Wait Helpers", () => {
 
     test("applySlowMotion sleeps for the custom delay", async () => {
         const sleeps: number[] = [];
-        const driver = createSleepOnlyDriver(sleeps);
+        const driver = createPollingDriver(sleeps);
 
         await applySlowMotion(driver, 25);
 
@@ -66,7 +86,7 @@ suite("Wait Helpers", () => {
 
     test("applySlowMotion skips sleep for zero custom delay", async () => {
         const sleeps: number[] = [];
-        const driver = createSleepOnlyDriver(sleeps);
+        const driver = createPollingDriver(sleeps);
 
         await applySlowMotion(driver, 0);
 
@@ -75,7 +95,7 @@ suite("Wait Helpers", () => {
 
     test("waitForTreeRefresh checks provided section before global sidebar scan", async () => {
         const sleeps: number[] = [];
-        const driver = createSleepOnlyDriver(sleeps);
+        const driver = createPollingDriver(sleeps);
 
         const section = {
             getVisibleItems: async (): Promise<unknown[]> => ["item"]

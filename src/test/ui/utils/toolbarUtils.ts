@@ -195,7 +195,148 @@ export async function clickSearchButton(section: any, driver: any): Promise<bool
     try {
         await driver.switchTo().defaultContent();
 
-        const searchClicked = await driver.executeScript(`
+        let sectionTitle = "";
+        try {
+            sectionTitle = await section.getTitle();
+        } catch {
+            // Section title not available; fall back to the first visible tree pane.
+        }
+
+        const isSearchInputVisible = async (): Promise<boolean> => {
+            const visible = await driver.executeScript(
+                `
+                const selectors = String(arguments[0] || '');
+                const sectionTitle = String(arguments[1] || '');
+                const quickInput = findVisibleInput(document.querySelectorAll('.quick-input-widget input, .quick-input-box input'));
+                if (quickInput) {
+                    return true;
+                }
+
+                const pane = findTargetPane(sectionTitle);
+                const inputs = pane ? pane.querySelectorAll(selectors) : document.querySelectorAll(selectors);
+                return findVisibleInput(inputs) !== null;
+
+                function findVisibleInput(inputs) {
+                    for (const input of inputs) {
+                        if (input.offsetParent !== null) {
+                            return input;
+                        }
+                    }
+
+                    return null;
+                }
+
+                function findTargetPane(title) {
+                    const panes = Array.from(document.querySelectorAll('.pane, .split-view-view'));
+                    if (!title) {
+                        return panes.find((candidate) => candidate.offsetParent !== null) || null;
+                    }
+
+                    const normalizedTitle = title.toLowerCase();
+                    return panes.find((candidate) => {
+                        if (candidate.offsetParent === null) {
+                            return false;
+                        }
+
+                        const header = candidate.querySelector('.pane-header, .title');
+                        const headerText = (header?.textContent || '').toLowerCase();
+                        const normalizedHeaderText = headerText.trim();
+                        return (
+                            normalizedHeaderText.length > 0 &&
+                            (normalizedHeaderText.includes(normalizedTitle) || normalizedTitle.includes(normalizedHeaderText))
+                        );
+                    }) || null;
+                }
+            `,
+                TREE_SEARCH_INPUT_SELECTORS,
+                sectionTitle
+            );
+
+            return visible as boolean;
+        };
+
+        const searchAlreadyVisible = await isSearchInputVisible();
+
+        if (searchAlreadyVisible) {
+            return true;
+        }
+
+        const searchClicked = await driver.executeScript(
+            `
+            const sectionTitle = String(arguments[0] || '');
+            const pane = findTargetPane(sectionTitle);
+            const panes = pane ? [pane] : Array.from(document.querySelectorAll('.pane, .split-view-view'));
+
+            for (const candidatePane of panes) {
+                const toolbar = candidatePane.querySelector('.pane-header .actions, .pane-header .monaco-action-bar, .title-actions');
+                if (clickSearchAction(toolbar)) {
+                    return true;
+                }
+            }
+            return false;
+
+            function clickSearchAction(toolbar) {
+                if (!toolbar) {
+                    return false;
+                }
+
+                const buttons = toolbar.querySelectorAll('a.action-item, li.action-item a, .action-label, [role="button"]');
+                for (const button of buttons) {
+                    if (button.offsetParent === null) {
+                        continue;
+                    }
+
+                    const label = button.getAttribute('aria-label') || button.getAttribute('title') || '';
+                    if (label.toLowerCase().includes('search')) {
+                        button.click();
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            function findTargetPane(title) {
+                const panes = Array.from(document.querySelectorAll('.pane, .split-view-view'));
+                if (!title) {
+                    return panes.find((candidate) => candidate.offsetParent !== null) || null;
+                }
+
+                const normalizedTitle = title.toLowerCase();
+                return panes.find((candidate) => {
+                    if (candidate.offsetParent === null) {
+                        return false;
+                    }
+
+                    const header = candidate.querySelector('.pane-header, .title');
+                    const headerText = (header?.textContent || '').toLowerCase();
+                    const normalizedHeaderText = headerText.trim();
+                    return (
+                        normalizedHeaderText.length > 0 &&
+                        (normalizedHeaderText.includes(normalizedTitle) || normalizedTitle.includes(normalizedHeaderText))
+                    );
+                }) || null;
+            }
+        `,
+            sectionTitle
+        );
+
+        if (searchClicked) {
+            await applySlowMotion(driver);
+            const inputAppeared = await waitForCondition(
+                driver,
+                isSearchInputVisible,
+                UITimeouts.SHORT,
+                100,
+                `search input to appear in ${sectionTitle || "tree view"}`
+            );
+
+            if (inputAppeared) {
+                return true;
+            }
+        }
+
+        const fallbackSearchClicked = await driver.executeScript(`
             const sections = document.querySelectorAll('.pane-body');
             for (const section of sections) {
                 const toolbar = section.closest('.pane')?.querySelector('.pane-header .actions');
@@ -210,11 +351,18 @@ export async function clickSearchButton(section: any, driver: any): Promise<bool
             return false;
         `);
 
-        if (searchClicked) {
+        if (fallbackSearchClicked) {
             await applySlowMotion(driver);
+            return await waitForCondition(
+                driver,
+                isSearchInputVisible,
+                UITimeouts.SHORT,
+                100,
+                `search input to appear after fallback click in ${sectionTitle || "tree view"}`
+            );
         }
 
-        return searchClicked as boolean;
+        return false;
     } catch (error) {
         logger.debug("Toolbar", `Error clicking search button: ${error}`);
         return false;
@@ -226,6 +374,10 @@ export async function clickSearchButton(section: any, driver: any): Promise<bool
  * VS Code tree views use a custom filter widget in the pane header.
  */
 const TREE_SEARCH_INPUT_SELECTORS = [
+    // VS Code tree search opens as Quick Input in recent workbench versions
+    ".quick-input-widget input",
+    ".quick-input-widget .monaco-inputbox input",
+    ".quick-input-box input",
     // Tree filter widget input (primary - used by tree views)
     ".pane .tree-explorer-viewlet-tree-view .monaco-inputbox input",
     ".pane .monaco-list .monaco-inputbox input",
@@ -236,8 +388,8 @@ const TREE_SEARCH_INPUT_SELECTORS = [
     // Fallback selectors
     ".monaco-inputbox.synthetic-focus input",
     ".monaco-inputbox input.input",
-    // Quick input (for other dialogs)
-    ".quick-input-box input"
+    // Quick input fallback
+    ".quick-input input"
 ].join(", ");
 
 /**
@@ -288,7 +440,13 @@ export async function enterSearchText(driver: any, searchText: string): Promise<
             const selectors = String(arguments[0] || '');
             const nextValue = String(arguments[1] ?? '');
             const inputs = document.querySelectorAll(selectors);
-            for (const input of inputs) {
+            const visibleInputs = Array.from(inputs).filter((input) => input.offsetParent !== null);
+            const activeInput = document.activeElement?.matches?.(selectors) ? document.activeElement : null;
+            const candidateInputs = activeInput && activeInput.offsetParent !== null
+                ? [activeInput, ...visibleInputs.filter((input) => input !== activeInput)]
+                : visibleInputs;
+
+            for (const input of candidateInputs) {
                 if (input.offsetParent !== null) {
                     // Focus and set value
                     input.focus();
@@ -329,39 +487,136 @@ export async function clearSearch(driver: any): Promise<boolean> {
     try {
         await driver.switchTo().defaultContent();
 
-        // Use JavaScript to clear the input value directly (avoids ElementNotInteractableError)
-        const cleared = await driver.executeScript(
-            `
-            const selectors = String(arguments[0] || '');
-            const inputs = document.querySelectorAll(selectors);
-            for (const input of inputs) {
-                if (input.offsetParent !== null) {
-                    // Clear the value
-                    input.focus();
-                    input.value = '';
-                    // Dispatch input event to trigger VS Code's filtering reset
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
+        const clearVisibleSearchInputs = async (): Promise<number> => {
+            const clearedCount = await driver.executeScript(
+                `
+                const selectors = String(arguments[0] || '');
+                const inputs = document.querySelectorAll(selectors);
+                let clearedCount = 0;
+                for (const input of inputs) {
+                    if (input.offsetParent !== null) {
+                        input.focus();
+                        input.select?.();
+                        input.value = '';
+                        input.dispatchEvent(new InputEvent('input', {
+                            bubbles: true,
+                            inputType: 'deleteContentBackward',
+                            data: null
+                        }));
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                        clearedCount++;
+                    }
+                }
+                return clearedCount;
+            `,
+                TREE_SEARCH_INPUT_SELECTORS
+            );
+
+            return clearedCount as number;
+        };
+
+        const hasFilteredEmptyState = async (): Promise<boolean> => {
+            const hasEmptyState = await driver.executeScript(`
+                const sidebar = document.querySelector('.sidebar, .part.sidebar, [id="workbench.parts.sidebar"]');
+                const root = sidebar || document;
+                return Array.from(root.querySelectorAll('.monaco-list-row, .pane-body, .monaco-list'))
+                    .some((element) => /No items found for/i.test(element.textContent || ''));
+            `);
+
+            return hasEmptyState as boolean;
+        };
+
+        const clickVisibleSearchAction = async (): Promise<boolean> => {
+            const clicked = await driver.executeScript(`
+                const candidates = Array.from(document.querySelectorAll(
+                    '.sidebar [aria-label*="Search"], .sidebar [title*="Search"], ' +
+                    '.part.sidebar [aria-label*="Search"], .part.sidebar [title*="Search"], ' +
+                    '.pane-header .actions [aria-label*="Search"], .pane-header .actions [title*="Search"]'
+                ));
+
+                for (const candidate of candidates) {
+                    if (candidate.offsetParent === null) {
+                        continue;
+                    }
+
+                    const label = candidate.getAttribute('aria-label') || candidate.getAttribute('title') || '';
+                    if (!label.toLowerCase().includes('search')) {
+                        continue;
+                    }
+
+                    candidate.click();
                     return true;
                 }
-            }
-            return false;
-        `,
-            TREE_SEARCH_INPUT_SELECTORS
-        );
 
-        if (cleared) {
-            await applySlowMotion(driver);
+                return false;
+            `);
+
+            return clicked as boolean;
+        };
+
+        let visibleInputCount = await clearVisibleSearchInputs();
+
+        if (visibleInputCount === 0 && (await hasFilteredEmptyState())) {
+            const searchReopened = await clickVisibleSearchAction();
+            if (searchReopened) {
+                await waitForCondition(
+                    driver,
+                    async () => {
+                        const hasVisibleInput = await driver.executeScript(
+                            `
+                            const selectors = String(arguments[0] || '');
+                            const inputs = document.querySelectorAll(selectors);
+                            for (const input of inputs) {
+                                if (input.offsetParent !== null) {
+                                    return true;
+                                }
+                            }
+                            return false;
+                        `,
+                            TREE_SEARCH_INPUT_SELECTORS
+                        );
+                        return hasVisibleInput as boolean;
+                    },
+                    UITimeouts.SHORT,
+                    100,
+                    "active tree search input to reopen before clearing"
+                );
+                visibleInputCount = await clearVisibleSearchInputs();
+            }
+        }
+
+        if (visibleInputCount === 0 && !(await hasFilteredEmptyState())) {
             return true;
         }
 
-        // Fallback: Press Escape to close any open search widget
         const { Key } = await import("vscode-extension-tester");
-        const body = await driver.findElement({ css: "body" });
-        await body.sendKeys(Key.ESCAPE);
+        const didClearSearchState = await waitForCondition(
+            driver,
+            async () => {
+                const hasNonEmptySearchInput = await driver.executeScript(
+                    `
+                    const selectors = String(arguments[0] || '');
+                    const inputs = document.querySelectorAll(selectors);
+                    for (const input of inputs) {
+                        if (input.offsetParent !== null && String(input.value || '').length > 0) {
+                            return true;
+                        }
+                    }
+                    return false;
+                `,
+                    TREE_SEARCH_INPUT_SELECTORS
+                );
+                return !(hasNonEmptySearchInput as boolean) && !(await hasFilteredEmptyState());
+            },
+            UITimeouts.MEDIUM,
+            100,
+            "tree search input and filtered-empty state to clear"
+        );
+
+        await driver.actions().sendKeys(Key.ESCAPE).perform();
         await applySlowMotion(driver);
 
-        return true;
+        return didClearSearchState;
     } catch (error) {
         logger.debug("Toolbar", `Error clearing search: ${error}`);
         return false;

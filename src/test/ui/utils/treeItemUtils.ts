@@ -6,9 +6,33 @@
 
 import { TreeItem, By } from "vscode-extension-tester";
 import { getTestLogger } from "./testLogger";
-import { applySlowMotion } from "./waitHelpers";
+import { applySlowMotion, UITimeouts, waitForCondition } from "./waitHelpers";
 
 const logger = getTestLogger();
+
+/**
+ * Waits for inline action buttons to render for a tree item row.
+ *
+ * @param item - Tree item whose action buttons should be materialized
+ * @param driver - WebDriver instance used for polling
+ * @returns Promise<void>
+ */
+async function waitForActionButtons(item: TreeItem, driver: any): Promise<void> {
+    await waitForCondition(
+        driver,
+        async () => {
+            try {
+                const actionButtons = await item.findElements(By.className("action-label"));
+                return actionButtons.length > 0;
+            } catch {
+                return false;
+            }
+        },
+        UITimeouts.SHORT,
+        100,
+        "tree item action buttons to appear"
+    );
+}
 
 /**
  * Checks if a tree item has a specific action button visible.
@@ -25,7 +49,7 @@ export async function hasActionButton(item: TreeItem, buttonName: string, driver
 
         // Click item to show action buttons (same as BasePage approach)
         await item.click();
-        await driver.sleep(200);
+        await waitForActionButtons(item, driver);
 
         // Use the same approach as BasePage.clickTreeItemAction
         const actionButtons = await item.findElements(By.className("action-label"));
@@ -60,7 +84,7 @@ export async function getActionButtonLabels(item: TreeItem, driver: any): Promis
     try {
         await driver.switchTo().defaultContent();
         await item.click();
-        await driver.sleep(200);
+        await waitForActionButtons(item, driver);
 
         const actionButtons = await item.findElements(By.className("action-label"));
         const labels: string[] = [];
@@ -200,7 +224,7 @@ export async function clickActionButton(item: TreeItem, buttonName: string, driv
     try {
         await driver.switchTo().defaultContent();
         await item.click();
-        await driver.sleep(200);
+        await waitForActionButtons(item, driver);
 
         const actionButtons = await item.findElements(By.className("action-label"));
 

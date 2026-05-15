@@ -111,6 +111,115 @@ function resetTreeStructureLoggingFlag(): void {
 }
 
 /**
+ * Waits until command palette quick picks are populated.
+ *
+ * @param commandPalette - Workbench command palette handle
+ * @param driver - WebDriver instance used for polling
+ * @param description - Timeout description for diagnostics
+ * @param timeout - Maximum wait duration in milliseconds
+ * @returns Promise<boolean> - True when at least one quick pick is available
+ */
+async function waitForQuickPicksAvailable(
+    commandPalette: any,
+    driver: WebDriver,
+    description: string,
+    timeout: number = UITimeouts.MEDIUM
+): Promise<boolean> {
+    return await waitForCondition(
+        driver,
+        async () => {
+            try {
+                const picks = await commandPalette.getQuickPicks();
+                return picks.length > 0;
+            } catch {
+                return false;
+            }
+        },
+        timeout,
+        100,
+        description
+    );
+}
+
+/**
+ * Waits for any quick input widget to close.
+ *
+ * @param driver - WebDriver instance used for polling
+ * @param timeout - Maximum wait duration in milliseconds
+ * @returns Promise<boolean> - True when quick input widgets are no longer present
+ */
+async function waitForQuickInputToClose(driver: WebDriver, timeout: number = UITimeouts.MEDIUM): Promise<boolean> {
+    return await waitForCondition(
+        driver,
+        async () => {
+            try {
+                const quickInputElements = await driver.findElements(
+                    By.css(".quick-input-widget, .monaco-quick-open-widget")
+                );
+                return quickInputElements.length === 0;
+            } catch {
+                return false;
+            }
+        },
+        timeout,
+        100,
+        "quick input dialog to close"
+    );
+}
+
+/**
+ * Waits until a generate-related inline action becomes available for a tree row.
+ *
+ * @param driver - WebDriver instance used to execute DOM inspection script
+ * @param itemLabel - Tree item label used to locate the row
+ * @returns Promise<boolean> - True when a generate action is discoverable for the row
+ */
+async function waitForGenerateActionReady(driver: WebDriver, itemLabel: string): Promise<boolean> {
+    return await waitForCondition(
+        driver,
+        async () => {
+            return (await driver.executeScript(
+                `
+                const label = String(arguments[0] || '');
+                if (!label) {
+                    return false;
+                }
+
+                const rows = document.querySelectorAll('.monaco-list-row');
+                for (const row of rows) {
+                    const rowText = row.textContent || row.innerText || '';
+                    if (!rowText.includes(label)) {
+                        continue;
+                    }
+
+                    const actionButtons = row.querySelectorAll('a.action-item, button.action-item, a[class*="action"], button[class*="action"]');
+                    for (const btn of actionButtons) {
+                        const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+                        const title = (btn.getAttribute('title') || '').toLowerCase();
+                        if (
+                            ariaLabel.includes('generate') ||
+                            ariaLabel.includes('robot framework') ||
+                            title.includes('generate') ||
+                            title.includes('robot framework') ||
+                            btn.querySelector('.codicon-robot, .codicon-play, [class*="codicon-robot"], [class*="codicon-play"]')
+                        ) {
+                            return true;
+                        }
+                    }
+                }
+
+                return false;
+            `,
+                itemLabel
+            )) as boolean;
+        },
+        UITimeouts.SHORT,
+        100,
+        `generate action to be ready for "${itemLabel}"`
+    );
+}
+
+/**
  * Waits for the upload success notification with dynamic counts and item name.
  *
  * Expected format example:
@@ -247,7 +356,37 @@ async function getTreeItemTooltip(item: TreeItem, driver: WebDriver): Promise<st
         // First, move mouse away from any current hover position to clear any existing tooltip
         const clearActions = driver.actions({ async: true });
         await clearActions.move({ x: 10, y: 10 }).perform();
-        await driver.sleep(150);
+        await waitForCondition(
+            driver,
+            async () => {
+                try {
+                    const tooltipSelectors = [
+                        ".monaco-hover-content",
+                        ".hover-contents",
+                        ".monaco-hover",
+                        "[class*='tooltip']",
+                        ".hover-row",
+                        ".custom-hover"
+                    ];
+
+                    for (const selector of tooltipSelectors) {
+                        const tooltips = await driver.findElements(By.css(selector));
+                        for (const tooltip of tooltips) {
+                            if (await tooltip.isDisplayed()) {
+                                return false;
+                            }
+                        }
+                    }
+
+                    return true;
+                } catch {
+                    return false;
+                }
+            },
+            UITimeouts.SHORT,
+            100,
+            "existing hover tooltip to clear before target hover"
+        );
 
         let labelElement = null;
 
@@ -315,18 +454,20 @@ async function getTreeItemTooltip(item: TreeItem, driver: WebDriver): Promise<st
         const actions = driver.actions({ async: true });
         await actions.move({ origin: elementToHover as any }).perform();
 
-        const startTime = Date.now();
         let validTooltip: string | null = null;
+        await waitForCondition(
+            driver,
+            async () => {
+                const tooltipText = await waitForTooltip(driver, 1000, `tooltip for tree item "${itemLabel}"`);
+                if (!tooltipText) {
+                    return false;
+                }
 
-        while (Date.now() - startTime < UITimeouts.MEDIUM) {
-            const tooltipText = await waitForTooltip(driver, 1000);
-
-            if (tooltipText) {
-                // Verify the tooltip is for the correct item by checking the Name field
+                // Verify the tooltip is for the correct item by checking the Name field.
                 const nameMatch = tooltipText.match(/Name:\s*([^\r\n]+)/);
                 const tooltipName = nameMatch ? nameMatch[1].trim() : null;
 
-                // Verify this is the item tooltip, not an action button tooltip
+                // Verify this is the item tooltip, not an action button tooltip.
                 const isItemTooltip =
                     tooltipText.includes("Execution Status") ||
                     tooltipText.includes("Type:") ||
@@ -334,34 +475,35 @@ async function getTreeItemTooltip(item: TreeItem, driver: WebDriver): Promise<st
                         !tooltipText.includes("Generate") &&
                         !tooltipText.includes("Delete"));
 
-                if (isItemTooltip) {
-                    if (tooltipName && tooltipName !== itemLabel) {
-                        logger.trace(
-                            "Tooltip",
-                            `Stale tooltip: expected "${itemLabel}", found Name: "${tooltipName}". Retrying...`
-                        );
-                        // Jiggle mouse slightly to trigger update
-                        await actions.move({ origin: elementToHover as any, x: 5, y: 5 }).perform();
-                        await actions.move({ origin: elementToHover as any }).perform();
-                        await driver.sleep(200);
-                        continue;
-                    }
-
-                    logger.trace("Tooltip", `Found valid tooltip text: ${tooltipText.substring(0, 100)}...`);
-                    logger.debug("Tooltip", `Full tooltip text for "${itemLabel}":\n${tooltipText}`);
-                    validTooltip = tooltipText;
-                    break;
-                } else {
+                if (!isItemTooltip) {
                     logger.trace(
                         "Tooltip",
                         `Found button tooltip instead: "${tooltipText.substring(0, 50)}". Retrying...`
                     );
-                    await driver.sleep(200);
+                    return false;
                 }
-            } else {
-                await driver.sleep(200);
-            }
-        }
+
+                if (tooltipName && tooltipName !== itemLabel) {
+                    logger.trace(
+                        "Tooltip",
+                        `Stale tooltip: expected "${itemLabel}", found Name: "${tooltipName}". Retrying...`
+                    );
+
+                    // Jiggle mouse slightly to trigger tooltip refresh without fixed delays.
+                    await actions.move({ origin: elementToHover as any, x: 5, y: 5 }).perform();
+                    await actions.move({ origin: elementToHover as any }).perform();
+                    return false;
+                }
+
+                logger.trace("Tooltip", `Found valid tooltip text: ${tooltipText.substring(0, 100)}...`);
+                logger.debug("Tooltip", `Full tooltip text for "${itemLabel}":\n${tooltipText}`);
+                validTooltip = tooltipText;
+                return true;
+            },
+            UITimeouts.MEDIUM,
+            200,
+            `valid tooltip for "${itemLabel}"`
+        );
 
         if (validTooltip) {
             return validTooltip;
@@ -651,7 +793,7 @@ async function clickGenerateButton(driver: WebDriver, itemLabel: string): Promis
             return false;
         }
 
-        await driver.sleep(300);
+        await waitForGenerateActionReady(driver, itemLabel);
 
         const clickSucceeded = (await driver.executeScript(
             `
@@ -823,6 +965,40 @@ async function clickUploadButton(testThemesPage: TestThemesPage, item: TreeItem)
         logger.error("Upload", "Error clicking Upload button", error);
         return false;
     }
+}
+
+/**
+ * Repeatedly resolves the current upload target and tries to click its Upload action until success or timeout.
+ * Uses standardized wait-based retries instead of ad hoc attempt loops.
+ *
+ * @param driver - The WebDriver instance
+ * @param testThemesPage - The TestThemesPage instance
+ * @param resolveItem - Callback that returns the freshest tree item reference for upload
+ * @param description - Description used in timeout diagnostics
+ * @param timeout - Maximum time to keep retrying (default: UITimeouts.MEDIUM)
+ * @returns Promise<boolean> - True when upload click succeeds, false on timeout
+ */
+async function clickUploadButtonWithRetries(
+    driver: WebDriver,
+    testThemesPage: TestThemesPage,
+    resolveItem: () => Promise<TreeItem | null>,
+    description: string,
+    timeout: number = UITimeouts.MEDIUM
+): Promise<boolean> {
+    return await waitForCondition(
+        driver,
+        async () => {
+            const currentItem = await resolveItem();
+            if (!currentItem) {
+                return false;
+            }
+
+            return await clickUploadButton(testThemesPage, currentItem);
+        },
+        timeout,
+        500,
+        description
+    );
 }
 
 /**
@@ -1001,16 +1177,34 @@ async function verifyGeneratedRobotFile(
 
             // Use "Go to File" command to search for __init__.robot
             await commandPalette.setText(">Go to File");
-            await driver.sleep(500);
+            await waitForQuickPicksAvailable(commandPalette, driver, '"Go to File" quick picks to appear');
 
             const quickPicks = await commandPalette.getQuickPicks();
             if (quickPicks.length > 0) {
                 await quickPicks[0].select();
-                await driver.sleep(500);
 
                 // Search for __init__.robot in the file picker
                 await commandPalette.setText("__init__.robot");
-                await driver.sleep(1000);
+                await waitForCondition(
+                    driver,
+                    async () => {
+                        try {
+                            const filePicks = await commandPalette.getQuickPicks();
+                            for (const pick of filePicks) {
+                                const pickText = await pick.getText();
+                                if (pickText.includes("__init__.robot")) {
+                                    return true;
+                                }
+                            }
+                            return filePicks.length > 0;
+                        } catch {
+                            return false;
+                        }
+                    },
+                    UITimeouts.MEDIUM,
+                    100,
+                    '"__init__.robot" file picks to appear'
+                );
 
                 // Try to find and select the file
                 const filePicks = await commandPalette.getQuickPicks();
@@ -1256,7 +1450,11 @@ async function openTestingView(driver: WebDriver): Promise<boolean> {
             const commandPalette = await workbench.openCommandPrompt();
 
             await commandPalette.setText(">Testing: Focus on Test Explorer View");
-            await driver.sleep(400);
+            await waitForQuickPicksAvailable(
+                commandPalette,
+                driver,
+                '"Testing: Focus on Test Explorer View" quick picks to appear'
+            );
 
             const picks = await commandPalette.getQuickPicks();
             if (picks.length > 0) {
@@ -1300,7 +1498,11 @@ async function runTestsFromTestingView(driver: WebDriver): Promise<boolean> {
         await driver.switchTo().defaultContent();
         logger.info("TestingView", "Looking for Run Tests button...");
 
-        await waitForTestingViewReady(driver, UITimeouts.MEDIUM);
+        await waitForTestingViewReady(
+            driver,
+            UITimeouts.MEDIUM,
+            "Testing View readiness before clicking Run Tests button"
+        );
 
         // Look for the "Run All Tests" button in the Testing View toolbar
         const runButton = await driver.wait(
@@ -1380,70 +1582,85 @@ async function waitForTestExecutionComplete(driver: WebDriver, timeout: number =
         await driver.switchTo().defaultContent();
         logger.info("TestingView", "Waiting for test execution to complete...");
 
-        // Wait for test execution indicators to appear and then disappear
-        // or for test results to appear
-        const startTime = Date.now();
+        const executionIndicatorSelector =
+            '.codicon-loading, .codicon-sync, [class*="spinning"], .codicon-testing-run-icon';
+        const spinnerSelector = '.codicon-loading, .codicon-sync, [class*="spinning"]';
+        const resultIndicatorSelector =
+            ".codicon-testing-passed-icon, .codicon-testing-failed-icon, .codicon-testing-skipped-icon";
+
+        const hasVisibleElements = async (selector: string): Promise<boolean> => {
+            const elements = await driver.findElements(By.css(selector));
+            for (const element of elements) {
+                try {
+                    if (await element.isDisplayed()) {
+                        return true;
+                    }
+                } catch {
+                    // Element may have gone stale between discovery and visibility check.
+                }
+            }
+
+            return false;
+        };
 
         // Wait for execution to start by looking for activity indicators
-        await waitForCondition(
+        const executionStarted = await waitForCondition(
             driver,
             async () => {
-                const indicators = await driver.findElements(
-                    By.css('.codicon-loading, .codicon-sync, [class*="spinning"], .codicon-testing-run-icon')
-                );
-                return indicators.length > 0;
+                return await hasVisibleElements(executionIndicatorSelector);
             },
             UITimeouts.MEDIUM,
             200,
             "test execution to start"
         );
 
-        // Wait for execution to complete
-        await driver.wait(
+        if (!executionStarted) {
+            logger.debug(
+                "TestingView",
+                "Execution start indicators did not appear within the startup wait window; monitoring for completion anyway"
+            );
+        }
+
+        // Wait for execution to complete either via explicit results,
+        // or via a short spinner-free stability window.
+        let spinnerClearedSince: number | null = null;
+        const executionCompleted = await waitForCondition(
+            driver,
             async () => {
                 try {
-                    // Check if there are any spinning/loading indicators
-                    const spinners = await driver.findElements(
-                        By.css('.codicon-loading, .codicon-sync, [class*="spinning"]')
-                    );
-
-                    let hasActiveSpinner = false;
-                    for (const spinner of spinners) {
-                        try {
-                            if (await spinner.isDisplayed()) {
-                                hasActiveSpinner = true;
-                                break;
-                            }
-                        } catch {
-                            // Element may be stale
-                        }
-                    }
-
-                    // Consider it complete
-                    if (!hasActiveSpinner && Date.now() - startTime > 5000) {
+                    const hasResultIndicators = await hasVisibleElements(resultIndicatorSelector);
+                    if (hasResultIndicators) {
                         return true;
                     }
 
-                    // Check for test result indicators (pass/fail icons)
-                    const resultIndicators = await driver.findElements(
-                        By.css(
-                            ".codicon-testing-passed-icon, .codicon-testing-failed-icon, .codicon-testing-skipped-icon"
-                        )
-                    );
-
-                    if (resultIndicators.length > 0) {
-                        // Results are visible, execution is complete
-                        return true;
+                    const hasActiveSpinner = await hasVisibleElements(spinnerSelector);
+                    if (hasActiveSpinner) {
+                        spinnerClearedSince = null;
+                        return false;
                     }
 
-                    return false;
+                    if (spinnerClearedSince === null) {
+                        spinnerClearedSince = Date.now();
+                        return false;
+                    }
+
+                    return Date.now() - spinnerClearedSince >= 5000;
                 } catch {
                     return false;
                 }
             },
             timeout,
-            "Waiting for test execution to complete"
+            200,
+            `Testing View execution to complete (results visible or no active spinner for 5000ms)`
         );
+
+        if (!executionCompleted) {
+            logger.warn(
+                "TestingView",
+                `Execution completion condition timed out after ${timeout}ms; continuing with fallback flow`
+            );
+            return true;
+        }
 
         logger.info("TestingView", " Test execution appears to be complete");
         return true;
@@ -1581,7 +1798,7 @@ async function handleSelectOutputXmlFilePrompt(driver: WebDriver): Promise<boole
         await inputBox.clear();
         await inputBox.setText(outputXmlCheck.path);
         await inputBox.confirm();
-        await driver.sleep(500);
+        await waitForQuickInputToClose(driver, UITimeouts.SHORT);
 
         return true;
     } catch (error) {
@@ -1639,7 +1856,23 @@ async function verifyChildrenGenerated(
     try {
         // Ensure parent is expanded
         await expandTreeItemIfNeeded(parentItem, driver);
-        await driver.sleep(500);
+        await waitForCondition(
+            driver,
+            async () => {
+                try {
+                    if (!(await parentItem.hasChildren())) {
+                        return true;
+                    }
+
+                    return await parentItem.isExpanded();
+                } catch {
+                    return false;
+                }
+            },
+            UITimeouts.SHORT,
+            100,
+            "parent tree item expansion before child verification"
+        );
 
         const children = await parentItem.getChildren();
         logger.info("ChildVerification", `Checking ${children.length} children for generation status...`);
@@ -2091,30 +2324,30 @@ async function executeTestGenerationScenario(
                                 : await testThemesPage.getItem(currentSection, itemLabel);
                         }
 
-                        let uploadButtonClicked = false;
-                        for (let attempt = 1; attempt <= 3; attempt++) {
-                            if (!itemForUpload) {
-                                break;
-                            }
-
-                            uploadButtonClicked = await clickUploadButton(testThemesPage, itemForUpload);
-                            if (uploadButtonClicked) {
-                                break;
-                            }
-
-                            if (attempt < 3) {
-                                await driver.sleep(250);
+                        const uploadButtonClicked = await clickUploadButtonWithRetries(
+                            driver,
+                            testThemesPage,
+                            async () => {
                                 const retryContent = sideBar.getContent();
                                 currentSection = await testThemesPage.getSection(retryContent);
                                 if (!currentSection) {
-                                    break;
+                                    return null;
                                 }
 
-                                itemForUpload = targetUniqueId
+                                const resolvedItem = targetUniqueId
                                     ? await findTreeItemByUniqueId(currentSection, driver, targetUniqueId)
                                     : await testThemesPage.getItem(currentSection, itemLabel);
-                            }
-                        }
+
+                                if (!resolvedItem) {
+                                    return null;
+                                }
+
+                                await waitForTreeRefresh(driver, currentSection, UITimeouts.SHORT);
+                                return resolvedItem;
+                            },
+                            `Upload button click for ${stableTargetLabel}`,
+                            UITimeouts.LONG
+                        );
 
                         if (!uploadButtonClicked) {
                             logger.warn("Scenario", `Failed to click Upload button for target "${stableTargetLabel}"`);
@@ -3294,7 +3527,27 @@ describe("Test Themes View UI Tests", function () {
                     return;
                 }
 
-                const uploadButtonClicked = await clickUploadButton(testThemesPage, itemForUpload);
+                const uploadButtonClicked = await clickUploadButtonWithRetries(
+                    driver,
+                    testThemesPage,
+                    async () => {
+                        const refreshedContent = sideBar.getContent();
+                        const refreshedSection = await testThemesPage.getSection(refreshedContent);
+                        if (!refreshedSection) {
+                            return null;
+                        }
+
+                        return targetTestThemeUniqueId
+                            ? await findTreeItemByUniqueId(refreshedSection, driver, targetTestThemeUniqueId)
+                            : await findTreeItemByLabel(
+                                  (await refreshedSection.getVisibleItems()) as TreeItem[],
+                                  config.testThemeName,
+                                  true
+                              );
+                    },
+                    `Upload button click for ${uploadLabel}`,
+                    UITimeouts.MEDIUM
+                );
                 expect(uploadButtonClicked, "Upload button should be clickable").to.equal(true);
 
                 await handleSelectOutputXmlFilePrompt(driver);

@@ -25,7 +25,15 @@ import {
     clickRefactorPreviewApply,
     releaseModifierKeys
 } from "./utils/testUtils";
-import { applySlowMotion, waitForTreeItems, UITimeouts, waitForTreeRefresh } from "./utils/waitHelpers";
+import {
+    applySlowMotion,
+    waitForTreeItems,
+    UITimeouts,
+    waitForTreeRefresh,
+    waitForCondition,
+    runWithTimeout,
+    retryUntil
+} from "./utils/waitHelpers";
 import { doubleClickTreeItem, waitForTreeItemButton } from "./utils/treeViewUtils";
 import { getTestData, logTestDataConfig } from "./config/testConfig";
 import { TestContext, setupTestHooks } from "./utils/testHooks";
@@ -60,14 +68,7 @@ describe("Resource Creation Flow UI Tests", function () {
      * 2. Stop waiting if it takes too long.
      * 3. Return null on timeout so the test can continue safely.
      */
-    const withTimeout = async <T>(operation: () => Promise<T>, timeoutMs: number = 2500): Promise<T | null> => {
-        return await Promise.race([
-            operation(),
-            new Promise<null>((resolve) => {
-                setTimeout(() => resolve(null), timeoutMs);
-            })
-        ]);
-    };
+    const withTimeout = runWithTimeout;
 
     /*
      * Helper Steps:
@@ -77,6 +78,77 @@ describe("Resource Creation Flow UI Tests", function () {
      */
     const isLabelMatch = (actualLabel: string, expectedLabel: string): boolean => {
         return actualLabel === expectedLabel || actualLabel.includes(expectedLabel);
+    };
+
+    /*
+     * Helper Steps:
+     * 1. Ensure editor APIs are responsive.
+     * 2. Verify keyboard focus is inside an editor surface.
+     * 3. Return true only when retry interactions are likely to succeed.
+     */
+    const waitForEditorInteractionReady = async (
+        editor: TextEditor,
+        driver: any,
+        timeout: number = UITimeouts.SHORT
+    ): Promise<boolean> => {
+        return await waitForCondition(
+            driver,
+            async () => {
+                try {
+                    await editor.getText();
+                    const editorHasFocus = (await driver.executeScript(
+                        `
+                        const active = document.activeElement;
+                        if (!active) {
+                            return false;
+                        }
+
+                        if (typeof active.closest !== 'function') {
+                            return false;
+                        }
+
+                        return Boolean(active.closest('.monaco-editor, .editor-instance, .editor-container'));
+                    `
+                    )) as boolean;
+
+                    return editorHasFocus;
+                } catch {
+                    return false;
+                }
+            },
+            timeout,
+            100,
+            "resource editor to be focused and readable for retry"
+        );
+    };
+
+    /*
+     * Helper Steps:
+     * 1. Repeatedly attempt to resolve a value.
+     * 2. Use waitForCondition polling for bounded retries/diagnostics.
+     * 3. Return null when the value is not resolved within the timeout.
+     */
+    const waitForResolvedValue = async <T>(
+        driver: any,
+        resolver: () => Promise<T | null>,
+        timeout: number,
+        pollInterval: number,
+        description: string
+    ): Promise<T | null> => {
+        let resolvedValue: T | null = null;
+
+        const resolved = await waitForCondition(
+            driver,
+            async () => {
+                resolvedValue = await resolver();
+                return resolvedValue !== null;
+            },
+            timeout,
+            pollInterval,
+            description
+        );
+
+        return resolved ? resolvedValue : null;
     };
 
     /*
@@ -113,17 +185,23 @@ describe("Resource Creation Flow UI Tests", function () {
         driver: any
     ): Promise<TreeItem | null> => {
         let topLevelItems: TreeItem[] = [];
-        for (let attempt = 1; attempt <= 3 && topLevelItems.length === 0; attempt++) {
-            try {
-                topLevelItems = (await section.getVisibleItems()) as TreeItem[];
-            } catch {
-                if (attempt < 3) {
-                    await driver.sleep(200);
+        const resolvedTopLevelItems = await waitForCondition(
+            driver,
+            async () => {
+                try {
+                    topLevelItems = (await section.getVisibleItems()) as TreeItem[];
+                } catch {
+                    topLevelItems = [];
                 }
-            }
-        }
 
-        if (topLevelItems.length === 0) {
+                return topLevelItems.length > 0;
+            },
+            UITimeouts.MEDIUM,
+            UITimeouts.SHORT,
+            `visible top-level Test Elements items for subdivision "${expectedLabel}"`
+        );
+
+        if (!resolvedTopLevelItems || topLevelItems.length === 0) {
             return null;
         }
 
@@ -207,44 +285,68 @@ describe("Resource Creation Flow UI Tests", function () {
         driver: any,
         maxAttempts = 3
     ): Promise<boolean> => {
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            try {
-                await openTestBenchSidebar(driver);
+        return await retryUntil(
+            async (attempt) => {
+                try {
+                    await openTestBenchSidebar(driver);
 
-                const sideBar = new SideBarView();
-                const content = sideBar.getContent();
-                const elementsSection = await testElementsPage.getSection(content);
-                if (!elementsSection) {
-                    continue;
+                    const sideBar = new SideBarView();
+                    const content = sideBar.getContent();
+                    const elementsSection = await testElementsPage.getSection(content);
+                    if (!elementsSection) {
+                        return false;
+                    }
+
+                    await waitForTreeRefresh(driver, elementsSection, UITimeouts.SHORT);
+
+                    const resourceItem = await testElementsPage.getItem(elementsSection, subdivisionLabel);
+                    if (!resourceItem) {
+                        return false;
+                    }
+
+                    await resourceItem.click();
+                    await applySlowMotion(driver);
+
+                    return await testElementsPage.clickOpenResource(resourceItem);
+                } catch (error) {
+                    logger.debug(
+                        "Phase4",
+                        `Open Resource retry failed for "${subdivisionLabel}" (attempt ${attempt}/${maxAttempts}): ${String(error)}`
+                    );
+                    return false;
+                }
+            },
+            maxAttempts,
+            `Open Resource action for subdivision "${subdivisionLabel}"`,
+            async (attempt) => {
+                const nextAttempt = attempt + 1;
+                if (nextAttempt > maxAttempts) {
+                    return;
                 }
 
-                await waitForTreeRefresh(driver, elementsSection, UITimeouts.SHORT);
+                await waitForCondition(
+                    driver,
+                    async () => {
+                        try {
+                            const sideBar = new SideBarView();
+                            const content = sideBar.getContent();
+                            const elementsSection = await testElementsPage.getSection(content);
+                            if (!elementsSection) {
+                                return false;
+                            }
 
-                const resourceItem = await testElementsPage.getItem(elementsSection, subdivisionLabel);
-                if (!resourceItem) {
-                    continue;
-                }
-
-                await resourceItem.click();
-                await applySlowMotion(driver);
-
-                const openClicked = await testElementsPage.clickOpenResource(resourceItem);
-                if (openClicked) {
-                    return true;
-                }
-            } catch (error) {
-                logger.debug(
-                    "Phase4",
-                    `Open Resource retry failed for "${subdivisionLabel}" (attempt ${attempt}/${maxAttempts}): ${String(error)}`
+                            const resourceItem = await testElementsPage.getItem(elementsSection, subdivisionLabel);
+                            return !!resourceItem;
+                        } catch {
+                            return false;
+                        }
+                    },
+                    UITimeouts.SHORT,
+                    100,
+                    `subdivision "${subdivisionLabel}" to be available before Open Resource retry ${nextAttempt}/${maxAttempts}`
                 );
             }
-
-            if (attempt < maxAttempts) {
-                await driver.sleep(250);
-            }
-        }
-
-        return false;
+        );
     };
 
     /*
@@ -258,22 +360,48 @@ describe("Resource Creation Flow UI Tests", function () {
         driver: any,
         maxAttempts = 4
     ) => {
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            await openTestBenchSidebar(driver);
+        let resolvedSection: any = null;
 
-            const content = sideBar.getContent();
-            const section = await testElementsPage.getSection(content);
-            if (section) {
-                return section;
-            }
+        const sectionResolved = await retryUntil(
+            async (attempt) => {
+                await openTestBenchSidebar(driver);
 
-            if (attempt < maxAttempts) {
+                const content = sideBar.getContent();
+                resolvedSection = await testElementsPage.getSection(content);
+                if (resolvedSection) {
+                    return true;
+                }
+
                 logger.debug("Phase3", `Test Elements section lookup retry ${attempt}/${maxAttempts}`);
-                await driver.sleep(250);
-            }
-        }
+                return false;
+            },
+            maxAttempts,
+            "Test Elements section to become available",
+            async (attempt) => {
+                const nextAttempt = attempt + 1;
+                if (nextAttempt > maxAttempts) {
+                    return;
+                }
 
-        return null;
+                await waitForCondition(
+                    driver,
+                    async () => {
+                        try {
+                            const content = sideBar.getContent();
+                            const section = await testElementsPage.getSection(content);
+                            return !!section;
+                        } catch {
+                            return false;
+                        }
+                    },
+                    UITimeouts.SHORT,
+                    100,
+                    `Test Elements section to become available before retry ${nextAttempt}/${maxAttempts}`
+                );
+            }
+        );
+
+        return sectionResolved ? resolvedSection : null;
     };
 
     /*
@@ -519,29 +647,47 @@ describe("Resource Creation Flow UI Tests", function () {
             );
 
             let fallbackSection = elementsSection;
-            for (let attempt = 1; attempt <= 3 && !subdivision; attempt++) {
-                const contentForFallback = sideBar.getContent();
-                const sectionForFallback = await testElementsPage.getSection(contentForFallback);
-                if (sectionForFallback) {
-                    fallbackSection = sectionForFallback;
-                }
+            let fallbackAttempts = 0;
+            const fallbackMatch = await waitForResolvedValue(
+                driver,
+                async () => {
+                    fallbackAttempts += 1;
 
-                const fallback = await findResourceSubdivision(driver, fallbackSection, testElementsPage);
-                subdivision = fallback.subdivision;
-                if (subdivision) {
-                    subdivisionLabelForActions = fallback.label || config.subdivisionName;
-                    subdivisionCandidateResolved = true;
-                    logger.info(
-                        "Phase3",
-                        `Using fallback subdivision "${subdivisionLabelForActions}" for resource creation.`
-                    );
-                    break;
-                }
+                    const contentForFallback = sideBar.getContent();
+                    const sectionForFallback = await testElementsPage.getSection(contentForFallback);
+                    if (sectionForFallback) {
+                        fallbackSection = sectionForFallback;
+                    }
 
-                if (attempt < 3) {
-                    logger.debug("Phase3", `Fallback subdivision lookup attempt ${attempt}/3 failed; retrying...`);
-                    await waitForTreeRefresh(driver, fallbackSection, UITimeouts.SHORT);
-                }
+                    const fallback = await findResourceSubdivision(driver, fallbackSection, testElementsPage);
+                    if (!fallback.subdivision) {
+                        if (fallbackAttempts < 3) {
+                            logger.debug(
+                                "Phase3",
+                                `Fallback subdivision lookup attempt ${fallbackAttempts}/3 failed; retrying...`
+                            );
+                        }
+                        return null;
+                    }
+
+                    return {
+                        subdivision: fallback.subdivision,
+                        label: fallback.label || config.subdivisionName
+                    };
+                },
+                3 * UITimeouts.SHORT,
+                UITimeouts.SHORT,
+                `fallback subdivision with resource actions for "${config.subdivisionName}"`
+            );
+
+            if (fallbackMatch) {
+                subdivision = fallbackMatch.subdivision;
+                subdivisionLabelForActions = fallbackMatch.label;
+                subdivisionCandidateResolved = true;
+                logger.info(
+                    "Phase3",
+                    `Using fallback subdivision "${subdivisionLabelForActions}" for resource creation.`
+                );
             }
 
             if (!subdivisionCandidateResolved) {
@@ -550,24 +696,35 @@ describe("Resource Creation Flow UI Tests", function () {
                     "Fallback lookup with action buttons did not find a subdivision. Trying label-based fallback."
                 );
 
-                let visibleItems: TreeItem[] = [];
-                for (let attempt = 1; attempt <= 3 && visibleItems.length === 0; attempt++) {
-                    try {
-                        const contentForLabelFallback = sideBar.getContent();
-                        const sectionForLabelFallback = await testElementsPage.getSection(contentForLabelFallback);
-                        if (!sectionForLabelFallback) {
-                            continue;
-                        }
+                let labelFallbackAttempts = 0;
+                const visibleItems =
+                    (await waitForResolvedValue<TreeItem[]>(
+                        driver,
+                        async () => {
+                            labelFallbackAttempts += 1;
 
-                        visibleItems = (await sectionForLabelFallback.getVisibleItems()) as TreeItem[];
-                    } catch (error) {
-                        logger.debug(
-                            "Phase3",
-                            `Label-based fallback failed to read visible items (attempt ${attempt}/3): ${String(error)}`
-                        );
-                        await waitForTreeRefresh(driver, elementsSection, UITimeouts.SHORT);
-                    }
-                }
+                            try {
+                                const contentForLabelFallback = sideBar.getContent();
+                                const sectionForLabelFallback =
+                                    await testElementsPage.getSection(contentForLabelFallback);
+                                if (!sectionForLabelFallback) {
+                                    return null;
+                                }
+
+                                const items = (await sectionForLabelFallback.getVisibleItems()) as TreeItem[];
+                                return items.length > 0 ? items : null;
+                            } catch (error) {
+                                logger.debug(
+                                    "Phase3",
+                                    `Label-based fallback failed to read visible items (attempt ${labelFallbackAttempts}/3): ${String(error)}`
+                                );
+                                return null;
+                            }
+                        },
+                        3 * UITimeouts.SHORT,
+                        UITimeouts.SHORT,
+                        "visible Test Elements items for label-based subdivision fallback"
+                    )) || [];
 
                 for (const item of visibleItems.slice(0, 40)) {
                     try {
@@ -757,38 +914,42 @@ describe("Resource Creation Flow UI Tests", function () {
 
             logger.info("Phase4", "Removing content from line 4 onwards...");
 
-            let contentDeleted = false;
             const maxRetries = 3;
-            for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                if (attempt > 1) {
-                    logger.debug("Phase4", `Retry attempt ${attempt}/${maxRetries} to delete content...`);
-                    await driver.sleep(500); // Brief pause between retries
-                }
+            const contentDeleted = await retryUntil(
+                async (attempt) => {
+                    if (attempt > 1) {
+                        logger.debug("Phase4", `Retry attempt ${attempt}/${maxRetries} to delete content...`);
+                        await waitForEditorInteractionReady(resourceEditor, driver, UITimeouts.SHORT);
+                    }
 
-                contentDeleted = await deleteFromLineOnwards(resourceEditor, driver, 4);
-                if (contentDeleted) {
-                    logger.info("Phase4", `Content deleted successfully on attempt ${attempt}`);
-                    break;
-                } else {
+                    const deleted = await deleteFromLineOnwards(resourceEditor, driver, 4);
+                    if (deleted) {
+                        logger.info("Phase4", `Content deleted successfully on attempt ${attempt}`);
+                        return true;
+                    }
+
                     logger.warn("Phase4", `Deletion failed on attempt ${attempt}`);
                     if (attempt < maxRetries) {
                         try {
                             await resourceEditor.click();
-                            await driver.sleep(200);
+                            await waitForEditorInteractionReady(resourceEditor, driver, UITimeouts.SHORT);
                         } catch {
                             // Ignore focus errors
                         }
                     }
-                }
-            }
+
+                    return false;
+                },
+                maxRetries,
+                `delete resource content from line 4 onwards in ${expectedResourceFileName}`
+            );
 
             if (!contentDeleted) {
                 logger.error("Phase4", "ERROR: Failed to delete content after all retry attempts");
                 skipError(this, "Failed to delete content after all retry attempts");
             }
 
-            logger.debug("Phase4", "Waiting for CodeLens to stabilize after deletion...");
-            await driver.sleep(3000);
+            logger.debug("Phase4", "Waiting for CodeLens to appear after deletion...");
         }
 
         const codeLensAppeared = await waitForCodeLens(driver, "Pull changes from TestBench");

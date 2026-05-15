@@ -401,9 +401,8 @@ describe("Toolbar Actions UI Tests", function () {
             }
 
             await applySlowMotion(driver);
-            await driver.sleep(1000);
 
-            const projectsAppeared = await waitForProjectsView(driver);
+            const projectsAppeared = await waitForProjectsView(driver, UITimeouts.MEDIUM);
             logger.info("Toolbar", `Projects View appeared: ${projectsAppeared}`);
             expect(projectsAppeared, "Projects View should appear after clicking Open Projects View").to.equal(true);
 

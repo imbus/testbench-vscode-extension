@@ -13,7 +13,7 @@ import {
     openTestBenchSidebar,
     ensureLoggedIn
 } from "./testUtils";
-import { waitForTreeItems } from "./waitHelpers";
+import { waitForCondition, waitForTreeItems, UITimeouts, retryUntil } from "./waitHelpers";
 import { doubleClickTreeItem } from "./treeViewUtils";
 import { getTestData } from "../config/testConfig";
 import { ProjectsViewPage } from "../pages/ProjectsViewPage";
@@ -73,7 +73,7 @@ export async function navigateToTestView(
             logger.info(logPrefix, "In Test Themes view, clicking Open Projects View button...");
             const clicked = await testThemesPage.clickOpenProjectsView();
             if (clicked) {
-                await driver.sleep(1000);
+                await waitForProjectsView(driver, UITimeouts.MEDIUM);
                 content = sideBar.getContent();
             }
         }
@@ -82,7 +82,7 @@ export async function navigateToTestView(
         let projectsSection = await projectsPage.getSection(content);
         if (!projectsSection) {
             await openTestBenchSidebar(driver);
-            await driver.sleep(1000);
+            await waitForProjectsView(driver, UITimeouts.MEDIUM);
             content = sideBar.getContent();
             projectsSection = await projectsPage.getSection(content);
         }
@@ -111,7 +111,7 @@ export async function navigateToTestView(
         // Wrong context, navigate back to Projects View
         logger.info(logPrefix, "In Test Themes view but wrong context, navigating to Projects View...");
         await testThemesPage.clickToolbarAction(testThemesSection, "Open Projects View");
-        await driver.sleep(1000);
+        await waitForProjectsView(driver, UITimeouts.MEDIUM);
     }
 
     // Navigate from Projects View
@@ -122,7 +122,7 @@ export async function navigateToTestView(
     if (!projectsSection) {
         // Try to open the sidebar
         await openTestBenchSidebar(driver);
-        await driver.sleep(1000);
+        await waitForProjectsView(driver, UITimeouts.MEDIUM);
         content = sideBar.getContent();
         projectsSection = await projectsPage.getSection(content);
         if (!projectsSection) {
@@ -270,34 +270,53 @@ export async function findResourceSubdivision(
     testElementsPage: TestElementsPage
 ): Promise<{ subdivision: TreeItem | null; label: string }> {
     const { hasActionButton } = await import("./treeItemUtils");
+    const maxReadAttempts = 3;
 
     // Collect labels first to avoid stale element issues
     let items: TreeItem[] = [];
     const sideBar = new SideBarView();
 
-    for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-            items = (await elementsSection.getVisibleItems()) as TreeItem[];
-            break;
-        } catch (error) {
-            logger.debug(
-                "Navigation",
-                `Failed to read visible test element items (attempt ${attempt}/3): ${String(error)}`
+    const itemsLoaded = await retryUntil(
+        async (attempt) => {
+            try {
+                items = (await elementsSection.getVisibleItems()) as TreeItem[];
+                return true;
+            } catch (error) {
+                logger.debug(
+                    "Navigation",
+                    `Failed to read visible test element items (attempt ${attempt}/${maxReadAttempts}): ${String(error)}`
+                );
+                return false;
+            }
+        },
+        maxReadAttempts,
+        "read visible test element items before resource subdivision lookup",
+        async (attempt) => {
+            const nextAttempt = attempt + 1;
+            if (nextAttempt > maxReadAttempts) {
+                return;
+            }
+
+            await waitForCondition(
+                driver,
+                async () => {
+                    const content = sideBar.getContent();
+                    const refreshedSection = await testElementsPage.getSection(content);
+                    if (!refreshedSection) {
+                        return false;
+                    }
+
+                    elementsSection = refreshedSection;
+                    return true;
+                },
+                UITimeouts.SHORT,
+                100,
+                `Test Elements section to be available before visible-item read retry ${nextAttempt}/${maxReadAttempts}`
             );
-
-            const content = sideBar.getContent();
-            const refreshedSection = await testElementsPage.getSection(content);
-            if (refreshedSection) {
-                elementsSection = refreshedSection;
-            }
-
-            if (attempt < 3) {
-                await driver.sleep(200);
-            }
         }
-    }
+    );
 
-    if (items.length === 0) {
+    if (!itemsLoaded || items.length === 0) {
         return { subdivision: null, label: "" };
     }
 
@@ -332,9 +351,6 @@ export async function findResourceSubdivision(
                 if (!item) {
                     continue;
                 }
-
-                await item.click();
-                await driver.sleep(200);
 
                 const hasCreate = await hasActionButton(item, "Create Resource", driver);
                 const hasOpen = await hasActionButton(item, "Open Resource", driver);

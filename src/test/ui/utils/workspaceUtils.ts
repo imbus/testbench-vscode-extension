@@ -5,7 +5,7 @@
 
 import { TEST_PATHS } from "../config/testConfig";
 import { getTestLogger } from "./testLogger";
-import { UITimeouts } from "./waitHelpers";
+import { UITimeouts, waitForCondition } from "./waitHelpers";
 import * as path from "path";
 import * as fs from "fs";
 import { VSBrowser, WebDriver, By, until, WebElement } from "vscode-extension-tester";
@@ -100,19 +100,39 @@ export async function ensureWorkspaceIsOpen(config: WorkspaceConfig = {}): Promi
 
     // Wait for the workbench to fully reload.
     // Using generic class selector which is more stable than ID
-    await driver.wait(
-        until.elementLocated(By.className("monaco-workbench")),
+    const workbenchLoaded = await waitForCondition(
+        driver,
+        async () => {
+            try {
+                const workbenches = await driver.findElements(By.className("monaco-workbench"));
+                return workbenches.length > 0;
+            } catch {
+                return false;
+            }
+        },
         UITimeouts.WORKSPACE_LOAD,
-        `Timeout waiting for workspace '${workspaceName}' to load`
+        200,
+        `workspace "${workspaceName}" workbench to load`
     );
+    if (!workbenchLoaded) {
+        throw new Error(`Timeout waiting for workspace '${workspaceName}' to load`);
+    }
 
-    try {
-        await driver.wait(
-            until.elementLocated(By.id("workbench.parts.statusbar")),
-            UITimeouts.VERY_LONG,
-            "Waiting for status bar (UI ready)"
-        );
-    } catch {
+    const statusBarReady = await waitForCondition(
+        driver,
+        async () => {
+            try {
+                const statusBars = await driver.findElements(By.id("workbench.parts.statusbar"));
+                return statusBars.length > 0;
+            } catch {
+                return false;
+            }
+        },
+        UITimeouts.VERY_LONG,
+        200,
+        `workspace "${workspaceName}" status bar readiness`
+    );
+    if (!statusBarReady) {
         logger.warn("Workspace", "Status bar not found, proceeding anyway.");
     }
 

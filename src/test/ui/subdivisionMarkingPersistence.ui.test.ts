@@ -10,9 +10,15 @@
 import { expect } from "chai";
 import { SideBarView, TreeItem, ViewSection, Workbench, By, until, WebDriver } from "vscode-extension-tester";
 import { getTestLogger } from "./utils/testLogger";
-import { waitForFileInEditor, openTestBenchSidebar, attemptLogout, ensureLoggedIn } from "./utils/testUtils";
+import {
+    waitForFileInEditor,
+    openTestBenchSidebar,
+    attemptLogout,
+    ensureLoggedIn,
+    waitForTestThemesAndElementsViews
+} from "./utils/testUtils";
 import { cleanupWorkspace } from "./utils/workspaceUtils";
-import { waitForTreeItems, UITimeouts } from "./utils/waitHelpers";
+import { waitForCondition, waitForTreeItems, waitForActivityBar, UITimeouts, retryUntil } from "./utils/waitHelpers";
 import { clickToolbarButton } from "./utils/toolbarUtils";
 import { waitForTreeItemButton } from "./utils/treeViewUtils";
 import { collectTreeItemLabels } from "./utils/treeItemUtils";
@@ -39,12 +45,6 @@ const SUBDIVISION_ICON_PREFIXES = {
     /** Icon prefix for subdivisions without local resource files */
     MISSING: "missingSubdivision"
 } as const;
-
-/**
- * Constants for test timing.
- */
-const STATE_RESTORE_DELAY = 2000;
-const REFRESH_DELAY = 3000;
 
 /**
  * Represents the marking state of a subdivision tree item.
@@ -101,6 +101,87 @@ async function focusSubdivisionRowByLabel(label: string, driver: WebDriver): Pro
     } catch (error) {
         logger.debug("SubdivisionRow", `Error focusing row by label "${label}": ${error}`);
         return false;
+    }
+}
+
+/**
+ * Waits for subdivision row state to satisfy a caller-provided predicate.
+ */
+async function waitForSubdivisionRowState(
+    label: string,
+    driver: WebDriver,
+    predicate: (state: SubdivisionRowState) => boolean,
+    timeout: number,
+    timeoutContext: string
+): Promise<SubdivisionRowState> {
+    let lastState: SubdivisionRowState = {
+        found: false,
+        hasCreateButton: false,
+        hasOpenButton: false,
+        iconContainsLocal: false
+    };
+
+    const stateMatched = await waitForCondition(
+        driver,
+        async () => {
+            lastState = await readSubdivisionRowStateByLabel(label, driver);
+            return predicate(lastState);
+        },
+        timeout,
+        100,
+        `subdivision "${label}" ${timeoutContext}`
+    );
+
+    if (!stateMatched) {
+        throw new Error(`Timed out waiting for subdivision "${label}" ${timeoutContext}`);
+    }
+
+    return lastState;
+}
+
+/**
+ * Expands visible parent tree items and waits for expansion state to settle.
+ */
+async function expandVisibleParentItems(
+    items: readonly (TreeItem | unknown)[],
+    driver: WebDriver,
+    logContext: string
+): Promise<void> {
+    for (const topItem of items) {
+        try {
+            const item = topItem as TreeItem;
+            const hasChildren = await item.hasChildren();
+            if (!hasChildren) {
+                continue;
+            }
+
+            const isExpanded = await item.isExpanded();
+            if (isExpanded) {
+                continue;
+            }
+
+            logger.debug(logContext, "Expanding parent item to reveal children...");
+            await item.expand();
+            const expansionSettled = await waitForCondition(
+                driver,
+                async () => {
+                    try {
+                        return await item.isExpanded();
+                    } catch {
+                        return true;
+                    }
+                },
+                UITimeouts.MEDIUM,
+                100,
+                "parent tree item expansion to settle"
+            );
+
+            if (!expansionSettled) {
+                throw new Error("Parent tree item did not report expanded state within timeout");
+            }
+        } catch {
+            // Skip stale elements
+        }
     }
 }
 
@@ -237,9 +318,13 @@ async function captureSubdivisionMarkingState(
 
     // Focus row by label to ensure inline action buttons are visible before reading state.
     await focusSubdivisionRowByLabel(label, driver);
-    await driver.sleep(200);
-
-    const rowState = await readSubdivisionRowStateByLabel(label, driver);
+    const rowState = await waitForSubdivisionRowState(
+        label,
+        driver,
+        (state) => state.found,
+        UITimeouts.SHORT,
+        "row to be available after focus"
+    );
     const hasCreateButton = rowState.hasCreateButton;
     const hasOpenButton = rowState.hasOpenButton;
     const iconContainsLocal = rowState.iconContainsLocal;
@@ -283,23 +368,7 @@ async function findUnmarkedResourceSubdivision(
 ): Promise<{ item: TreeItem | null; label: string }> {
     // First, expand any parent items to reveal all subdivisions
     const topLevelItems = await elementsSection.getVisibleItems();
-
-    for (const topItem of topLevelItems) {
-        try {
-            const item = topItem as TreeItem;
-            const hasChildren = await item.hasChildren();
-            if (hasChildren) {
-                const isExpanded = await item.isExpanded();
-                if (!isExpanded) {
-                    logger.debug("FindSubdivision", `Expanding parent item to reveal children...`);
-                    await item.expand();
-                    await driver.sleep(500);
-                }
-            }
-        } catch {
-            // Skip stale elements
-        }
-    }
+    await expandVisibleParentItems(topLevelItems, driver, "FindSubdivision");
 
     // Re-fetch items after expansion
     const items = await elementsSection.getVisibleItems();
@@ -324,10 +393,15 @@ async function findUnmarkedResourceSubdivision(
             }
 
             const focused = await focusSubdivisionRowByLabel(label, driver);
-            if (focused) {
-                await driver.sleep(200);
-            }
-            const rowState = await readSubdivisionRowStateByLabel(label, driver);
+            const rowState = focused
+                ? await waitForSubdivisionRowState(
+                      label,
+                      driver,
+                      (state) => state.found,
+                      UITimeouts.SHORT,
+                      "row to be available after focus"
+                  )
+                : await readSubdivisionRowStateByLabel(label, driver);
             const hasCreate = rowState.hasCreateButton;
 
             if (hasCreate) {
@@ -364,20 +438,54 @@ async function reloadVSCodeWindow(driver: WebDriver): Promise<boolean> {
             // Element might not exist
         }
 
-        // Open command palette with retry logic
-        let commandPalette;
-        for (let attempt = 1; attempt <= 3; attempt++) {
-            try {
-                const workbench = new Workbench();
-                commandPalette = await workbench.openCommandPrompt();
-                break;
-            } catch (error) {
-                logger.warn("Reload", `Command palette open attempt ${attempt} failed: ${error}`);
-                if (attempt === 3) {
-                    throw error;
+        // Open command palette with bounded attempt retries.
+        let commandPalette: any = null;
+        const maxOpenAttempts = 3;
+        let lastOpenError: unknown;
+
+        const paletteOpened = await retryUntil(
+            async (attempt) => {
+                if (commandPalette) {
+                    return true;
                 }
-                await driver.sleep(1000);
+
+                try {
+                    const workbench = new Workbench();
+                    commandPalette = await workbench.openCommandPrompt();
+                    return true;
+                } catch (error) {
+                    lastOpenError = error;
+                    logger.warn(
+                        "Reload",
+                        `Command palette open attempt ${attempt}/${maxOpenAttempts} failed: ${error}`
+                    );
+                    return false;
+                }
+            },
+            maxOpenAttempts,
+            "open command palette for Developer: Reload Window",
+            async () => {
+                await waitForCondition(
+                    driver,
+                    async () => {
+                        try {
+                            const quickInputWidgets = await driver.findElements(
+                                By.css(".quick-input-widget, .monaco-quick-open-widget")
+                            );
+                            return quickInputWidgets.length === 0;
+                        } catch {
+                            return false;
+                        }
+                    },
+                    UITimeouts.SHORT,
+                    100,
+                    "previous quick input to close before reload command retry"
+                );
             }
+        );
+
+        if (!paletteOpened && lastOpenError) {
+            throw lastOpenError;
         }
 
         if (!commandPalette) {
@@ -387,8 +495,8 @@ async function reloadVSCodeWindow(driver: WebDriver): Promise<boolean> {
 
         await commandPalette.setText(">Developer: Reload Window");
 
-        // Wait for quick picks to populate
-        await driver.wait(
+        const picksReady = await waitForCondition(
+            driver,
             async () => {
                 try {
                     const picks = await commandPalette!.getQuickPicks();
@@ -398,8 +506,19 @@ async function reloadVSCodeWindow(driver: WebDriver): Promise<boolean> {
                 }
             },
             UITimeouts.MEDIUM,
-            "Waiting for quick picks to populate"
+            100,
+            'quick picks to populate for ">Developer: Reload Window"'
         );
+
+        if (!picksReady) {
+            logger.warn("Reload", "Quick picks did not populate for reload command");
+            try {
+                await commandPalette.cancel();
+            } catch {
+                // Ignore cancel errors
+            }
+            return false;
+        }
 
         const picks = await commandPalette.getQuickPicks();
         let reloadCommandFound = false;
@@ -452,21 +571,7 @@ async function reloadVSCodeWindow(driver: WebDriver): Promise<boolean> {
         );
 
         // Wait for activity bar to be interactive
-        await driver.wait(
-            async () => {
-                try {
-                    const activityBar = await driver.findElement(By.id("workbench.parts.activitybar"));
-                    return activityBar !== null;
-                } catch {
-                    return false;
-                }
-            },
-            UITimeouts.LONG,
-            "Waiting for activity bar"
-        );
-
-        // Small delay for extensions to finish activating
-        await driver.sleep(1500);
+        await waitForActivityBar(driver, UITimeouts.LONG, "reloadVSCodeWindow post-reload");
 
         logger.info("Reload", "VS Code window reloaded successfully");
         return true;
@@ -604,22 +709,7 @@ describe("Subdivision Marking Persistence UI Tests", function () {
 
             // Expand all top-level items to reveal child subdivisions
             const topLevelItems = await elementsSection.getVisibleItems();
-            for (const topItem of topLevelItems) {
-                try {
-                    const item = topItem as TreeItem;
-                    const hasChildren = await item.hasChildren();
-                    if (hasChildren) {
-                        const isExpanded = await item.isExpanded();
-                        if (!isExpanded) {
-                            logger.debug("Phase1", "Expanding parent item to reveal children...");
-                            await item.expand();
-                            await driver.sleep(500);
-                        }
-                    }
-                } catch {
-                    // Skip stale elements
-                }
-            }
+            await expandVisibleParentItems(topLevelItems, driver, "Phase1");
 
             // Re-fetch items after expansion
             const items = await elementsSection.getVisibleItems();
@@ -663,22 +753,7 @@ describe("Subdivision Marking Persistence UI Tests", function () {
 
             // Expand all top-level items to reveal child subdivisions
             const topLevelItems = await elementsSection.getVisibleItems();
-            for (const topItem of topLevelItems) {
-                try {
-                    const item = topItem as TreeItem;
-                    const hasChildren = await item.hasChildren();
-                    if (hasChildren) {
-                        const isExpanded = await item.isExpanded();
-                        if (!isExpanded) {
-                            logger.debug("Phase2", "Expanding parent item to reveal children...");
-                            await item.expand();
-                            await driver.sleep(500);
-                        }
-                    }
-                } catch {
-                    // Skip stale elements
-                }
-            }
+            await expandVisibleParentItems(topLevelItems, driver, "Phase2");
 
             // Re-fetch section after expansion
             const sideBar = new SideBarView();
@@ -694,8 +769,13 @@ describe("Subdivision Marking Persistence UI Tests", function () {
 
             if (targetSubdivision) {
                 await focusSubdivisionRowByLabel(targetLabel, driver);
-                await driver.sleep(200);
-                const rowState = await readSubdivisionRowStateByLabel(targetLabel, driver);
+                const rowState = await waitForSubdivisionRowState(
+                    targetLabel,
+                    driver,
+                    (state) => state.found,
+                    UITimeouts.SHORT,
+                    "row to be available while checking Create Resource action"
+                );
                 const hasCreate = rowState.hasCreateButton;
                 if (!hasCreate) {
                     logger.info(
@@ -748,7 +828,6 @@ describe("Subdivision Marking Persistence UI Tests", function () {
 
             // Click the subdivision to show action buttons (following resourceCreationFlow pattern)
             await freshSubdivision.click();
-            await driver.sleep(300);
 
             // Wait for button to be visible
             const buttonVisible = await waitForTreeItemButton(
@@ -760,7 +839,7 @@ describe("Subdivision Marking Persistence UI Tests", function () {
             if (!buttonVisible) {
                 logger.warn("Phase2", "Create Resource button not visible, trying to click again...");
                 await freshSubdivision.click();
-                await driver.sleep(500);
+                await waitForTreeItemButton(freshSubdivision, driver, "Create Resource", UITimeouts.SHORT);
             }
 
             logger.info("Phase2", `Creating resource for subdivision "${targetLabel}"...`);
@@ -796,8 +875,14 @@ describe("Subdivision Marking Persistence UI Tests", function () {
                 throw new Error("Test Elements section not found after resource creation");
             }
 
-            await driver.sleep(STATE_RESTORE_DELAY);
             await waitForTreeItems(updatedSection, driver);
+            await waitForSubdivisionRowState(
+                targetLabel,
+                driver,
+                (state) => state.found && (state.hasOpenButton || state.iconContainsLocal),
+                UITimeouts.LONG,
+                "marking state update after resource creation"
+            );
 
             // Re-fetch the subdivision with fresh reference
             const updatedSubdivision = await testElementsPage.getItem(updatedSection, targetLabel);
@@ -842,12 +927,12 @@ describe("Subdivision Marking Persistence UI Tests", function () {
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
             expect(reloaded, "VS Code window should reload successfully").to.be.true;
 
-            // Wait for extension to activate
-            await driver.sleep(STATE_RESTORE_DELAY);
-
             // Navigate to Test Elements view
             logger.info("Reload", "Navigating back to Test Elements view...");
             await openTestBenchSidebar(driver);
+            const viewsReady = await waitForTestThemesAndElementsViews(driver, UITimeouts.LONG);
+            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+            expect(viewsReady, "Test Themes and Test Elements views should be ready after reload").to.be.true;
 
             const { section: elementsSection, success } = await navigateToTestElements();
             if (!success || !elementsSection) {
@@ -891,15 +976,11 @@ describe("Subdivision Marking Persistence UI Tests", function () {
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
             expect(loggedOut, "Logout should succeed").to.be.true;
 
-            await driver.sleep(STATE_RESTORE_DELAY);
-
             // Login again
             logger.info("LogoutLogin", "Logging back in...");
             const loggedIn = await ensureLoggedIn(driver);
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
             expect(loggedIn, "Login should succeed").to.be.true;
-
-            await driver.sleep(STATE_RESTORE_DELAY);
 
             // Navigate to Test Elements view
             logger.info("LogoutLogin", "Navigating to Test Elements view...");
@@ -960,8 +1041,14 @@ describe("Subdivision Marking Persistence UI Tests", function () {
             }
 
             // Wait for refresh to complete
-            await driver.sleep(REFRESH_DELAY);
             await waitForTreeItems(elementsSection, driver);
+            await waitForSubdivisionRowState(
+                createdResourceSubdivisionLabel,
+                driver,
+                (state) => state.found,
+                UITimeouts.LONG,
+                "to be visible after Test Elements refresh"
+            );
 
             // Verify the subdivision is still marked
             const isMarked = await verifySubdivisionIsMarked(
