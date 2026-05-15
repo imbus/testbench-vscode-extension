@@ -6,7 +6,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { VSBrowser, WebDriver, EditorView, Workbench, By, until } from "vscode-extension-tester";
+import { VSBrowser, WebDriver, EditorView, By, until } from "vscode-extension-tester";
 import {
     openTestBenchSidebar,
     ensureLoggedIn,
@@ -15,6 +15,7 @@ import {
     deleteAllConnections
 } from "./testUtils";
 import { findAndSwitchToWebview, isWebviewAvailable } from "./webviewUtils";
+import { clearAllNotifications } from "./notificationUtils";
 import { UITimeouts, retryUntil, waitForCondition } from "./waitHelpers";
 import {
     isSlowMotionEnabled,
@@ -374,85 +375,6 @@ export async function captureScreenshot(
     } catch (error) {
         logger.error("Screenshot", `Failed to capture screenshot: ${error}`);
         return null;
-    }
-}
-
-/**
- * Clears all VS Code notifications.
- * Useful for cleaning up state between tests.
- *
- * @param driver - WebDriver instance
- * @returns Promise<number> - Number of notifications cleared
- */
-export async function clearAllNotifications(driver: WebDriver): Promise<number> {
-    const logger = getTestLogger();
-    try {
-        await driver.switchTo().defaultContent();
-
-        let clearedCount = 0;
-        const closeButtonSelector =
-            ".notifications-toasts .codicon-notifications-clear, " +
-            ".notifications-toasts .codicon-close, " +
-            ".notification-toast .action-label.codicon-close, " +
-            ".notification-toast .codicon-notifications-clear-all";
-
-        try {
-            await driver.wait(
-                async () => {
-                    const closeButtons = await driver.findElements(By.css(closeButtonSelector));
-                    if (closeButtons.length === 0) {
-                        return true;
-                    }
-
-                    for (const button of closeButtons) {
-                        try {
-                            if (await button.isDisplayed()) {
-                                await button.click();
-                                clearedCount++;
-                                return false;
-                            }
-                        } catch {
-                            // Ignore stale elements and continue checking others.
-                        }
-                    }
-
-                    return false;
-                },
-                UITimeouts.MEDIUM,
-                "Waiting for notification toasts to be dismissed"
-            );
-        } catch {
-            logger.debug("Cleanup", "Timed out while dismissing notification toasts");
-        }
-
-        // Also try to clear notifications via command palette if any remain
-        let notificationsRemain = false;
-        try {
-            const remainingButtons = await driver.findElements(By.css(closeButtonSelector));
-            notificationsRemain = remainingButtons.length > 0;
-        } catch {
-            notificationsRemain = false;
-        }
-
-        if (clearedCount === 0 || notificationsRemain) {
-            try {
-                const workbench = new Workbench();
-                const notificationCenter = await workbench.openNotificationsCenter();
-                await notificationCenter.clearAllNotifications();
-                await notificationCenter.close();
-            } catch {
-                // Ignore errors - notification center might not be available
-            }
-        }
-
-        if (clearedCount > 0) {
-            logger.debug("Cleanup", `Cleared ${clearedCount} notification(s)`);
-        }
-
-        return clearedCount;
-    } catch (error) {
-        logger.warn("Cleanup", `Error clearing notifications: ${error}`);
-        return 0;
     }
 }
 

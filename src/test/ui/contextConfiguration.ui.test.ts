@@ -24,6 +24,7 @@ import { clickToolbarButton } from "./utils/toolbarUtils";
 import { hasPinIcon } from "./utils/treeItemUtils";
 import { getTestData, logTestDataConfig } from "./config/testConfig";
 import { TestContext, setupTestHooks, skipTest } from "./utils/testHooks";
+import { clickNotificationButton } from "./utils/notificationUtils";
 import { ProjectsViewPage } from "./pages/ProjectsViewPage";
 
 const logger = getTestLogger();
@@ -351,7 +352,6 @@ describe("Context Configuration UI Tests", function () {
                 logger.info("Config", "Configuration notification appeared");
 
                 // Use clickNotificationButton utility for better reliability
-                const { clickNotificationButton } = await import("./utils/testUtils");
                 const createButtonClicked = await clickNotificationButton(driver, "Create");
 
                 expect(createButtonClicked, "Should click Create button in configuration notification").to.equal(true);

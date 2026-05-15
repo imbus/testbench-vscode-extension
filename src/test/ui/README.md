@@ -55,6 +55,7 @@ src/test/ui/
 │   ├── waitHelpers.ts                 # Wait wrappers, timeouts, and slow-motion helpers
 │   ├── filesystemUtils.ts             # Generated .robot filesystem verification helpers
 │   ├── workspaceUtils.ts              # Workspace open/detection/cleanup helpers
+│   ├── notificationUtils.ts           # VS Code notification interaction helpers
 │   ├── testHooks.ts                   # Shared test hooks and setup utilities
 │   ├── testLogger.ts                  # Persistent file logging utility
 │   └── treeViewUtils.ts               # Tree view specific utilities
