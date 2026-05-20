@@ -358,6 +358,70 @@ export class TestBenchLogger {
     }
 
     /**
+     * Determines whether a value is error-like and should be sanitized before logging.
+     *
+     * A value is considered error-like when it is:
+     * - an Error instance, or
+     * - an object with a string `message` plus an additional error marker (`stack`, `isAxiosError`, or error-like `name`).
+     * @param value The value to check.
+     * @returns True if the value is error-like, false otherwise.
+     */
+    private isErrorLike(value: unknown): boolean {
+        if (!value || typeof value !== "object") {
+            return false;
+        }
+
+        if (value instanceof Error) {
+            return true;
+        }
+
+        const candidate = value as {
+            message?: unknown;
+            stack?: unknown;
+            name?: unknown;
+            isAxiosError?: unknown;
+        };
+
+        const hasMessage = typeof candidate.message === "string";
+        if (!hasMessage) {
+            return false;
+        }
+
+        const hasStack = typeof candidate.stack === "string";
+        const hasAxiosFlag = candidate.isAxiosError === true;
+        const hasErrorLikeName = typeof candidate.name === "string" && candidate.name.toLowerCase().includes("error");
+
+        return hasStack || hasAxiosFlag || hasErrorLikeName;
+    }
+
+    /**
+     * Converts only error-like details into safe message strings.
+     * Non-error objects remain unchanged.
+     * @param details The original details to sanitize.
+     * @returns The sanitized details with error-like objects converted to strings, or the original value if it was not error-like.
+     */
+    private sanitizeErrorDetails(details?: any | any[]): any | any[] | undefined {
+        if (details === undefined || details === null) {
+            return details;
+        }
+
+        const sanitizeSingleDetail = (detail: any): any => {
+            if (this.isErrorLike(detail)) {
+                const message = (detail as { message?: unknown }).message;
+                if (typeof message === "string" && message.trim().length > 0) {
+                    return message;
+                }
+                return "[error details omitted]";
+            }
+            return detail;
+        };
+
+        return Array.isArray(details)
+            ? details.map((detail) => sanitizeSingleDetail(detail))
+            : sanitizeSingleDetail(details);
+    }
+
+    /**
      * Retrieves the "flatted" module, caching it after the first dynamic import.
      */
     private getFlatted() {
@@ -438,16 +502,18 @@ export class TestBenchLogger {
         }
         await this.initPromise;
 
+        const safeDetails = this.sanitizeErrorDetails(details);
+
         const timestamp: string = new Date().toISOString();
         const baseLogMessage: string = `${timestamp} [${logLevel.toUpperCase()}]: ${logMessage}`;
-        const detailsMessage: string = await this.formatDetails(details);
+        const detailsMessage: string = await this.formatDetails(safeDetails);
         const completeLogMessage: string = `${baseLogMessage}${detailsMessage}\n`;
 
         if (shouldOutputToTerminal || this.outputLogToTerminal) {
-            if (Array.isArray(details) && details.length > 0) {
-                console.log(baseLogMessage, ...details);
-            } else if (details) {
-                console.log(baseLogMessage, details);
+            if (Array.isArray(safeDetails) && safeDetails.length > 0) {
+                console.log(baseLogMessage, ...safeDetails);
+            } else if (safeDetails) {
+                console.log(baseLogMessage, safeDetails);
             } else {
                 console.log(baseLogMessage);
             }
