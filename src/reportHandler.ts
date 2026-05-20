@@ -1158,18 +1158,6 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
             if (importError) {
                 return null;
             }
-            let importError = false;
-            for (const tcs of importJobStatus?.completion?.result?.ExecutionImportingSuccess?.testCaseSets ?? []) {
-                const errorMessage = tcs?.error?.message;
-                const tcsName = tcs?.name ?? "Unknown TestCaseSet";
-                if (errorMessage && typeof errorMessage === "string") {
-                    vscode.window.showErrorMessage(`Import of TestCaseSet '${tcsName}' failed: ${errorMessage}`);
-                    importError = true;
-                }
-            }
-            if (importError) {
-                return null;
-            }
         } catch (error: any) {
             logger.error(
                 `[reportHandler] Error during import job for specific tree item UID ${reportRootUID}:`,
