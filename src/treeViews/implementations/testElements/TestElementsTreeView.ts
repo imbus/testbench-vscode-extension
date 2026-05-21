@@ -801,7 +801,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
 
-            this.logger.error("[TestElementsTreeView] Failed to load test elements", error as Error);
+            this.logger.error("[TestElementsTreeView] Failed to load test elements", error);
             throw error;
         }
     }

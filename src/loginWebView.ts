@@ -85,11 +85,11 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     break;
                 case WebviewMessageCommands.LOGIN:
                     logger.debug('[loginWebView] "Sign In" button clicked. Triggering TestBench login command.');
-                    vscode.commands.executeCommand(allExtensionCommands.login).then(undefined, (err: any) => {
-                        if (this.isLoginCancellation(err)) {
+                    vscode.commands.executeCommand(allExtensionCommands.login).then(undefined, (error: any) => {
+                        if (this.isLoginCancellation(error)) {
                             logger.trace("[loginWebView] Login process was cancelled by the user.");
                         } else {
-                            logger.error("[loginWebView] Error executing login command:", err);
+                            logger.error("[loginWebView] Error executing login command");
                             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                                 type: "error",
                                 text: "Could not start TestBench login process."
@@ -102,10 +102,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         logger.debug(
                             `[loginWebView] Webview requested to trigger command: ${message.payload.commandId}`
                         );
-                        vscode.commands.executeCommand(message.payload.commandId).then(undefined, (err) => {
+                        vscode.commands.executeCommand(message.payload.commandId).then(undefined, (_err) => {
                             logger.error(
-                                `[loginWebView] Error executing command '${message.payload.commandId}' from webview:`,
-                                err
+                                `[loginWebView] Error executing command '${message.payload.commandId}' from webview:`
                             );
                             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                                 type: "error",
@@ -291,8 +290,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 loginConnectionId: this.loginInProgressConnectionId,
                 loginConnectionLabel: this.loginInProgressConnectionLabel
             });
-        } catch (error: any) {
-            logger.error("[loginWebView] Error fetching connections for webview:", error);
+        } catch (_error: any) {
+            logger.error("[loginWebView] Error fetching connections for webview");
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
                 text: "Error loading connections."
@@ -440,7 +439,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             });
             await this.sendConnectionToWebview();
         } catch (error: any) {
-            logger.error("[loginWebView] Error saving new connection:", error);
+            logger.error("[loginWebView] Error saving new connection");
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
                 text: `Error saving connection: ${error.message}`
@@ -477,7 +476,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             });
             await this.sendConnectionToWebview();
         } catch (error: any) {
-            logger.error(`[loginWebView] Error deleting connection ${connectionId}:`, error);
+            logger.error(`[loginWebView] Error deleting connection ${connectionId}`);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
                 text: `Error deleting connection: ${error.message}`
@@ -524,7 +523,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
             logger.debug(`[loginWebView] Edit mode activated for connection: ${connectionToEdit.label}`);
         } catch (error: any) {
-            logger.error(`[loginWebView] Error entering edit mode for connection ${connectionId}:`, error);
+            logger.error(`[loginWebView] Error entering edit mode for connection ${connectionId}`);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
                 text: `Error loading connection for editing: ${error.message}`
@@ -625,7 +624,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             this.postMessageToWebview(WebviewMessageCommands.EXIT_EDIT_MODE, {});
             await this.sendConnectionToWebview();
         } catch (error: any) {
-            logger.error("[loginWebView] Error updating connection:", error);
+            logger.error("[loginWebView] Error updating connection");
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
                 text: `Error updating connection: ${error.message}`
