@@ -44,11 +44,11 @@ export async function getConnections(context: vscode.ExtensionContext): Promise<
 /**
  * Saves or updates a TestBench connection.
  * If it's a new connection (no id or id not found), a new id will be generated.
- * Passwords that are empty strings will not be stored. To remove an existing password,
- * pass `undefined` or an empty string for the password parameter.
+ * Passwords are stored exactly as provided, including empty strings. To remove an existing password,
+ * pass `undefined` for the password parameter.
  * @param {vscode.ExtensionContext} context The extension context.
  * @param connection The connection data to save. The `id` can be omitted for new connections.
- * @param {string} [password] The password for the connection (optional). If undefined or an empty string,
+ * @param {string} [password] The password for the connection (optional). If undefined,
  * no password will be stored, and any existing password for this connection will be removed.
  * @returns {Promise<string>} The ID of the saved connection.
  * @throws {Error} If a connection with the same label already exists (excluding the current connection for updates).
@@ -89,15 +89,13 @@ export async function saveConnection(
         await context.globalState.update(StorageKeys.CONNECTIONS_STORAGE_KEY, connections);
         if (connection.keepExistingPassword) {
             // Password is not changing, do nothing.
-        } else if (connection.password && connection.password.length > 0) {
+        } else if (connection.password !== undefined) {
             await context.secrets.store(
                 StorageKeys.CONNECTION_PASSWORD_SECRET_PREFIX + connectionToSave.id,
                 connection.password
             );
         } else {
-            // Handle cases:
-            // - `password` is undefined (e.g., "Store password" unchecked)
-            // - `password` is an empty string
+            // Handle `password` being undefined (e.g., "Store password" unchecked).
             await context.secrets.delete(StorageKeys.CONNECTION_PASSWORD_SECRET_PREFIX + connectionToSave.id);
         }
         logger.debug(`[connectionManager] Connection saved: ${connectionToSave.label}`);
