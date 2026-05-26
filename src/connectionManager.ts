@@ -42,14 +42,29 @@ export async function getConnections(context: vscode.ExtensionContext): Promise<
 }
 
 /**
+ * Converts a TestBenchConnectionWithSecrets to a TestBenchConnection by omitting password-related fields.
+ * @param connection The connection object that may include password fields.
+ * @returns A TestBenchConnection object with only the fields that are persisted in globalState.
+ */
+function toPersistedConnection(connection: TestBenchConnection): TestBenchConnection {
+    return {
+        id: connection.id,
+        label: connection.label,
+        serverName: connection.serverName,
+        portNumber: connection.portNumber,
+        username: connection.username
+    };
+}
+
+/**
  * Saves or updates a TestBench connection.
  * If it's a new connection (no id or id not found), a new id will be generated.
- * Passwords are stored exactly as provided, including empty strings. To remove an existing password,
- * pass `undefined` for the password parameter.
+ * Passwords are stored exactly as provided, including empty strings. Set `connection.password` to `undefined`
+ * to remove an existing password, or set `connection.keepExistingPassword` to leave the stored password unchanged.
  * @param {vscode.ExtensionContext} context The extension context.
- * @param connection The connection data to save. The `id` can be omitted for new connections.
- * @param {string} [password] The password for the connection (optional). If undefined,
- * no password will be stored, and any existing password for this connection will be removed.
+ * @param connection The connection data to save. The `id` can be omitted for new connections. The optional
+ * `connection.password` and `connection.keepExistingPassword` fields control SecretStorage updates and are never
+ * persisted in globalState.
  * @returns {Promise<string>} The ID of the saved connection.
  * @throws {Error} If a connection with the same label already exists (excluding the current connection for updates).
  */
@@ -72,21 +87,33 @@ export async function saveConnection(
         }
 
         if (existingConnectionIndex !== -1 && connection.id) {
-            connectionToSave = { ...connections[existingConnectionIndex], ...connection };
+            connectionToSave = {
+                id: connection.id,
+                label: connection.label,
+                serverName: connection.serverName,
+                portNumber: connection.portNumber,
+                username: connection.username
+            };
             connections[existingConnectionIndex] = connectionToSave;
             logger.debug(
                 `[connectionManager] Updating connection: ${connectionToSave.label} with ID ${connectionToSave.id}`
             );
         } else {
             const newId: string = uuidv4();
-            connectionToSave = { ...connection, id: newId } as TestBenchConnection;
+            connectionToSave = {
+                id: newId,
+                label: connection.label,
+                serverName: connection.serverName,
+                portNumber: connection.portNumber,
+                username: connection.username
+            };
             connections.push(connectionToSave);
             logger.debug(
                 `[connectionManager] Adding new connection ${connectionToSave.label} with ID ${connectionToSave.id}`
             );
         }
 
-        await context.globalState.update(StorageKeys.CONNECTIONS_STORAGE_KEY, connections);
+        await context.globalState.update(StorageKeys.CONNECTIONS_STORAGE_KEY, connections.map(toPersistedConnection));
         if (connection.keepExistingPassword) {
             // Password is not changing, do nothing.
         } else if (connection.password !== undefined) {
@@ -147,10 +174,7 @@ export async function getPasswordForConnection(
     connectionId: string
 ): Promise<string | undefined> {
     try {
-        const password: string | undefined = await context.secrets.get(
-            StorageKeys.CONNECTION_PASSWORD_SECRET_PREFIX + connectionId
-        );
-        return password;
+        return await context.secrets.get(StorageKeys.CONNECTION_PASSWORD_SECRET_PREFIX + connectionId);
     } catch (error) {
         logger.error(`[connectionManager] Error retrieving password for connection ${connectionId}:`, error);
         return undefined;
