@@ -548,9 +548,21 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         await this.resourceFileService.ensureFileExists(filePath, content);
 
         const uri = vscode.Uri.file(filePath);
-        vscode.commands.executeCommand("testbench_ls.pullSubdivision", uri.toString(), uid, false);
+        await vscode.commands.executeCommand("testbench_ls.pullSubdivision", uri.toString(), uid, false);
+        await this.saveGeneratedResourceDocument(uri);
 
         return true;
+    }
+
+    /**
+     * Saves the provided resouce document. Used to save a document in case the user does not use auto save feature of VS Code.
+     * @param uri The document to save
+     */
+    private async saveGeneratedResourceDocument(uri: vscode.Uri): Promise<void> {
+        const document = await vscode.workspace.openTextDocument(uri);
+        if (document.isDirty) {
+            await document.save();
+        }
     }
 
     /**

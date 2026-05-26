@@ -764,7 +764,7 @@ def push_testbench_subdivision(ls: LanguageServer, kwargs):
 
 
 @testbench_ls.command(COMMAND_PULL_SUBDIVISION)
-def pull_testbench_subdivision(ls: LanguageServer, *args):
+async def pull_testbench_subdivision(ls: LanguageServer, *args):
     document_uri, subdivision_uid, needs_user_confirmation, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
     existing_resource = TestBenchResourceModel.from_file(document.source)
@@ -839,8 +839,8 @@ def pull_testbench_subdivision(ls: LanguageServer, *args):
         KEYWORD_INTERFACE_CHANGE_LABEL,
         needs_user_confirmation,
     )
-    ls.protocol.send_request(
-        WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
+    await ls.workspace_apply_edit_async(
+        ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
     )
 
 
