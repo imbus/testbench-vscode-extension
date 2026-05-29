@@ -25,7 +25,8 @@ import {
 } from "./constants";
 import { TestThemesTreeView } from "./treeViews/implementations/testThemes/TestThemesTreeView";
 import { getExtensionSetting } from "./configuration";
-import { TESTBENCH_AUTH_PROVIDER_ID } from "./testBenchAuthenticationProvider";
+import { TESTBENCH_AUTH_PROVIDER_ID, validateServerVersion } from "./testBenchAuthenticationProvider";
+import { DependencyVersionError } from "./errors";
 import * as connectionManager from "./connectionManager";
 import { SharedSessionManager } from "./sharedSessionManager";
 import { handleLanguageServerRestartOnSessionChange } from "./languageServer/server";
@@ -1650,6 +1651,60 @@ export async function extractDataFromReport(zipFilePath: string): Promise<{
 }
 
 /**
+ * Fetches the TestBench server version using an existing HTTPS agent.
+ * This function attempts to retrieve the server version from a public endpoint.
+ *
+ * @param {string} serverName The server hostname or IP.
+ * @param {number} portNumber The server port.
+ * @param {https.Agent | HttpsProxyAgent<string>} agent The HTTPS agent to use for the request.
+ * @returns {Promise<string>} The server version string, or an empty string if unavailable.
+ */
+export async function fetchServerVersion(
+    serverName: string,
+    portNumber: number,
+    agent: https.Agent | HttpsProxyAgent<string>
+): Promise<string> {
+    const baseURL: string = `https://${serverName}:${portNumber}/api`;
+    const serverVersionEndpoint = `${baseURL}/serverVersion`;
+    logger.trace(`[testBenchConnection] Attempting to fetch server version from '${serverVersionEndpoint}'.`);
+
+    try {
+        const versionResponse = await axios.get(serverVersionEndpoint, {
+            headers: {
+                accept: "application/json"
+            },
+            proxy: false,
+            httpsAgent: agent,
+            timeout: 5000,
+            validateStatus: () => true // Accept all status codes to handle manually
+        });
+
+        if (versionResponse.status === 200 && versionResponse.data) {
+            const version = versionResponse.data;
+            if (version) {
+                logger.debug(
+                    `[testBenchConnection] Server version fetched from '${serverVersionEndpoint}': ${version}`
+                );
+                return version;
+            }
+        }
+
+        logger.warn(`[testBenchConnection] Could not fetch server version from '${serverVersionEndpoint}'.`);
+        return "";
+    } catch (error: any) {
+        if (axios.isAxiosError(error)) {
+            if (error.code === "ETIMEDOUT") {
+                logger.warn(
+                    `[testBenchConnection] Failed to fetch server version from '${serverVersionEndpoint}': ${error.message}.`
+                );
+                return "";
+            }
+        }
+        throw error;
+    }
+}
+
+/**
  * Logs in to the TestBench server with the provided credentials and returns session details.
  * This function focuses on the API keyword and does not handle UI or global state.
  *
@@ -1693,6 +1748,10 @@ export async function loginToServerAndGetSessionDetails(
 
     try {
         const secureAgent = await createHttpsAgent();
+
+        const serverVersion = await fetchServerVersion(serverName, portNumber, secureAgent);
+        await validateServerVersion(serverVersion, true);
+
         const loginResponse = await performLogin(secureAgent);
         if (loginResponse.status === 201 && loginResponse.data?.sessionToken) {
             logger.info(`[testBenchConnection] Login successful for user ${username} on ${serverName}.`);
@@ -1714,6 +1773,10 @@ export async function loginToServerAndGetSessionDetails(
             "DEPTH_ZERO_SELF_SIGNED_CERT"
         ];
 
+        if (error instanceof DependencyVersionError) {
+            return null;
+        }
+
         if (axios.isAxiosError(error) && certErrorCodes.includes(error.code || "")) {
             logger.warn(
                 `[testBenchConnection] Certificate validation failed for ${serverName}: ${error.message}. Prompting user for insecure connection option.`
@@ -1733,6 +1796,11 @@ export async function loginToServerAndGetSessionDetails(
                         `[testBenchConnection] Attempting insecure connection to '${serverName}:${portNumber}'.`
                     );
                     const insecureAgent = await createHttpsAgent(true);
+
+                    // Check server version with insecure agent before login
+                    const insecureServerVersion = await fetchServerVersion(serverName, portNumber, insecureAgent);
+                    await validateServerVersion(insecureServerVersion, true);
+
                     const insecureLoginResponse = await axios.post(loginURL, requestBody, {
                         headers: {
                             accept: "application/vnd.testbench+json",
@@ -1763,6 +1831,9 @@ export async function loginToServerAndGetSessionDetails(
                         );
                     }
                 } catch (insecureError: any) {
+                    if (insecureError instanceof DependencyVersionError) {
+                        return null;
+                    }
                     vscode.window.showErrorMessage(`${insecureError.code}: ${insecureError.message}`);
                     logger.error(
                         `[testBenchConnection] Insecure login attempt failed for ${username} on ${serverName}:`,

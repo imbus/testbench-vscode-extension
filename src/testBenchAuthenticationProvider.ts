@@ -5,9 +5,11 @@ import { TestBenchConnection } from "./testBenchTypes";
 import { logger } from "./extension";
 import { SharedSessionManager } from "./sharedSessionManager";
 import { StorageKeys } from "./constants";
+import { DependencyVersionError } from "./errors";
 
 export const TESTBENCH_AUTH_PROVIDER_ID = "testbench-auth";
 export const TESTBENCH_AUTH_PROVIDER_LABEL = "TestBench"; // User-facing name in VS Code Accounts UI
+export const EXPECTED_TESTBENCH_SERVER_VERSION = "4.0";
 
 interface TestBenchSessionData {
     sessionId: string; // VS Code session ID
@@ -604,6 +606,36 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
         if (!password || password === "") {
             throw new Error("Password is required for login.");
         }
+    }
+}
+
+/**
+ * Validates the TestBench server version.
+ * Displays a warning if the server version does not match the expected version.
+ * @param serverVersion The server version returned from the login response
+ * @param modal Whether to show a modal dialog (true) or a regular notification (false)
+ */
+export async function validateServerVersion(serverVersion: string, modal: boolean = true): Promise<void> {
+    if (!serverVersion || serverVersion.trim() === "") {
+        logger.warn("[validateServerVersion] Server version is empty or not provided.");
+        await vscode.window.showErrorMessage(
+            `Could not determine the TestBench server version. Please check your connection details.`,
+            modal ? { modal: true } : {}
+        );
+        throw new DependencyVersionError("TestBench server", EXPECTED_TESTBENCH_SERVER_VERSION, "unknown");
+    }
+
+    if (serverVersion !== EXPECTED_TESTBENCH_SERVER_VERSION) {
+        logger.warn(
+            `[validateServerVersion] Server version mismatch. Expected: ${EXPECTED_TESTBENCH_SERVER_VERSION}, Got: ${serverVersion}`
+        );
+        await vscode.window.showErrorMessage(
+            `This extension is designed for TestBench version ${EXPECTED_TESTBENCH_SERVER_VERSION}, but the server is running version ${serverVersion}.`,
+            modal ? { modal: true } : {}
+        );
+        throw new DependencyVersionError("TestBench server", EXPECTED_TESTBENCH_SERVER_VERSION, serverVersion);
+    } else {
+        logger.debug(`[validateServerVersion] Server version validated successfully: ${serverVersion}`);
     }
 }
 
