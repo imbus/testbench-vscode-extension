@@ -4,6 +4,7 @@
 # UI Test Artifacts
 .test-resources/
 test-resources/
+src/test/ui/config/profiles/
 
 # VS Code package
 *.vsix
