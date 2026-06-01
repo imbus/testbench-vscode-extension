@@ -1693,7 +1693,7 @@ export async function fetchServerVersion(
         return "";
     } catch (error: any) {
         if (axios.isAxiosError(error)) {
-            if (error.code === "ETIMEDOUT") {
+            if (error.code === "ETIMEDOUT" || error.code === "ENOTFOUND") {
                 logger.warn(
                     `[testBenchConnection] Failed to fetch server version from '${serverVersionEndpoint}': ${error.message}.`
                 );
