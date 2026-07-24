@@ -9,7 +9,7 @@ import { DependencyVersionError } from "./errors";
 
 export const TESTBENCH_AUTH_PROVIDER_ID = "testbench-auth";
 export const TESTBENCH_AUTH_PROVIDER_LABEL = "TestBench"; // User-facing name in VS Code Accounts UI
-export const EXPECTED_TESTBENCH_SERVER_VERSION = "4.0";
+export const EXPECTED_TESTBENCH_SERVER_VERSION = "4.1";
 
 interface TestBenchSessionData {
     sessionId: string; // VS Code session ID
@@ -625,7 +625,11 @@ export async function validateServerVersion(serverVersion: string, modal: boolea
         throw new DependencyVersionError("TestBench server", EXPECTED_TESTBENCH_SERVER_VERSION, "unknown");
     }
 
-    if (serverVersion !== EXPECTED_TESTBENCH_SERVER_VERSION) {
+    // Only compare the major and minor version parts; the bugfix/patch version is ignored.
+    // e.g. an expected version of "4.1" also accepts a server version of "4.1.03".
+    const toMajorMinor = (version: string): string => version.trim().split(".").slice(0, 2).join(".");
+
+    if (toMajorMinor(serverVersion) !== toMajorMinor(EXPECTED_TESTBENCH_SERVER_VERSION)) {
         logger.warn(
             `[validateServerVersion] Server version mismatch. Expected: ${EXPECTED_TESTBENCH_SERVER_VERSION}, Got: ${serverVersion}`
         );

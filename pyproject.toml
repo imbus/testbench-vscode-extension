@@ -5,42 +5,27 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "testbench-vscode-extension"
-authors = [
-    {name = "imbus AG", email = "support@imbus.de"},
-]
+authors = [{ name = "imbus AG", email = "support@imbus.de" }]
 description = ""
 requires-python = ">= 3.10"
 readme = "README.md"
-license = {text = "Apache 2.0 License"}
+license = { text = "Apache 2.0 License" }
 dynamic = ["version"]
 dependencies = [
-  "testbench2robotframework>=1.0.0",
+  "testbench2robotframework>=1.1.0",
   "robotframework==7.2",
-  "testbench-language-server @ file:./testbench-language-server"
+  "testbench-language-server @ file:./testbench-language-server",
 ]
 
 [project.optional-dependencies]
-dev = [
-  "nox",
-  "invoke",
-  "pip-tools",
-  "ruff",
-]
+dev = ["nox", "invoke", "pip-tools", "ruff"]
 
 
 [tool.check-manifest]
-ignore = [
-  "config.json",
-  "*.bat",
-  "*.sh",
-  "*.zip",
-  "tests/**"
-]
+ignore = ["config.json", "*.bat", "*.sh", "*.zip", "tests/**"]
 
 
-exclude = [
-  "__pycache__",
-]
+exclude = ["__pycache__"]
 
 [tool.ruff]
 target-version = "py310"
@@ -68,15 +53,9 @@ lint.select = [
   "SIM",
   "T20",
   "UP",
-  "W"
+  "W",
 ]
 
-lint.ignore = [
-  "ISC001"
-]
+lint.ignore = ["ISC001"]
 
-exclude = [
-  "__pycache__",
-  "model.py",
-  "legacy_model.py",
-]
+exclude = ["__pycache__", "model.py", "legacy_model.py"]
