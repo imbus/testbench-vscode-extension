@@ -541,8 +541,7 @@ export class TestElementsDataProvider {
                 };
                 const keyField = keyFieldMap[elementType];
                 const testElementKey = rawTestElementData[keyField as keyof RawTestElement] as
-                    | { serial: string }
-                    | undefined;
+                    { serial: string } | undefined;
                 if (testElementKey?.serial && rawTestElementData.uniqueID) {
                     return `${testElementKey.serial}_${rawTestElementData.uniqueID}`;
                 }

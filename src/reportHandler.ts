@@ -178,7 +178,7 @@ export async function pollJobStatus(
 ): Promise<testBenchTypes.JobStatusResponse | null> {
     const startTime: number = Date.now(); // Start time for the polling to adjust the polling interval after 10 seconds
     let pollingAttemptAmount: number = 0;
-    let jobStatus: testBenchTypes.JobStatusResponse | null = null;
+    let jobStatus: testBenchTypes.JobStatusResponse | null;
     let lastProgressIncrement: number = 0;
 
     // Poll the job status until the job is completed with either success or failure.
