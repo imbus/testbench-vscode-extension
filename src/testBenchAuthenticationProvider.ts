@@ -618,9 +618,10 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
 export async function validateServerVersion(serverVersion: string, modal: boolean = true): Promise<void> {
     if (!serverVersion || serverVersion.trim() === "") {
         logger.warn("[validateServerVersion] Server version is empty or not provided.");
+
         await vscode.window.showErrorMessage(
             `Could not determine the TestBench server version. Please check your connection details.`,
-            modal ? { modal: true } : {}
+            { modal }
         );
         throw new DependencyVersionError("TestBench server", EXPECTED_TESTBENCH_SERVER_VERSION, "unknown");
     }
@@ -628,15 +629,26 @@ export async function validateServerVersion(serverVersion: string, modal: boolea
     // Only compare the major and minor version parts; the bugfix/patch version is ignored.
     // e.g. an expected version of "4.1" also accepts a server version of "4.1.03".
     const toMajorMinor = (version: string): string => version.trim().split(".").slice(0, 2).join(".");
+    const compatibleVersions: Record<string, string> = {
+        "4.0": "0.6.2"
+    };
+    const serverMajorMinorVersion = toMajorMinor(serverVersion);
 
-    if (toMajorMinor(serverVersion) !== toMajorMinor(EXPECTED_TESTBENCH_SERVER_VERSION)) {
+    if (serverMajorMinorVersion !== toMajorMinor(EXPECTED_TESTBENCH_SERVER_VERSION)) {
         logger.warn(
             `[validateServerVersion] Server version mismatch. Expected: ${EXPECTED_TESTBENCH_SERVER_VERSION}, Got: ${serverVersion}`
         );
-        await vscode.window.showErrorMessage(
-            `This extension is designed for TestBench version ${EXPECTED_TESTBENCH_SERVER_VERSION}, but the server is running version ${serverVersion}.`,
-            modal ? { modal: true } : {}
-        );
+        const expectedVersionText = `This extension expects TestBench server version ${EXPECTED_TESTBENCH_SERVER_VERSION}`;
+        const compatibleExtensionVersionText = `The compatible version of VS Code TestBench Extension is: ${compatibleVersions[serverMajorMinorVersion]}`;
+        const fallbackText = "No compatible extension version available.";
+        await vscode.window.showErrorMessage(`Incompatible TestBench server version: ${serverVersion}`, {
+            modal,
+            detail: `
+${expectedVersionText}
+
+${serverMajorMinorVersion in compatibleVersions ? compatibleExtensionVersionText : fallbackText}
+                `
+        });
         throw new DependencyVersionError("TestBench server", EXPECTED_TESTBENCH_SERVER_VERSION, serverVersion);
     } else {
         logger.debug(`[validateServerVersion] Server version validated successfully: ${serverVersion}`);
