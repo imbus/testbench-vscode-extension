@@ -13,7 +13,7 @@ license = { text = "Apache 2.0 License" }
 dynamic = ["version"]
 dependencies = [
   "testbench2robotframework>=2.0.0",
-  "robotframework==7.2",
+  "robotframework==7.4.2",
   "testbench-language-server @ file:./testbench-language-server",
 ]
 
