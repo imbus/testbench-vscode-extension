@@ -5,9 +5,11 @@ import { TestBenchConnection } from "./testBenchTypes";
 import { logger } from "./extension";
 import { SharedSessionManager } from "./sharedSessionManager";
 import { StorageKeys } from "./constants";
+import { DependencyVersionError } from "./errors";
 
 export const TESTBENCH_AUTH_PROVIDER_ID = "testbench-auth";
 export const TESTBENCH_AUTH_PROVIDER_LABEL = "TestBench"; // User-facing name in VS Code Accounts UI
+export const EXPECTED_TESTBENCH_SERVER_VERSION = "4.1";
 
 interface TestBenchSessionData {
     sessionId: string; // VS Code session ID
@@ -70,8 +72,8 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                     "[AuthenticationProvider] Loaded existing shared session for: " + sessionData.accountLabel
                 );
             }
-        } catch (error) {
-            logger.error("[AuthenticationProvider] Error loading shared sessions:", error);
+        } catch (_error) {
+            logger.error("[AuthenticationProvider] Error loading shared sessions");
         }
     }
 
@@ -129,7 +131,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             if (error instanceof UserCancelledError) {
                 logger.debug(`[AuthenticationProvider] ${error.message}`);
             } else {
-                logger.error(`[AuthenticationProvider] Error during session creation: ${error.message || error}`);
+                logger.error("[AuthenticationProvider] Error during session creation");
                 if (!isSilentLogin) {
                     await connectionManager.clearActiveConnection(this.context);
                 }
@@ -608,6 +610,52 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
 }
 
 /**
+ * Validates the TestBench server version.
+ * Displays a warning if the server version does not match the expected version.
+ * @param serverVersion The server version returned from the login response
+ * @param modal Whether to show a modal dialog (true) or a regular notification (false)
+ */
+export async function validateServerVersion(serverVersion: string, modal: boolean = true): Promise<void> {
+    if (!serverVersion || serverVersion.trim() === "") {
+        logger.warn("[validateServerVersion] Server version is empty or not provided.");
+
+        await vscode.window.showErrorMessage(
+            `Could not determine the TestBench server version. Please check your connection details.`,
+            { modal }
+        );
+        throw new DependencyVersionError("TestBench server", EXPECTED_TESTBENCH_SERVER_VERSION, "unknown");
+    }
+
+    // Only compare the major and minor version parts; the bugfix/patch version is ignored.
+    // e.g. an expected version of "4.1" also accepts a server version of "4.1.03".
+    const toMajorMinor = (version: string): string => version.trim().split(".").slice(0, 2).join(".");
+    const compatibleVersions: Record<string, string> = {
+        "4.0": "0.6.2"
+    };
+    const serverMajorMinorVersion = toMajorMinor(serverVersion);
+
+    if (serverMajorMinorVersion !== toMajorMinor(EXPECTED_TESTBENCH_SERVER_VERSION)) {
+        logger.warn(
+            `[validateServerVersion] Server version mismatch. Expected: ${EXPECTED_TESTBENCH_SERVER_VERSION}, Got: ${serverVersion}`
+        );
+        const expectedVersionText = `This extension expects TestBench server version ${EXPECTED_TESTBENCH_SERVER_VERSION}`;
+        const compatibleExtensionVersionText = `The compatible version of VS Code TestBench Extension is: ${compatibleVersions[serverMajorMinorVersion]}`;
+        const fallbackText = "No compatible extension version available.";
+        await vscode.window.showErrorMessage(`Incompatible TestBench server version: ${serverVersion}`, {
+            modal,
+            detail: `
+${expectedVersionText}
+
+${serverMajorMinorVersion in compatibleVersions ? compatibleExtensionVersionText : fallbackText}
+                `
+        });
+        throw new DependencyVersionError("TestBench server", EXPECTED_TESTBENCH_SERVER_VERSION, serverVersion);
+    } else {
+        logger.debug(`[validateServerVersion] Server version validated successfully: ${serverVersion}`);
+    }
+}
+
+/**
  * Gets the session to process, either from the parameter or by fetching it.
  * @param existingSession - An optional existing authentication session to process.
  * @returns The session to process or undefined if no session is found.
@@ -624,8 +672,8 @@ export async function getSessionToProcess(
             createIfNone: false,
             silent: true
         });
-    } catch (error) {
-        logger.warn("[AuthenticationProvider] Error getting current session:", error);
+    } catch (_error) {
+        logger.warn("[AuthenticationProvider] Error getting current session");
         return undefined;
     }
 }

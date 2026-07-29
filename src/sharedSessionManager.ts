@@ -105,8 +105,8 @@ export class SharedSessionManager {
             }
 
             return sessionData;
-        } catch (error) {
-            logger.error("[SharedSessionManager] Error retrieving shared session:", error);
+        } catch (_error) {
+            logger.error("[SharedSessionManager] Error retrieving shared session");
             return null;
         }
     }
@@ -138,8 +138,8 @@ export class SharedSessionManager {
 
             logger.trace(`[SharedSessionManager] Session validation result: ${isValid}`);
             return isValid;
-        } catch (error) {
-            logger.error("[SharedSessionManager] Error validating session:", error);
+        } catch (_error) {
+            logger.error("[SharedSessionManager] Error validating session");
             return false;
         }
     }

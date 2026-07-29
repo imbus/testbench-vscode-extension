@@ -25,7 +25,8 @@ import {
 } from "./constants";
 import { TestThemesTreeView } from "./treeViews/implementations/testThemes/TestThemesTreeView";
 import { getExtensionSetting } from "./configuration";
-import { TESTBENCH_AUTH_PROVIDER_ID } from "./testBenchAuthenticationProvider";
+import { TESTBENCH_AUTH_PROVIDER_ID, validateServerVersion } from "./testBenchAuthenticationProvider";
+import { DependencyVersionError } from "./errors";
 import * as connectionManager from "./connectionManager";
 import { SharedSessionManager } from "./sharedSessionManager";
 import { handleLanguageServerRestartOnSessionChange } from "./languageServer/server";
@@ -349,9 +350,9 @@ export class PlayServerConnection {
         );
 
         // Initialize legacy server port discovery in the background
-        this.legacyInitPromise = this.legacyClient.initialize().catch((error) => {
+        this.legacyInitPromise = this.legacyClient.initialize().catch((_error) => {
             logger.warn(
-                `[testBenchConnection] Legacy Play server initialization failed, but main connection is still functional: ${error?.message || error}`
+                `[testBenchConnection] Legacy Play server initialization failed, but main connection is still functional`
             );
         });
 
@@ -412,8 +413,8 @@ export class PlayServerConnection {
             const tlsManager = TLSSecurityManager.getInstance();
             tlsManager.disableInsecureMode();
             this.sessionToken = "";
-        } catch (error) {
-            logger.error("[testBenchConnection] Error during teardown after logout:", error);
+        } catch (_error) {
+            logger.error("[testBenchConnection] Error during teardown after logout");
             return false;
         }
 
@@ -471,9 +472,9 @@ export class PlayServerConnection {
                 logger.error("[testBenchConnection] Project list data is not available.");
                 return null;
             }
-        } catch (error) {
+        } catch (_error) {
             // Axios throws an error automatically if the response status is not 2xx
-            logger.error("[testBenchConnection] Error fetching projects:", error);
+            logger.error("[testBenchConnection] Error fetching projects");
             return null;
         }
     }
@@ -538,8 +539,8 @@ export class PlayServerConnection {
                 logger.error("[testBenchConnection] Project tree data is not available.");
                 return null;
             }
-        } catch (error) {
-            logger.error(`[testBenchConnection] Error fetching project tree: ${error}`);
+        } catch (_error) {
+            logger.error(`[testBenchConnection] Error fetching project tree`);
             return null;
         }
     }
@@ -663,7 +664,7 @@ export class PlayServerConnection {
                         );
                 }
             } else {
-                logger.error(`[testBenchConnection] Error fetching TOV report job ID: ${error}`);
+                logger.error(`[testBenchConnection] Error fetching TOV report job ID`);
             }
             return null;
         }
@@ -813,11 +814,8 @@ export class PlayServerConnection {
                 );
                 return null;
             }
-        } catch (error) {
-            logger.error(
-                `[testBenchConnection] Error fetching test structure for ${structureType} using ${url}:`,
-                error
-            );
+        } catch (_error) {
+            logger.error(`[testBenchConnection] Error fetching test structure for ${structureType} using ${url}`);
             return null;
         }
     }
@@ -1553,7 +1551,7 @@ export async function importReportWithResultsToTestbench(
                 const importJobStatusUnknownMessage: string =
                     "[testBenchConnection] Import job finished polling but status is unknown.";
                 const importJobStatusUnknownMessageForUser: string = "Import job status unknown after polling.";
-                logger.warn(importJobStatusUnknownMessage, importJobStatus);
+                logger.warn(importJobStatusUnknownMessage);
                 vscode.window.showWarningMessage(importJobStatusUnknownMessageForUser);
             }
         } catch (error: any) {
@@ -1646,9 +1644,63 @@ export async function extractDataFromReport(zipFilePath: string): Promise<{
             `[testBenchConnection] Extracted data from zip file "${zipFilePath}": uniqueID = ${uniqueID}, projectKey = ${projectKey}, cycleName = ${cycleNameOfProject}, cycleKey = ${cycleKey}`
         );
         return { uniqueID, projectKey, cycleNameOfProject, cycleKey };
-    } catch (error) {
-        logger.error(`[testBenchConnection] Error extracting JSON data from zip file "${zipFilePath}":`, error);
+    } catch (_error) {
+        logger.error(`[testBenchConnection] Error extracting JSON data from zip file "${zipFilePath}"`);
         return { uniqueID: null, projectKey: null, cycleNameOfProject: null, cycleKey: null };
+    }
+}
+
+/**
+ * Fetches the TestBench server version using an existing HTTPS agent.
+ * This function attempts to retrieve the server version from a public endpoint.
+ *
+ * @param {string} serverName The server hostname or IP.
+ * @param {number} portNumber The server port.
+ * @param {https.Agent | HttpsProxyAgent<string>} agent The HTTPS agent to use for the request.
+ * @returns {Promise<string>} The server version string, or an empty string if unavailable.
+ */
+export async function fetchServerVersion(
+    serverName: string,
+    portNumber: number,
+    agent: https.Agent | HttpsProxyAgent<string>
+): Promise<string> {
+    const baseURL: string = `https://${serverName}:${portNumber}/api`;
+    const serverVersionEndpoint = `${baseURL}/serverVersion`;
+    logger.trace(`[testBenchConnection] Attempting to fetch server version from '${serverVersionEndpoint}'.`);
+
+    try {
+        const versionResponse = await axios.get(serverVersionEndpoint, {
+            headers: {
+                accept: "application/json"
+            },
+            proxy: false,
+            httpsAgent: agent,
+            timeout: 5000,
+            validateStatus: () => true // Accept all status codes to handle manually
+        });
+
+        if (versionResponse.status === 200 && versionResponse.data) {
+            const version = versionResponse.data;
+            if (version) {
+                logger.debug(
+                    `[testBenchConnection] Server version fetched from '${serverVersionEndpoint}': ${version}`
+                );
+                return version;
+            }
+        }
+
+        logger.warn(`[testBenchConnection] Could not fetch server version from '${serverVersionEndpoint}'.`);
+        return "";
+    } catch (error: any) {
+        if (axios.isAxiosError(error)) {
+            if (error.code === "ETIMEDOUT" || error.code === "ENOTFOUND") {
+                logger.warn(
+                    `[testBenchConnection] Failed to fetch server version from '${serverVersionEndpoint}': ${error.message}.`
+                );
+                return "";
+            }
+        }
+        throw error;
     }
 }
 
@@ -1696,6 +1748,10 @@ export async function loginToServerAndGetSessionDetails(
 
     try {
         const secureAgent = await createHttpsAgent();
+
+        const serverVersion = await fetchServerVersion(serverName, portNumber, secureAgent);
+        await validateServerVersion(serverVersion, true);
+
         const loginResponse = await performLogin(secureAgent);
         if (loginResponse.status === 201 && loginResponse.data?.sessionToken) {
             logger.info(`[testBenchConnection] Login successful for user ${username} on ${serverName}.`);
@@ -1717,6 +1773,10 @@ export async function loginToServerAndGetSessionDetails(
             "DEPTH_ZERO_SELF_SIGNED_CERT"
         ];
 
+        if (error instanceof DependencyVersionError) {
+            return null;
+        }
+
         if (axios.isAxiosError(error) && certErrorCodes.includes(error.code || "")) {
             logger.warn(
                 `[testBenchConnection] Certificate validation failed for ${serverName}: ${error.message}. Prompting user for insecure connection option.`
@@ -1736,6 +1796,11 @@ export async function loginToServerAndGetSessionDetails(
                         `[testBenchConnection] Attempting insecure connection to '${serverName}:${portNumber}'.`
                     );
                     const insecureAgent = await createHttpsAgent(true);
+
+                    // Check server version with insecure agent before login
+                    const insecureServerVersion = await fetchServerVersion(serverName, portNumber, insecureAgent);
+                    await validateServerVersion(insecureServerVersion, true);
+
                     const insecureLoginResponse = await axios.post(loginURL, requestBody, {
                         headers: {
                             accept: "application/vnd.testbench+json",
@@ -1766,6 +1831,9 @@ export async function loginToServerAndGetSessionDetails(
                         );
                     }
                 } catch (insecureError: any) {
+                    if (insecureError instanceof DependencyVersionError) {
+                        return null;
+                    }
                     vscode.window.showErrorMessage(`${insecureError.code}: ${insecureError.message}`);
                     logger.error(
                         `[testBenchConnection] Insecure login attempt failed for ${username} on ${serverName}:`,
