@@ -31,6 +31,12 @@ jobs:
                   node-version: ${{ matrix.node-version }}
                   cache: "npm"
 
+            # Node 22 ships npm 10, which resolves optional peer dependencies differently
+            # than npm 11 and therefore rejects the committed lock file. Pin npm 11 so all
+            # jobs use the same resolver as the lock file was generated with.
+            - name: Pin npm version
+              run: npm install -g npm@11
+
             # Install Node.js dependencies
             - name: Install Dependencies
               run: npm ci
@@ -103,6 +109,9 @@ jobs:
                   node-version: "lts/*"
                   check-latest: true
                   cache: "npm"
+
+            - name: Pin npm version
+              run: npm install -g npm@11
 
             # Install Node.js dependencies
             - name: Install Node.js Dependencies
