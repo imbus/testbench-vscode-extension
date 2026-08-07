@@ -22,11 +22,11 @@ jobs:
         steps:
             # Checkout the repository
             - name: Checkout Code
-              uses: actions/checkout@v6
+              uses: actions/checkout@v7
 
             # Set up Node.js
             - name: Set up Node.js ${{ matrix.node-version }}
-              uses: actions/setup-node@v6
+              uses: actions/setup-node@v7
               with:
                   node-version: ${{ matrix.node-version }}
                   cache: "npm"
@@ -63,7 +63,7 @@ jobs:
 
             # Cache VS Code test instance to speed up tests
             - name: Cache VS Code Test Instance
-              uses: actions/cache@v5
+              uses: actions/cache@v6
               with:
                   path: .vscode-test
                   key: vscode-test-${{ runner.os }}-${{ hashFiles('package.json') }}
@@ -82,7 +82,7 @@ jobs:
             # Upload logs on failure
             - name: Upload Logs on Failure
               if: failure()
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v7
               with:
                   name: failure-logs-${{ matrix.os }}-node${{ matrix.node-version }}
                   path: |
@@ -100,11 +100,11 @@ jobs:
         steps:
             # Checkout the repository
             - name: Checkout Code
-              uses: actions/checkout@v6
+              uses: actions/checkout@v7
 
             # Set up Node.js
             - name: Set up Node.js
-              uses: actions/setup-node@v6
+              uses: actions/setup-node@v7
               with:
                   node-version: "lts/*"
                   check-latest: true
@@ -119,7 +119,7 @@ jobs:
 
             # Set up Python
             - name: Set up Python
-              uses: actions/setup-python@v5
+              uses: actions/setup-python@v7
               with:
                   python-version: "3.10"
                   cache: "pip"
@@ -210,7 +210,7 @@ jobs:
 
             # Upload the VSIX as an artifact
             - name: Upload VSIX Artifact
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v7
               with:
                   name: ${{ steps.artifact_name.outputs.NAME }}
                   path: ${{ steps.verify_vsix.outputs.VSIX_PATH }}
@@ -222,7 +222,7 @@ jobs:
             # Upload VSIX for release workflow (if on main branch)
             - name: Upload VSIX for Release
               if: github.ref == 'refs/heads/main'
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v7
               with:
                   name: testbench-release
                   path: ${{ steps.verify_vsix.outputs.VSIX_PATH }}
