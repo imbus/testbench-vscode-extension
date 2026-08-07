@@ -256,7 +256,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 initialPassword = undefined;
             } catch (saveError: any) {
                 logger.error(`[AuthenticationProvider] Failed to save new connection: ${saveError.message}`);
-                throw new Error(`Failed to save connection: ${saveError.message}`);
+                throw new Error(`Failed to save connection: ${saveError.message}`, { cause: saveError });
             }
         } else if (!initialPassword) {
             throw new Error("Password required for unsaved connection.");

@@ -197,8 +197,7 @@ export class RobotFileService {
                         treeViews.testThemesTree.refresh(item);
                         // If file is gone, unmark the item to keep icon/marking in sync
                         const markingModule = treeViews.testThemesTree.getModule("marking") as
-                            | MarkingModule
-                            | undefined;
+                            MarkingModule | undefined;
                         if (markingModule && item.id) {
                             markingModule.unmarkItemByID(item.id);
                         }

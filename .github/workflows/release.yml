@@ -32,6 +32,9 @@ jobs:
                   # Use the default npm registry
                   registry-url: "https://registry.npmjs.org/"
 
+            - name: Pin npm version
+              run: npm install -g npm@11
+
             # Step 3: Install project dependencies in a clean state
             - name: Install dependencies
               run: npm ci

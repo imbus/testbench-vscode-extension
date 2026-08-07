@@ -117,7 +117,7 @@ export class ResourceFileService {
                 this.logger.info(`[ResourceFileService] Robot Framework resource file created at '${filePath}'.`);
             } catch (writeError: any) {
                 this.logger.error(`[ResourceFileService] Error writing to resource file ${filePath}:`, writeError);
-                throw new Error(`Failed to create resource file: ${writeError.message}`);
+                throw new Error(`Failed to create resource file: ${writeError.message}`, { cause: writeError });
             }
         } else {
             this.logger.debug(
@@ -301,13 +301,13 @@ export class ResourceFileService {
         } catch (error: any) {
             if (error.code === "EACCES") {
                 this.logger.error(`[ResourceFileService] Permission denied while creating folder: "${folderPath}"`);
-                throw new Error(`Permission denied while creating folder: ${folderPath}`);
+                throw new Error(`Permission denied while creating folder: ${folderPath}`, { cause: error });
             }
             this.logger.error(
                 `[ResourceFileService] Failed to create folder path: "${folderPath}": ${error.message}`,
                 error
             );
-            throw new Error(`Failed to create folder: ${error.message}`);
+            throw new Error(`Failed to create folder: ${error.message}`, { cause: error });
         }
     }
 }
