@@ -650,7 +650,7 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
 
         const currentFilters = await TestThemesTreeView.getValidatedFiltersForTreeItem(selectedTreeItem);
         const cycleReportOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
-            basedOnExecution: defaultExecutionMode === testBenchTypes.ExecutionMode.Execute,
+            executionMode: defaultExecutionMode,
             treeRootUID: UIDforRequest,
             suppressFilteredData: true, // Hides tree items after filtering
             suppressNotExecutable: true, // Exclude not executable tests (including NotPlanned)
@@ -986,7 +986,7 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
 
             const currentFiltersForImport = await TestThemesTreeView.getValidatedFiltersForApiRequest();
             const cycleStructureOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
-                basedOnExecution: executionBased === testBenchTypes.ExecutionMode.Execute,
+                executionMode: testBenchTypes.ExecutionMode.Continue,
                 treeRootUID: effectiveUID,
                 filters: currentFiltersForImport
             };
