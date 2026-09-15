@@ -25,6 +25,9 @@ export const LANGUAGE_SERVER_DEBUG_PATH: string = path.join(
 // Prefix of the extension commands and settings in package.json
 export const baseKeyOfExtension: string = "testbenchExtension";
 
+// Marketplace identifier of this extension ("<publisher>.<name>" from package.json)
+export const EXTENSION_ID: string = "imbus.testbench-extension";
+
 // --- Webview Message Commands ---
 export const WebviewMessageCommands = {
     LOGIN: "login",
