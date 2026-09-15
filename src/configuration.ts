@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
-import { baseKeyOfExtension, ConfigKeys } from "./constants";
-import { sanitizeFilePath } from "./utils";
+import { baseKeyOfExtension } from "./constants";
 
 let extensionConfiguration = vscode.workspace.getConfiguration(baseKeyOfExtension);
 
@@ -18,61 +17,9 @@ export function refreshConfig() {
 }
 
 export function initializeConfigurationWatcher() {
-    vscode.workspace.onDidChangeConfiguration(async (event) => {
+    vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration(baseKeyOfExtension)) {
             refreshConfig();
-        }
-
-        const outputDirKey = `${baseKeyOfExtension}.${ConfigKeys.TB2ROBOT_OUTPUT_DIR}`;
-        if (event.affectsConfiguration(outputDirKey)) {
-            const config = vscode.workspace.getConfiguration(baseKeyOfExtension);
-            const inspection = config.inspect<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
-
-            // Sanitize User setting
-            if (inspection && typeof inspection.globalValue === "string") {
-                const sanitized = sanitizeFilePath(inspection.globalValue);
-                if (sanitized !== inspection.globalValue) {
-                    await config.update(ConfigKeys.TB2ROBOT_OUTPUT_DIR, sanitized, vscode.ConfigurationTarget.Global);
-                }
-            }
-
-            // Sanitize Workspace setting
-            if (inspection && typeof inspection.workspaceValue === "string") {
-                const sanitized = sanitizeFilePath(inspection.workspaceValue);
-                if (sanitized !== inspection.workspaceValue) {
-                    await config.update(
-                        ConfigKeys.TB2ROBOT_OUTPUT_DIR,
-                        sanitized,
-                        vscode.ConfigurationTarget.Workspace
-                    );
-                }
-            }
-        }
-
-        const resourceDirKey = `${baseKeyOfExtension}.${ConfigKeys.TB2ROBOT_RESOURCE_DIR}`;
-        if (event.affectsConfiguration(resourceDirKey)) {
-            const config = vscode.workspace.getConfiguration(baseKeyOfExtension);
-            const inspection = config.inspect<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR);
-
-            // Sanitize User setting
-            if (inspection && typeof inspection.globalValue === "string") {
-                const sanitized = sanitizeFilePath(inspection.globalValue);
-                if (sanitized !== inspection.globalValue) {
-                    await config.update(ConfigKeys.TB2ROBOT_RESOURCE_DIR, sanitized, vscode.ConfigurationTarget.Global);
-                }
-            }
-
-            // Sanitize Workspace setting
-            if (inspection && typeof inspection.workspaceValue === "string") {
-                const sanitized = sanitizeFilePath(inspection.workspaceValue);
-                if (sanitized !== inspection.workspaceValue) {
-                    await config.update(
-                        ConfigKeys.TB2ROBOT_RESOURCE_DIR,
-                        sanitized,
-                        vscode.ConfigurationTarget.Workspace
-                    );
-                }
-            }
         }
     });
 }

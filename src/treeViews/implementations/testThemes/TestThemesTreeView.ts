@@ -26,6 +26,7 @@ import { TreeViewEventTypes } from "../../utils/EventBus";
 import { PersistenceModule } from "../../features/PersistenceModule";
 import { ClickHandler } from "../../core/ClickHandler";
 import { ProjectsTreeItem } from "../projects/ProjectsTreeItem";
+import { validateGenerationPathSettingsAndReturnError } from "../../../utils";
 
 /**
  * Interface for filter storage
@@ -1095,6 +1096,10 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             return;
         }
 
+        if (!this.validateGenerationPathSettingsBeforeStart()) {
+            return;
+        }
+
         try {
             await this.executeClearInternalDirIfNeeded();
 
@@ -1111,6 +1116,23 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         } catch (error) {
             this.handleTestGenerationError(error);
         }
+    }
+
+    /**
+     * Validates generation-related path settings before expensive operations begin.
+     */
+    private validateGenerationPathSettingsBeforeStart(): boolean {
+        const outputDirectory = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
+        const resourceDirectory = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR);
+
+        const settingError = validateGenerationPathSettingsAndReturnError(outputDirectory, resourceDirectory);
+        if (settingError) {
+            this.logger.error(`[TestThemesTreeView] ${settingError}`);
+            void vscode.window.showErrorMessage(settingError);
+            return false;
+        }
+
+        return true;
     }
 
     /**
