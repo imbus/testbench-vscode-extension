@@ -227,9 +227,13 @@ class RobotDocumentationConverter(MarkdownConverter):
         )
         return f"| {robot_text}"
 
-    def _convert_hn(self, n, el, text, parent_tags):
-        text = f"{int(n - 1) * '='} {text} {int(n - 1) * '='}"
-        return super()._convert_hn(n, el, text, parent_tags).replace("#", "")
+    def convert_hN(self, n, el, text, parent_tags):  # noqa: N802 - markdownify hook name
+        if "_inline" in parent_tags:
+            return text
+        # Robot libdoc renders "= x =" as <h2>, "== x ==" as <h3> and "=== x ===" as <h4>
+        level = max(1, min(3, n - 1))
+        text = re.sub(r"\s+", " ", text).strip()
+        return f"\n\n{'=' * level} {text} {'=' * level}\n\n"
 
 
 def html_2_robot(html: str, **options) -> str:
