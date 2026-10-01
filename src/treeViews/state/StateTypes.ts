@@ -20,7 +20,6 @@ export interface TreeViewState {
     rootItems: string[];
 
     // Feature states
-    customRoot: CustomRootState | null;
     marking: MarkingState | null;
     expansion: ExpansionState | null;
     filtering: FilterState | null;
@@ -33,17 +32,6 @@ export interface TreeViewState {
 
     // Additional metadata
     metadata: Record<string, any>;
-}
-
-/**
- * Custom root state
- */
-export interface CustomRootState {
-    active: boolean;
-    rootItemId: string | null;
-    rootItemPath: string[];
-    originalTitle: string;
-    contextData: Record<string, any>;
 }
 
 /**
@@ -139,7 +127,6 @@ export interface PersistenceConfig {
     strategy: "workspace" | "global" | "none";
     autoSave: boolean;
     saveDebounce: number;
-    includeCustomRoot: boolean;
     includeExpansion: boolean;
     includeMarking: boolean;
 }
@@ -177,7 +164,6 @@ export interface SerializedTreeViewState {
         lastSessionToken?: string;
         items: Array<[string, any]>;
         rootItems: string[];
-        customRoot: SerializedCustomRootState | null;
         marking: SerializedMarkingState | null;
         expansion: SerializedExpansionState | null;
         filtering: SerializedFilterState | null;
@@ -187,14 +173,6 @@ export interface SerializedTreeViewState {
         selectedTovKey: string | null;
         metadata: Record<string, any>;
     };
-}
-
-export interface SerializedCustomRootState {
-    active: boolean;
-    rootItemId: string | null;
-    rootItemPath: string[];
-    originalTitle: string;
-    contextData: Record<string, any>;
 }
 
 export interface SerializedMarkingState {

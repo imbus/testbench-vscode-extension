@@ -11,7 +11,6 @@ export interface TreeViewConfig {
 
     // Feature toggles
     features: {
-        customRoot: boolean;
         marking: boolean;
         persistence: boolean;
         filtering: boolean;
@@ -21,7 +20,6 @@ export interface TreeViewConfig {
 
     // Module configurations
     modules: {
-        customRoot?: CustomRootConfig;
         marking?: MarkingConfig;
         persistence?: PersistenceConfig;
         filtering?: FilterConfig;
@@ -51,14 +49,6 @@ export interface TreeViewConfig {
     };
 }
 
-export interface CustomRootConfig {
-    enabled: boolean;
-    contextKey: string;
-    allowedItemTypes: string[];
-    persistAcrossSessions: boolean;
-    maxDepth?: number;
-}
-
 export interface MarkingConfig {
     enabled: boolean;
     strategies: string[];
@@ -71,7 +61,6 @@ export interface MarkingConfig {
 export interface PersistenceConfig {
     strategy: "workspace" | "global" | "none";
     autoSave: boolean;
-    includeCustomRoot: boolean;
     includeExpansion: boolean;
     includeMarking: boolean;
 }

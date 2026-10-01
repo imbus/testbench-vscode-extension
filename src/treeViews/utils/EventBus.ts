@@ -239,10 +239,6 @@ export const TreeViewEventTypes = {
     MODULE_ERROR: "module:error",
     MODULE_CONFIG_CHANGED: "module:configChanged",
 
-    // Custom root events
-    CUSTOM_ROOT_SET: "customRoot:set",
-    CUSTOM_ROOT_RESET: "customRoot:reset",
-
     // Marking events
     MARKING_ADDED: "marking:added",
     MARKING_REMOVED: "marking:removed",

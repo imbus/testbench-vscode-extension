@@ -88,6 +88,25 @@ function withSingleTestOperation<T extends any[]>(
 }
 
 /**
+ * Validates generation-relevant path settings before starting generation flows.
+ * Returns false and shows a user-facing error when a path setting is invalid.
+ */
+function validateGenerationPathSettingsBeforeStart(): boolean {
+    const config = getExtensionConfiguration();
+    const outputDirectory = config.get<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
+    const resourceDirectory = config.get<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR);
+
+    const settingError = utils.validateGenerationPathSettingsAndReturnError(outputDirectory, resourceDirectory);
+    if (settingError) {
+        getLogger().error(`[extensionCommands] ${settingError}`);
+        void vscode.window.showErrorMessage(settingError);
+        return false;
+    }
+
+    return true;
+}
+
+/**
  * Registers a command with error handling.
  *
  * @param {vscode.ExtensionContext} context The extension context.
@@ -104,7 +123,7 @@ function registerSafeCommand(
             await callback(...args);
         } catch (error: any) {
             getLogger().error(`[extensionCommands] Command ${commandId} error: ${error.message}`, error);
-            vscode.window.showErrorMessage(`Command ${commandId} failed: ${error.message}`);
+            vscode.window.showErrorMessage("The action could not be completed.");
         }
     });
     context.subscriptions.push(disposable);
@@ -316,6 +335,10 @@ const _handleGenerateTestCasesForTOV = async (tovItem: ProjectsTreeItem) => {
         return;
     }
 
+    if (!validateGenerationPathSettingsBeforeStart()) {
+        return;
+    }
+
     try {
         if (treeViews?.testThemesTree) {
             const markingModule = treeViews.testThemesTree.getModule("marking") as MarkingModule | undefined;
@@ -336,7 +359,7 @@ const _handleGenerateTestCasesForTOV = async (tovItem: ProjectsTreeItem) => {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         if (errorMessage.includes("cancelled")) {
             getLogger().debug(`[extensionCommands] Language server wait operation was cancelled by user`);
-            vscode.window.showInformationMessage("Operation cancelled while waiting for language server.");
+            vscode.window.showInformationMessage("Operation cancelled.");
         } else {
             getLogger().error(`[extensionCommands] Error in generateTestCasesForTOV: ${errorMessage}`, error);
             vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
@@ -355,6 +378,10 @@ const _handleGenerateTestCasesForCycle = async (cycleItem: ProjectsTreeItem) => 
     if (!connection) {
         getLogger().error(`[extensionCommands] _handleGenerateTestCasesForCycle called without active connection.`);
         vscode.window.showWarningMessage("No active connection available. Please log in first.");
+        return;
+    }
+
+    if (!validateGenerationPathSettingsBeforeStart()) {
         return;
     }
 
@@ -378,7 +405,7 @@ const _handleGenerateTestCasesForCycle = async (cycleItem: ProjectsTreeItem) => 
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         if (errorMessage.includes("cancelled")) {
             getLogger().debug(`[extensionCommands] Language server wait operation was cancelled by user`);
-            vscode.window.showInformationMessage("Operation cancelled while waiting for language server.");
+            vscode.window.showInformationMessage("Operation cancelled.");
         } else {
             getLogger().error(`[extensionCommands] Error in generateTestCasesForCycle: ${errorMessage}`, error);
             vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
@@ -404,6 +431,10 @@ const _handleGenerateTestCasesForTestThemeOrTestCaseSet = async (testThemeTreeIt
         return;
     }
 
+    if (!validateGenerationPathSettingsBeforeStart()) {
+        return;
+    }
+
     try {
         await prepareLanguageServerForTreeItemOperation("generate test cases for test theme or test case set");
         await treeViews.testThemesTree.generateTestCases(testThemeTreeItem);
@@ -417,7 +448,7 @@ const _handleGenerateTestCasesForTestThemeOrTestCaseSet = async (testThemeTreeIt
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         if (errorMessage.includes("cancelled")) {
             getLogger().debug(`[extensionCommands] Language server wait operation was cancelled by user`);
-            vscode.window.showInformationMessage("Operation cancelled while waiting for language server.");
+            vscode.window.showInformationMessage("Operation cancelled.");
         } else {
             getLogger().error(
                 `[extensionCommands] Error in generateTestCasesForTestThemeOrTestCaseSet: ${errorMessage}`,
@@ -448,6 +479,10 @@ const _handleGenerateTestsForTestThemeTreeItemFromTOV = async (testThemeTreeItem
         return;
     }
 
+    if (!validateGenerationPathSettingsBeforeStart()) {
+        return;
+    }
+
     try {
         await prepareLanguageServerForTreeItemOperation("generate test cases for test theme tree item");
         await treeViews.testThemesTree.generateTestCases(testThemeTreeItem);
@@ -461,7 +496,7 @@ const _handleGenerateTestsForTestThemeTreeItemFromTOV = async (testThemeTreeItem
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         if (errorMessage.includes("cancelled")) {
             getLogger().debug(`[extensionCommands] Language server wait operation was cancelled by user`);
-            vscode.window.showInformationMessage("Operation cancelled while waiting for language server.");
+            vscode.window.showInformationMessage("Operation cancelled.");
         } else {
             getLogger().error(
                 `[extensionCommands] Error in generateTestsForTestThemeTreeItemFromTOV: ${errorMessage}`,
@@ -507,7 +542,7 @@ const _handleReadAndImportTestResultsToTestbench = async (testThemeTreeItem: Tes
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         if (errorMessage.includes("cancelled")) {
             getLogger().debug(`[extensionCommands] Language server wait operation was cancelled by user`);
-            vscode.window.showInformationMessage("Operation cancelled while waiting for language server.");
+            vscode.window.showInformationMessage("Operation cancelled.");
         } else {
             getLogger().error(
                 `[extensionCommands] Error in readAndImportTestResultsToTestbench: ${errorMessage}`,
@@ -532,14 +567,6 @@ const handleDisplayAllProjects = async () => {
     hideTestElementsTreeView();
     if (treeViews) {
         await treeViews.saveUIContext("projects");
-    }
-};
-
-const handleMakeRoot = (item: any) => {
-    if (treeViews?.projectsTree && item.data?.type === "project") {
-        treeViews?.projectsTree.makeRoot(item);
-    } else if (treeViews?.testThemesTree && item.data?.type?.includes("TestTheme")) {
-        treeViews?.testThemesTree.makeRoot(item);
     }
 };
 
@@ -671,14 +698,6 @@ const handleDisableFilterDiffMode = async () => {
     } else {
         getLogger().warn("[extensionCommands] Test themes tree not available to disable filter diff mode.");
     }
-};
-
-const handleResetProjectTreeViewRoot = () => {
-    treeViews?.projectsTree.resetCustomRoot();
-};
-
-const handleResetTestThemeTreeViewRoot = () => {
-    treeViews?.testThemesTree.resetCustomRoot();
 };
 
 const handleCheckForTestCaseSetDoubleClick = async (item: TestThemesTreeItem) => {
@@ -1149,15 +1168,6 @@ export async function registerExtensionCommands(context: vscode.ExtensionContext
         },
         { id: allExtensionCommands.enableFilterDiffMode, handler: handleEnableFilterDiffMode },
         { id: allExtensionCommands.disableFilterDiffMode, handler: handleDisableFilterDiffMode },
-        {
-            id: allExtensionCommands.makeRoot,
-            handler: handleMakeRoot
-        },
-        { id: allExtensionCommands.resetProjectTreeViewRoot, handler: handleResetProjectTreeViewRoot },
-        {
-            id: allExtensionCommands.resetTestThemeTreeViewRoot,
-            handler: handleResetTestThemeTreeViewRoot
-        },
 
         // Other extension commands
         { id: allExtensionCommands.clearInternalTestbenchFolder, handler: clearInternalFolder },

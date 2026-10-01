@@ -70,8 +70,8 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                     "[AuthenticationProvider] Loaded existing shared session for: " + sessionData.accountLabel
                 );
             }
-        } catch (error) {
-            logger.error("[AuthenticationProvider] Error loading shared sessions:", error);
+        } catch (_error) {
+            logger.error("[AuthenticationProvider] Error loading shared sessions");
         }
     }
 
@@ -129,7 +129,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             if (error instanceof UserCancelledError) {
                 logger.debug(`[AuthenticationProvider] ${error.message}`);
             } else {
-                logger.error(`[AuthenticationProvider] Error during session creation: ${error.message || error}`);
+                logger.error("[AuthenticationProvider] Error during session creation");
                 if (!isSilentLogin) {
                     await connectionManager.clearActiveConnection(this.context);
                 }
@@ -367,7 +367,8 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                         sessionToken: existingSharedSession.sessionToken,
                         userKey: existingSharedSession.userKey,
                         loginName: existingSharedSession.loginName,
-                        isInsecure: existingSharedSession.isInsecure
+                        isInsecure: existingSharedSession.isInsecure,
+                        serverVersion: existingSharedSession.serverVersion || ""
                     },
                     usingSharedSession: true
                 };
@@ -439,12 +440,6 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             scopes
         };
 
-        this._onDidChangeSessions.fire({
-            added: [authSession],
-            removed: [],
-            changed: []
-        });
-
         if (!usingSharedSession) {
             const sharedSessionManager = SharedSessionManager.getInstance(this.context);
             await sharedSessionManager.storeSharedSession(
@@ -456,12 +451,19 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 connection.serverName,
                 connection.portNumber,
                 connection.username,
-                loginResult.isInsecure
+                loginResult.isInsecure,
+                loginResult.serverVersion
             );
             logger.debug(
                 "[AuthenticationProvider] Stored new session in shared session manager for cross-window access"
             );
         }
+
+        this._onDidChangeSessions.fire({
+            added: [authSession],
+            removed: [],
+            changed: []
+        });
 
         logger.debug(
             `[AuthenticationProvider] TestBench session created successfully for '${sessionData.accountLabel}'.`
@@ -622,8 +624,8 @@ export async function getSessionToProcess(
             createIfNone: false,
             silent: true
         });
-    } catch (error) {
-        logger.warn("[AuthenticationProvider] Error getting current session:", error);
+    } catch (_error) {
+        logger.warn("[AuthenticationProvider] Error getting current session");
         return undefined;
     }
 }

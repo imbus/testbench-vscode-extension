@@ -8,8 +8,9 @@ from robot.api.parsing import (
 )
 
 from ..ls_exceptions import TestBenchKeywordNotFound
+from pathlib import Path
+
 from ..testbench_api.legacy_model import (
-    get_keywords_resource_path,
     get_tb_keyword_key,
     get_tb_keyword_parent_key,
     get_test_element_uid,
@@ -26,12 +27,39 @@ from .resource_utils import html_2_robot
 from .testbench_resource_model import TestBenchResourceModel
 
 
+def _get_subdivision_resource_path(test_elements, uid: str) -> Path | None:
+    subdivisions = {te.Subdivision_key.serial: te for te in test_elements if te.Subdivision_key}
+    subdivision = next(
+        (
+            test_element
+            for test_element in test_elements
+            if test_element.Subdivision_key
+            and test_element.uniqueID
+            and test_element.uniqueID.lower() == uid.lower()
+        ),
+        None,
+    )
+    if subdivision is None:
+        return None
+    path_parts = []
+    current_key = subdivision.Subdivision_key.serial
+    while current_key and current_key != "0":
+        path_parts.insert(0, subdivisions[current_key].name)
+        current_key = subdivisions[current_key].parent.serial
+    path_parts[-1] = f"{path_parts[-1]}.resource"
+    return Path.cwd() / Path(*path_parts)
+
+
 def create_resource_from_subdivision(
     uid: str,
 ):
-    resource = None
     tb_connection = TestBenchResourceConnection.singleton()
     test_elements = get_test_elements(tb_connection)
+    resource_path = _get_subdivision_resource_path(test_elements, uid)
+    if resource_path is None:
+        return None
+    resource = TestBenchResourceModel(resource_path)
+    resource.add_comment(f"tb:uid:{uid}")
     for test_element in test_elements:
         if not is_tb_keyword(test_element):
             continue
@@ -40,10 +68,6 @@ def create_resource_from_subdivision(
         )
         if uid != parent_uid:
             continue
-        resource_path = get_keywords_resource_path(test_elements, test_element)
-        if not resource:
-            resource = TestBenchResourceModel(resource_path)
-            resource.add_comment(f"tb:uid:{uid}")
         keyword_key = get_tb_keyword_key(test_element)
         keyword_details = get_tb_keyword(tb_connection, tb_connection.project_key, keyword_key)
         keyword_arguments = [

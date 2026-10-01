@@ -213,7 +213,7 @@ export class ProjectsTreeItem extends TreeItemBase {
      * Updates the context value based on the current state of the item
      */
     public updateContextValue(): void {
-        let contextValue =
+        const contextValue =
             this.data.type === "project"
                 ? "Project"
                 : this.data.type === "version"
@@ -221,10 +221,6 @@ export class ProjectsTreeItem extends TreeItemBase {
                   : this.data.type === "cycle"
                     ? "Cycle"
                     : "Other";
-
-        if (this._metadata.has("isCustomRoot") && this._metadata.get("isCustomRoot") === true) {
-            contextValue = `customRoot.${contextValue}`;
-        }
 
         this.contextValue = contextValue;
     }

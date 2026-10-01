@@ -126,7 +126,6 @@ suite("TreeViewModule", function () {
             title: "Test Tree View",
             contextValue: "testTreeView",
             features: {
-                customRoot: true,
                 marking: true,
                 persistence: true,
                 filtering: true,

@@ -209,10 +209,6 @@ export class PersistenceModule implements TreeViewModule {
             lastRefresh: state.lastRefresh
         };
 
-        if (persistenceConfig.includeCustomRoot && state.customRoot) {
-            dataToSave.customRoot = state.customRoot;
-        }
-
         if (persistenceConfig.includeExpansion && state.expansion) {
             dataToSave.expansion = {
                 expandedItems: Array.from(state.expansion.expandedItems),
@@ -274,10 +270,6 @@ export class PersistenceModule implements TreeViewModule {
 
         if (data.lastRefresh) {
             state.lastRefresh = data.lastRefresh;
-        }
-
-        if (data.customRoot) {
-            state.customRoot = data.customRoot;
         }
 
         if (data.expansion) {

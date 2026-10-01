@@ -47,7 +47,8 @@ export const WebviewMessageCommands = {
 
     // Host to Webview communication
     DISPLAY_CONNECTIONS_IN_WEBVIEW: "displayConnectionsInWebview",
-    SHOW_WEBVIEW_MESSAGE: "showWebviewMessage"
+    SHOW_WEBVIEW_MESSAGE: "showWebviewMessage",
+    UPDATE_LOGIN_STATE: "updateLoginState"
 } as const;
 
 // --- Webview File Paths ---
@@ -94,8 +95,6 @@ export const ConfigKeys = {
 // --- Context Keys ---
 export const ContextKeys = {
     CONNECTION_ACTIVE: "testbenchExtension.connectionActive",
-    PROJECT_TREE_HAS_CUSTOM_ROOT: "testbenchExtension.projectTreeHasCustomRoot",
-    THEME_TREE_HAS_CUSTOM_ROOT: "testbenchExtension.themeTreeHasCustomRoot",
     IS_TT_OPENED_FROM_CYCLE: "testbenchExtension.isTestThemeOpenedFromCycle",
     WORKSPACE_AVAILABLE: "testbenchExtension.workspaceAvailable",
     SHOW_PROJECTS_TREE: "testbenchExtension.showProjectsTree",
@@ -130,16 +129,10 @@ export const StorageKeys = {
     CONNECTION_PASSWORD_SECRET_PREFIX: "testbenchExtension.connection.password.",
     MARKED_TEST_GENERATION_ITEM: "testbenchExtension.markedTestGenerationItem",
     SUB_TREE_ITEM_IMPORT_STORAGE_KEY: "testbenchExtension.importedSubTreeItems",
-    // Legacy Play server port cache (per server)
-    LEGACY_PLAY_SERVER_PORT_CACHE: "testbenchExtension.legacyPlayServerPortCache",
     // Persistent tree view storage for tree view restoration
     VISIBLE_VIEWS_STORAGE_KEY: "testbenchExtension.visibleTreeViews",
     LAST_ACTIVE_CYCLE_CONTEXT_KEY: "testbenchExtension.lastActiveCycleContext",
     LAST_ACTIVE_TOV_CONTEXT_KEY: "testbenchExtension.lastActiveTovContext",
-    // Custom root persistence
-    CUSTOM_ROOT_PROJECT_TREE: "testbenchExtension.customRoot.projectTree",
-    CUSTOM_ROOT_TEST_THEME_TREE: "testbenchExtension.customRoot.testThemeTree",
-    CUSTOM_ROOT_TEST_ELEMENTS_TREE: "testbenchExtension.customRoot.testElementsTree",
     IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY: "testbenchExtension.isTestThemeOpenedFromCycleStorageKey",
     HAS_USED_EXTENSION_BEFORE: "testbenchExtension.hasUsedExtensionBefore",
     // Test theme tree filters
@@ -150,7 +143,6 @@ export const StorageKeys = {
 // --- Tree Item Context Values ---
 export const ProjectItemTypes = {
     PROJECT: "Project",
-    CUSTOM_ROOT_PROJECT: "customRoot.project",
     VERSION: "Version",
     CYCLE: "Cycle",
     OTHER: "Other"
@@ -158,12 +150,10 @@ export const ProjectItemTypes = {
 
 export const TestThemeItemTypes = {
     TEST_THEME: "TestThemeNode",
-    CUSTOM_ROOT_TEST_THEME: "customRoot.testTheme",
     TEST_CASE_SET: "TestCaseSetNode",
     TEST_CASE: "TestCaseNode",
     MARKED_TEST_THEME_TREE_ITEM: "MarkedForImport.TestThemeNode",
     MARKED_TEST_CASE_SET_TREE_ITEM: "MarkedForImport.TestCaseSetNode",
-    MARKED_CUSTOM_ROOT_TEST_THEME: "MarkedForImport.customRoot.testTheme",
     OTHER: "Other"
 } as const;
 
@@ -226,7 +216,6 @@ export const allExtensionCommands = {
     generateTestsForTestThemeTreeItemFromTOV: `${baseKeyOfExtension}.generateTestsForTestThemeTreeItemFromTOV`,
     generateTestCasesForTOV: `${baseKeyOfExtension}.generateTestCasesForTOV`,
     openAndRevealGeneratedRobotFile: `${baseKeyOfExtension}.openAndRevealGeneratedRobotFile`,
-    makeRoot: `${baseKeyOfExtension}.makeRoot`,
     showExtensionSettings: `${baseKeyOfExtension}.showExtensionSettings`,
     displayAllProjects: `${baseKeyOfExtension}.displayAllProjects`,
     importTestResultsToTestbench: `${baseKeyOfExtension}.importTestResultsToTestbench`,
@@ -243,8 +232,6 @@ export const allExtensionCommands = {
     openIssueReporter: `${baseKeyOfExtension}.openIssueReporter`,
     handleCycleClick: `${baseKeyOfExtension}.handleCycleClick`,
     handleTOVClick: `${baseKeyOfExtension}.handleTOVClick`,
-    resetProjectTreeViewRoot: `${baseKeyOfExtension}.resetProjectTreeViewRoot`,
-    resetTestThemeTreeViewRoot: `${baseKeyOfExtension}.resetTestThemeTreeViewRoot`,
     fetchTovStructure: `${baseKeyOfExtension}.fetchTovStructure`,
     clearImportedSubTreeItemsTracking: `${baseKeyOfExtension}.clearImportedSubTreeItemsTracking`,
     checkForCycleDoubleClick: `${baseKeyOfExtension}.checkForCycleDoubleClick`,
@@ -253,7 +240,6 @@ export const allExtensionCommands = {
     markTestThemeForImport: "testbench.markTestThemeForImport",
     generateTestCasesForTestTheme: "testbench.generateTestCasesForTestTheme",
     refreshAllTrees: "testbench.refreshAllTrees",
-    clearAllCustomRoots: "testbench.clearAllCustomRoots",
     clearAllMarks: "testbench.clearAllMarks",
     clearAllExtensionData: `${baseKeyOfExtension}.clearAllExtensionData`,
 

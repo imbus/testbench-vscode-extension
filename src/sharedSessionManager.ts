@@ -19,6 +19,7 @@ interface SharedSessionData {
     createdAt: number;
     lastValidated: number;
     isInsecure: boolean;
+    serverVersion?: string;
 }
 
 const SHARED_SESSION_KEY = "testbenchExtension.sharedSession";
@@ -48,7 +49,8 @@ export class SharedSessionManager {
         serverName: string,
         portNumber: number,
         username: string,
-        isInsecure: boolean
+        isInsecure: boolean,
+        serverVersion: string = ""
     ): Promise<void> {
         const sessionData: SharedSessionData = {
             sessionId,
@@ -60,6 +62,7 @@ export class SharedSessionManager {
             portNumber,
             username,
             isInsecure,
+            serverVersion,
             createdAt: Date.now(),
             lastValidated: Date.now()
         };
@@ -102,8 +105,8 @@ export class SharedSessionManager {
             }
 
             return sessionData;
-        } catch (error) {
-            logger.error("[SharedSessionManager] Error retrieving shared session:", error);
+        } catch (_error) {
+            logger.error("[SharedSessionManager] Error retrieving shared session");
             return null;
         }
     }
@@ -135,8 +138,8 @@ export class SharedSessionManager {
 
             logger.trace(`[SharedSessionManager] Session validation result: ${isValid}`);
             return isValid;
-        } catch (error) {
-            logger.error("[SharedSessionManager] Error validating session:", error);
+        } catch (_error) {
+            logger.error("[SharedSessionManager] Error validating session");
             return false;
         }
     }

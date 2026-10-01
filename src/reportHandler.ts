@@ -109,7 +109,9 @@ function getLastGeneratedReportParams(
             storedParams.executionMode !== undefined &&
             storedParams.alreadyImported !== undefined
         ) {
-            logger.debug("[reportHandler] Retrieved last generated report params from workspace state:", storedParams);
+            logger.debug(
+                `[reportHandler] Retrieved last generated report params from workspace state. UID=${storedParams.UID}, projectKey=${storedParams.projectKey}, cycleKey=${storedParams.cycleKey}, executionMode=${storedParams.executionMode}, alreadyImported=${storedParams.alreadyImported}`
+            );
             return storedParams;
         } else {
             logger.warn("[reportHandler] No valid last generated report params found in workspace state.");
@@ -183,8 +185,9 @@ export async function pollJobStatus(
     while (true) {
         if (cancellationToken?.isCancellationRequested) {
             const cancellationMsg = "Job status polling cancelled by the user.";
+            const cancellationMsgForUser = "Operation cancelled.";
             logger.debug(`[reportHandler] ${cancellationMsg}`);
-            vscode.window.showInformationMessage(cancellationMsg);
+            vscode.window.showInformationMessage(cancellationMsgForUser);
             throw new vscode.CancellationError();
         }
         if (!connection) {
@@ -224,8 +227,10 @@ export async function pollJobStatus(
                     return null;
                 }
             }
-        } catch (error) {
-            logger.error(`[reportHandler] Failed to get job status at polling attempt ${pollingAttemptAmount}:`, error);
+        } catch (error: any) {
+            logger.error(`[reportHandler] Failed to get job status at polling attempt ${pollingAttemptAmount}`);
+            vscode.window.showErrorMessage(`Failed to get job status from the TestBench server: ${error.message}`);
+            return null; // Abort polling on server error since getJobStatus already retries 3 times
         }
 
         // Check if the maximum polling time has been exceeded.
@@ -279,7 +284,7 @@ export async function getJobIdOfCycleReport(
         );
 
         logger.trace(`[reportHandler] Job ID response status for URL: ${getJobIDUrl}:`, jobIdResponse.status);
-        logger.trace(`[reportHandler] Job ID response data for URL: ${getJobIDUrl}:`, jobIdResponse.data);
+        logger.trace(`[reportHandler] Job ID successfully fetched for URL: ${getJobIDUrl}`);
 
         if (jobIdResponse.status !== 200) {
             const errorMsg: string = `[reportHandler] Failed to fetch job ID, status code: ${jobIdResponse.status}`;
@@ -291,7 +296,7 @@ export async function getJobIdOfCycleReport(
     } catch (error: any) {
         const errorMsg: string = `Error fetching job ID: ${error.message}`;
         logger.error("[reportHandler] " + errorMsg);
-        vscode.window.showErrorMessage(errorMsg);
+        vscode.window.showErrorMessage("Could not reach TestBench server. Please try again.");
         return null;
     }
 }
@@ -331,7 +336,7 @@ export async function getJobStatus(
     );
 
     logger.trace(`[reportHandler] Job status response status for URL: ${getJobStatusUrl}:`, jobStatusResponse.status);
-    logger.trace(`[reportHandler] Job status response data for URL: ${getJobStatusUrl}:`, jobStatusResponse.data);
+    logger.trace(`[reportHandler] Job status successfully fetched for URL: ${getJobStatusUrl}`);
     if (jobStatusResponse.status !== 200) {
         const errorMsg: string = `[reportHandler] Failed to fetch job status, status code: ${jobStatusResponse.status}`;
         logger.error(errorMsg);
@@ -406,7 +411,7 @@ export async function downloadReport(
     } catch (error) {
         const downloadReportErrorMessage: string = `Failed to download report: ${(error as Error).message}`;
         logger.error(`[reportHandler] ${downloadReportErrorMessage}`);
-        vscode.window.showErrorMessage(downloadReportErrorMessage);
+        vscode.window.showErrorMessage("Could not download the report from TestBench.");
         return null;
     }
 }
@@ -566,8 +571,8 @@ export async function fetchReportZipOfCycleFromServer(
             logger.warn("[reportHandler] Downloading report failed or was canceled.");
             return null;
         }
-    } catch (error) {
-        logger.error(`[reportHandler] Error while fetching report zip from server: ${error}`);
+    } catch (_error) {
+        logger.error(`[reportHandler] Error while fetching report zip from server`);
         return null;
     }
 }
@@ -594,7 +599,7 @@ async function setLastImportedItem(context: vscode.ExtensionContext, reportRootU
             `[reportHandler] Set last imported item UID to ${reportRootUID} for user ${userSessionManager.getCurrentUserId()}.`
         );
     } catch (error) {
-        logger.error(`[reportHandler] Error setting last imported item UID: ${error}`);
+        logger.error(`[reportHandler] Error setting last imported item UID:`, error);
     }
 }
 
@@ -679,7 +684,7 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
             const testGenerationCancelledMessage: string =
                 "[reportHandler] Robot Framework test suite generation has been cancelled by user.";
             logger.debug(testGenerationCancelledMessage);
-            vscode.window.showInformationMessage(testGenerationCancelledMessage);
+            vscode.window.showInformationMessage("Robot Framework test generation has been cancelled");
             return false;
         } else {
             logger.error("[reportHandler] Error during Robot Framework test suite generation:", error);
@@ -806,7 +811,7 @@ export async function removeReportZipFile(
                 await utils.delay(delayMs);
             } else {
                 logger.error(`[reportHandler] Error removing file ${zipFileFullPath}:`, error);
-                vscode.window.showErrorMessage(`Error removing file ${zipFileFullPath}: ${(error as Error).message}`);
+                vscode.window.showErrorMessage("Could not remove the report file. It may still be in use.");
                 return;
             }
         }
@@ -930,9 +935,10 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 await vscode.workspace.fs.createDirectory(
                     vscode.Uri.file(testbenchWorkingDirectoryPathInsideWorkspace)
                 );
-            } catch (e) {
+            } catch (error) {
                 logger.warn(
-                    `[reportHandler] Failed to ensure reports directory exists at ${testbenchWorkingDirectoryPathInsideWorkspace}: ${e}`
+                    `[reportHandler] Failed to ensure reports directory exists at ${testbenchWorkingDirectoryPathInsideWorkspace}:`,
+                    error
                 );
             }
 
@@ -1133,13 +1139,24 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
                 undefined,
                 cancellationToken
             );
-
             if (!importJobStatus || isImportJobFailed(importJobStatus)) {
                 const importJobFailedMessageForUser: string = "Import job could not be completed.";
                 vscode.window.showErrorMessage(importJobFailedMessageForUser);
                 return null;
             } else if (!isImportJobCompletedSuccessfully(importJobStatus)) {
-                logger.warn("[reportHandler] Import job finished polling but status is unknown.", importJobStatus);
+                logger.warn("[reportHandler] Import job finished polling but status is unknown.");
+            }
+            let importError = false;
+            for (const tcs of importJobStatus?.completion?.result?.ExecutionImportingSuccess?.testCaseSets ?? []) {
+                const errorMessage = tcs?.error?.message;
+                const tcsName = tcs?.name ?? "Unknown TestCaseSet";
+                if (errorMessage && typeof errorMessage === "string") {
+                    vscode.window.showErrorMessage(`Import of TestCaseSet '${tcsName}' failed: ${errorMessage}`);
+                    importError = true;
+                }
+            }
+            if (importError) {
+                return null;
             }
         } catch (error: any) {
             logger.error(
@@ -1235,7 +1252,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     increment: 30
                 });
 
-                await importReportWithResultsToTestbenchWithSpecificUID(
+                const importResult = await importReportWithResultsToTestbenchWithSpecificUID(
                     connection!,
                     resolvedTargetProjectKey,
                     resolvedTargetCycleKey,
@@ -1243,6 +1260,9 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     resolvedReportRootUID,
                     cancellationToken
                 );
+                if (importResult === null) {
+                    return false;
+                }
 
                 if (cancellationToken.isCancellationRequested) {
                     logger.debug("[reportHandler] Fetch and import process cancelled.");
@@ -1258,7 +1278,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     error instanceof Error ? error.message : String(error)
                 }`;
                 const fetchAndImportErrorMsgForUser: string = "Error during fetch and import process.";
-                logger.error(fetchAndImportErrorMsg, error);
+                logger.error(fetchAndImportErrorMsg);
                 vscode.window.showErrorMessage(fetchAndImportErrorMsgForUser);
                 return false;
             }

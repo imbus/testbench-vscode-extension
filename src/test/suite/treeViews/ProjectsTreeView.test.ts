@@ -43,7 +43,6 @@ suite("ProjectsTreeView", function () {
             lastRefresh: Date.now(),
             items: new Map(),
             rootItems: [],
-            customRoot: null,
             marking: null,
             expansion: null,
             filtering: null,
@@ -296,38 +295,6 @@ suite("ProjectsTreeView", function () {
     });
 
     suite("Command Handling", () => {
-        test("should handle make root command for project", async () => {
-            const projectItem = new ProjectsTreeItem(
-                {
-                    key: "PROJ-001",
-                    name: "Test Project",
-                    type: "project"
-                },
-                testEnv.mockContext
-            );
-
-            // Mock the makeRoot method
-            const mockMakeRoot = testEnv.sandbox.stub();
-            (treeView as any).makeRoot = mockMakeRoot;
-
-            // Simulate command execution through public interface
-            treeView.makeRoot(projectItem);
-
-            sinon.assert.calledOnce(mockMakeRoot);
-            sinon.assert.calledWith(mockMakeRoot, projectItem);
-        });
-
-        test("should handle reset custom root command", async () => {
-            // Mock the resetCustomRoot method
-            const mockResetCustomRoot = testEnv.sandbox.stub();
-            (treeView as any).resetCustomRoot = mockResetCustomRoot;
-
-            // Simulate command execution through public interface
-            treeView.resetCustomRoot();
-
-            sinon.assert.calledOnce(mockResetCustomRoot);
-        });
-
         test("should handle refresh command", async () => {
             // Mock the refresh method
             const mockRefresh = testEnv.sandbox.stub();

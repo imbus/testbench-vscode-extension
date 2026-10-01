@@ -311,7 +311,7 @@ suite("ResourceFileService", function () {
                 return undefined as any;
             });
 
-            // Return the correct index for "resources" marker at root
+            // Return 0 (marker is the first component)
             testEnv.vscodeMocks.executeCommandStub
                 .withArgs("testbench_ls.get_resource_directory_subdivision_index")
                 .resolves(0);
@@ -322,7 +322,36 @@ suite("ResourceFileService", function () {
             assert.strictEqual(
                 result,
                 expectedPath,
-                `Expected slicing after root marker and mapping into resource dir: "${expectedPath}", got "${result}"`
+                `Expected slicing after root marker: "${expectedPath}", got "${result}"`
+            );
+        });
+
+        test("should leave relative path empty when marker is the last component", async function () {
+            testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").callsFake((key: string) => {
+                if (key === "resourceDirectoryPath") {
+                    return "rf" as any;
+                }
+                if (key === "resourceRootRegex") {
+                    return "resources" as any;
+                }
+                if (key === "resourceMarker") {
+                    return undefined as any;
+                }
+                return undefined as any;
+            });
+
+            testEnv.vscodeMocks.executeCommandStub
+                .withArgs("testbench_ls.get_resource_directory_subdivision_index")
+                .resolves(2);
+
+            const result = await resourceFileService.constructAbsolutePath("Root/Project/resources");
+            const expectedPath = path.join("/test/workspace", "rf");
+
+            assert.strictEqual(
+                result,
+                expectedPath,
+                `Expected mapping exact marker to resource directory: "${expectedPath}", got "${result}"`
             );
         });
 
@@ -594,6 +623,24 @@ suite("ResourceFileService", function () {
         test("should return false when markers array is empty", function () {
             testEnv.sandbox.stub(configuration, "getExtensionSetting").returns([]);
             assert.strictEqual(ResourceFileService.hasResourceMarker("TestTheme"), false);
+        });
+
+        test("should return false when configured marker is present but not as suffix", function () {
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns(["[Robot-Resource]", "rf_resource"]);
+            const result = ResourceFileService.hasResourceMarker("TestTheme [Robot-Resource] suffix");
+            assert.strictEqual(result, false, "Should return false when marker is not at the end");
+        });
+
+        test("should return true when configured marker is exact suffix string", function () {
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns(["[Robot-Resource]", "rf_resource"]);
+            const result = ResourceFileService.hasResourceMarker("TestTheme [Robot-Resource]");
+            assert.strictEqual(result, true, "Should return true for exact suffix match");
+        });
+
+        test("should return true when configured marker has trailing whitespace", function () {
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns(["[Robot-Resource]", "rf_resource"]);
+            const result = ResourceFileService.hasResourceMarker("TestTheme [Robot-Resource]   \t");
+            assert.strictEqual(result, true, "Should ignore trailing whitespace when matching suffix marker");
         });
 
         test("should handle invalid marker types gracefully", function () {

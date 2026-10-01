@@ -45,7 +45,7 @@ By default, subdivisions whose names end with the suffix `[Robot-Resource]` are 
 
 ![Edit Subdivision Suffix to display it in the extension](userGuideImages/subdivision_suffix.png)
 
-To create a Robot Framework resource file from a TestBench Subdivision, find the corresponding Subdivision in the `Test Elements` view and click the `Create Resource` button next to it. Afterwards, you can use the `Test Elements` view of the extension to navigate between keywords and resource files.
+To create a Robot Framework resource file from a TestBench Subdivision, simply hover over the corresponding Subdivision in the `Test Elements` view and click the `Create Resource` button. Afterwards, you can use the `Test Elements` view of the extension to navigate between keywords and resource files.
 The path where the resource file is created can be configured in the extension settings.
 
 ![Create Resource from TestBench Subdivision](userGuideImages/create_resource.gif)
@@ -89,8 +89,8 @@ If there is no UID tag in a keyword, the CodeLens action will allow you to **cre
 
 ### Generate Robot Framework Tests from TestBench Test Cases
 
-After using the Robot Framework keywords within TestBench test cases to specify the test logic, you can generate Robot Framework test suites from the test cases defined in TestBench.
-The generated Robot Framework test suites will be created in your workspace/folder and can then be executed or debugged. To generate Robot Framework tests, click the `Generate Robot Framework Test Suites` button next to a tree item in the `Test Themes` view (tests are generated for that item and its subtree). The output path and test format can be configured in the extension settings. Please note that depending on which Test Cycle or Test Object Version is opened in the extension, different test cases will be generated.
+After using the Robot Framework keywords within TestBench test cases to specify the test logic, you can generate Robot Framework test suites from the test case sets defined in TestBench.
+The generated Robot Framework test suites will be created in your workspace/folder and can then be executed or debugged. To generate Robot Framework tests, click the `Generate Robot Framework Test Suites` button next to a tree item in the `Test Themes` view (tests are generated for that item and its subtree). The output path and test format can be configured in the extension settings. Please note that depending on which Test Cycle or Test Object Version is opened in the extension, different test suites and tests will be generated.
 
 ![Generate Robot Framework Tests](userGuideImages/generate_tests.png)
 
@@ -108,10 +108,6 @@ To make the VS Code extension trust a custom or self-signed certificate from you
 
 - Obtain the public certificate file (.pem) from your TestBench server.
 - In the extension settings, set the Certificate Path.
-
-<!--## Documentation
-
-For comprehensive documentation including detailed feature descriptions, configuration settings, and a troubleshooting guide, see the [User Guide](user-guide.md). -->
 
 ## License
 

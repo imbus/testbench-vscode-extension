@@ -22,4 +22,4 @@ jobs:
                   skip-recent: 3
                   # Skip these specific artifacts (uncomment to preserve release artifacts)
                   # skip-tags: |
-                  #    testbench-extension-release
+                  #    testbench-release

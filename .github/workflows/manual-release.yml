@@ -8,14 +8,6 @@ on:
                 description: "The version to release (e.g., 1.2.3)"
                 type: string
                 required: true
-            release_type:
-                description: "Type of release"
-                type: choice
-                options:
-                    - patch
-                    - minor
-                    - major
-                default: "patch"
             create_tag:
                 description: "Create a git tag for this release"
                 type: boolean
@@ -29,17 +21,19 @@ jobs:
     manual-release:
         name: Create Manual Release
         runs-on: ubuntu-latest
+        permissions:
+            contents: write
 
         steps:
             # Checkout code
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
               with:
                   fetch-depth: 0
 
             # Set up Node.js
             - name: Set up Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v6
               with:
                   node-version: "lts/*"
                   check-latest: true
@@ -120,14 +114,25 @@ jobs:
                   git push origin main
                   git push origin "v${{ inputs.version }}"
 
-            # Create GitHub Release
+            # If we don't create a tag in this run, ensure it already exists remotely.
+            - name: Verify release tag exists
+              if: inputs.create_tag != 'true'
+              run: |
+                  TAG_REF="refs/tags/v${{ inputs.version }}"
+                  if ! git ls-remote --exit-code --tags origin "$TAG_REF" > /dev/null; then
+                    echo "Tag v${{ inputs.version }} was not found on origin."
+                    echo "Set create_tag=true or create and push the tag before running this workflow."
+                    exit 1
+                  fi
+
+            # Create GitHub release and upload VSIX artifact(s)
             - name: Create GitHub Release
-              uses: actions/create-release@v1
+              uses: softprops/action-gh-release@v2
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               with:
                   tag_name: v${{ inputs.version }}
-                  release_name: Release v${{ inputs.version }}
+                  name: Release v${{ inputs.version }}
                   body: |
                       ## What's Changed
 
@@ -141,18 +146,8 @@ jobs:
                       ### Download
                       Download the VSIX file from the assets below to install this extension.
                   draft: false
-                  prerelease: ${{ inputs.release_type == 'prerelease' }}
-
-            # Upload VSIX to release
-            - name: Upload VSIX to Release
-              uses: actions/upload-release-asset@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  upload_url: ${{ steps.create_release.outputs.upload_url }}
-                  asset_path: ./testbench-extension-${{ inputs.version }}.vsix
-                  asset_name: testbench-extension-v${{ inputs.version }}.vsix
-                  asset_content_type: application/octet-stream
+                  prerelease: ${{ contains(inputs.version, '-') }}
+                  files: ./*.vsix
 
             # Summary
             - name: Release Summary
