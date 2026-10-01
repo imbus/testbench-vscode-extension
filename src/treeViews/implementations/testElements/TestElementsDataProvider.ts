@@ -97,11 +97,14 @@ export class TestElementsDataProvider {
             return [];
         }
 
-        const patterns = resourceMarkers.map((marker) => {
-            // Escape special regex characters in the marker
-            const escaped = marker.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
-            return new RegExp(escaped);
-        });
+        const patterns = resourceMarkers
+            .filter((marker) => typeof marker === "string" && marker.length > 0)
+            .map((marker) => {
+                // Match resource markers as suffixes (ignoring trailing whitespace)
+                // to stay consistent with ResourceFileService.hasResourceMarker().
+                const escaped = marker.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+                return new RegExp(`${escaped}\\s*$`);
+            });
 
         // this.logger.debug(`[TestElementsDataProvider] Generated regex patterns: ${JSON.stringify(patterns.map((p) => p.source))}`);
         return patterns;

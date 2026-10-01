@@ -11,7 +11,7 @@ import { TestElementsDataProvider } from "./TestElementsDataProvider";
 import { testElementsConfig } from "./TestElementsConfig";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { ResourceFileService } from "./ResourceFileService";
-import { ContextKeys, TestElementItemTypes } from "../../../constants";
+import { ConfigKeys, ContextKeys, TestElementItemTypes } from "../../../constants";
 import { treeViews } from "../../../extension";
 import { ClickHandler } from "../../core/ClickHandler";
 import {
@@ -23,7 +23,7 @@ import {
 } from "../../../languageServer/server";
 import { hasLsConfig } from "../../../languageServer/lsConfig";
 import { getExtensionSetting } from "../../../configuration";
-import { ConfigKeys } from "../../../constants";
+import { validateAndReturnPathSettingError } from "../../../utils";
 
 /**
  * Local interface for configuring the generic resource handler.
@@ -382,6 +382,10 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      */
     private async _handleResourceOperation(config: ResourceOperationConfig): Promise<void> {
         try {
+            if (!this.validateResourceDirectoryPathSetting()) {
+                return;
+            }
+
             await this.requireLanguageServerWithProgress();
 
             const resourcePath = await this.resolveResourcePathForTreeItem(config.targetItem, config.errorMessages);
@@ -412,6 +416,22 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         } catch (error) {
             this.handleResourceOperationError(config.operationType, error);
         }
+    }
+
+    /**
+     * Validates the Resource Directory Path setting before operations that open/create resources.
+     * Returns false and shows a user-facing error when the configured path is invalid.
+     */
+    private validateResourceDirectoryPathSetting(): boolean {
+        const configuredResourcePath = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR);
+        const settingError = validateAndReturnPathSettingError("Resource Directory Path", configuredResourcePath);
+        if (!settingError) {
+            return true;
+        }
+
+        this.logger.error(`[TestElementsTreeView] ${settingError}`);
+        vscode.window.showErrorMessage(settingError);
+        return false;
     }
 
     /**
@@ -945,26 +965,37 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private async hasAllChildResourcesAvailable(item: TestElementsTreeItem): Promise<boolean> {
         if (!item.children || item.children.length === 0) {
             // Leaf
-            return item.data.directRegexMatch ? item.data.isLocallyAvailable === true : true;
+            return false;
         }
 
-        for (const child of item.children as TestElementsTreeItem[]) {
-            if (child.data.testElementType === TestElementType.Subdivision) {
-                if (child.data.directRegexMatch) {
-                    if (!child.data.isLocallyAvailable) {
-                        return false;
-                    }
-                } else {
-                    // Folder, recursively check all its children
-                    const allChildrenAvailable = await this.hasAllChildResourcesAvailable(child);
-                    if (!allChildrenAvailable) {
-                        return false;
+        let hasAnyResource = false;
+        let allAvailable = true;
+
+        const checkChildren = async (children: TestElementsTreeItem[]) => {
+            for (const child of children) {
+                if (child.data.testElementType === TestElementType.Subdivision) {
+                    if (child.data.directRegexMatch) {
+                        hasAnyResource = true;
+                        if (!child.data.isLocallyAvailable) {
+                            allAvailable = false;
+                            return; // Early exit once we find a missing resource
+                        }
+                    } else {
+                        // Folder, recursively check all its children
+                        if (child.children && child.children.length > 0) {
+                            await checkChildren(child.children as TestElementsTreeItem[]);
+                            if (!allAvailable) {
+                                return;
+                            }
+                        }
                     }
                 }
             }
-        }
+        };
 
-        return true;
+        await checkChildren(item.children as TestElementsTreeItem[]);
+
+        return hasAnyResource && allAvailable;
     }
 
     /**
