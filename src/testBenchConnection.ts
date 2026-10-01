@@ -1099,7 +1099,7 @@ export class PlayServerConnection {
         }
 
         const storedPassword = await connectionManager.getPasswordForConnection(this.context, activeConnection.id);
-        if (!storedPassword) {
+        if (storedPassword === undefined) {
             return false;
         }
 

@@ -256,7 +256,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 logger.error(`[AuthenticationProvider] Failed to save new connection: ${saveError.message}`);
                 throw new Error(`Failed to save connection: ${saveError.message}`);
             }
-        } else if (!initialPassword) {
+        } else if (initialPassword === undefined) {
             throw new Error("Password required for unsaved connection.");
         }
 
@@ -276,9 +276,6 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
         isSilent: boolean
     ): Promise<{ password: string; wasManuallyProvided: boolean; hadStoredPassword: boolean }> {
         if (initialPassword !== undefined) {
-            if (initialPassword === "") {
-                throw new Error("Cannot attempt login with an empty password.");
-            }
             return {
                 password: initialPassword,
                 wasManuallyProvided: true,
@@ -290,19 +287,6 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
         if (storedPassword === undefined) {
             const password = await this.promptForPassword(
                 `Enter password for ${connection.label}${isSilent ? " (auto-login attempt)" : ""}`,
-                isSilent
-            );
-            return { password, wasManuallyProvided: true, hadStoredPassword: false };
-        }
-
-        if (storedPassword === "") {
-            if (isSilent) {
-                throw new Error(
-                    `Empty password stored for connection "${connection.label}". Auto-login failed. Please update connection interactively.`
-                );
-            }
-            const password = await this.promptForPassword(
-                `Enter password for ${connection.label} (stored password was empty)`,
                 isSilent
             );
             return { password, wasManuallyProvided: true, hadStoredPassword: false };
@@ -324,10 +308,6 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
 
         if (manuallyEnteredPassword === undefined) {
             throw new UserCancelledError(`Password entry cancelled${isSilent ? " for auto-login" : ""}.`);
-        }
-
-        if (manuallyEnteredPassword === "") {
-            throw new Error("Password cannot be empty. Please enter a valid password or cancel.");
         }
 
         return manuallyEnteredPassword;
@@ -398,7 +378,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
         passwordResult: { wasManuallyProvided: boolean; hadStoredPassword: boolean },
         password: string
     ): Promise<void> {
-        if (!passwordResult.wasManuallyProvided || passwordResult.hadStoredPassword || !password || !connection.id) {
+        if (!passwordResult.wasManuallyProvided || passwordResult.hadStoredPassword || !connection.id) {
             return;
         }
 
@@ -558,7 +538,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
         }
 
         const passwordInput: string | undefined = await vscode.window.showInputBox({
-            prompt: "Enter TestBench Password (optional, can be left empty if you don't want to store it)",
+            prompt: "Enter TestBench Password (leave empty if this user has no password)",
             password: true,
             ignoreFocusOut: true
         });
@@ -601,7 +581,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             throw new Error("Username is required for login.");
         }
 
-        if (!password || password === "") {
+        if (password === undefined) {
             throw new Error("Password is required for login.");
         }
     }
