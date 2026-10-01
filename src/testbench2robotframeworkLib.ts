@@ -52,24 +52,27 @@ export class tb2robotLib {
             return false;
         }
 
-        isGenerateTestsCommandSuccessful = await vscode.commands.executeCommand("testbench_ls.generateTestSuites", {
-            use_config_file: use_config_file,
-            clean: clean,
-            compound_keyword_logging: compound_keyword_logging,
-            config: use_config_file,
-            fully_qualified: fully_qualified,
-            library_marker: libraryMarker,
-            library_root: libraryRoot,
-            log_suite_numbering: logSuiteNumbering,
-            output_directory: outputDirectory,
-            resource_directory: resourceDirectory,
-            resource_directory_regex: resourceDirectoryRegex,
-            resource_marker: resourceMarker,
-            resource_root: resourceRoot,
-            library_mapping: libraryMapping,
-            resource_mapping: resourceMapping,
-            testbench_report: reportPath
-        });
+        const isGenerateTestsCommandSuccessful: boolean = await vscode.commands.executeCommand(
+            "testbench_ls.generateTestSuites",
+            {
+                use_config_file: use_config_file,
+                clean: clean,
+                compound_keyword_logging: compound_keyword_logging,
+                config: use_config_file,
+                fully_qualified: fully_qualified,
+                library_marker: libraryMarker,
+                library_root: libraryRoot,
+                log_suite_numbering: logSuiteNumbering,
+                output_directory: outputDirectory,
+                resource_directory: resourceDirectory,
+                resource_directory_regex: resourceDirectoryRegex,
+                resource_marker: resourceMarker,
+                resource_root: resourceRoot,
+                library_mapping: libraryMapping,
+                resource_mapping: resourceMapping,
+                testbench_report: reportPath
+            }
+        );
 
         return isGenerateTestsCommandSuccessful;
     }
