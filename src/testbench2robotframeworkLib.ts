@@ -21,7 +21,6 @@ export class tb2robotLib {
      * @returns {Promise<boolean>} A promise that resolves to true if test generation succeeds, false otherwise.
      */
     public static async startTb2robotframeworkTestGeneration(reportPath: string): Promise<boolean> {
-        let isGenerateTestsCommandSuccessful: boolean = false;
         // use_config_file temporarily disabled (tbe-162)
         const use_config_file: boolean | undefined = false; // getExtensionSetting<boolean>(ConfigKeys.USE_CONFIG_FILE_SETTING);
         const clean: boolean | undefined = getExtensionSetting<boolean>(ConfigKeys.TB2ROBOT_CLEAN);
@@ -90,7 +89,7 @@ export class tb2robotLib {
     ): Promise<boolean> {
         const fetchResultsCommand: string = `fetch-results`;
         logger.debug(`[testbench2robotframeworkLib] Starting tb2robot ${fetchResultsCommand} command.`);
-        let isFetchResultsCommandSuccessful: boolean = true;
+        let isFetchResultsCommandSuccessful: boolean;
         try {
             await vscode.commands.executeCommand("testbench_ls.fetchResults", {
                 robot_result: outputXmlPath,

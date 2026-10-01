@@ -125,7 +125,6 @@ cover/
 
 # Test configuration conflicts
 .vscode-test.mjs.disabled
-.vscode-test.mjs
 
 # Temporary files
 *.tmp

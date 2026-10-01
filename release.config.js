@@ -56,6 +56,22 @@ module.exports = {
         ],
 
         // Update package.json version (but don't publish to npm)
+        //
+        // NOTE ON `npm audit`: this plugin depends on the npm CLI, which ships its own
+        // dependencies as bundleDependencies. Those are never re-resolved, so the
+        // advisories they carry (currently brace-expansion and tar) cannot be fixed by
+        // `npm audit fix` or by an `overrides` entry -- npm itself reports
+        // "It cannot be fixed automatically". Upgrading does not help either: the latest
+        // npm bundles the same affected versions. This is the sole source of the
+        // remaining audit findings; they are dev-only, reachable just during a release,
+        // and CI runs no audit. Do not chase them.
+        //
+        // To actually remove them, this plugin has to go: its only job here is writing
+        // the version into package.json (npmPublish is false), which the exec plugin
+        // below could do via
+        //   npm version ${nextRelease.version} --no-git-tag-version --allow-same-version
+        // That was a deliberate no-go for now, because `semantic-release --dry-run`
+        // skips the prepare phase and so cannot verify the replacement before a release.
         [
             "@semantic-release/npm",
             {
