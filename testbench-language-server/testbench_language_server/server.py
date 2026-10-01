@@ -169,18 +169,6 @@ class TestBenchLanguageServer(LanguageServer):
     def set_tov(self, tov: str):
         self.tov = tov
 
-    # def generate_ai_documentation(self, keyword: Keyword):
-    #     keyword_string = robot_model_to_string(keyword)
-    #     data = {
-    #         "keyword_code": keyword_string,
-    #         "language": "ENG",
-    #         "arguments_exist": True,
-    #         "return_value_exists": False,
-    #     }
-    #     url = f"{self.ai_server_address}/generate-rf-keyword-description"
-    #     response = requests.post(url, json=data)
-    #     return response.json().get("description", "No documentation found")
-
 
 testbench_ls = TestBenchLanguageServer()
 
@@ -431,6 +419,15 @@ def _get_keyword_section_start_and_spacing(
     return KeywordSectionAnchor(kw_section_start, needs_creation=True, minimum_leading_blank_lines=minimum_empty_lines_before_section)
 
 
+def _strip_blank_line_after_last_keyword_at_eof(
+    document: TextDocument, keyword_edit: AnnotatedTextEdit
+) -> None:
+    # Each keyword ends with an EmptyLine as separator; the last one at EOF doesn't need it.
+    is_at_eof = keyword_edit.range.start.line >= len(document.source.splitlines())
+    if is_at_eof and keyword_edit.new_text.endswith("\n\n"):
+        keyword_edit.new_text = keyword_edit.new_text[:-1]
+
+
 def build_subdivision_edits(
     ls: LanguageServer,
     document: TextDocument,
@@ -455,6 +452,7 @@ def build_subdivision_edits(
 
     visited_keywords: list[str] = []
     first_new_keyword = True
+    last_new_keyword_edit: AnnotatedTextEdit | None = None
     if new_resource is not None and new_resource.keyword_section:
         for new_keyword in new_resource.keyword_section.body:
             new_keyword_uid = get_kw_uid(new_keyword)
@@ -482,18 +480,22 @@ def build_subdivision_edits(
                     first_new_keyword = False
                 else:
                     effective_trailing = 2
-                edits.append(new_keyword_edit(
+                last_new_keyword_edit = new_keyword_edit(
                     new_keyword,
                     anchor.start_line + 1,
                     change_identifier,
                     existing_trailing_newline_count=effective_trailing,
-                ))
+                )
+                edits.append(last_new_keyword_edit)
             else:
                 if get_keyword_tags(keyword_match) and any(
                     tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword_match))
                 ):
                     continue
                 edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
+
+    if last_new_keyword_edit is not None:
+        _strip_blank_line_after_last_keyword_at_eof(document, last_new_keyword_edit)
 
     if include_deleted_testbench_tag_cleanup and existing_resource.keyword_section:
         for existing_keyword in existing_resource.keyword_section.body:
