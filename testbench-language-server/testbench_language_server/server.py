@@ -1,3 +1,4 @@
+import logging
 import pathlib
 import re
 from typing import NamedTuple
@@ -38,6 +39,7 @@ from pygls.lsp.server import LanguageServer
 from pygls.workspace.text_document import TextDocument
 from robot.api.parsing import Keyword, KeywordName, KeywordSection, SectionHeader, Token
 from testbench2robotframework.cli import get_tb2robot_file_configuration
+from testbench2robotframework.log import logger as tb2robot_logger
 from testbench2robotframework.robotframework2testbench import robot2testbench
 from testbench2robotframework.testbench2robotframework import testbench2robotframework
 
@@ -113,6 +115,7 @@ from .messages import (
     TESTBENCH_LS_CLASS_NAME,
     WARNING_CONTEXT_MISMATCH,
     WARNING_MISSING_CONTEXT,
+    WARNING_NO_TEST_SUITES_GENERATED,
     WORKSPACE_APPLY_EDIT_LABEL,
 )
 from .testbench_api.testbench_patch import patch_tb_keyword_details, post_tb_keyword_details
@@ -214,13 +217,44 @@ def generate_test_suites(ls: LanguageServer, kwargs):
         if not toml_settings.get("output-directory"):
             show_error(ls, ERROR_EMPTY_OUTPUT_DIRECTORY)
             return False
-        testbench2robotframework(report_path, toml_settings)
+        generated = run_testbench2robotframework(report_path, toml_settings)
     else:
         if not settings.get("output-directory"):
             show_error(ls, ERROR_EMPTY_OUTPUT_DIRECTORY)
             return False
+        generated = run_testbench2robotframework(report_path, settings)
+    if not generated:
+        show_warning(ls, WARNING_NO_TEST_SUITES_GENERATED)
+    return generated
+
+
+class _NoTestSuitesDetector(logging.Filter):
+    """Notices tb2robot's warning that the report contained no test suites."""
+
+    def __init__(self):
+        super().__init__()
+        self.no_test_suites = False
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno >= logging.WARNING and "contains no test suites" in record.getMessage():
+            self.no_test_suites = True
+        return True
+
+
+def run_testbench2robotframework(report_path: pathlib.Path, settings: dict) -> bool:
+    """Runs tb2robot and returns whether any test suites were written.
+
+    tb2robot returns silently when the report holds no test suites, e.g. when
+    every selected test is locked by another user, blocked or not executable.
+    A logger filter is used because tb2robot replaces its handlers on each run.
+    """
+    detector = _NoTestSuitesDetector()
+    tb2robot_logger.addFilter(detector)
+    try:
         testbench2robotframework(report_path, settings)
-    return True
+    finally:
+        tb2robot_logger.removeFilter(detector)
+    return not detector.no_test_suites
 
 
 @testbench_ls.command(COMMAND_FETCH_RESULTS)
