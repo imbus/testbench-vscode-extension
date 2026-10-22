@@ -98,6 +98,7 @@ export interface CycleTreeItemData {
 export interface OptionalJobIDRequestParameter {
     treeRootUID?: string;
     basedOnExecution?: boolean;
+    executionMode?: ExecutionMode;
     suppressFilteredData?: boolean;
     suppressNotExecutable?: boolean;
     suppressEmptyTestThemes?: boolean;
