@@ -62,6 +62,13 @@ Settings are grouped in VS Code under these categories:
 | ---------------- | ---------------------------------- | ---------- | ------- | ------------------------------------------------------------------------- |
 | Certificate Path | testbenchExtension.certificatePath | String     | empty   | Optional custom PEM certificate path. Supports relative or absolute path. |
 
+:::note
+The extension checks the version of the connected TestBench server on every login. This check has no
+setting and cannot be switched off. See
+[TestBench server version check](../troubleshooting/troubleshooting.md#testbench-server-version-check)
+for what it does and what the warning means.
+:::
+
 ## Path rules
 
 - All path settings are workspace-relative except `certificatePath`.

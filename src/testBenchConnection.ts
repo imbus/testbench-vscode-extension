@@ -25,7 +25,8 @@ import {
 } from "./constants";
 import { TestThemesTreeView } from "./treeViews/implementations/testThemes/TestThemesTreeView";
 import { getExtensionSetting } from "./configuration";
-import { TESTBENCH_AUTH_PROVIDER_ID, validateServerVersion } from "./testBenchAuthenticationProvider";
+import { TESTBENCH_AUTH_PROVIDER_ID } from "./testBenchAuthenticationProvider";
+import { validateServerVersion } from "./serverVersionCheck";
 import { DependencyVersionError } from "./errors";
 import * as connectionManager from "./connectionManager";
 import { SharedSessionManager } from "./sharedSessionManager";
