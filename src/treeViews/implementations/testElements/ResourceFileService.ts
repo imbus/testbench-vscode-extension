@@ -86,9 +86,10 @@ export class ResourceFileService {
     }
 
     /**
-     * Checks if a string contains any configured resource markers.
-     * @param str The string to check for resource markers
-     * @returns True if the string contains any configured resource markers
+     * Checks whether a string ends with any configured resource marker.
+     * Trailing whitespace in the input string is ignored.
+     * @param str The string to check for a resource marker suffix
+     * @returns True if the string ends with any configured resource marker
      */
     public static hasResourceMarker(str: string): boolean {
         const resourceMarkers = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER);
@@ -97,7 +98,7 @@ export class ResourceFileService {
         }
 
         return resourceMarkers.some(
-            (marker) => typeof marker === "string" && marker.length > 0 && str.includes(marker)
+            (marker) => typeof marker === "string" && marker.length > 0 && str.trimEnd().endsWith(marker)
         );
     }
 
@@ -127,7 +128,7 @@ export class ResourceFileService {
     }
 
     /**
-     * Constructs the absolute for the resource file to be created using the hierarchical name of tree,
+     * Constructs the absolute path for the resource file to be created using the hierarchical name of tree,
      * respecting the configured Resource Directory Marker and Resource Directory Path.
      *
      * When a Resource Directory Marker is found in the hierarchical name, the folder structure below the marker

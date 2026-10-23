@@ -88,6 +88,25 @@ function withSingleTestOperation<T extends any[]>(
 }
 
 /**
+ * Validates generation-relevant path settings before starting generation flows.
+ * Returns false and shows a user-facing error when a path setting is invalid.
+ */
+function validateGenerationPathSettingsBeforeStart(): boolean {
+    const config = getExtensionConfiguration();
+    const outputDirectory = config.get<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
+    const resourceDirectory = config.get<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR);
+
+    const settingError = utils.validateGenerationPathSettingsAndReturnError(outputDirectory, resourceDirectory);
+    if (settingError) {
+        getLogger().error(`[extensionCommands] ${settingError}`);
+        void vscode.window.showErrorMessage(settingError);
+        return false;
+    }
+
+    return true;
+}
+
+/**
  * Registers a command with error handling.
  *
  * @param {vscode.ExtensionContext} context The extension context.
@@ -316,6 +335,10 @@ const _handleGenerateTestCasesForTOV = async (tovItem: ProjectsTreeItem) => {
         return;
     }
 
+    if (!validateGenerationPathSettingsBeforeStart()) {
+        return;
+    }
+
     try {
         if (treeViews?.testThemesTree) {
             const markingModule = treeViews.testThemesTree.getModule("marking") as MarkingModule | undefined;
@@ -355,6 +378,10 @@ const _handleGenerateTestCasesForCycle = async (cycleItem: ProjectsTreeItem) => 
     if (!connection) {
         getLogger().error(`[extensionCommands] _handleGenerateTestCasesForCycle called without active connection.`);
         vscode.window.showWarningMessage("No active connection available. Please log in first.");
+        return;
+    }
+
+    if (!validateGenerationPathSettingsBeforeStart()) {
         return;
     }
 
@@ -404,6 +431,10 @@ const _handleGenerateTestCasesForTestThemeOrTestCaseSet = async (testThemeTreeIt
         return;
     }
 
+    if (!validateGenerationPathSettingsBeforeStart()) {
+        return;
+    }
+
     try {
         await prepareLanguageServerForTreeItemOperation("generate test cases for test theme or test case set");
         await treeViews.testThemesTree.generateTestCases(testThemeTreeItem);
@@ -445,6 +476,10 @@ const _handleGenerateTestsForTestThemeTreeItemFromTOV = async (testThemeTreeItem
             `[extensionCommands] _handleGenerateTestsForTestThemeTreeItemFromTOV called before tree views are initialized`
         );
         vscode.window.showWarningMessage("Tree views are not ready. Please wait a moment and try again.");
+        return;
+    }
+
+    if (!validateGenerationPathSettingsBeforeStart()) {
         return;
     }
 
