@@ -443,7 +443,9 @@ def _get_keyword_section_start_and_spacing(
     create_kw_section = not bool(get_keyword_section(existing_resource.file))
     if not create_kw_section:
         _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
-        return KeywordSectionAnchor(kw_section_start, needs_creation=False, minimum_leading_blank_lines=0)
+        return KeywordSectionAnchor(
+            kw_section_start, needs_creation=False, minimum_leading_blank_lines=0
+        )
 
     minimum_empty_lines_before_section = 0
     if get_variables_section(existing_resource.file):
@@ -454,7 +456,11 @@ def _get_keyword_section_start_and_spacing(
         _, _, kw_section_start, _ = get_testbench_context_position(existing_resource.file)
         minimum_empty_lines_before_section = 1
 
-    return KeywordSectionAnchor(kw_section_start, needs_creation=True, minimum_leading_blank_lines=minimum_empty_lines_before_section)
+    return KeywordSectionAnchor(
+        kw_section_start,
+        needs_creation=True,
+        minimum_leading_blank_lines=minimum_empty_lines_before_section,
+    )
 
 
 def _strip_blank_line_after_last_keyword_at_eof(
