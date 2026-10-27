@@ -933,6 +933,7 @@
     },
     "overrides": {
         "minimatch": "^10.2.6",
+        "npm": "^11.21.1",
         "mocha": {
             "serialize-javascript": "^7.0.7",
             "diff": "^8.0.4"
