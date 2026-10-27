@@ -169,7 +169,9 @@ export class ResourceFileService {
             }
         );
 
-        if (resourceDirectoryMarkerIndex !== -1) {
+        if (normalizedPathComponents.length === 1) {
+            relativePathComponents = normalizedPathComponents;
+        } else if (resourceDirectoryMarkerIndex !== -1) {
             // Marker is found, ignore everything up to and including the marker itself
             relativePathComponents = normalizedPathComponents.slice(resourceDirectoryMarkerIndex + 1);
         } else {

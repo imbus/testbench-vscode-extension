@@ -13,7 +13,7 @@ With the extension, you can browse TestBench projects, test object versions (TOV
 
 - Visual Studio Code 1.101.0 or newer
 - Python 3.10 or newer
-- TestBench 4.1
+- TestBench 4.2
 - Open VS Code workspace folder (required for write operations)
 
 The extension auto-installs these dependencies:

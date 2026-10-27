@@ -105,12 +105,14 @@ def get_test_element_uid(test_elements: list[TestElement], test_element_key: str
     element = next(
         filter(
             lambda test_element: (
-                test_element.Subdivision_key
-                and test_element.Subdivision_key.serial == test_element_key
-            )
-            or (
-                test_element.Interaction_key
-                and test_element.Interaction_key.serial == test_element_key
+                (
+                    test_element.Subdivision_key
+                    and test_element.Subdivision_key.serial == test_element_key
+                )
+                or (
+                    test_element.Interaction_key
+                    and test_element.Interaction_key.serial == test_element_key
+                )
             ),
             test_elements,
         ),

@@ -9,7 +9,7 @@ import { DependencyVersionError } from "./errors";
 
 export const TESTBENCH_AUTH_PROVIDER_ID = "testbench-auth";
 export const TESTBENCH_AUTH_PROVIDER_LABEL = "TestBench"; // User-facing name in VS Code Accounts UI
-export const EXPECTED_TESTBENCH_SERVER_VERSION = "4.1";
+export const EXPECTED_TESTBENCH_SERVER_VERSION = "4.2";
 
 interface TestBenchSessionData {
     sessionId: string; // VS Code session ID
@@ -630,7 +630,8 @@ export async function validateServerVersion(serverVersion: string, modal: boolea
     // e.g. an expected version of "4.1" also accepts a server version of "4.1.03".
     const toMajorMinor = (version: string): string => version.trim().split(".").slice(0, 2).join(".");
     const compatibleVersions: Record<string, string> = {
-        "4.0": "0.6.2"
+        "4.0": "0.6.2",
+        "4.1": "0.6.3"
     };
     const serverMajorMinorVersion = toMajorMinor(serverVersion);
 
