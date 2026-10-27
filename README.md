@@ -13,7 +13,7 @@ The **TestBench Extension** enables seamless synchronization between [TestBench]
 
 - **Visual Studio Code** version 1.101.0 or higher
 - **Python** 3.10 or higher
-- **TestBench** 4.2
+- **TestBench** 4.1 – 4.2
 
 ### Required Extensions
 

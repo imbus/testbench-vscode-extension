@@ -9,7 +9,11 @@ import { DependencyVersionError } from "./errors";
 
 export const TESTBENCH_AUTH_PROVIDER_ID = "testbench-auth";
 export const TESTBENCH_AUTH_PROVIDER_LABEL = "TestBench"; // User-facing name in VS Code Accounts UI
-export const EXPECTED_TESTBENCH_SERVER_VERSION = "4.2";
+// Supported TestBench server versions (major.minor, inclusive on both ends).
+// Report compatibility is checked separately by testbench2robotframework via the report's formatVersion.
+export const MIN_TESTBENCH_SERVER_VERSION = "4.1";
+export const MAX_TESTBENCH_SERVER_VERSION = "4.2";
+const SUPPORTED_TESTBENCH_SERVER_VERSIONS = `${MIN_TESTBENCH_SERVER_VERSION} - ${MAX_TESTBENCH_SERVER_VERSION}`;
 
 interface TestBenchSessionData {
     sessionId: string; // VS Code session ID
@@ -610,8 +614,25 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
 }
 
 /**
+ * Compares the major and minor parts of two version strings numerically.
+ * The bugfix/patch part is ignored, e.g. "4.1.03" equals "4.1".
+ * @returns A negative number if a < b, 0 if equal, a positive number if a > b, or NaN if a version cannot be parsed.
+ */
+export function compareMajorMinorVersions(a: string, b: string): number {
+    const toMajorMinor = (version: string): number[] =>
+        version
+            .trim()
+            .split(".")
+            .slice(0, 2)
+            .map((part) => (/^\d+$/.test(part) ? parseInt(part, 10) : NaN));
+    const [aMajor, aMinor = 0] = toMajorMinor(a);
+    const [bMajor, bMinor = 0] = toMajorMinor(b);
+    return aMajor !== bMajor ? aMajor - bMajor : aMinor - bMinor;
+}
+
+/**
  * Validates the TestBench server version.
- * Displays a warning if the server version does not match the expected version.
+ * Displays an error if the server version is outside the supported version range.
  * @param serverVersion The server version returned from the login response
  * @param modal Whether to show a modal dialog (true) or a regular notification (false)
  */
@@ -623,25 +644,30 @@ export async function validateServerVersion(serverVersion: string, modal: boolea
             `Could not determine the TestBench server version. Please check your connection details.`,
             { modal }
         );
-        throw new DependencyVersionError("TestBench server", EXPECTED_TESTBENCH_SERVER_VERSION, "unknown");
+        throw new DependencyVersionError("TestBench server", SUPPORTED_TESTBENCH_SERVER_VERSIONS, "unknown");
     }
 
-    // Only compare the major and minor version parts; the bugfix/patch version is ignored.
-    // e.g. an expected version of "4.1" also accepts a server version of "4.1.03".
-    const toMajorMinor = (version: string): string => version.trim().split(".").slice(0, 2).join(".");
+    // Extension versions to suggest for TestBench versions below MIN_TESTBENCH_SERVER_VERSION.
     const compatibleVersions: Record<string, string> = {
-        "4.0": "0.6.2",
-        "4.1": "0.6.3"
+        "4.0": "0.6.2"
     };
-    const serverMajorMinorVersion = toMajorMinor(serverVersion);
+    const serverMajorMinorVersion = serverVersion.trim().split(".").slice(0, 2).join(".");
 
-    if (serverMajorMinorVersion !== toMajorMinor(EXPECTED_TESTBENCH_SERVER_VERSION)) {
+    // NaN comparisons are false, so an unparsable version is treated as unsupported.
+    const isSupported =
+        compareMajorMinorVersions(serverVersion, MIN_TESTBENCH_SERVER_VERSION) >= 0 &&
+        compareMajorMinorVersions(serverVersion, MAX_TESTBENCH_SERVER_VERSION) <= 0;
+
+    if (!isSupported) {
         logger.warn(
-            `[validateServerVersion] Server version mismatch. Expected: ${EXPECTED_TESTBENCH_SERVER_VERSION}, Got: ${serverVersion}`
+            `[validateServerVersion] Unsupported server version. Supported: ${SUPPORTED_TESTBENCH_SERVER_VERSIONS}, Got: ${serverVersion}`
         );
-        const expectedVersionText = `This extension expects TestBench server version ${EXPECTED_TESTBENCH_SERVER_VERSION}`;
+        const expectedVersionText = `This extension supports TestBench server versions ${SUPPORTED_TESTBENCH_SERVER_VERSIONS}`;
         const compatibleExtensionVersionText = `The compatible version of VS Code TestBench Extension is: ${compatibleVersions[serverMajorMinorVersion]}`;
-        const fallbackText = "No compatible extension version available.";
+        const fallbackText =
+            compareMajorMinorVersions(serverVersion, MAX_TESTBENCH_SERVER_VERSION) > 0
+                ? "Please check whether a newer version of VS Code TestBench Extension is available."
+                : "No compatible extension version available.";
         await vscode.window.showErrorMessage(`Incompatible TestBench server version: ${serverVersion}`, {
             modal,
             detail: `
@@ -650,7 +676,7 @@ ${expectedVersionText}
 ${serverMajorMinorVersion in compatibleVersions ? compatibleExtensionVersionText : fallbackText}
                 `
         });
-        throw new DependencyVersionError("TestBench server", EXPECTED_TESTBENCH_SERVER_VERSION, serverVersion);
+        throw new DependencyVersionError("TestBench server", SUPPORTED_TESTBENCH_SERVER_VERSIONS, serverVersion);
     } else {
         logger.debug(`[validateServerVersion] Server version validated successfully: ${serverVersion}`);
     }
