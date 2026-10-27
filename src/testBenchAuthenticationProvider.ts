@@ -630,7 +630,8 @@ export async function validateServerVersion(serverVersion: string, modal: boolea
     // e.g. an expected version of "4.1" also accepts a server version of "4.1.03".
     const toMajorMinor = (version: string): string => version.trim().split(".").slice(0, 2).join(".");
     const compatibleVersions: Record<string, string> = {
-        "4.0": "0.6.2"
+        "4.0": "0.6.2",
+        "4.1": "0.6.3"
     };
     const serverMajorMinorVersion = toMajorMinor(serverVersion);
 
