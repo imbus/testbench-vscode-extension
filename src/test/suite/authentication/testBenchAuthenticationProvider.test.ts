@@ -39,14 +39,14 @@ suite("TestBenchAuthenticationProvider Test Suite", function () {
     });
 
     suite("validateServerVersion", () => {
-        for (const version of ["4.1", "4.1.03", "4.2", "4.2.1"]) {
+        for (const version of ["4.1", "4.1.03", "4.2", "4.2.1", "4.3", "5.0", "5.0.2"]) {
             test(`should accept supported version ${version}`, async () => {
                 await validateServerVersion(version, false);
                 assert.ok(testEnv.vscodeMocks.showErrorMessageStub.notCalled);
             });
         }
 
-        for (const version of ["4.0.5", "4.3", "5.0", "invalid"]) {
+        for (const version of ["4.0.5", "5.1", "6.0", "invalid"]) {
             test(`should reject unsupported version ${version}`, async () => {
                 await assert.rejects(validateServerVersion(version, false), DependencyVersionError);
                 assert.ok(testEnv.vscodeMocks.showErrorMessageStub.calledOnce);
@@ -60,7 +60,7 @@ suite("TestBenchAuthenticationProvider Test Suite", function () {
         });
 
         test("should point to a newer extension for newer servers", async () => {
-            await assert.rejects(validateServerVersion("4.3", false), DependencyVersionError);
+            await assert.rejects(validateServerVersion("5.1", false), DependencyVersionError);
             const options = testEnv.vscodeMocks.showErrorMessageStub.firstCall.args[1];
             assert.ok(options.detail.includes("newer version"));
         });
