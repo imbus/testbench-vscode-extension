@@ -12,7 +12,7 @@ export const TESTBENCH_AUTH_PROVIDER_LABEL = "TestBench"; // User-facing name in
 // Supported TestBench server versions (major.minor, inclusive on both ends).
 // Report compatibility is checked separately by testbench2robotframework via the report's formatVersion.
 export const MIN_TESTBENCH_SERVER_VERSION = "4.1";
-export const MAX_TESTBENCH_SERVER_VERSION = "4.2";
+export const MAX_TESTBENCH_SERVER_VERSION = "5.0";
 const SUPPORTED_TESTBENCH_SERVER_VERSIONS = `${MIN_TESTBENCH_SERVER_VERSION} - ${MAX_TESTBENCH_SERVER_VERSION}`;
 
 interface TestBenchSessionData {
