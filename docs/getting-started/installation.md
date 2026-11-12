@@ -10,6 +10,8 @@ title: Installation
 - TestBench 4.1 – 4.2
 - Open VS Code workspace folder (required for write operations)
 
+The extension uses the Python interpreter that is selected in the Python extension. If keyword synchronization does not become available, run **Python: Select Interpreter** from the Command Palette and choose an interpreter with Python 3.10 or newer.
+
 ## Install the extension
 
 1. Install the [TestBench extension from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=imbus.testbench-extension). You can also find it in the Extensions view by searching for the extension identifier `imbus.testbench-extension`.

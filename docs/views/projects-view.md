@@ -9,11 +9,21 @@ title: Projects View
 
 ## Open context
 
-Opening a **Test Object Version** loads the selected TOV into **Test Themes View** and **Test Elements View**. Opening a **Test Cycle** also loads its context into **Test Themes View** and **Test Elements View**.
+Opening a TOV or a cycle loads its context into **Test Themes View** and **Test Elements View**:
+
+- **Test Object Version**: hover over the TOV and click the inline **Open Test Object Version** button.
+- **Test Cycle**: hover over the cycle and click the inline **Open Test Cycle** button, or double-click the cycle.
+
+Open a cycle if you want to upload execution results later. Upload is not available in a TOV context.
 
 ## Set the active configuration
 
-To define the working context, right-click a project and choose **Set as Active Project** when you only want to set the project. Right-click a TOV and choose **Set as Active TOV** when you want to set both the active TOV and its parent project in one step. The selected active project and active TOV are visually pinned as the first items in **Projects View**, and the active configuration is written to `.testbench/ls.config.json`.
+The active configuration links the workspace to a TestBench project and TOV. Keyword synchronization uses it to find the matching TestBench content.
+
+- Right-click a project and choose **Set as Active Project** to set only the project.
+- Right-click a TOV and choose **Set as Active TOV** to set the TOV and its parent project in one step.
+
+The active project and active TOV are pinned as the first items in **Projects View**. The active configuration is written to `.testbench/ls.config.json`. Both actions require an open workspace.
 
 ![Set as Active TOV action in Projects View](./images/SetAsActiveTov.png)
 

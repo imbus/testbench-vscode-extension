@@ -171,7 +171,7 @@
                     },
                     "testbenchExtension.libraryRoot": {
                         "type": "array",
-                        "description": "TestBench root subdivision whose direct children correspond to Robot Framework resources.",
+                        "description": "TestBench root subdivision whose direct children correspond to Robot Framework libraries.",
                         "items": {
                             "type": "string"
                         },

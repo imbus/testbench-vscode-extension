@@ -14,7 +14,15 @@ Open a TOV or cycle from **Projects View** to load the corresponding **Test Them
 ## Generate Robot Framework test suites
 
 Every Test Theme and Test Case Set node has a **Generate Robot Framework Test Suites** action. Running it generates suites for the selected node and its subtree. Generated items are visually marked in the tree.
-Test generation uses the bundled `testbench2robotframework` library. The output location is controlled by the **outputDirectory** extension setting. Optional pre-generation cleanup is controlled by **cleanFilesBeforeTestGeneration**, which deletes existing files in the output directory before new suites are generated.
+
+Test generation uses the bundled `testbench2robotframework` library and is controlled by these settings:
+
+- **outputDirectory** sets the output location (default: `tests`).
+- **cleanFilesBeforeTestGeneration** deletes existing files in the output directory before new suites are generated (default: enabled).
+
+:::warning
+With **cleanFilesBeforeTestGeneration** enabled, every generation run deletes all files in the output directory. Do not keep hand-written files there.
+:::
 
 ![Generate Robot Framework Test Suites action](./images/TestThemesGenerateTestsButton.png)
 
@@ -29,7 +37,12 @@ Single-clicking a generated test case set opens its `.robot` file. Double-clicki
 Run generated suites with RobotCode or any other Robot Framework runner before uploading results.
 
 Use the tree item action **Upload Execution Results To TestBench** on the node you want to upload. You can upload a selected subtree or a single node.
-The **Upload Execution Results To TestBench** action is visible for generated nodes and generated subtree contexts. Upload reads Robot Framework test execution results from `output.xml`, and the default result path is defined by **outputXmlFilePath** relative to the workspace. After a successful upload, affected tree items are updated to `Performed` and show verdict details in their tooltips. The upload action is available only when **Test Themes View** is opened from a cycle context.
+
+- The action is available only when **Test Themes View** is opened from a cycle context.
+- The action is visible for generated nodes and generated subtree contexts.
+- Upload reads the Robot Framework results from the file configured in **outputXmlFilePath** (default: `results/output.xml`, relative to the workspace).
+- If no file is found at the configured path, the extension opens a file dialog so that you can select the `output.xml` manually.
+- After a successful upload, affected tree items are updated to `Performed` and show verdict details in their tooltips.
 
 ![Upload execution results action in Test Themes](./images/UploadResultsToTestbenchButton.png)
 
