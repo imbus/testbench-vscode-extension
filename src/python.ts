@@ -90,7 +90,7 @@ export async function getInterpreterPath(resource?: Uri): Promise<string | undef
 
 /**
  * Checks if the resolved Python environment is compatible with the language server requirements.
- * Requires Python 3.10 or newer.
+ * Requires Python 3.11 or newer.
  * @param {ResolvedEnvironment | undefined} resolvedEnv - The resolved Python environment.
  * @returns {boolean} True if the environment is compatible, false otherwise.
  */
@@ -106,11 +106,11 @@ export function checkPythonCompatibility(resolvedEnv: ResolvedEnvironment | unde
         return false;
     }
 
-    if (version.major === 3 && version.minor >= 10) {
+    if (version.major === 3 && version.minor >= 11) {
         return true;
     }
 
     const versionString: string = `${version.major}.${version.minor}.${version.micro}`;
-    logger.error(`[python] Python version ${versionString} is not supported. Supported versions are 3.9 and above.`);
+    logger.error(`[python] Python version ${versionString} is not supported. Supported versions are 3.11 and above.`);
     return false;
 }
