@@ -1,7 +1,7 @@
 import nox
 
 
-@nox.session(python="3.10")
+@nox.session(python="3.11")
 def bundle_dependencies(session):
     session.install(
         "-t",
