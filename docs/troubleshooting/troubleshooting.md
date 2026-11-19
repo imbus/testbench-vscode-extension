@@ -25,25 +25,26 @@ title: Troubleshooting
 ## TestBench server version check
 
 On every login the extension reads the version of the TestBench server and compares its major and
-minor version with the TestBench version the installed extension was built against. The patch
-version is ignored, so extension support for TestBench `4.1` also covers server version `4.1.03`.
+minor version with the range of TestBench versions the installed extension supports (currently
+`4.1` – `4.2`). The patch version is ignored, so extension support for TestBench `4.1` also covers
+server version `4.1.03`.
 
 The check exists because the extension updates itself automatically while a TestBench installation
 does not. Without it, an auto-updated extension could silently talk to a server it does not support.
 
 There are four outcomes:
 
-| Server version                            | Behavior                                                                |
-| ----------------------------------------- | ----------------------------------------------------------------------- |
-| Same major and minor version as supported | Login continues, nothing is shown.                                      |
-| **Older** than the supported version      | Login is refused with a dialog; this combination is known not to work.  |
-| **Newer** than the supported version      | Login continues; a warning is shown once.                               |
-| Cannot be determined or read              | Login is refused; check the connection details and server reachability. |
+| Server version                        | Behavior                                                                |
+| ------------------------------------- | ----------------------------------------------------------------------- |
+| Within the supported version range    | Login continues, nothing is shown.                                      |
+| **Older** than the supported versions | Login is refused with a dialog; this combination is known not to work.  |
+| **Newer** than the supported versions | Login continues; a warning is shown once.                               |
+| Cannot be determined or read          | Login is refused; check the connection details and server reachability. |
 
 ### Older than the supported version
 
 This combination is known not to work, so the extension refuses the connection and returns to the
-login view. The dialog names the TestBench version the extension expects and, where one exists, the
+login view. The dialog names the TestBench versions the extension supports and, where one exists, the
 last extension version that supported your server version. Either install that extension version or
 update the TestBench server.
 
@@ -54,8 +55,8 @@ has no information about it, because the next breaking change to the TestBench A
 time an extension version is built. The extension therefore only warns and lets you continue
 working; you decide whether to look for an extension update.
 
-The warning names the installed extension version, the detected TestBench version and the TestBench
-version the extension supports, and it appears once per server version per VS Code window rather
+The warning names the installed extension version, the detected TestBench version and the newest
+TestBench version the extension supports, and it appears once per server version per VS Code window rather
 than on every subsequent action.
 
 Its **Check for Extension Updates** action runs VS Code's own check for extension updates and opens

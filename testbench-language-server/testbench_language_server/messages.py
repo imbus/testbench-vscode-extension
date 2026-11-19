@@ -39,6 +39,10 @@ INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST_IN_FILE = "TestBench keyword with name '{n
 # Warning messages
 WARNING_CONTEXT_MISMATCH = "TestBench context mismatch: Selected context '{selected_context}' does not match the resource context '{resource_context}'. "
 WARNING_MISSING_CONTEXT = "Missing TestBench context."
+WARNING_NO_TEST_SUITES_GENERATED = (
+    "No Robot Framework test suites were generated: the TestBench report contains no executable tests. "
+    "Tests locked by another user, blocked or not planned for execution are excluded."
+)
 
 
 # DEBUG MESSAGES

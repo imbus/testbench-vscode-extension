@@ -1,8 +1,8 @@
 /**
  * @file src/serverVersionCheck.ts
- * @description Checks the version of the connected TestBench server against the version
- * this extension supports. A server older than the supported version is known not to work
- * and blocks the connection. A server newer than the supported version is simply unknown to
+ * @description Checks the version of the connected TestBench server against the version range
+ * this extension supports. A server older than the supported range is known not to work
+ * and blocks the connection. A server newer than the supported range is simply unknown to
  * this extension, so it only produces a warning and work continues.
  */
 
@@ -11,8 +11,13 @@ import { logger } from "./extension";
 import { DependencyVersionError } from "./errors";
 import { EXTENSION_ID } from "./constants";
 
-/** The TestBench server version (major.minor) this extension is built against. */
-export const SUPPORTED_TESTBENCH_SERVER_VERSION = "4.1";
+// Supported TestBench server versions (major.minor, inclusive on both ends).
+// Report compatibility is checked separately by testbench2robotframework via the report's formatVersion.
+/** The oldest TestBench server version (major.minor) this extension supports. */
+export const MIN_TESTBENCH_SERVER_VERSION = "4.1";
+/** The newest TestBench server version (major.minor) this extension is built against. */
+export const MAX_TESTBENCH_SERVER_VERSION = "4.2";
+const SUPPORTED_TESTBENCH_SERVER_VERSIONS = `${MIN_TESTBENCH_SERVER_VERSION} - ${MAX_TESTBENCH_SERVER_VERSION}`;
 
 /** Label of the notification action that runs VS Code's own extension update check. */
 export const CHECK_FOR_UPDATES_ACTION = "Check for Extension Updates";
@@ -52,26 +57,37 @@ function toMajorMinor(version: string): string {
 }
 
 /**
- * Compares a server version against the supported TestBench version.
+ * Compares two parsed versions by major, then minor version.
+ * @returns A negative number if a < b, 0 if equal, a positive number if a > b.
+ */
+function compareMajorMinor(a: [number, number], b: [number, number]): number {
+    return a[0] !== b[0] ? a[0] - b[0] : a[1] - b[1];
+}
+
+/**
+ * Compares a server version against the supported TestBench version range.
  * @param serverVersion The version reported by the TestBench server.
- * @param supportedVersion The version supported by this extension.
- * @returns Whether the server is unknown, older than, equal to, or newer than the supported version.
+ * @param minVersion The oldest version supported by this extension (inclusive).
+ * @param maxVersion The newest version supported by this extension (inclusive).
+ * @returns Whether the server is unknown, older than, within, or newer than the supported range.
  */
 export function classifyServerVersion(
     serverVersion: string,
-    supportedVersion: string = SUPPORTED_TESTBENCH_SERVER_VERSION
+    minVersion: string = MIN_TESTBENCH_SERVER_VERSION,
+    maxVersion: string = MAX_TESTBENCH_SERVER_VERSION
 ): ServerVersionVerdict {
     const server = parseMajorMinor(serverVersion);
-    const supported = parseMajorMinor(supportedVersion);
+    const min = parseMajorMinor(minVersion);
+    const max = parseMajorMinor(maxVersion);
 
-    if (!server || !supported) {
+    if (!server || !min || !max) {
         return "unknown";
     }
-    if (server[0] !== supported[0]) {
-        return server[0] < supported[0] ? "older" : "newer";
+    if (compareMajorMinor(server, min) < 0) {
+        return "older";
     }
-    if (server[1] !== supported[1]) {
-        return server[1] < supported[1] ? "older" : "newer";
+    if (compareMajorMinor(server, max) > 0) {
+        return "newer";
     }
     return "supported";
 }
@@ -125,13 +141,13 @@ function warnAboutNewerServer(serverVersion: string): void {
     warnedServerVersions.add(warningKey);
 
     logger.warn(
-        `[serverVersionCheck] Server version ${serverVersion} is newer than the supported version ${SUPPORTED_TESTBENCH_SERVER_VERSION}.`
+        `[serverVersionCheck] Server version ${serverVersion} is newer than the supported versions ${SUPPORTED_TESTBENCH_SERVER_VERSIONS}.`
     );
 
     // Deliberately not awaited: the notification must never delay the login flow.
     void vscode.window
         .showWarningMessage(
-            `Connected TestBench server ${serverVersion} is newer than TestBench ${SUPPORTED_TESTBENCH_SERVER_VERSION}, the version supported by TestBench extension ${extensionVersion}. You can keep working; if something behaves unexpectedly, an extension update may be required.`,
+            `Connected TestBench server ${serverVersion} is newer than TestBench ${MAX_TESTBENCH_SERVER_VERSION}, the newest version supported by TestBench extension ${extensionVersion}. You can keep working; if something behaves unexpectedly, an extension update may be required.`,
             CHECK_FOR_UPDATES_ACTION
         )
         .then(async (choice) => {
@@ -150,7 +166,7 @@ function warnAboutNewerServer(serverVersion: string): void {
  */
 async function blockOlderServer(serverVersion: string, modal: boolean): Promise<void> {
     logger.warn(
-        `[serverVersionCheck] Server version mismatch. Expected: ${SUPPORTED_TESTBENCH_SERVER_VERSION}, Got: ${serverVersion}`
+        `[serverVersionCheck] Unsupported server version. Supported: ${SUPPORTED_TESTBENCH_SERVER_VERSIONS}, Got: ${serverVersion}`
     );
 
     const compatibleExtensionVersion = LAST_COMPATIBLE_EXTENSION_VERSION[toMajorMinor(serverVersion)];
@@ -160,12 +176,12 @@ async function blockOlderServer(serverVersion: string, modal: boolean): Promise<
 
     await vscode.window.showErrorMessage(`Incompatible TestBench server version: ${serverVersion}`, {
         modal,
-        detail: `This extension expects TestBench server version ${SUPPORTED_TESTBENCH_SERVER_VERSION}
+        detail: `This extension supports TestBench server versions ${SUPPORTED_TESTBENCH_SERVER_VERSIONS}
 
 ${compatibleExtensionVersionText}`
     });
 
-    throw new DependencyVersionError("TestBench server", SUPPORTED_TESTBENCH_SERVER_VERSION, serverVersion);
+    throw new DependencyVersionError("TestBench server", SUPPORTED_TESTBENCH_SERVER_VERSIONS, serverVersion);
 }
 
 /**
@@ -181,5 +197,5 @@ async function blockUndeterminedServer(serverVersion: string, modal: boolean): P
         { modal }
     );
 
-    throw new DependencyVersionError("TestBench server", SUPPORTED_TESTBENCH_SERVER_VERSION, "unknown");
+    throw new DependencyVersionError("TestBench server", SUPPORTED_TESTBENCH_SERVER_VERSIONS, "unknown");
 }

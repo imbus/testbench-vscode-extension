@@ -1,5 +1,7 @@
+import logging
 import pathlib
 import re
+from typing import NamedTuple
 
 import requests  # type: ignore
 from lsprotocol.types import (
@@ -37,6 +39,7 @@ from pygls.lsp.server import LanguageServer
 from pygls.workspace.text_document import TextDocument
 from robot.api.parsing import Keyword, KeywordName, KeywordSection, SectionHeader, Token
 from testbench2robotframework.cli import get_tb2robot_file_configuration
+from testbench2robotframework.log import logger as tb2robot_logger
 from testbench2robotframework.robotframework2testbench import robot2testbench
 from testbench2robotframework.testbench2robotframework import testbench2robotframework
 
@@ -112,6 +115,7 @@ from .messages import (
     TESTBENCH_LS_CLASS_NAME,
     WARNING_CONTEXT_MISMATCH,
     WARNING_MISSING_CONTEXT,
+    WARNING_NO_TEST_SUITES_GENERATED,
     WORKSPACE_APPLY_EDIT_LABEL,
 )
 from .testbench_api.testbench_patch import patch_tb_keyword_details, post_tb_keyword_details
@@ -213,13 +217,44 @@ def generate_test_suites(ls: LanguageServer, kwargs):
         if not toml_settings.get("output-directory"):
             show_error(ls, ERROR_EMPTY_OUTPUT_DIRECTORY)
             return False
-        testbench2robotframework(report_path, toml_settings)
+        generated = run_testbench2robotframework(report_path, toml_settings)
     else:
         if not settings.get("output-directory"):
             show_error(ls, ERROR_EMPTY_OUTPUT_DIRECTORY)
             return False
+        generated = run_testbench2robotframework(report_path, settings)
+    if not generated:
+        show_warning(ls, WARNING_NO_TEST_SUITES_GENERATED)
+    return generated
+
+
+class _NoTestSuitesDetector(logging.Filter):
+    """Notices tb2robot's warning that the report contained no test suites."""
+
+    def __init__(self):
+        super().__init__()
+        self.no_test_suites = False
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno >= logging.WARNING and "contains no test suites" in record.getMessage():
+            self.no_test_suites = True
+        return True
+
+
+def run_testbench2robotframework(report_path: pathlib.Path, settings: dict) -> bool:
+    """Runs tb2robot and returns whether any test suites were written.
+
+    tb2robot returns silently when the report holds no test suites, e.g. when
+    every selected test is locked by another user, blocked or not executable.
+    A logger filter is used because tb2robot replaces its handlers on each run.
+    """
+    detector = _NoTestSuitesDetector()
+    tb2robot_logger.addFilter(detector)
+    try:
         testbench2robotframework(report_path, settings)
-    return True
+    finally:
+        tb2robot_logger.removeFilter(detector)
+    return not detector.no_test_suites
 
 
 @testbench_ls.command(COMMAND_FETCH_RESULTS)
@@ -396,6 +431,136 @@ def context_is_valid(
     return True
 
 
+class KeywordSectionAnchor(NamedTuple):
+    start_line: int
+    needs_creation: bool
+    minimum_leading_blank_lines: int
+
+
+def _get_keyword_section_start_and_spacing(
+    existing_resource: TestBenchResourceModel,
+) -> KeywordSectionAnchor:
+    create_kw_section = not bool(get_keyword_section(existing_resource.file))
+    if not create_kw_section:
+        _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
+        return KeywordSectionAnchor(
+            kw_section_start, needs_creation=False, minimum_leading_blank_lines=0
+        )
+
+    minimum_empty_lines_before_section = 0
+    if get_variables_section(existing_resource.file):
+        _, _, kw_section_start, _ = get_variables_section_position(existing_resource.file)
+    elif get_setting_section(existing_resource.file):
+        _, _, kw_section_start, _ = get_setting_section_position(existing_resource.file)
+    else:
+        _, _, kw_section_start, _ = get_testbench_context_position(existing_resource.file)
+        minimum_empty_lines_before_section = 1
+
+    return KeywordSectionAnchor(
+        kw_section_start,
+        needs_creation=True,
+        minimum_leading_blank_lines=minimum_empty_lines_before_section,
+    )
+
+
+def _strip_blank_line_after_last_keyword_at_eof(
+    document: TextDocument, keyword_edit: AnnotatedTextEdit
+) -> None:
+    # Each keyword ends with an EmptyLine as separator; the last one at EOF doesn't need it.
+    is_at_eof = keyword_edit.range.start.line >= len(document.source.splitlines())
+    if is_at_eof and keyword_edit.new_text.endswith("\n\n"):
+        keyword_edit.new_text = keyword_edit.new_text[:-1]
+
+
+def build_subdivision_edits(
+    ls: LanguageServer,
+    document: TextDocument,
+    existing_resource: TestBenchResourceModel,
+    new_resource: TestBenchResourceModel | None,
+    change_identifier: ChangeAnnotationIdentifier,
+    include_deleted_testbench_tag_cleanup: bool = True,
+) -> list[AnnotatedTextEdit]:
+    edits: list[AnnotatedTextEdit] = []
+    anchor = _get_keyword_section_start_and_spacing(existing_resource)
+    trailing_newline_count = _count_trailing_newline_characters(document.source)
+
+    if new_resource is not None and anchor.needs_creation:
+        edits.extend(
+            keyword_section_edit(
+                anchor.start_line,
+                change_identifier,
+                minimum_empty_lines_before_section=anchor.minimum_leading_blank_lines,
+                existing_trailing_newline_count=trailing_newline_count,
+            )
+        )
+
+    visited_keywords: list[str] = []
+    first_new_keyword = True
+    last_new_keyword_edit: AnnotatedTextEdit | None = None
+    if new_resource is not None and new_resource.keyword_section:
+        for new_keyword in new_resource.keyword_section.body:
+            new_keyword_uid = get_kw_uid(new_keyword)
+            if new_keyword_uid:
+                visited_keywords.append(new_keyword_uid.lower())
+
+            try:
+                keyword_match = get_matching_testbench_keyword(new_keyword, existing_resource)
+            except MultipleKeywordsWithUid as e:
+                show_error(
+                    ls,
+                    ERROR_DUPLICATE_KEYWORD_UID.format(uid=e.uid),
+                )
+                continue
+            except MultipleKeywordsWithName as e:
+                show_error(
+                    ls,
+                    ERROR_DUPLICATE_KEYWORD_NAME.format(uid=e.name),
+                )
+                continue
+
+            if not keyword_match:
+                if first_new_keyword:
+                    effective_trailing = trailing_newline_count if not anchor.needs_creation else 2
+                    first_new_keyword = False
+                else:
+                    effective_trailing = 2
+                last_new_keyword_edit = new_keyword_edit(
+                    new_keyword,
+                    anchor.start_line + 1,
+                    change_identifier,
+                    existing_trailing_newline_count=effective_trailing,
+                )
+                edits.append(last_new_keyword_edit)
+            else:
+                if get_keyword_tags(keyword_match) and any(
+                    tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword_match))
+                ):
+                    continue
+                edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
+
+    if last_new_keyword_edit is not None:
+        _strip_blank_line_after_last_keyword_at_eof(document, last_new_keyword_edit)
+
+    if include_deleted_testbench_tag_cleanup and existing_resource.keyword_section:
+        for existing_keyword in existing_resource.keyword_section.body:
+            if not isinstance(existing_keyword, Keyword):
+                continue
+            existing_uid = get_kw_uid(existing_keyword)
+            if not existing_uid or existing_uid.lower() in visited_keywords:
+                continue
+            if get_keyword_tags(existing_keyword) and any(
+                tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(existing_keyword))
+            ):
+                continue
+            deleted_tag_edit = get_deleted_testbench_kw_tags_edit(
+                existing_keyword, change_identifier
+            )
+            if deleted_tag_edit:
+                edits.append(deleted_tag_edit)
+
+    return edits
+
+
 @testbench_ls.command(COMMAND_SHOW_TESTBENCH_SUBDIVISON_DIFF)
 def show_testbench_diff(ls: LanguageServer, kwargs):
     document_uri = kwargs.get("document_uri")
@@ -412,43 +577,14 @@ def show_testbench_diff(ls: LanguageServer, kwargs):
         return
     change_identifier_tb = ChangeAnnotationIdentifier()
     change_identifier_vscode = ChangeAnnotationIdentifier()
-    tb_edits = []
+    tb_edits = build_subdivision_edits(
+        ls,
+        document,
+        vscode_resource,
+        testbench_resource,
+        change_identifier_tb,
+    )
     vscode_edits = []
-    create_kw_section = not bool(get_keyword_section(vscode_resource.file))
-    if create_kw_section:
-        if get_variables_section(vscode_resource.file):
-            _, _, kw_section_start, _ = get_variables_section_position(vscode_resource.file)
-        else:
-            _, _, kw_section_start, _ = get_setting_section_position(vscode_resource.file)
-        tb_edits.extend(keyword_section_edit(kw_section_start, change_identifier_tb))
-    else:
-        _, _, kw_section_start, _ = get_keyword_section_position(vscode_resource.file)
-    for new_keyword in testbench_resource.keyword_section.body:
-        try:
-            keyword_match = get_matching_testbench_keyword(new_keyword, vscode_resource)
-        except MultipleKeywordsWithUid as e:
-            show_error(
-                ls,
-                ERROR_DUPLICATE_KEYWORD_UID.format(uid=e.uid),
-            )
-            continue
-        except MultipleKeywordsWithName as e:
-            show_error(
-                ls,
-                ERROR_DUPLICATE_KEYWORD_NAME.format(uid=e.name),
-            )
-            continue
-        if not keyword_match:
-            tb_edits.append(
-                new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier_tb)
-            )
-        else:
-            if get_keyword_tags(keyword_match) and any(
-                tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword_match))
-            ):
-                continue
-            tb_edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier_tb))
-
     if vscode_resource and vscode_resource.keyword_section:
         for vscode_keyword in vscode_resource.keyword_section.body:
             if not isinstance(vscode_keyword, Keyword):
@@ -520,44 +656,15 @@ def attempt_push_subdivision(ls: LanguageServer, *args):
         show_error(ls, ERROR_FINDING_TESTBENCH_SUBDIVISION_WITH_UID.format(uid=subdivision_uid))
         return
     change_identifier = ChangeAnnotationIdentifier()
-    edits = []
-    create_kw_section = not bool(get_keyword_section(vscode_resource.file))
-    if create_kw_section:
-        if get_variables_section(vscode_resource.file):
-            _, _, kw_section_start, _ = get_variables_section_position(vscode_resource.file)
-        else:
-            _, _, kw_section_start, _ = get_setting_section_position(vscode_resource.file)
-        edits.extend(keyword_section_edit(kw_section_start, change_identifier))
-    else:
-        _, _, kw_section_start, _ = get_keyword_section_position(vscode_resource.file)
-    if testbench_resource and testbench_resource.keyword_section:
-        for testbench_keyword in testbench_resource.keyword_section.body:
-            try:
-                keyword_match = get_matching_testbench_keyword(testbench_keyword, vscode_resource)
-            except MultipleKeywordsWithUid as e:
-                show_error(
-                    ls,
-                    ERROR_DUPLICATE_KEYWORD_UID.format(uid=e.uid),
-                )
-                continue
-            except MultipleKeywordsWithName as e:
-                show_error(
-                    ls,
-                    ERROR_DUPLICATE_KEYWORD_NAME.format(uid=e.name),
-                )
-                continue
-            if not keyword_match:
-                edits.append(
-                    new_keyword_edit(testbench_keyword, kw_section_start + 1, change_identifier)
-                )
-            else:
-                if get_keyword_tags(keyword_match) and any(
-                    tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword_match))
-                ):
-                    continue
-                edits.extend(
-                    create_keyword_edits(keyword_match, testbench_keyword, change_identifier)
-                )
+    edits = build_subdivision_edits(
+        ls,
+        document,
+        vscode_resource,
+        testbench_resource,
+        change_identifier,
+        include_deleted_testbench_tag_cleanup=False,
+    )
+    kw_section_start = _get_keyword_section_start_and_spacing(vscode_resource).start_line
     if vscode_resource and vscode_resource.keyword_section:
         for vscode_keyword in vscode_resource.keyword_section.body:
             if not isinstance(vscode_keyword, Keyword):
@@ -722,58 +829,13 @@ def pull_testbench_subdivision(ls: LanguageServer, *args):
         show_error(ls, ERROR_FINDING_TESTBENCH_SUBDIVISION_WITH_UID.format(uid=subdivision_uid))
         return
     change_identifier = ChangeAnnotationIdentifier()
-    edits = []
-    create_kw_section = not bool(get_keyword_section(existing_resource.file))
-    if create_kw_section:
-        if get_variables_section(existing_resource.file):
-            kw_section_start = get_variables_section_position(existing_resource.file)[-2]
-        elif get_setting_section(existing_resource.file):
-            kw_section_start = get_setting_section_position(existing_resource.file)[-2]
-        else:
-            kw_section_start = get_testbench_context_position(existing_resource.file)[-2]
-        edits.extend(keyword_section_edit(kw_section_start, change_identifier))
-    else:
-        _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
-    visited_keywords = []
-    if new_resource and new_resource.keyword_section:
-        for new_keyword in new_resource.keyword_section.body:
-            visited_keywords.append(get_kw_uid(new_keyword).lower())
-            try:
-                keyword_match = get_matching_testbench_keyword(new_keyword, existing_resource)
-            except MultipleKeywordsWithUid as e:
-                show_error(
-                    ls,
-                    ERROR_DUPLICATE_KEYWORD_UID.format(uid=e.uid),
-                )
-                continue
-            except MultipleKeywordsWithName as e:
-                show_error(
-                    ls,
-                    ERROR_DUPLICATE_KEYWORD_NAME.format(uid=e.name),
-                )
-                continue
-            if not keyword_match:
-                edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
-            else:
-                if get_keyword_tags(keyword_match) and any(
-                    tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword_match))
-                ):
-                    continue
-                edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
-    if existing_resource and existing_resource.keyword_section:
-        for existing_keyword in existing_resource.keyword_section.body:
-            if not isinstance(existing_keyword, Keyword):
-                continue
-            if (
-                not get_kw_uid(existing_keyword)
-                or get_kw_uid(existing_keyword).lower() in visited_keywords
-            ):
-                continue
-            if get_keyword_tags(existing_keyword) and any(
-                tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(existing_keyword))
-            ):
-                continue
-            edits.append(get_deleted_testbench_kw_tags_edit(existing_keyword, change_identifier))
+    edits = build_subdivision_edits(
+        ls,
+        document,
+        existing_resource,
+        new_resource,
+        change_identifier,
+    )
     if not edits:
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
@@ -805,14 +867,21 @@ def get_matching_testbench_keyword(
         raise MultipleKeywordsWithName(rf_keyword.name)
 
 
-def new_keyword_edit(new_keyword, kw_section_start_row, change_identifier):
+def new_keyword_edit(
+    new_keyword, kw_section_start_row, change_identifier, existing_trailing_newline_count: int = 2
+):
+    keyword_text = robot_model_to_string(new_keyword)
+    required_newlines = 2  # line break + one blank line between keywords
+    missing_newlines = max(0, required_newlines - existing_trailing_newline_count)
+    if missing_newlines > 0:
+        keyword_text = "\n" * missing_newlines + keyword_text
     return AnnotatedTextEdit(
         change_identifier,
         range=Range(
             start=Position(kw_section_start_row + 2, 0),
             end=Position(kw_section_start_row + 2, 0),
         ),
-        new_text=robot_model_to_string(new_keyword),
+        new_text=keyword_text,
     )
 
 
@@ -827,7 +896,37 @@ def deleted_keyword_edit(new_keyword, change_identifier):
     )
 
 
-def keyword_section_edit(keyword_section_line, change_identifier):
+def _count_trailing_newline_characters(source_text: str) -> int:
+    trailing_newline_count = 0
+    index = len(source_text) - 1
+
+    # Count trailing LF and CRLF line breaks at EOF.
+    while index >= 0:
+        if source_text[index] != "\n":
+            break
+        trailing_newline_count += 1
+        index -= 1
+        if index >= 0 and source_text[index] == "\r":
+            index -= 1
+
+    return trailing_newline_count
+
+
+def keyword_section_edit(
+    keyword_section_line,
+    change_identifier,
+    minimum_empty_lines_before_section: int = 0,
+    existing_trailing_newline_count: int = 0,
+):
+    keyword_section_text = robot_model_to_string(
+        KeywordSection(SectionHeader.from_params(Token.KEYWORD_HEADER))
+    )
+    required_line_breaks_before_section = minimum_empty_lines_before_section + 1
+    missing_line_breaks = max(
+        0, required_line_breaks_before_section - existing_trailing_newline_count
+    )
+    if missing_line_breaks > 0:
+        keyword_section_text = "\n" * missing_line_breaks + keyword_section_text
     return [
         AnnotatedTextEdit(
             change_identifier,
@@ -835,9 +934,7 @@ def keyword_section_edit(keyword_section_line, change_identifier):
                 start=Position(keyword_section_line + 3, 0),
                 end=Position(keyword_section_line + 3, 0),
             ),
-            new_text=robot_model_to_string(
-                KeywordSection(SectionHeader.from_params(Token.KEYWORD_HEADER))
-            ),
+            new_text=keyword_section_text,
         )
     ]
 
