@@ -248,7 +248,7 @@
         if (hasStoredPassword) {
             passwordInput.placeholder = "Leave empty to keep stored password";
         } else {
-            passwordInput.placeholder = "Enter your password";
+            passwordInput.placeholder = "Enter password";
         }
 
         // Update checkbox state

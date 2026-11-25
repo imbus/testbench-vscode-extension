@@ -516,7 +516,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
             this.postMessageToWebview(WebviewMessageCommands.ENTER_EDIT_MODE, {
                 connection: connectionToEdit,
-                hasStoredPassword: !!storedPassword
+                hasStoredPassword: storedPassword !== undefined
             });
 
             await this.sendConnectionToWebview();
