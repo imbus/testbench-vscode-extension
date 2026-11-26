@@ -7,13 +7,13 @@ build-backend = "setuptools.build_meta"
 name = "testbench-vscode-extension"
 authors = [{ name = "imbus AG", email = "support@imbus.de" }]
 description = ""
-requires-python = ">= 3.10"
+requires-python = ">= 3.11"
 readme = "README.md"
 license = { text = "Apache 2.0 License" }
 dynamic = ["version"]
 dependencies = [
   "testbench2robotframework>=2.1.0",
-  "robotframework==7.4.2",
+  "robotframework==7.5",
   "testbench-language-server @ file:./testbench-language-server",
 ]
 
@@ -28,7 +28,7 @@ ignore = ["config.json", "*.bat", "*.sh", "*.zip", "tests/**"]
 exclude = ["__pycache__"]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 100
 lint.select = [
   "A",
