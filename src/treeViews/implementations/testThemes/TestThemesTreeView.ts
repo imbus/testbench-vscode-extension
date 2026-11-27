@@ -662,10 +662,13 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             const lastImportedItem = this.extensionContext.workspaceState.get<string>(lastImportedItemKey);
             // TODO: Check if there are results in TestBench and only ask if they already exist
             if (lastImportedItem === item.id) {
+                // Must be modal: a non-modal notification hides itself after a while without resolving,
+                // which would leave this operation (and the single test operation lock) pending forever.
+                // A modal dialog provides its own "Cancel" button.
                 const result = await vscode.window.showWarningMessage(
                     `You have already imported test results for "${itemLabel}". Do you want to import it again?`,
-                    "Yes, Import Again",
-                    "Cancel"
+                    { modal: true },
+                    "Yes, Import Again"
                 );
 
                 if (result !== "Yes, Import Again") {
