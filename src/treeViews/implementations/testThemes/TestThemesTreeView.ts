@@ -608,7 +608,47 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Imports test results for a marked test theme item
+     * Returns the workspace state key that stores the ID of the last successfully imported item.
+     */
+    private getLastImportedItemStorageKey(): string {
+        const userId = userSessionManager.getCurrentUserId();
+        return `${userId}.${StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY}_lastItemId`;
+    }
+
+    /**
+     * Asks the user for confirmation if the given item was already imported before.
+     *
+     * Must be called outside the single test operation lock: the non-modal notification may be
+     * hidden by VS Code after a timeout without ever resolving. If the lock were held while waiting,
+     * all further test operations would stay blocked.
+     *
+     * @param item The test theme tree item that is about to be imported
+     * @returns True if the import should proceed, false if the user declined
+     */
+    public async confirmReimportIfNeeded(item: TestThemesTreeItem): Promise<boolean> {
+        const lastImportedItem = this.extensionContext.workspaceState.get<string>(this.getLastImportedItemStorageKey());
+        // TODO: Check if there are results in TestBench and only ask if they already exist
+        if (lastImportedItem !== item.id) {
+            return true;
+        }
+
+        const itemLabel = item.label?.toString() || "Unknown Item";
+        const result = await vscode.window.showWarningMessage(
+            `You have already imported test results for "${itemLabel}". Do you want to import it again?`,
+            "Yes, Import Again",
+            "Cancel"
+        );
+
+        if (result !== "Yes, Import Again") {
+            this.logger.debug(`[TestThemesTreeView] Re-import operation cancelled by user for tree item: ${itemLabel}`);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Imports test results for a marked test theme item.
+     * Re-import confirmation is not part of this method, see {@link confirmReimportIfNeeded}.
      * @param item The test theme tree item to import results for
      */
     public async importTestResultsForTestThemeTreeItem(item: TestThemesTreeItem): Promise<void> {
@@ -656,28 +696,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 return;
             }
 
-            // Check if this is the same item as the last import
-            const userId = userSessionManager.getCurrentUserId();
-            const lastImportedItemKey = `${userId}.${StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY}_lastItemId`;
-            const lastImportedItem = this.extensionContext.workspaceState.get<string>(lastImportedItemKey);
-            // TODO: Check if there are results in TestBench and only ask if they already exist
-            if (lastImportedItem === item.id) {
-                // Must be modal: a non-modal notification hides itself after a while without resolving,
-                // which would leave this operation (and the single test operation lock) pending forever.
-                // A modal dialog provides its own "Cancel" button.
-                const result = await vscode.window.showWarningMessage(
-                    `You have already imported test results for "${itemLabel}". Do you want to import it again?`,
-                    { modal: true },
-                    "Yes, Import Again"
-                );
-
-                if (result !== "Yes, Import Again") {
-                    this.logger.debug(
-                        `[TestThemesTreeView] Re-import operation cancelled by user for tree item: ${itemLabel}`
-                    );
-                    return;
-                }
-            }
+            const lastImportedItemKey = this.getLastImportedItemStorageKey();
 
             const markingModule = this.getModule("marking") as MarkingModule;
             if (!markingModule) {

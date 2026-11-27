@@ -517,7 +517,21 @@ const _handleReadAndImportTestResultsToTestbench = async (testThemeTreeItem: Tes
         }
     }
 };
-const handleReadAndImportTestResultsToTestbench = withSingleTestOperation(_handleReadAndImportTestResultsToTestbench);
+const lockedReadAndImportTestResultsToTestbench = withSingleTestOperation(_handleReadAndImportTestResultsToTestbench);
+
+/**
+ * Asks for re-import confirmation before acquiring the single test operation lock.
+ * The confirmation notification can be hidden by VS Code without resolving, so it must not hold the lock.
+ */
+const handleReadAndImportTestResultsToTestbench = async (testThemeTreeItem: TestThemesTreeItem) => {
+    if (testThemeTreeItem && treeViews?.testThemesTree) {
+        const proceed = await treeViews.testThemesTree.confirmReimportIfNeeded(testThemeTreeItem);
+        if (!proceed) {
+            return;
+        }
+    }
+    await lockedReadAndImportTestResultsToTestbench(testThemeTreeItem);
+};
 
 /* =============================================================================
    Tree View Management Commands
